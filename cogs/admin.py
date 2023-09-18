@@ -10,6 +10,7 @@ import asyncio
 from discord import app_commands
 import nacl
 
+
 def is_owner(interaction: discord.Interaction):
     if interaction.user.id == interaction.guild.owner_id:
         return True
@@ -55,6 +56,7 @@ class Administrate(commands.Cog):
         await interaction.response.send_message(content='this cog has been reloaded.', ephemeral=True, delete_after=4.0)
 
     @commands.is_owner()
+    @commands.guild_only()
     @commands.command()
     async def eval(self, ctx, *, body: str):
         """Evaluates arbitary code."""

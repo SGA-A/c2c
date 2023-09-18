@@ -1,10 +1,11 @@
-import asyncio
-import psutil
 import os
-from discord.ext.commands.context import Context
-from discord.ext.commands._types import BotT
+import sys
+import traceback
+import psutil
 from discord.ext import commands
 from discord.ext.commands import errors
+from discord.ext.commands._types import BotT
+from discord.ext.commands.context import Context
 
 
 class Events(commands.Cog):
@@ -32,6 +33,8 @@ class Events(commands.Cog):
         elif isinstance(err, errors.NotOwner):
             await ctx.send("the functionality of this command is limited to the owner of this bot.")
         else:
+            print('Ignoring exception in command {}:'.format(ctx.command), file=sys.stderr)
+            traceback.print_exception(type(err), err, err.__traceback__, file=sys.stderr)
             await ctx.send(f"{err}")
 
 
