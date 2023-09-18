@@ -1,2 +1,2 @@
-# python-client (v11)
-a bot that i made in discord coded in python. uses some libraries and scripts by other developers.
+# test-branch (new)
+the new branch im testing is out now! (not a big deal)
