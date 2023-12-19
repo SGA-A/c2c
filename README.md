@@ -7,10 +7,10 @@ I have been actively working on this project for the past 3 years, it is rare to
 
 ## Features
 - Advanced economy system (no json, using databases)
- - Running these databases using connection pools via [@Rapptz](https://www.github.com/Rapptz)'s `asqlite` repo.
- - The connection pool makes it fast and reliable, data loss is rare.
- - Rob, Bankrob, Slots, Bets, Highlow, Building robberies
- - More is being added every month..
+  - Running these databases using connection pools via [@Rapptz](https://www.github.com/Rapptz)'s `asqlite` repo.
+  - The connection pool makes it fast and reliable, data loss is rare.
+  - Rob, Bankrob, Slots, Bets, Highlow, Building robberies
+  - More is being added every month..
 - Miscellaneous Features
   -  Get the time now in Discord's timestamp formatting using any style
   -  Get a list of every emoji the client can access
