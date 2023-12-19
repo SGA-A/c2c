@@ -28,6 +28,11 @@ The help command. It is an interactive menu sorting all the commands within cogs
 
 In the course of making this bot, I learnt a lot of things. I was just a beginner at first and had no idea how to read or even understand the discord.py documentation. i did not on many tutorials but I think it was my initiative one day to just completley absolve the docs of all of its contents one day that led me to where this project has come now. It is a passion project and I am not considering disbanding the project any time soon.
 
+## Credits
+- **The [discord.py](https://discord.gg/r3sSKJJ) server**: almost every question/bug ive encountered has been solved on their discord server, so many situations to fix burning problems were fixed because of them. It is also a great place to learn code optimizations that lower speed and time complexity for the bot.
+- **[API Ninjas](https://api-ninjas.com/)**: their are a diverse range of APIs available for free (10,000 requests per month)
+- **[Stack Overflow](https://stackoverflow.com/)**: a pretty good place for to find answers to your general python bugs and errors
+- **[Danny's Eval Command](https://github.com/Rapptz/RoboDanny/blob/rewrite/cogs/admin.py#L214-L259)**: still use it and made minor tweaks to it.
+- **[skrphenix's Economy System in `aiosqlite`](https://github.com/Modern-Realm/economy-bot-discord.py/tree/master/economy%20with%20aiosqlite)**: this was a big one, the project structure and design was straightforward making it easy to change, though i had eventually migrated to Danny's `asqlite` afterward as i was frustrated with the way it was coded, instead of creating connections every time the command is called, multiple connections are made in a 'connection pool' and on each query a connection is 'acquired' from the pool and then later on 'released' back into the pool. This did make asynchronous transactions even more faster and reliable.
 
-
-  
+x
