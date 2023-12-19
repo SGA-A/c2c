@@ -21,7 +21,7 @@ I have been actively working on this project for the past 3 years, it is rare to
   - Playing local files in a voice-channel (yes)
   - Having **a lot** of control over the economy system
     -  Kick users off the economy system, generate assets without paying etc.
-    -  Ability to modify any attribute of the economy system with ease of any user (credits to [DB Browser for SQlite](https://sqlitebrowser.org/) for this.
+    -  Ability to modify any attribute of the economy system with ease of any user (credits to [DB Browser for SQlite](https://sqlitebrowser.org/) for this.)
 
 ## My Personal Favourite Feature
 The help command. It is an interactive menu sorting all the commands within cogs by category and assumes each cog fits into one category. A dropdown is displayed to list the available categories and clicking any given one provides an embed edited from the original response containing every single command that corresponds to the category. My thought process at the time of making it was robust and there has been no situation yet encountered in which it faltered.
