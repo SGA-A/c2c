@@ -34,5 +34,3 @@ In the course of making this bot, I learnt a lot of things. I was just a beginne
 - **[Stack Overflow](https://stackoverflow.com/)**: a pretty good place for to find answers to your general python bugs and errors
 - **[Danny's Eval Command](https://github.com/Rapptz/RoboDanny/blob/rewrite/cogs/admin.py#L214-L259)**: still use it and made minor tweaks to it.
 - **[skrphenix's Economy System in `aiosqlite`](https://github.com/Modern-Realm/economy-bot-discord.py/tree/master/economy%20with%20aiosqlite)**: this was a big one, the project structure and design was straightforward making it easy to change, though i had eventually migrated to Danny's `asqlite` afterward as i was frustrated with the way it was coded, instead of creating connections every time the command is called, multiple connections are made in a 'connection pool' and on each query a connection is 'acquired' from the pool and then later on 'released' back into the pool. This did make asynchronous transactions even more faster and reliable.
-
-x
