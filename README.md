@@ -1,6 +1,6 @@
 # c2c
 <div align="center">
-<img src="99d48ed4682a0c26cb135ed5e5a788f9 (1).png" width="100" height="100"/>
+<img src="testing/99d48ed4682a0c26cb135ed5e5a788f9 (1).png" width="100" height="100"/>
 </div>
 A highly integrated and powerful discord bot.
 I have been actively working on this project for the past 3 years, it is rare to encounter any bugs on the bot. 
