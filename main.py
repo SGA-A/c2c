@@ -1,17 +1,23 @@
 from __future__ import annotations
+import discord
 from dotenv import load_dotenv
 from datetime import datetime
 from os import listdir, environ
 from sys import version
 from discord.ext import commands
-import discord
 from typing import Literal
+from cogs.economy import Economy, CURRENCY, SERVER_MULTIPLIERS
+from cogs.economy import display_user_friendly_card_format
+from math import floor
+from random import randint
 from collections import deque
-from discord import FFmpegPCMAudio, app_commands
-from asyncio import run, TimeoutError as asyncio_TimeoutError
+from discord.utils import setup_logging
+from discord import app_commands, Object, ui, Intents, Status, Embed, Interaction, CustomActivity
+from discord import RawReactionActionEvent, AppCommandType, SelectOption, Colour, File, Webhook
+from asyncio import run, TimeoutError as asyncio_TimeoutError, sleep
 from typing import Dict, Optional, TYPE_CHECKING, Union, List
 from aiohttp import ClientSession
-from asqlite import create_pool
+from asqlite import create_pool, Connection as asqlite_Connection
 from logging import INFO as LOGGING_INFO
 
 
@@ -49,7 +55,7 @@ class CustomContext(commands.Context):
         # function. This allows the function to access the self and msg
         # variables defined above.
 
-        def check(payload: discord.RawReactionActionEvent):
+        def check(payload: RawReactionActionEvent):
             # 'nonlocal' works almost like 'global' except for functions inside of
             # functions. This means that when 'confirmation' is changed, that will
             # apply to the variable above
@@ -158,7 +164,7 @@ class MyCommandTree(app_commands.CommandTree):
         _guild: Optional[Snowflake] = None
         if guild is not None:
             if isinstance(guild, int):
-                _guild = discord.Object(guild)
+                _guild = Object(guild)
             else:
                 _guild = guild
 
@@ -183,7 +189,7 @@ class MyCommandTree(app_commands.CommandTree):
         else:
             self._global_app_commands = {}
 
-    def clear_commands(self, *, guild: Optional[Snowflake], typer: Optional[discord.AppCommandType] = None,
+    def clear_commands(self, *, guild: Optional[Snowflake], typer: Optional[AppCommandType] = None,
                        clear_app_commands_cache: bool = True) -> None:
         super().clear_commands(guild=guild)
         if clear_app_commands_cache:
@@ -206,6 +212,7 @@ class C2C(commands.Bot):
         # Database and HTTP Connections
         self.pool_connection = None
         self.session = None
+        self.games = dict()
 
         # Misc
         self.time_launch = None
@@ -227,10 +234,10 @@ class C2C(commands.Bot):
         # Create a aiohttp session once and reuse this throughout the bot.
         self.session = ClientSession()
 
-client = C2C(command_prefix='>', intents=discord.Intents.all(), case_insensitive=True,
+client = C2C(command_prefix='>', intents=Intents.all(), case_insensitive=True,
              owner_ids={992152414566232139, 546086191414509599},
-             activity=discord.CustomActivity(name='Serving cc • /help'),
-             status=discord.Status.idle, tree_cls=MyCommandTree)
+             activity=CustomActivity(name='Serving cc • /help'),
+             status=Status.idle, tree_cls=MyCommandTree)
 print(version)
 
 
@@ -242,16 +249,8 @@ async def load_cogs():
         if filename.endswith(".py"):
             await client.load_extension(f"cogs.{filename[:-3]}")
 
-
-def membed(descriptioner: str) -> discord.Embed:
-    """Quickly create an embed with a custom description using the preset."""
-    membedder = discord.Embed(colour=0x2F3136,
-                           description=descriptioner)
-    return membedder
-
-
 def return_txt_cmds_first(command_holder: dict,
-                          category: Literal["Economy", "Moderation", "Miscellaneous", "Administrate"]) -> dict:
+                          category: Literal["Economy", "Moderation", "Miscellaneous", "Administrate", "Music"]) -> dict:
     """Displays all the text-based commands that are defined within a cog as a dict. This should always be called first for consistency."""
     the_cog = client.get_cog(category)
     cog_cmds = the_cog.get_commands()
@@ -261,7 +260,7 @@ def return_txt_cmds_first(command_holder: dict,
 
 
 def return_interaction_cmds_last(command_holder: dict,
-                                 category: Literal["Economy", "Moderation", "Miscellaneous", "Administrate"]) -> dict:
+                                 category: Literal["Economy", "Moderation", "Miscellaneous", "Administrate", "Music"]) -> dict:
     """Displays all the app commands and grouped app commands that are defined within a cog as a dict. This should always be called last for consistency."""
     the_cog = client.get_cog(category)
     cog_cmds = the_cog.get_app_commands()
@@ -271,10 +270,24 @@ def return_interaction_cmds_last(command_holder: dict,
     return command_holder
 
 
-async def play_source(voice_client):
-    source = FFmpegPCMAudio("C:\\Users\\georg\\PycharmProjects\\c2c\\other\\battlet.mp3", executable='ffmpeg')
-    voice_client.play(source, after=lambda e: print('Player error: %s' % e) if e else client.loop.create_task(
-        play_source(voice_client)))
+def calculate_hand(hand):
+    aces = hand.count(11)
+    total = sum(hand)
+
+    while total > 21 and aces > 0:
+        total -= 10
+        aces -= 1
+
+    return total
+
+
+async def total_command_count(interaction: Interaction) -> int:
+    """Return the total amount of commands detected within the client, including text and slash commands."""
+    amount = 0
+    lenslash = len(await client.tree.fetch_commands(guild=Object(id=interaction.guild.id)))
+    lentxt = len(client.commands)
+    amount += (lenslash+lentxt)
+    return amount
 
 
 """
@@ -290,40 +303,45 @@ that's it!
 """
 
 
-class SelectMenu(discord.ui.Select):
+class SelectMenu(ui.Select):
     def __init__(self):
         optionss = [
-            discord.SelectOption(label='Owner', description='commands accessible by the bot owners.',
+            SelectOption(label='Owner', description='commands accessible by the bot owners.',
                                  emoji='<a:e1_butterflyB:1124677894275338301>'),
-            discord.SelectOption(label='Moderation',
+            SelectOption(label='Moderation',
                                  description='commands accessible by those with further permissions.',
                                  emoji='<a:e1_starR:1124677520038567946>'),
-            discord.SelectOption(label='Utility', description='generic commands that may serve useful.',
+            SelectOption(label='Utility', description='generic commands that may serve useful.',
                                  emoji='<a:e1_starG:1124677658500927488>'),
-            discord.SelectOption(label='Economy', description='commands related to the virtual economy.',
-                                 emoji='<a:e1_starY:1124677741980176495>')
+            SelectOption(label='Economy', description='commands related to the virtual economy.',
+                                 emoji='<a:e1_starY:1124677741980176495>'),
+            SelectOption(label='Music', description='commands for listening to music on discord.',
+                                 emoji='<a:e1_starPur:1125040539943837738>')
         ]
         super().__init__(placeholder="Name of category", options=optionss)
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: Interaction):
 
         choice = self.values[0]
         cmd_formatter: set = set()
 
-        total_cmds_rough = 0
-        lenslash = len(await client.tree.fetch_commands(guild=interaction.guild))  # all interaction cmds
-        lentxt = len(client.commands)
-        total_cmds_rough += (lenslash + lentxt)
+        total_cmds_rough = await total_command_count(interaction)
 
         total_cmds_cata = 0
 
         if choice == 'Owner':
 
+            for option in self.options:
+                if option.value == "Owner":
+                    option.default = True
+                else:
+                    option.default = False
+
             the_dict = {}
             new_dict = return_txt_cmds_first(the_dict, "Administrate")
             all_cmds: dict = return_interaction_cmds_last(new_dict, "Administrate")
 
-            embed = discord.Embed(title='Help: Owner', colour=discord.Colour.from_rgb(91, 170, 239))
+            embed = Embed(title='Help: Owner', colour=Colour.from_rgb(91, 170, 239))
             embed.set_image(url='https://media.discordapp.net/attachments/1124994990246985820/1125005648422256692/762082-3602628412.jpg?width=1377&height=701')
             embed.set_footer(text='Got any suggestions for the bot? use the /feedback command'
                                   'to let us know about it.', icon_url=client.user.avatar.url)
@@ -332,7 +350,7 @@ class SelectMenu(discord.ui.Select):
                 if cmd_details[-1] == 'txt':
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                 else:
-                    command_manage = client.tree.get_app_command(cmd, guild=discord.Object(id=829053898333225010)) # type: ignore
+                    command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010)) # type: ignore
                     cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
 
             embed.add_field(name='About: Owner',
@@ -346,15 +364,21 @@ class SelectMenu(discord.ui.Select):
 
             embed.description = "\n".join(cmd_formatter)
 
-            await interaction.response.edit_message(embed=embed) # type: ignore
+            await interaction.response.edit_message(attachments=[], embed=embed, view=self.view) # type: ignore
 
-        if choice == 'Moderation':
+        elif choice == 'Moderation':
+
+            for option in self.options:
+                if option.value == "Moderation":
+                    option.default = True
+                else:
+                    option.default = False
 
             the_dict = {}
             new_dict = return_txt_cmds_first(the_dict, choice) # type: ignore
             all_cmdss: dict = return_interaction_cmds_last(new_dict, choice) # type: ignore
 
-            embed = discord.Embed(title='Help: Moderation', colour=discord.Colour.from_rgb(247, 14, 115))
+            embed = Embed(title='Help: Moderation', colour=Colour.from_rgb(247, 14, 115))
             embed.set_image(url='https://media.discordapp.net/attachments/1124994990246985820/1125041765200703528/pink.jpg?width=1247&height=701')
             embed.set_footer(text='Got any suggestions for the bot? use the /feedback command to let us know about it.', icon_url=client.user.avatar.url)
 
@@ -363,7 +387,7 @@ class SelectMenu(discord.ui.Select):
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     total_cmds_cata += 1
                 else:
-                    command_manage = client.tree.get_app_command(cmd, guild=discord.Object(id=829053898333225010)) # type: ignore
+                    command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010)) # type: ignore
                     cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
                     total_cmds_cata += 1
 
@@ -377,15 +401,21 @@ class SelectMenu(discord.ui.Select):
                                   f'- Status: **READY**')
             embed.description = "\n".join(cmd_formatter)
 
-            await interaction.response.edit_message(embed=embed) # type: ignore
+            await interaction.response.edit_message(attachments=[], embed=embed, view=self.view) # type: ignore
 
-        if choice == 'Utility':
+        elif choice == 'Utility':
+
+            for option in self.options:
+                if option.value == "Utility":
+                    option.default = True
+                else:
+                    option.default = False
 
             the_dict = {}
             new_dict = return_txt_cmds_first(the_dict, "Miscellaneous")
             all_cmdsss: dict = return_interaction_cmds_last(new_dict, "Miscellaneous")
 
-            embed = discord.Embed(title='Help: Utility', colour=discord.Colour.from_rgb(15, 255, 135))
+            embed = Embed(title='Help: Utility', colour=Colour.from_rgb(15, 255, 135))
             embed.set_image(url='https://media.discordapp.net/attachments/1124994990246985820/1125009796429520936/wp6063334-2886616470.jpg?width=1168&height=701')
             embed.set_footer(text='Got any suggestions for the bot? use the /feedback command to let us know about it.', icon_url=client.user.avatar.url)
 
@@ -394,7 +424,7 @@ class SelectMenu(discord.ui.Select):
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     total_cmds_cata += 1
                 else:
-                    command_manage = client.tree.get_app_command(cmd, guild=discord.Object(id=829053898333225010)) # type: ignore
+                    command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010)) # type: ignore
                     cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
                     total_cmds_cata += 1
 
@@ -407,10 +437,17 @@ class SelectMenu(discord.ui.Select):
                                   f'- Status: **READY**')
             embed.description = "\n".join(cmd_formatter)
 
-            await interaction.response.edit_message(embed=embed) # type: ignore
+            await interaction.response.edit_message(attachments=[], embed=embed, view=self.view) # type: ignore
 
-        if choice == 'Economy':
-            embed = discord.Embed(title='Help: Economy', colour=discord.Colour.from_rgb(255, 215, 0))
+        elif choice == 'Economy':
+
+            for option in self.options:
+                if option.value == "Economy":
+                    option.default = True
+                else:
+                    option.default = False
+
+            embed = Embed(title='Help: Economy', colour=Colour.from_rgb(255, 215, 0))
             embed.set_image(url='https://media.discordapp.net/attachments/1124994990246985820/1125010187812605972/wp6402672.jpg?width=1247&height=701')
             embed.set_footer(text='Got any suggestions for the bot? use the /feedback command to let us know about it.', icon_url=client.user.avatar.url)
 
@@ -423,7 +460,7 @@ class SelectMenu(discord.ui.Select):
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     total_cmds_cata += 1
                 else:
-                    command_manage = client.tree.get_app_command(cmd, guild=discord.Object(id=829053898333225010)) # type: ignore
+                    command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010)) # type: ignore
                     cmd_formatter.add(
                         f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
                     total_cmds_cata += 1
@@ -437,10 +474,41 @@ class SelectMenu(discord.ui.Select):
                                   f'- Last modified: <t:1702722548:D> (**<t:1702722548:R>**)\n'
                                   f'- Status: **LOCKED**')
 
-            await interaction.response.edit_message(embed=embed) # type: ignore
+            await interaction.response.edit_message(attachments=[], embed=embed, view=self.view) # type: ignore
+        else:
+            for option in self.options:
+                if option.value == "Music":
+                    option.default = True
+                else:
+                    option.default = False
+
+            embed = Embed(title='Help: Music', colour=Colour.from_rgb(105, 83, 224))
+            that_file = File("C:\\Users\\georg\\Downloads\\Media\\wallpaper\\purple-wp.jpg",
+                                     filename="image.png")
+            embed.set_image(url="attachment://image.png")
+            embed.set_footer(text='Got any suggestions for the bot? use the /feedback command to let us know about it.',
+                             icon_url=client.user.avatar.url)
+
+            the_dict: dict = {}
+            all_cmdssss = return_txt_cmds_first(the_dict, "Music")
+
+            for cmd, cmd_details in all_cmdssss.items():
+                cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
+                total_cmds_cata += 1
+
+            embed.description = "\n".join(cmd_formatter)
+            embed.add_field(name='About: Music',
+                            value=f'Contains commands that can be used by anybody, related to the music client '
+                                  f'and its functions. Use these commands to play music on Discord.\n'
+                                  f'__Interesting Stats__\n'
+                                  f'- There are **{total_cmds_cata}** commands in this category\n'
+                                  f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%** of all commands.\n'
+                                  f'- Last modified: <t:1703857689:D> (**<t:1703857689:R>**)\n'
+                                  f'- Status: **READY**')
+            await interaction.response.edit_message(attachments=[that_file], embed=embed, view=self.view) # type: ignore
 
 
-class Select(discord.ui.View):
+class Select(ui.View):
     def __init__(self):
         super().__init__(timeout=40.0)
         self.add_item(SelectMenu())
@@ -449,55 +517,8 @@ class Select(discord.ui.View):
         # Step 2
         for item in self.children:
             item.disabled = True
-            item.placeholder = 'Timed out..'
         # Step 3
         await self.message.edit(view=self) # type: ignore
-
-@commands.is_owner()
-@client.command(name='playq')
-async def join(ctx: commands.Context):
-    async with ctx.typing():
-        if ctx.author.voice:
-            channel = ctx.message.author.voice.channel
-            voice = await channel.connect(self_deaf=True)
-            await client.loop.create_task(play_source(voice))
-        else:
-            await ctx.send(embed=membed("You'll need to be in a voice channel first."))
-
-
-@commands.is_owner()
-@client.command(name='pause')
-async def pause_cl(ctx: commands.Context):
-    async with ctx.typing():
-        if ctx.voice_client:
-            if ctx.voice_client.is_playing(): # type: ignore
-                ctx.voice_client.pause() # type: ignore
-                return await ctx.message.add_reaction('<:successful:1183089889269530764>')
-            return await ctx.send(embed=membed("Nothing is playing."))
-        return await ctx.send(embed=membed("Not connected to a voice channel."))
-
-
-@commands.is_owner()
-@client.command(name='resume')
-async def resume_cl(ctx: commands.Context):
-    async with ctx.typing():
-        if ctx.voice_client:
-            if ctx.voice_client.is_paused(): # type: ignore
-                ctx.voice_client.resume() # type: ignore
-                return await ctx.message.add_reaction('<:successful:1183089889269530764>')
-            return await ctx.send(embed=membed("The music is not paused."))
-        return await ctx.send(embed=membed("Not connected to a voice channel."))
-
-
-@commands.is_owner()
-@client.command(name='disconnect')
-async def disconn_cl(ctx: commands.Context):
-    async with ctx.typing():
-        if ctx.voice_client:
-            await ctx.voice_client.disconnect(force=False)
-            return await ctx.message.add_reaction('<:successful:1183089889269530764>')
-        await ctx.send(embed=membed("Not connected to a voice channel."))
-
 
 @client.command(name='confirm')
 async def confirm_panel(ctx: CustomContext):
@@ -508,20 +529,280 @@ async def confirm_panel(ctx: CustomContext):
         await ctx.send("Cancelled operation.")
 
 
+@client.command(name='hit', aliases=("h",))
+async def hit(ctx: commands.Context):
+
+    if client.games.setdefault(ctx.author.id, None) is None:  # type: ignore
+        return await ctx.send("You haven't started a game yet. To start a game: [`>bj`](https://www.skcdcmxmv.com)")
+
+    namount = client.games[ctx.author.id][-1] # pass
+    deck = client.games[ctx.author.id][0] # pass
+    player_hand = client.games[ctx.author.id][1] # pass
+
+    popped = deck.pop()
+    player_hand.append(popped)
+    client.games[ctx.author.id][-2].append(display_user_friendly_card_format(popped))
+    player_sum = sum(player_hand)
+
+    if player_sum > 21:
+
+        dealer_hand = client.games[ctx.author.id][2]
+        d_fver_p = [num for num in client.games[ctx.author.id][-2]]
+        d_fver_d = [num for num in client.games[ctx.author.id][-3]]
+        del client.games[ctx.author.id]
+        async with client.pool_connection.acquire() as conn: # type: ignore
+            conn: asqlite_Connection
+
+            bj_win = await conn.execute('SELECT bjw FROM bank WHERE userID = ?', (ctx.author.id,))
+            bj_win = await bj_win.fetchone()
+            new_bj_lose = await Economy.update_bank_new(ctx.author, conn, 1, "bjl")
+            new_total = new_bj_lose[0] + bj_win[0]
+            prnctl = round((new_bj_lose[0] / new_total) * 100)
+
+            new_amount_balance = await Economy.update_bank_new(ctx.author, conn, -namount)
+            embed = discord.Embed(colour=discord.Colour.brand_red(),
+                                  description=f"**You lost. You went over 21 and busted.**\n"
+                                              f"You lost {CURRENCY}**{namount:,}**. You now "
+                                              f"have {CURRENCY}**{new_amount_balance[0]:,}**\n"
+                                              f"You lost {prnctl}% of the games.")
+
+            embed.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                      f"**Total** - `{player_sum}`")
+            embed.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
+                                                                        f"**Total** - `{sum(dealer_hand)}`")
+
+            avatar = ctx.author.avatar or ctx.author.default_avatar
+            embed.set_author(name=f"{ctx.author.name}'s losing blackjack game", icon_url=avatar.url)
+            await ctx.send(embed=embed)
+
+    elif sum(player_hand) == 21:
+        dealer_hand = client.games[ctx.author.id][2]
+        d_fver_p = [num for num in client.games[ctx.author.id][-2]]
+        d_fver_d = [num for num in client.games[ctx.author.id][-3]]
+
+        del client.games[ctx.author.id]
+
+        async with client.pool_connection.acquire() as conn: # type: ignore
+            conn: asqlite_Connection
+
+            bj_lose = await conn.execute('SELECT bjl FROM bank WHERE userID = ?', (ctx.author.id,))
+            bj_lose = await bj_lose.fetchone()
+            new_bj_win = await Economy.update_bank_new(ctx.author, conn, 1, "bjw")
+            new_total = new_bj_win[0] + bj_lose[0]
+            prctnw = round((new_bj_win[0] / new_total) * 100)
+
+            pmulti = await Economy.get_pmulti_data_only(ctx.author, conn)
+            new_multi = SERVER_MULTIPLIERS.setdefault(ctx.guild.id, 0) + pmulti[0]
+            amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
+            new_amount_balance = await Economy.update_bank_new(ctx.author, conn, amount_after_multi)
+            win = discord.Embed(colour=discord.Colour.brand_green(),
+                                description=f"**You win! You got to {player_sum}**.\n"
+                                            f"You won {CURRENCY}**{amount_after_multi:,}**. "
+                                            f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                                            f"You won {prctnw}% of the games.")
+
+            win.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                    f"**Total** - `{player_sum}`")
+            win.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
+                                                                      f"**Total** - `{sum(dealer_hand)}`")
+            avatar = ctx.author.avatar or ctx.author.default_avatar
+            win.set_author(name=f"{ctx.author.name}'s winning blackjack game", icon_url=avatar.url)
+            await ctx.send(embed=win)
+
+    else:
+        player_hand = client.games[ctx.author.id][1]  # pass
+        d_fver_p = [number for number in client.games[ctx.author.id][-2]]
+        necessary_show = client.games[ctx.author.id][-3][0]
+        ts = sum(player_hand)
+
+        prg = discord.Embed(colour=discord.Colour.dark_theme(),
+                            description=f"**Your move. Your hand is now {ts}**.")
+        prg.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                f"**Total** - `{ts}`")
+        prg.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {necessary_show} `?`\n"
+                                                                  f"**Total** - ` ? `")
+
+        avatar = ctx.author.avatar or ctx.author.default_avatar
+        prg.set_footer(text="K, Q, J = 10  |  A = 1 or 11")
+        prg.set_author(icon_url=avatar.url, name=f"{ctx.author.name}'s blackjack game")
+        await ctx.send(content="Type `>h` to **hit** or `>s` to **stand**, ending the game.", embed=prg)
+
+
+@client.command(name='stand', aliases=("s",))
+async def stand(ctx: CustomContext):
+    if client.games.setdefault(ctx.author.id, None) is None:  # type: ignore
+        return await ctx.send("You haven't started a game yet. To start a game: [`>bj`](https://www.skcdcmxmv.com)")
+
+    deck = client.games[ctx.author.id][0] # pass
+    player_hand = client.games[ctx.author.id][1]
+    dealer_hand = client.games[ctx.author.id][2]
+    namount = client.games[ctx.author.id][-1]
+
+    msg = await ctx.send("*Results are being fetched, hang in there..*")
+    await sleep(0.5)
+    dealer_total = calculate_hand(dealer_hand)
+
+    while dealer_total < 17:
+        popped = deck.pop()
+
+        # not ui friendly
+        dealer_hand.append(popped) # not ui friendly
+
+        # ui friendly
+        client.games[ctx.author.id][-3].append(display_user_friendly_card_format(popped))
+
+        dealer_total = calculate_hand(dealer_hand)
+
+    player_sum = sum(player_hand)
+    d_fver_p = client.games[ctx.author.id][-2]
+    d_fver_d = client.games[ctx.author.id][-3]
+    del client.games[ctx.author.id]
+
+    if dealer_total > 21:
+        async with client.pool_connection.acquire() as conn:  # type: ignore
+            conn: asqlite_Connection
+
+            bj_lose = await conn.execute('SELECT bjl FROM bank WHERE userID = ?', (ctx.author.id,))
+            bj_lose = await bj_lose.fetchone()
+            new_bj_win = await Economy.update_bank_new(ctx.author, conn, 1, "bjw")
+            new_total = new_bj_win[0] + bj_lose[0]
+            prctnw = round((new_bj_win[0] / new_total) * 100)
+
+            pmulti = await Economy.get_pmulti_data_only(ctx.author, conn)
+            new_multi = SERVER_MULTIPLIERS.setdefault(ctx.guild.id, 0) + pmulti[0]
+            amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
+            # tma = amount_after_multi - namount
+            new_amount_balance = await Economy.update_bank_new(ctx.author, conn, amount_after_multi)
+
+        win = discord.Embed(colour=discord.Colour.brand_green(),
+                            description=f"**You win! The dealer went over 21 and busted.**\n"
+                                        f"You won {CURRENCY}**{amount_after_multi:,}**. "
+                                        f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                                        f"You won {prctnw}% of the games.")
+
+        win.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                f"**Total** - `{player_sum}`")
+        win.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
+                                                                  f"**Total** - `{dealer_total}`")
+
+        avatar = ctx.author.avatar or ctx.author.default_avatar
+        win.set_author(icon_url=avatar.url, name=f"{ctx.author.name}'s winning blackjack game")
+        await msg.edit(content=None, embed=win)
+
+    elif dealer_total > sum(player_hand):
+        async with client.pool_connection.acquire() as conn:  # type: ignore
+            conn: asqlite_Connection
+
+            bj_win = await conn.execute('SELECT bjw FROM bank WHERE userID = ?', (ctx.author.id,))
+            bj_win = await bj_win.fetchone()
+            new_bj_lose = await Economy.update_bank_new(ctx.author, conn, 1, "bjl")
+            new_total = new_bj_lose[0] + bj_win[0]
+            prnctl = round((new_bj_lose[0] / new_total) * 100)
+
+
+            new_amount_balance = await Economy.update_bank_new(ctx.author, conn, -namount)
+        loser = discord.Embed(colour=discord.Colour.brand_red(),
+                              description=f"**You lost. You stood with a lower score (`{player_sum}`) than "
+                                          f"the dealer (`{dealer_total}`).**\n"
+                                          f"You lost {CURRENCY}**{namount:,}**. You now "
+                                          f"have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                                          f"You lost {prnctl}% of the games.")
+
+        loser.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                  f"**Total** - `{player_sum}`")
+        loser.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
+                                                                    f"**Total** - `{dealer_total}`")
+        avatar = ctx.author.avatar or ctx.author.default_avatar
+        loser.set_author(icon_url=avatar.url, name=f"{ctx.author.name}'s losing blackjack game")
+        await msg.edit(content=None, embed=loser)
+    elif dealer_total < sum(player_hand):
+
+        async with client.pool_connection.acquire() as conn:  # type: ignore
+            conn: asqlite_Connection
+
+            bj_lose = await conn.execute('SELECT bjl FROM bank WHERE userID = ?', (ctx.author.id,))
+            bj_lose = await bj_lose.fetchone()
+            new_bj_win = await Economy.update_bank_new(ctx.author, conn, 1, "bjw")
+            new_total = new_bj_win[0] + bj_lose[0]
+            prctnw = round((new_bj_win[0] / new_total) * 100)
+
+            pmulti = await Economy.get_pmulti_data_only(ctx.author, conn)
+            new_multi = SERVER_MULTIPLIERS.setdefault(ctx.guild.id, 0) + pmulti[0]
+            amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
+            # tma = amount_after_multi - namount
+            new_amount_balance = await Economy.update_bank_new(ctx.author, conn, amount_after_multi)
+
+        win = discord.Embed(colour=discord.Colour.brand_green(),
+                            description=f"**You win! You stood with a higher score (`{player_sum}`) than the dealer (`{dealer_total}`).**\n"
+                                        f"You won {CURRENCY}**{amount_after_multi:,}**. "
+                                        f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                                        f"You won {prctnw}% of the games.")
+        win.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                f"**Total** - `{player_sum}`")
+        win.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
+                                                                  f"**Total** - `{dealer_total}`")
+        avatar = ctx.author.avatar or ctx.author.default_avatar
+        win.set_author(icon_url=avatar.url, name=f"{ctx.author.name}'s winning blackjack game")
+        await msg.edit(content=None, embed=win)
+    else:
+        tie = discord.Embed(colour=discord.Colour.yellow(),
+                            description=f"**Tie! Your tied with the dealer.**")
+        tie.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                f"**Total** - `{player_sum}`")
+        tie.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
+                                                                  f"**Total** - `{dealer_total}`")
+        avatar = ctx.author.avatar or ctx.author.default_avatar
+        tie.set_author(icon_url=avatar.url, name=f"{ctx.author.name}'s blackjack game")
+        await msg.edit(content=None, embed=tie)
+
+
+@client.command(name='dispatch-webhook', aliases=("dww",))
+async def dispatch_the_webhook_when(ctx: commands.Context):
+    await ctx.message.delete()
+    embed = Embed(
+        colour=Colour.from_rgb(3, 102, 214),
+        title='Changes for 2024 Q1',
+    description="Changes that have taken place in the period between January 1 - March 31 are noted here.\n\n"
+                "- **Linked Roles**: Integrate your Github account to Discord and claim your linked role "
+                "in the 'Linked Roles' tab.\n"
+                " - Once claimed, you receive <@&1190772742409158667> and a badge next to your name in most channels.\n"
+                "- **Activity Roles**: earn roles by participating regularly in channels.\n"
+                " - <@&1190772029830471781> - earnt by sending 50 messages per week.\n"
+                " - <@&1190772182591209492> - earnt by sending 150 messages per week.\n"
+                "- **New Bots added**: <@491769129318088714> and <@770100332998295572>\n"
+                "- **Event Highlights**: A recurring event for New Years Day was added.\n"
+                " - Every year this event is created on the 1st Jan.\n"
+                "- **Slash Command Changes:** You now only see slash commands that are relevant to you.\n"
+                " - Server management related slash commands were removed completley for server members.\n"
+                " - More are regularly being detected and removed from the list.\n"
+                "- **XP Changes**: It recently became possible to earn XP in bot command channels\n"
+                " - Link to announcement: https://discord.com/channels/829053898333225010/1121094935802822768/1166397053329477642.\n"
+                "- **Channel Overhaul**: For a more simplistic look, <#1121445944576188517> and <#902138223571116052> were modified.")
+
+    embed.set_footer(icon_url=ctx.guild.icon.url, text="That's all for Q1 2024. Next review due: 30 June 2024.")
+
+    urll = "https://discord.com/api/webhooks/1163132850699247746/dSp0XRiADRL31YLS20W9i66Nq-ePYb-fFqID9UjdgFTuNQIFTtpHvBwmdvt1PcE2j9UM"
+    webhook = Webhook.from_url(url=urll, session=client.session)
+    thread = await ctx.guild.fetch_channel(1190736866308276394)  # thread id
+    rtype = "feature" or "bugfix"
+    await webhook.send(f'Patch notes for Q1 2024 / This is mostly a `{rtype}` release', embed=embed,
+                       thread=Object(id=thread.id), silent=True)
+    await ctx.send(f"Done. The webhook was sent to '{thread.name}' with ID {thread.id}.")
+
 @client.tree.command(name='help', description='help command for c2c, outlines all categories of commands.',
-                     guilds=[discord.Object(id=829053898333225010), discord.Object(id=780397076273954886)])
-async def help_command(interaction: discord.Interaction):
-    embed = discord.Embed(title='Help Menu for c2c',
-                          description=f'```fix\n[Patch #24]\n'
-                                      f'- Command optimization\n'
-                                      f'- Major performance improvements\n'
-                                      f'- Databases have fully replaced json```\n'
-                                      f'Use this dropdown to find a command based on its category. '
-                                      f'A few things to note:\n'
-                                      f'- This help command does not display uncategorized commands.\n'
-                                      f'- The prefix for this bot is `>` (for text commands)\n'
-                                      f'- Not all categories are accessible to everyone, check the details prior.',
-                          colour=discord.Colour.from_rgb(138, 175, 255))
+                     guilds=[Object(id=829053898333225010), Object(id=780397076273954886)])
+async def help_command(interaction: Interaction):
+    embed = Embed(title='Help Menu for c2c',
+                  description=f'```fix\n[Patch #26]\n'
+                              f'- More commands interacting with API Interfaces\n'
+                              f'- Major performance improvements\n'
+                              f'- Databases have fully replaced json```\n'
+                              f'Use this dropdown to find a command based on its category. '
+                              f'A few things to note:\n'
+                              f'- This help command does not display uncategorized commands.\n'
+                              f'- The prefix for this bot is `>` (for text commands)\n'
+                              f'- Not all categories are accessible to everyone, check the details prior.',
+                  colour=Colour.from_rgb(138, 175, 255))
     embed.add_field(name='Feedback System',
                     value=f'We have a feedback system! Use the </feedback:1179817617767268353> command to help '
                           f'improve this experience.')
@@ -533,7 +814,7 @@ async def help_command(interaction: discord.Interaction):
 async def main():
     await load_cogs()
     try:
-        discord.utils.setup_logging(level=LOGGING_INFO)
+        setup_logging(level=LOGGING_INFO)
 
         load_dotenv()
         token = environ.get("BOT_TOKEN")
