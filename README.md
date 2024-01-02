@@ -5,6 +5,10 @@
 A highly integrated and powerful discord bot.
 I have been actively working on this project for the past 3 years, it is rare to encounter any bugs on the bot. 
 
+## Installation
+Regarding setting up this bot yourself, the installation guide will not provided. I have not designed this bot to be used for others nor do I encourage this to take place. If you wish to fork this repo and setup a version of my bot however, you may do so. I am not responsible for any errors that may occur when running this bot.
+
+
 ## Features
 - Advanced economy system (no json, using databases)
   - Running these databases using connection pools via [@Rapptz](https://www.github.com/Rapptz)'s `asqlite` repo.
