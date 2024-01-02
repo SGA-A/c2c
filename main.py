@@ -22,20 +22,6 @@ if TYPE_CHECKING:
     AppCommandStore = Dict[str, app_commands.AppCommand]  # name: AppCommand
 
 
-# Search for a specific term in this project using Ctrl + Shift + F
-"""
-HOW TO RUN ON PYTHON 3.12 (in the background):
-Type the following:
-pythonw.exe main.py ON THE FLEET TERMINAL (NOWHERE ELSE, NOT EVEN CMD PROMPT)
-thats it!
-
-HOW TO RUN ON PYTHON 3.12 (not in the background):
-Type the following
-py -3.12 main.py OR python.exe main.py (if you don't have multiple version of python installed)
-that's it!
-"""
-
-
 class CustomContext(commands.Context):
     async def prompt(
             self,
