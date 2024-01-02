@@ -18,7 +18,7 @@ from tatsu.wrapper import ApiWrapper
 
 def membed(custom_description: str) -> discord.Embed:
     """Quickly create an embed with a custom description using the preset."""
-    membedder = discord.Embed(colour=0x2F3136,
+    membedder = discord.Embed(colour=discord.Colour.dark_embed(),
                               description=custom_description)
     return membedder
 
@@ -38,7 +38,7 @@ def number_to_ordinal(n):
 BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
 COOLDOWN_TABLE_NAME = "cooldowns"
-BANK_COLUMNS = ["wallet", "bank", "slotw", "slotl", "betw", "betl", "bjw", "bjl", "pmulti", "job", "bounty" "prestige"]
+BANK_COLUMNS = ["wallet", "bank", "pmulti", "job", "bounty", "prestige"]
 invoker_ch = int()
 participants = set()
 DOWN = True
@@ -146,6 +146,17 @@ def save_times():  # Note that this used to be called save_amount_job_times, jus
 def acknowledge_claim():
     with open('C:\\Users\\georg\\PycharmProjects\\c2c\\cogs\\claimed.json', 'w') as file_name_nine:
         json.dump(claims, file_name_nine, indent=4)
+
+
+def calculate_hand(hand):
+    aces = hand.count(11)
+    total = sum(hand)
+
+    while total > 21 and aces > 0:
+        total -= 10
+        aces -= 1
+
+    return total
 
 
 def make_plural(word, count):
@@ -366,19 +377,18 @@ def modify_stock(item: str, modify_type: Literal["+", "-"], amount: int) -> int:
 
 
 class ConfirmDeny(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction):
-        super().__init__(timeout=20.0)
+    def __init__(self, interaction: discord.Interaction, client: commands.Bot, member: discord.Member):
         self.interaction = interaction
+        self.client: commands.Bot = client
+        self.member = member
         self.timed_out: bool = True
+        super().__init__(timeout=30)
 
     async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
         if self.timed_out:
-            for item in self.children:
-                item.disabled = True
-            await self.msg.edit(content="Timed out waiting for a response.", view=None) # type: ignore
-        else:
-            for item in self.children:
-                item.disabled = True
+            await self.msg.edit(content="Timed out waiting for a response. The operation was cancelled.", view=None) # type: ignore
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Make sure the original user that called the interaction is only in control, no one else."""
@@ -386,27 +396,33 @@ class ConfirmDeny(discord.ui.View):
             return True
         else:
             emb = membed(
-                f"A good attempt, but only {self.interaction.user.mention} can perform this action.")
+                f"{self.interaction.user.mention} can only give consent to perform this action.")
             await interaction.response.send_message(embed=emb, ephemeral=True) # type: ignore
             return False
 
-    @discord.ui.button(label='Confirm', style=discord.ButtonStyle.green)
+    @discord.ui.button(label='Confirm', style=discord.ButtonStyle.danger)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        button.disabled = True
-        # await interaction.response.send_message("Request accepted.", ephemeral=True)
-        self.timed_out = False
-        for item in self.children:
-            item.disabled = True
-        await interaction.message.edit(content="Request accepted.", view=None)
+        tables_to_delete = [BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME]
+        # Execute DELETE queries using a loop
+        async with self.client.pool_connection.acquire() as conn: # type: ignore
+            conn: asqlite_Connection
+            for table in tables_to_delete:
+                await conn.execute(f"DELETE FROM `{table}` WHERE userID = ?", (self.member.id,))
 
-    @discord.ui.button(label='Deny', style=discord.ButtonStyle.red)
+            await conn.commit()
+            embed = discord.Embed(colour=0x2F3136,
+                                  description=f"## <:successful:1183089889269530764> Your records have been wiped.\n"
+                                              f"- You can register again at any time if you wish.\n"
+                                              f" - Doing so will not recover your past data however.")
+            await interaction.message.edit(embed=embed, view=None)
+
+    @discord.ui.button(label='Deny', style=discord.ButtonStyle.green)
     async def deny(self, interaction: discord.Interaction, button: discord.ui.Button):
-        button.disabled = True
         # await interaction.response.send_message("Request denied.", ephemeral=True)
         self.timed_out = False
         for item in self.children:
             item.disabled = True
-        await interaction.message.edit(content="Request denied.", view=None)
+        await interaction.message.edit(content="The operation was cancelled, as per-request.", view=None)
 
 
 # class GroupModal(discord.ui.Modal, title='Create your clan'):
@@ -452,6 +468,340 @@ class ConfirmDeny(discord.ui.View):
 #         # Make sure we know what the error actually is
 #         traceback.print_exception(type(error), error, error.__traceback__)
 
+
+class BlackjackUi(discord.ui.View):
+    """View for the blackjack command and its associated functions."""
+
+    def __init__(self, interaction: discord.Interaction, client: commands.Bot):
+        self.interaction = interaction
+        self.client: commands.Bot = client
+        self.finishedr = False
+        super().__init__(timeout=30)
+
+    async def disable_all_items(self) -> None:
+        for item in self.children:
+            item.disabled = True
+
+    async def on_timeout(self) -> None:
+        await self.disable_all_items()
+        if not self.finishedr:
+
+            namount = self.client.games[self.interaction.user.id][-1]  # type: ignore
+            namount = floor(((130 / 100) * namount))
+            del self.client.games[self.interaction.user.id]  # type: ignore
+
+            async with self.client.pool_connection.acquire() as conn:  # type: ignore
+                conn: asqlite_Connection
+
+                await Economy.update_bank_new(self.interaction.guild.me, conn, namount)
+                new_amount_balance = await Economy.update_bank_new(self.interaction.user, conn, -namount)
+
+            losse = discord.Embed(
+                colour=discord.Colour.dark_embed(),
+                description=f"## No response detected.\n"
+                            f"- {self.interaction.user.mention} was fined \U000023e3 {namount:,} for unpunctuality.\n"
+                            f" - The dealer received {self.interaction.user.display_name}'s bet in full.\n"
+                            f" - An additional 30% tax was as included as part of a gambling duty.\n"
+                            f"- {self.interaction.user.mention} now has \U000023e3 {new_amount_balance[0]:,}."
+            )
+            avatar = self.interaction.user.avatar or self.interaction.user.default_avatar
+            losse.set_author(name=f"{self.interaction.user.name}'s timed-out blackjack game",
+                             icon_url=avatar.url)
+
+            return await self.message.edit( # type: ignore
+                content=None, embed=losse, view=self)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user == self.interaction.user:
+            return True
+        else:
+            emb = discord.Embed(
+                description=f"This game is being held under {self.interaction.user.name}'s name. Not yours.",
+                color=0x2F3136
+            )
+            await interaction.response.send_message(embed=emb, ephemeral=True) # type: ignore
+            return False
+
+    @discord.ui.button(label='Hit', style=discord.ButtonStyle.blurple)
+    async def hit_bj(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        namount = self.client.games[interaction.user.id][-1] # type: ignore
+        deck = self.client.games[interaction.user.id][0]  # type: ignore
+        player_hand = self.client.games[interaction.user.id][1]  # type: ignore
+
+        popped = deck.pop()
+        player_hand.append(popped)
+        self.client.games[interaction.user.id][-2].append(display_user_friendly_card_format(popped)) # type: ignore
+        player_sum = sum(player_hand)
+
+        if player_sum > 21:
+
+            await self.disable_all_items()
+            self.finishedr = True
+            dealer_hand = self.client.games[interaction.user.id][2] # type: ignore
+            d_fver_p = [num for num in self.client.games[interaction.user.id][-2]] # type: ignore
+            d_fver_d = [num for num in self.client.games[interaction.user.id][-3]] # type: ignore
+            del self.client.games[interaction.user.id] # type: ignore
+            async with self.client.pool_connection.acquire() as conn:  # type: ignore
+                conn: asqlite_Connection
+
+                await Economy.update_bank_new(interaction.user, conn, namount, "bjla")
+                bj_win = await conn.execute('SELECT bjw FROM bank WHERE userID = ?', (interaction.user.id,))
+                bj_win = await bj_win.fetchone()
+                new_bj_lose = await Economy.update_bank_new(interaction.user, conn, 1, "bjl")
+                new_total = new_bj_lose[0] + bj_win[0]
+                prnctl = round((new_bj_lose[0] / new_total) * 100)
+
+                new_amount_balance = await Economy.update_bank_new(interaction.user, conn, -namount)
+                embed = discord.Embed(colour=discord.Colour.brand_red(),
+                                      description=f"**You lost. You went over 21 and busted.**\n"
+                                                  f"You lost {CURRENCY}**{namount:,}**. You now "
+                                                  f"have {CURRENCY}**{new_amount_balance[0]:,}**\n"
+                                                  f"You lost {prnctl}% of the games.")
+
+                embed.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                          f"**Total** - `{player_sum}`")
+                embed.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
+                                                                            f"**Total** - `{sum(dealer_hand)}`")
+
+                avatar = interaction.user.avatar or interaction.user.default_avatar
+                embed.set_author(name=f"{interaction.user.name}'s losing blackjack game", icon_url=avatar.url)
+                await interaction.response.edit_message(content=None, embed=embed, view=None) # type: ignore
+
+        elif sum(player_hand) == 21:
+
+            self.finishedr = True
+            await self.disable_all_items()
+
+            dealer_hand = self.client.games[interaction.user.id][2] # type: ignore
+            d_fver_p = [num for num in self.client.games[interaction.user.id][-2]] # type: ignore
+            d_fver_d = [num for num in self.client.games[interaction.user.id][-3]] # type: ignore
+
+            del self.client.games[interaction.user.id] # type: ignore
+
+            async with self.client.pool_connection.acquire() as conn:  # type: ignore
+                conn: asqlite_Connection
+
+                bj_lose = await conn.execute('SELECT bjl FROM bank WHERE userID = ?', (interaction.user.id,))
+                bj_lose = await bj_lose.fetchone()
+                new_bj_win = await Economy.update_bank_new(interaction.user, conn, 1, "bjw")
+                new_total = new_bj_win[0] + bj_lose[0]
+                prctnw = round((new_bj_win[0] / new_total) * 100)
+
+                pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
+                new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
+                amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
+                await Economy.update_bank_new(interaction.user, conn, amount_after_multi, "bjwa")
+                new_amount_balance = await Economy.update_bank_new(interaction.user, conn, amount_after_multi)
+
+                win = discord.Embed(colour=discord.Colour.brand_green(),
+                                    description=f"**You win! You got to {player_sum}**.\n"
+                                                f"You won {CURRENCY}**{amount_after_multi:,}**. "
+                                                f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                                                f"You won {prctnw}% of the games.")
+
+                win.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                        f"**Total** - `{player_sum}`")
+                win.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
+                                                                          f"**Total** - `{sum(dealer_hand)}`")
+                avatar = interaction.user.avatar or interaction.user.default_avatar
+                win.set_author(name=f"{interaction.user.name}'s winning blackjack game", icon_url=avatar.url)
+                await interaction.response.edit_message(content=None, embed=win, view=None) # type: ignore
+
+        else:
+
+            player_hand = self.client.games[interaction.user.id][1] # type: ignore
+            d_fver_p = [number for number in self.client.games[interaction.user.id][-2]] # type: ignore
+            necessary_show = self.client.games[interaction.user.id][-3][0] # type: ignore
+            ts = sum(player_hand)
+
+            prg = discord.Embed(colour=discord.Colour.dark_theme(),
+                                description=f"**Your move. Your hand is now {ts}**.")
+            prg.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                    f"**Total** - `{ts}`")
+            prg.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {necessary_show} `?`\n"
+                                                                      f"**Total** - ` ? `")
+
+            avatar = interaction.user.avatar or interaction.user.default_avatar
+            prg.set_footer(text="K, Q, J = 10  |  A = 1 or 11")
+            prg.set_author(icon_url=avatar.url, name=f"{interaction.user.name}'s blackjack game")
+            await interaction.response.edit_message( # type: ignore
+                content="Press **Hit** to hit, **Stand** to finalize your deck or "
+                        "**Forfeit** to end your hand prematurely.", embed=prg, view=self)
+
+    @discord.ui.button(label='Stand', style=discord.ButtonStyle.blurple)
+    async def stand_bj(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        await self.disable_all_items()
+
+        deck = self.client.games[interaction.user.id][0] # type: ignore
+        player_hand = self.client.games[interaction.user.id][1] # type: ignore
+        dealer_hand = self.client.games[interaction.user.id][2] # type: ignore
+        namount = self.client.games[interaction.user.id][-1] # type: ignore
+
+        dealer_total = calculate_hand(dealer_hand)
+
+        while dealer_total < 17:
+            popped = deck.pop()
+
+            # not ui friendly
+            dealer_hand.append(popped)  # not ui friendly
+
+            # ui friendly
+            self.client.games[interaction.user.id][-3].append(display_user_friendly_card_format(popped)) # type: ignore
+
+            dealer_total = calculate_hand(dealer_hand)
+
+        player_sum = sum(player_hand)
+        d_fver_p = self.client.games[interaction.user.id][-2] # type: ignore
+        d_fver_d = self.client.games[interaction.user.id][-3] # type: ignore
+        del self.client.games[interaction.user.id] # type: ignore
+
+        if dealer_total > 21:
+            self.finishedr = True
+            async with self.client.pool_connection.acquire() as conn:  # type: ignore
+                conn: asqlite_Connection
+
+                bj_lose = await conn.execute('SELECT bjl FROM bank WHERE userID = ?', (interaction.user.id,))
+                bj_lose = await bj_lose.fetchone()
+                new_bj_win = await Economy.update_bank_new(interaction.user, conn, 1, "bjw")
+                new_total = new_bj_win[0] + bj_lose[0]
+                prctnw = round((new_bj_win[0] / new_total) * 100)
+
+                pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
+                new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
+                amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
+                await Economy.update_bank_new(interaction.user, conn, amount_after_multi, "bjwa")
+                # tma = amount_after_multi - namount
+                new_amount_balance = await Economy.update_bank_new(interaction.user, conn, amount_after_multi)
+
+            win = discord.Embed(colour=discord.Colour.brand_green(),
+                                description=f"**You win! The dealer went over 21 and busted.**\n"
+                                            f"You won {CURRENCY}**{amount_after_multi:,}**. "
+                                            f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                                            f"You won {prctnw}% of the games.")
+
+            win.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                    f"**Total** - `{player_sum}`")
+            win.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
+                                                                      f"**Total** - `{dealer_total}`")
+
+            avatar = interaction.user.avatar or interaction.user.default_avatar
+            win.set_author(icon_url=avatar.url, name=f"{interaction.user.name}'s winning blackjack game")
+            await interaction.response.edit_message(content=None, embed=win, view=None) # type: ignore
+
+        elif dealer_total > sum(player_hand):
+            self.finishedr = True
+            async with self.client.pool_connection.acquire() as conn:  # type: ignore
+                conn: asqlite_Connection
+
+                bj_win = await conn.execute('SELECT bjw FROM bank WHERE userID = ?', (interaction.user.id,))
+                bj_win = await bj_win.fetchone()
+                new_bj_lose = await Economy.update_bank_new(interaction.user, conn, 1, "bjl")
+                new_total = new_bj_lose[0] + bj_win[0]
+                prnctl = round((new_bj_lose[0] / new_total) * 100)
+                await Economy.update_bank_new(interaction.user, conn, namount, "bjla")
+                new_amount_balance = await Economy.update_bank_new(interaction.user, conn, -namount)
+
+            loser = discord.Embed(colour=discord.Colour.brand_red(),
+                                  description=f"**You lost. You stood with a lower score (`{player_sum}`) than "
+                                              f"the dealer (`{dealer_total}`).**\n"
+                                              f"You lost {CURRENCY}**{namount:,}**. You now "
+                                              f"have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                                              f"You lost {prnctl}% of the games.")
+
+            loser.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                      f"**Total** - `{player_sum}`")
+            loser.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
+                                                                        f"**Total** - `{dealer_total}`")
+            avatar = interaction.user.avatar or interaction.user.default_avatar
+            loser.set_author(icon_url=avatar.url, name=f"{interaction.user.name}'s losing blackjack game")
+            await interaction.response.edit_message(content=None, embed=loser, view=None) # type: ignore
+
+        elif dealer_total < sum(player_hand):
+            self.finishedr = True
+            async with self.client.pool_connection.acquire() as conn:  # type: ignore
+                conn: asqlite_Connection
+
+                bj_lose = await conn.execute('SELECT bjl FROM bank WHERE userID = ?', (interaction.user.id,))
+                bj_lose = await bj_lose.fetchone()
+                new_bj_win = await Economy.update_bank_new(interaction.user, conn, 1, "bjw")
+                new_total = new_bj_win[0] + bj_lose[0]
+                prctnw = round((new_bj_win[0] / new_total) * 100)
+
+                pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
+                new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
+                amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
+                # tma = amount_after_multi - namount
+                new_amount_balance = await Economy.update_bank_new(interaction.user, conn, amount_after_multi)
+                await Economy.update_bank_new(interaction.user, conn, amount_after_multi, "bjwa")
+
+            win = discord.Embed(colour=discord.Colour.brand_green(),
+                                description=f"**You win! You stood with a higher score (`{player_sum}`) than the dealer (`{dealer_total}`).**\n"
+                                            f"You won {CURRENCY}**{amount_after_multi:,}**. "
+                                            f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                                            f"You won {prctnw}% of the games.")
+            win.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                    f"**Total** - `{player_sum}`")
+            win.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
+                                                                      f"**Total** - `{dealer_total}`")
+            avatar = interaction.user.avatar or interaction.user.default_avatar
+            win.set_author(icon_url=avatar.url, name=f"{interaction.user.name}'s winning blackjack game")
+            await interaction.response.edit_message(content=None, embed=win, view=None) # type: ignore
+        else:
+            self.finishedr = True
+            async with self.client.pool_connection.acquire() as conn:  # type: ignore
+                conn: asqlite_Connection
+                wallet_amt = await Economy.get_wallet_data_only(interaction.user, conn)
+            tie = discord.Embed(colour=discord.Colour.yellow(),
+                                description=f"**Tie! You tied with the dealer.**\n"
+                                            f"Your wallet hasn't changed! You have {CURRENCY}**{wallet_amt:,}** still.")
+            tie.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                    f"**Total** - `{player_sum}`")
+            tie.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
+                                                                      f"**Total** - `{dealer_total}`")
+            avatar = interaction.user.avatar or interaction.user.default_avatar
+            tie.set_author(icon_url=avatar.url, name=f"{interaction.user.name}'s blackjack game")
+            await interaction.response.edit_message(content=None, embed=tie, view=None) # type: ignore
+
+    @discord.ui.button(label='Forfeit', style=discord.ButtonStyle.blurple)
+    async def forfeit_bj(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.finishedr = True
+        await self.disable_all_items()
+        namount = self.client.games[interaction.user.id][-1] # type: ignore
+        namount = namount // 2
+        dealer_total = sum(self.client.games[interaction.user.id][2]) # type: ignore
+        player_sum = sum(self.client.games[interaction.user.id][1]) # type: ignore
+        d_fver_p = self.client.games[interaction.user.id][-2] # type: ignore
+        d_fver_d = self.client.games[interaction.user.id][-3] # type: ignore
+
+        del self.client.games[interaction.user.id] # type: ignore
+
+        async with self.client.pool_connection.acquire() as conn:  # type: ignore
+            conn: asqlite_Connection
+
+            bj_win = await conn.execute('SELECT bjw FROM bank WHERE userID = ?', (interaction.user.id,))
+            bj_win = await bj_win.fetchone()
+            new_bj_lose = await Economy.update_bank_new(interaction.user, conn, 1, "bjl")
+            new_total = new_bj_lose[0] + bj_win[0]
+            await Economy.update_bank_new(interaction.user, conn, namount, "bjla")
+            await Economy.update_bank_new(self.interaction.guild.me, conn, namount)  # give to bot
+            new_amount_balance = await Economy.update_bank_new(interaction.user, conn, -namount)  # take from human
+
+        loser = discord.Embed(colour=discord.Colour.brand_red(),
+                              description=f"**You forfeit. The dealer took half of your bet for surrendering.**\n"
+                                          f"You lost {CURRENCY}**{namount:,}**. You now "
+                                          f"have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                                          f"You lost {round((new_bj_lose[0] / new_total) * 100)}% of the games.")
+
+        loser.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                                                        f"**Total** - `{player_sum}`")
+        loser.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
+                                                                            f"**Total** - `{dealer_total}`")
+        avatar = interaction.user.avatar or interaction.user.default_avatar
+        loser.set_author(icon_url=avatar.url, name=f"{interaction.user.name}'s losing blackjack game")
+
+        await interaction.response.edit_message(content=None, embed=loser, view=None) # type: ignore
 
 class HighLow(discord.ui.View):
     """View for the High-low command and its associated functions."""
@@ -1104,16 +1454,16 @@ class Economy(commands.Cog):
                         real_amount = wallet_amt_host
                     else:
                         return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
-                    host_amt = await Economy.update_bank_new(interaction.user, conn, -int(real_amount))
-                    recp_amt = await Economy.update_bank_new(other, conn, int(real_amount))
+                    host_amt = await self.update_bank_new(interaction.user, conn, -int(real_amount))
+                    recp_amt = await self.update_bank_new(other, conn, int(real_amount))
                 else:
                     if real_amount == 0:
                         return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
                     elif real_amount > wallet_amt_host:
                         return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
                     else:
-                        host_amt = await Economy.update_bank_new(interaction.user, conn, -int(real_amount))
-                        recp_amt = await Economy.update_bank_new(other, conn, int(real_amount))
+                        host_amt = await self.update_bank_new(interaction.user, conn, -int(real_amount))
+                        recp_amt = await self.update_bank_new(other, conn, int(real_amount))
 
                 embed = discord.Embed(title='Transaction Complete',
                                       description=f'- {clr.mention} has given {other.mention} \U000023e3 {real_amount:,}\n'
@@ -1615,6 +1965,7 @@ class Economy(commands.Cog):
                                               f'issues.**', colour=0x2F3136)
         await ctx.send(embed=embed)
 
+
     @app_commands.command(name="use", description="use an item you own from your inventory.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(item='the name of the item to use')
@@ -1664,12 +2015,60 @@ class Economy(commands.Cog):
                         embed=unavailable
                     )
 
-    @app_commands.command(name='tester', description='test slash command.')
+    @app_commands.command(name='stats', description='view user stats relevant to the virtual economy.')
+    @app_commands.checks.cooldown(1, 10)
+    @app_commands.describe(user="the user to fetch the stats of")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
-    async def test_sla_cmd(self, interaction: discord.Interaction):
-        view = ConfirmDeny(interaction)
-        await interaction.response.send_message("Do you confirm the changes?", view=view) # type: ignore
-        view.msg = await interaction.original_response()
+    async def view_stats_user(self, interaction: discord.Interaction, user: Optional[discord.Member]):
+
+        if user is None:
+            user = interaction.user
+
+        async with self.client.pool_connection.acquire() as conn: # type: ignore
+            conn: asqlite_Connection
+
+            if await self.can_call_out(user, conn):
+                return await interaction.response.send_message(embed=NOT_REGISTERED) # type: ignore
+
+            users = await conn.execute(f"SELECT * FROM `bank` WHERE userID = ?", (user.id,))
+            user_data = await users.fetchone()
+            total_slots = user_data[3] + user_data[4]
+            total_bets = user_data[5] + user_data[6]
+            total_blackjacks = user_data[7] + user_data[8]
+
+            try:
+                winbe = round((user_data[5] / total_bets) * 100)
+            except ZeroDivisionError:
+                winbe = 0
+            try:
+                winsl = round((user_data[3]/total_slots)*100)
+            except ZeroDivisionError:
+                winsl = 0
+            try:
+                winbl = round((user_data[7]/total_blackjacks)*100)
+            except ZeroDivisionError:
+                winbl = 0
+
+            stats = discord.Embed(title=f"{user.name}'s gambling stats",
+                                  colour=discord.Colour.dark_embed())
+            stats.add_field(name=f"BET ({total_bets:,})",
+                            value=f"Won: \U000023e3 {user_data[11]:,}\n"
+                                  f"Lost: \U000023e3 {user_data[12]:,}\n"
+                                  f"Net: \U000023e3 {user_data[11]-user_data[12]:,}\n"
+                                  f"Win: {winbe}% ({user_data[5]})")
+            stats.add_field(name=f"SLOTS ({total_slots:,})",
+                            value=f"Won: \U000023e3 {user_data[9]:,}\n"
+                                  f"Lost: \U000023e3 {user_data[10]:,}\n"
+                                  f"Net: \U000023e3 {user_data[9]-user_data[10]:,}\n"
+                                  f"Win: {winsl}% ({user_data[3]})")
+            stats.add_field(name=f"BLACKJACK ({total_blackjacks:,})",
+                            value=f"Won: \U000023e3 {user_data[13]:,}\n"
+                                  f"Lost: \U000023e3 {user_data[14]:,}\n"
+                                  f"Net: \U000023e3 {user_data[13]-user_data[14]:,}\n"
+                                  f"Win: {winbl}% ({user_data[7]})")
+            stats.set_footer(text="The number next to the name is how many matches are recorded")
+
+            await interaction.response.send_message(embed=stats) # type: ignore
 
     @app_commands.command(name="getjob", description="earn a salary becoming employed.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -1904,6 +2303,7 @@ class Economy(commands.Cog):
             new_multi = serv_multi + emulti  # Server multiplier PLUS slot machine multiplier
             amount_after_multi = floor(((new_multi / 100) * amount) + amount)  # New amount AFTER all multipliers
             tma = amount_after_multi - amount  # The multiplier amount
+            await self.update_bank_new(interaction.user, conn, amount_after_multi, "slotwa")
             new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
             new_id_won_amount = await self.update_bank_new(interaction.user, conn, 1, "slotw")
             new_total = id_lose_amount + new_id_won_amount[0]
@@ -1929,6 +2329,7 @@ class Economy(commands.Cog):
             new_multi = serv_multi + emulti  # Server multiplier PLUS slot machine multiplier
             amount_after_multi = floor(((new_multi / 100) * amount) + amount)  # New amount AFTER all multipliers
             tma = amount_after_multi - amount  # The multiplier amount
+            await self.update_bank_new(interaction.user, conn, amount_after_multi, "slotwa")
             new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
             new_id_won_amount = await self.update_bank_new(interaction.user, conn, 1, "slotw")
             new_total = id_lose_amount + new_id_won_amount[0]
@@ -1948,6 +2349,7 @@ class Economy(commands.Cog):
 
         else:  # A LOSING SLOT MACHINE
 
+            await self.update_bank_new(interaction.user, conn, amount, "slotla")
             new_amount_balance = await self.update_bank_new(interaction.user, conn, -amount)
             new_id_lose_amount = await self.update_bank_new(interaction.user, conn, 1, "slotl")
             new_total = new_id_lose_amount[0] + id_won_amount
@@ -2306,27 +2708,38 @@ class Economy(commands.Cog):
     @app_commands.command(name="discontinue", description="opt out of the virtual economy system.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(member='the user to remove all of the data of')
-    async def reset_user(self, interaction: discord.Interaction, member: Optional[discord.Member]):
-        their_name = member or interaction.user
-        if interaction.user.id not in {992152414566232139, 546086191414509599}:  # if author is not geo or splint
-            if member is not None:  # if member content was written
-                return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
-        else:  # if author is geo or splint
-            if their_name.bot:
-                return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
+    async def discontinue_bot(self, interaction: discord.Interaction, member: Optional[discord.Member]):
 
         if member is None:
             member = interaction.user
 
+        if interaction.user.id not in {992152414566232139, 546086191414509599}:  # if author is not geo or splint
+            if member is not None:  # if member content was written
+                return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
+        else:  # if author is geo or splint
+            if member.bot:
+                return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
+
         async with self.client.pool_connection.acquire() as conn: # type: ignore
             conn: asqlite_Connection
             data = await self.get_bank_data_new(member, conn)
+
             if data is None:
                 await interaction.response.send_message( # type: ignore
                     embed=membed(f"Cannot perform this action, {member.name} is not on our database."))
             else:
-                tables_to_delete = [BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME]
 
+                if member.id == interaction.user.id:
+                    view = ConfirmDeny(interaction, self.client, member)
+                    await interaction.response.send_message("## Are you sure you want to do this?\n" # type: ignore
+                                                            "You are about to erase all of your data "
+                                                            "associated with your account.\n"
+                                                            "**This process is irreversible, you cannot "
+                                                            "recover this data afterwards.**",
+                                                            view=view)  # type: ignore
+                    view.msg = await interaction.original_response()
+                    return
+                tables_to_delete = [BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME]
                 # Execute DELETE queries using a loop
                 for table in tables_to_delete:
                     await conn.execute(f"DELETE FROM `{table}` WHERE userID = ?", (member.id,))
@@ -2742,15 +3155,19 @@ class Economy(commands.Cog):
             return await interaction.response.send_message(embed=membed(f"You got {result}, meaning you won \U000023e3 " # type: ignore
                                                                         f"**{reward:,}** (50% capital gains tax)."))
 
-    @commands.command(name='blackjack', description='play a quick round of [blackjack.](https://www.youtube.com/watch?v=VB-6MvXvsKo)',
-                      aliases=("bj",))
-    @commands.cooldown(1, 12)
-    @commands.guild_only()
-    async def start_blackjack(self, ctx: commands.Context, bet_amount):
+    @app_commands.command(name="blackjack",
+                          description="take your chances and test your skills at blackjack.")
+    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
+    @app_commands.rename(bet_amount='robux')
+    @app_commands.describe(bet_amount='the amount of robux to bet on. Supports Shortcuts (max, all, exponents).')
+    async def play_blackjack(self, interaction: discord.Interaction, bet_amount: str):
+
+        await interaction.response.defer(thinking=True) # type: ignore
 
         # ------ Check the user is registered or already has an ongoing game ---------
         if len(self.client.games) >= 2: # type: ignore
-            return await ctx.send(
+            return await interaction.followup.send(
                 embed=membed(
                     "- The maximum consecutive blackjack games being held has been reached.\n"
                     "- To prevent server overload, you cannot start a game until the current games "
@@ -2759,13 +3176,13 @@ class Economy(commands.Cog):
                 )
             )
 
-        if self.client.games.setdefault(ctx.author.id, None) is not None: # type: ignore
-            return await ctx.send("You already have an ongoing game taking place.")
+        if self.client.games.setdefault(interaction.user.id, None) is not None: # type: ignore
+            return await interaction.followup.send("You already have an ongoing game taking place.")
 
         async with self.client.pool_connection.acquire() as conn: # type: ignore
             conn: asqlite_Connection
-            if await self.can_call_out(ctx.author, conn):
-                return await ctx.send(embed=self.not_registered) # type: ignore
+            if await self.can_call_out(interaction.user, conn):
+                return await interaction.followup.send(embed=self.not_registered)
 
         # --------------------------------------------------------------
 
@@ -2778,9 +3195,9 @@ class Economy(commands.Cog):
         dealer_hand = [deck.pop(), deck.pop()]
 
 
-        keycard_amt = await self.get_one_inv_data_new(ctx.author, "Keycard", conn)
-        wallet_amt = await self.get_wallet_data_only(ctx.author, conn)
-        pmulti = await self.get_pmulti_data_only(ctx.author, conn)
+        keycard_amt = await self.get_one_inv_data_new(interaction.user, "Keycard", conn)
+        wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
+        pmulti = await self.get_pmulti_data_only(interaction.user, conn)
         has_keycard = keycard_amt >= 1
         # ----------- Check what the bet amount is, converting where necessary -----------
 
@@ -2797,8 +3214,7 @@ class Economy(commands.Cog):
                 else:
                     namount = wallet_amt
             else:
-                ctx.command.reset_cooldown(ctx)
-                return await ctx.send(embed=ERR_UNREASON)  # type: ignore
+                return await interaction.followup.send(embed=ERR_UNREASON)  # type: ignore
 
         # -------------------- Check to see if user has sufficient balance --------------------------
 
@@ -2811,13 +3227,13 @@ class Economy(commands.Cog):
                                                                  f'be made\n'
                                                                  f' - A maximum bet of {CURRENCY}**100,000,000** '
                                                                  f'can only be made.')
-                return await ctx.send(embed=err)  # type: ignore
+                return await interaction.followup.send(embed=err)  # type: ignore
             if namount > wallet_amt:
                 err = discord.Embed(colour=0x2F3136, description=f'Cannot perform this action, '
                                                                  f'you only have {CURRENCY}**{wallet_amt:,}**\n'
                                                                  f'You\'ll need {CURRENCY}**{namount - wallet_amt:,}**'
                                                                  f' more in your wallet first.')
-                return await ctx.send(embed=err)  # type: ignore
+                return await interaction.followup.send(embed=err)  # type: ignore
         else:
             if (namount > 50_000_000) or (namount < 1000000):
                 err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the blackjack criteria:\n'
@@ -2829,28 +3245,28 @@ class Economy(commands.Cog):
                                                                  f'can only be made (this can increase when you '
                                                                  f'acquire a <:lanyard:1165935243140796487> '
                                                                  f'Keycard).')
-                return await ctx.send(embed=err)  # type: ignore
+                return await interaction.followup.send(embed=err)  # type: ignore
             if namount > wallet_amt:
                 err = discord.Embed(colour=0x2F3136, description=f'Cannot perform this action, '
                                                                  f'you only have {CURRENCY}**{wallet_amt:,}**\n'
                                                                  f'You\'ll need {CURRENCY}**{namount - wallet_amt:,}**'
                                                                  f' more in your wallet first.')
-                return await ctx.send(embed=err)  # type: ignore
+                return await interaction.followup.send(embed=err)  # type: ignore
 
         # ------------ In the case where the user already won --------------
         if self.calculate_hand(player_hand) == 21:
 
-            bj_lose = await conn.execute('SELECT bjl FROM bank WHERE userID = ?', (ctx.author.id,))
+            bj_lose = await conn.execute('SELECT bjl FROM bank WHERE userID = ?', (interaction.user.id,))
             bj_lose = await bj_lose.fetchone()
-            new_bj_win = await self.update_bank_new(ctx.author, conn, 1, "bjw")
+            new_bj_win = await self.update_bank_new(interaction.user, conn, 1, "bjw")
             new_total = new_bj_win[0] + bj_lose[0]
             prctnw = round((new_bj_win[0]/new_total)*100)
 
-            new_multi = SERVER_MULTIPLIERS.setdefault(ctx.guild.id, 0) + pmulti[0]
+            new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
             amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
             # tma = amount_after_multi - namount
-            new_amount_balance = await self.update_bank_new(ctx.author, conn, amount_after_multi)
-
+            await self.update_bank_new(interaction.user, conn, amount_after_multi, "bjwa")
+            new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
             d_fver_p = display_user_friendly_deck_format(player_hand)
             d_fver_d = display_user_friendly_deck_format(dealer_hand)
 
@@ -2861,11 +3277,11 @@ class Economy(commands.Cog):
                                       f"You won {CURRENCY}**{amount_after_multi:,}**. "
                                       f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
                                       f"You won {prctnw}% of the games."))
-            embed.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
+            embed.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
                                                                       f"**Total** - `{sum(player_hand)}`")
-            embed.add_field(name=f"{ctx.guild.me} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
+            embed.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
                                                                    f"**Total** - {sum(dealer_hand)}")
-            return await ctx.send(embed=embed)
+            return await interaction.followup.send(embed=embed) # type: ignore
 
         shallow_pv = []
         shallow_dv = []
@@ -2879,23 +3295,26 @@ class Economy(commands.Cog):
             shallow_dv.append(remade)
 
         # self.client.games[ctx.author.id] = (deck, player_hand, dealer_hand, namount)  # type: ignore  # before
-        self.client.games[ctx.author.id] = (deck, player_hand, dealer_hand, shallow_dv, shallow_pv, namount) # type: ignore  # after
+        self.client.games[interaction.user.id] = (deck, player_hand, dealer_hand, shallow_dv, shallow_pv, namount) # type: ignore  # after
 
 
         start = discord.Embed(colour=discord.Colour.dark_theme(),
                               description=f"The game has started. May the best win.\n"
                                           f"`\U000023e3 ~{format_number_short(namount)}` is up for grabs on the table.")
 
-        start.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(shallow_pv)}\n"
+        start.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(shallow_pv)}\n"
                                                                   f"**Total** - `{sum(player_hand)}`")
-        start.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {shallow_dv[0]} `?`\n"
+        start.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {shallow_dv[0]} `?`\n"
                                                                f"**Total** - ` ? `")
-        avatar = ctx.author.avatar or ctx.author.default_avatar
-        start.set_author(icon_url=avatar.url, name=f"{ctx.author.name}'s blackjack game")
+        avatar = interaction.user.avatar or interaction.user.default_avatar
+        start.set_author(icon_url=avatar.url, name=f"{interaction.user.name}'s blackjack game")
         start.set_footer(text="K, Q, J = 10  |  A = 1 or 11")
-        await ctx.send(content="What do you want to do?\n"
-                               "Type `>h` to **hit** or `>s` to **stand**, ending the game.",
-                       embed=start)
+        my_view = BlackjackUi(interaction, self.client)
+        await interaction.followup.send(
+            content="What do you want to do?\nPress **Hit** to to request an additional card, **Stand** to finalize "
+                    "your deck or **Forfeit** to end your hand prematurely, sacrificing half of your original bet.",
+            embed=start, view=my_view)
+        my_view.message = await interaction.original_response()
 
     @app_commands.command(name="bet",
                           description="bet your robux on a dice roll to win or lose robux.")
@@ -2986,6 +3405,7 @@ class Economy(commands.Cog):
                 new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
                 amount_after_multi = floor(((new_multi / 100) * amount) + amount)
                 tma = amount_after_multi - amount
+                await self.update_bank_new(interaction.user, conn, amount_after_multi, "betwa")
                 new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
                 new_id_won_amount = await self.update_bank_new(interaction.user, conn, 1, "betw")
                 new_total = id_lose_amount + new_id_won_amount[0]
@@ -3016,6 +3436,7 @@ class Economy(commands.Cog):
                 id_won_amount, id_lose_amount = bet_stuff[5], bet_stuff[6]
                 avatar = interaction.user.display_avatar or interaction.user.default_avatar
 
+                await self.update_bank_new(interaction.user, conn, amount, "betla")
                 new_amount_balance = await self.update_bank_new(interaction.user, conn, -amount)
                 new_id_lose_amount = await self.update_bank_new(interaction.user, conn, 1, "betl")
                 new_total = id_won_amount + new_id_lose_amount[0]
