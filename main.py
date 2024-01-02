@@ -1,23 +1,18 @@
 from __future__ import annotations
-import discord
 from dotenv import load_dotenv
 from datetime import datetime
 from os import listdir, environ
 from sys import version
 from discord.ext import commands
 from typing import Literal
-from cogs.economy import Economy, CURRENCY, SERVER_MULTIPLIERS
-from cogs.economy import display_user_friendly_card_format
-from math import floor
-from random import randint
 from collections import deque
 from discord.utils import setup_logging
 from discord import app_commands, Object, ui, Intents, Status, Embed, Interaction, CustomActivity
 from discord import RawReactionActionEvent, AppCommandType, SelectOption, Colour, File, Webhook
-from asyncio import run, TimeoutError as asyncio_TimeoutError, sleep
+from asyncio import run, TimeoutError as asyncio_TimeoutError
 from typing import Dict, Optional, TYPE_CHECKING, Union, List
 from aiohttp import ClientSession
-from asqlite import create_pool, Connection as asqlite_Connection
+from asqlite import create_pool
 from logging import INFO as LOGGING_INFO
 
 
@@ -25,6 +20,20 @@ if TYPE_CHECKING:
     from discord.abc import Snowflake
 
     AppCommandStore = Dict[str, app_commands.AppCommand]  # name: AppCommand
+
+
+# Search for a specific term in this project using Ctrl + Shift + F
+"""
+HOW TO RUN ON PYTHON 3.12 (in the background):
+Type the following:
+pythonw.exe main.py ON THE FLEET TERMINAL (NOWHERE ELSE, NOT EVEN CMD PROMPT)
+thats it!
+
+HOW TO RUN ON PYTHON 3.12 (not in the background):
+Type the following
+py -3.12 main.py OR python.exe main.py (if you don't have multiple version of python installed)
+that's it!
+"""
 
 
 class CustomContext(commands.Context):
@@ -241,9 +250,6 @@ client = C2C(command_prefix='>', intents=Intents.all(), case_insensitive=True,
 print(version)
 
 
-# Search for a specific term in this project using Ctrl + Shift + F
-# Shift Tab to Unindent a block of code
-
 async def load_cogs():
     for filename in listdir('./cogs'):
         if filename.endswith(".py"):
@@ -269,18 +275,6 @@ def return_interaction_cmds_last(command_holder: dict,
         command_holder.update({cmd.name: deque([f'{category}', f'{cmd.description}', 'sla'])})
     return command_holder
 
-
-def calculate_hand(hand):
-    aces = hand.count(11)
-    total = sum(hand)
-
-    while total > 21 and aces > 0:
-        total -= 10
-        aces -= 1
-
-    return total
-
-
 async def total_command_count(interaction: Interaction) -> int:
     """Return the total amount of commands detected within the client, including text and slash commands."""
     amount = 0
@@ -288,19 +282,6 @@ async def total_command_count(interaction: Interaction) -> int:
     lentxt = len(client.commands)
     amount += (lenslash+lentxt)
     return amount
-
-
-"""
-HOW TO RUN ON PYTHON 3.12 (in the background):
-Type the following:
-pythonw.exe main.py ON THE FLEET TERMINAL (NOWHERE ELSE, NOT EVEN CMD PROMPT)
-thats it!
-
-HOW TO RUN ON PYTHON 3.12 (not in the background):
-Type the following
-py -3.12 main.py OR python.exe main.py (if you don't have multiple version of python installed)
-that's it!
-"""
 
 
 class SelectMenu(ui.Select):
@@ -527,233 +508,6 @@ async def confirm_panel(ctx: CustomContext):
         await ctx.send("You accepted.")
     else:
         await ctx.send("Cancelled operation.")
-
-
-@client.command(name='hit', aliases=("h",))
-async def hit(ctx: commands.Context):
-
-    if client.games.setdefault(ctx.author.id, None) is None:  # type: ignore
-        return await ctx.send("You haven't started a game yet. To start a game: [`>bj`](https://www.skcdcmxmv.com)")
-
-    namount = client.games[ctx.author.id][-1] # pass
-    deck = client.games[ctx.author.id][0] # pass
-    player_hand = client.games[ctx.author.id][1] # pass
-
-    popped = deck.pop()
-    player_hand.append(popped)
-    client.games[ctx.author.id][-2].append(display_user_friendly_card_format(popped))
-    player_sum = sum(player_hand)
-
-    if player_sum > 21:
-
-        dealer_hand = client.games[ctx.author.id][2]
-        d_fver_p = [num for num in client.games[ctx.author.id][-2]]
-        d_fver_d = [num for num in client.games[ctx.author.id][-3]]
-        del client.games[ctx.author.id]
-        async with client.pool_connection.acquire() as conn: # type: ignore
-            conn: asqlite_Connection
-
-            bj_win = await conn.execute('SELECT bjw FROM bank WHERE userID = ?', (ctx.author.id,))
-            bj_win = await bj_win.fetchone()
-            new_bj_lose = await Economy.update_bank_new(ctx.author, conn, 1, "bjl")
-            new_total = new_bj_lose[0] + bj_win[0]
-            prnctl = round((new_bj_lose[0] / new_total) * 100)
-
-            new_amount_balance = await Economy.update_bank_new(ctx.author, conn, -namount)
-            embed = discord.Embed(colour=discord.Colour.brand_red(),
-                                  description=f"**You lost. You went over 21 and busted.**\n"
-                                              f"You lost {CURRENCY}**{namount:,}**. You now "
-                                              f"have {CURRENCY}**{new_amount_balance[0]:,}**\n"
-                                              f"You lost {prnctl}% of the games.")
-
-            embed.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
-                                                                      f"**Total** - `{player_sum}`")
-            embed.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
-                                                                        f"**Total** - `{sum(dealer_hand)}`")
-
-            avatar = ctx.author.avatar or ctx.author.default_avatar
-            embed.set_author(name=f"{ctx.author.name}'s losing blackjack game", icon_url=avatar.url)
-            await ctx.send(embed=embed)
-
-    elif sum(player_hand) == 21:
-        dealer_hand = client.games[ctx.author.id][2]
-        d_fver_p = [num for num in client.games[ctx.author.id][-2]]
-        d_fver_d = [num for num in client.games[ctx.author.id][-3]]
-
-        del client.games[ctx.author.id]
-
-        async with client.pool_connection.acquire() as conn: # type: ignore
-            conn: asqlite_Connection
-
-            bj_lose = await conn.execute('SELECT bjl FROM bank WHERE userID = ?', (ctx.author.id,))
-            bj_lose = await bj_lose.fetchone()
-            new_bj_win = await Economy.update_bank_new(ctx.author, conn, 1, "bjw")
-            new_total = new_bj_win[0] + bj_lose[0]
-            prctnw = round((new_bj_win[0] / new_total) * 100)
-
-            pmulti = await Economy.get_pmulti_data_only(ctx.author, conn)
-            new_multi = SERVER_MULTIPLIERS.setdefault(ctx.guild.id, 0) + pmulti[0]
-            amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
-            new_amount_balance = await Economy.update_bank_new(ctx.author, conn, amount_after_multi)
-            win = discord.Embed(colour=discord.Colour.brand_green(),
-                                description=f"**You win! You got to {player_sum}**.\n"
-                                            f"You won {CURRENCY}**{amount_after_multi:,}**. "
-                                            f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
-                                            f"You won {prctnw}% of the games.")
-
-            win.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
-                                                                    f"**Total** - `{player_sum}`")
-            win.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
-                                                                      f"**Total** - `{sum(dealer_hand)}`")
-            avatar = ctx.author.avatar or ctx.author.default_avatar
-            win.set_author(name=f"{ctx.author.name}'s winning blackjack game", icon_url=avatar.url)
-            await ctx.send(embed=win)
-
-    else:
-        player_hand = client.games[ctx.author.id][1]  # pass
-        d_fver_p = [number for number in client.games[ctx.author.id][-2]]
-        necessary_show = client.games[ctx.author.id][-3][0]
-        ts = sum(player_hand)
-
-        prg = discord.Embed(colour=discord.Colour.dark_theme(),
-                            description=f"**Your move. Your hand is now {ts}**.")
-        prg.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
-                                                                f"**Total** - `{ts}`")
-        prg.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {necessary_show} `?`\n"
-                                                                  f"**Total** - ` ? `")
-
-        avatar = ctx.author.avatar or ctx.author.default_avatar
-        prg.set_footer(text="K, Q, J = 10  |  A = 1 or 11")
-        prg.set_author(icon_url=avatar.url, name=f"{ctx.author.name}'s blackjack game")
-        await ctx.send(content="Type `>h` to **hit** or `>s` to **stand**, ending the game.", embed=prg)
-
-
-@client.command(name='stand', aliases=("s",))
-async def stand(ctx: CustomContext):
-    if client.games.setdefault(ctx.author.id, None) is None:  # type: ignore
-        return await ctx.send("You haven't started a game yet. To start a game: [`>bj`](https://www.skcdcmxmv.com)")
-
-    deck = client.games[ctx.author.id][0] # pass
-    player_hand = client.games[ctx.author.id][1]
-    dealer_hand = client.games[ctx.author.id][2]
-    namount = client.games[ctx.author.id][-1]
-
-    msg = await ctx.send("*Results are being fetched, hang in there..*")
-    await sleep(0.5)
-    dealer_total = calculate_hand(dealer_hand)
-
-    while dealer_total < 17:
-        popped = deck.pop()
-
-        # not ui friendly
-        dealer_hand.append(popped) # not ui friendly
-
-        # ui friendly
-        client.games[ctx.author.id][-3].append(display_user_friendly_card_format(popped))
-
-        dealer_total = calculate_hand(dealer_hand)
-
-    player_sum = sum(player_hand)
-    d_fver_p = client.games[ctx.author.id][-2]
-    d_fver_d = client.games[ctx.author.id][-3]
-    del client.games[ctx.author.id]
-
-    if dealer_total > 21:
-        async with client.pool_connection.acquire() as conn:  # type: ignore
-            conn: asqlite_Connection
-
-            bj_lose = await conn.execute('SELECT bjl FROM bank WHERE userID = ?', (ctx.author.id,))
-            bj_lose = await bj_lose.fetchone()
-            new_bj_win = await Economy.update_bank_new(ctx.author, conn, 1, "bjw")
-            new_total = new_bj_win[0] + bj_lose[0]
-            prctnw = round((new_bj_win[0] / new_total) * 100)
-
-            pmulti = await Economy.get_pmulti_data_only(ctx.author, conn)
-            new_multi = SERVER_MULTIPLIERS.setdefault(ctx.guild.id, 0) + pmulti[0]
-            amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
-            # tma = amount_after_multi - namount
-            new_amount_balance = await Economy.update_bank_new(ctx.author, conn, amount_after_multi)
-
-        win = discord.Embed(colour=discord.Colour.brand_green(),
-                            description=f"**You win! The dealer went over 21 and busted.**\n"
-                                        f"You won {CURRENCY}**{amount_after_multi:,}**. "
-                                        f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
-                                        f"You won {prctnw}% of the games.")
-
-        win.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
-                                                                f"**Total** - `{player_sum}`")
-        win.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
-                                                                  f"**Total** - `{dealer_total}`")
-
-        avatar = ctx.author.avatar or ctx.author.default_avatar
-        win.set_author(icon_url=avatar.url, name=f"{ctx.author.name}'s winning blackjack game")
-        await msg.edit(content=None, embed=win)
-
-    elif dealer_total > sum(player_hand):
-        async with client.pool_connection.acquire() as conn:  # type: ignore
-            conn: asqlite_Connection
-
-            bj_win = await conn.execute('SELECT bjw FROM bank WHERE userID = ?', (ctx.author.id,))
-            bj_win = await bj_win.fetchone()
-            new_bj_lose = await Economy.update_bank_new(ctx.author, conn, 1, "bjl")
-            new_total = new_bj_lose[0] + bj_win[0]
-            prnctl = round((new_bj_lose[0] / new_total) * 100)
-
-
-            new_amount_balance = await Economy.update_bank_new(ctx.author, conn, -namount)
-        loser = discord.Embed(colour=discord.Colour.brand_red(),
-                              description=f"**You lost. You stood with a lower score (`{player_sum}`) than "
-                                          f"the dealer (`{dealer_total}`).**\n"
-                                          f"You lost {CURRENCY}**{namount:,}**. You now "
-                                          f"have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
-                                          f"You lost {prnctl}% of the games.")
-
-        loser.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
-                                                                  f"**Total** - `{player_sum}`")
-        loser.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
-                                                                    f"**Total** - `{dealer_total}`")
-        avatar = ctx.author.avatar or ctx.author.default_avatar
-        loser.set_author(icon_url=avatar.url, name=f"{ctx.author.name}'s losing blackjack game")
-        await msg.edit(content=None, embed=loser)
-    elif dealer_total < sum(player_hand):
-
-        async with client.pool_connection.acquire() as conn:  # type: ignore
-            conn: asqlite_Connection
-
-            bj_lose = await conn.execute('SELECT bjl FROM bank WHERE userID = ?', (ctx.author.id,))
-            bj_lose = await bj_lose.fetchone()
-            new_bj_win = await Economy.update_bank_new(ctx.author, conn, 1, "bjw")
-            new_total = new_bj_win[0] + bj_lose[0]
-            prctnw = round((new_bj_win[0] / new_total) * 100)
-
-            pmulti = await Economy.get_pmulti_data_only(ctx.author, conn)
-            new_multi = SERVER_MULTIPLIERS.setdefault(ctx.guild.id, 0) + pmulti[0]
-            amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
-            # tma = amount_after_multi - namount
-            new_amount_balance = await Economy.update_bank_new(ctx.author, conn, amount_after_multi)
-
-        win = discord.Embed(colour=discord.Colour.brand_green(),
-                            description=f"**You win! You stood with a higher score (`{player_sum}`) than the dealer (`{dealer_total}`).**\n"
-                                        f"You won {CURRENCY}**{amount_after_multi:,}**. "
-                                        f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
-                                        f"You won {prctnw}% of the games.")
-        win.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
-                                                                f"**Total** - `{player_sum}`")
-        win.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
-                                                                  f"**Total** - `{dealer_total}`")
-        avatar = ctx.author.avatar or ctx.author.default_avatar
-        win.set_author(icon_url=avatar.url, name=f"{ctx.author.name}'s winning blackjack game")
-        await msg.edit(content=None, embed=win)
-    else:
-        tie = discord.Embed(colour=discord.Colour.yellow(),
-                            description=f"**Tie! Your tied with the dealer.**")
-        tie.add_field(name=f"{ctx.author.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
-                                                                f"**Total** - `{player_sum}`")
-        tie.add_field(name=f"{ctx.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
-                                                                  f"**Total** - `{dealer_total}`")
-        avatar = ctx.author.avatar or ctx.author.default_avatar
-        tie.set_author(icon_url=avatar.url, name=f"{ctx.author.name}'s blackjack game")
-        await msg.edit(content=None, embed=tie)
 
 
 @client.command(name='dispatch-webhook', aliases=("dww",))
