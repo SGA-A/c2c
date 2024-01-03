@@ -46,9 +46,9 @@ We are 2 teenagers in the UK studying A-Levels, and chose to make this Discord b
 
 ## Installation
 > [!CAUTION]
-> I do not support running an instance of my bot. Setup details will not be given, if you can figure it out, go nuts.
+> We do not support running an instance of my bot. Setup details will not be given, if you can figure it out, go nuts.
 > 
-> I am not responsible for any errors that may occur when running this bot.
+> We are not responsible for any errors that may occur when running this bot.
 
 ## Features
 - Advanced economy system (no json, using databases):
@@ -63,7 +63,7 @@ We are 2 teenagers in the UK studying A-Levels, and chose to make this Discord b
   -  Make GET requests to multiple APIs like konachan and API Ninjas. 
   -  Generate a random fact or even ideas of what to do if you're bored.
   -  And so much more..
--  Some owner-only features I am proud of:
+-  Some owner-only features We are proud of:
     - Having **a lot** of control over the economy system:
       -  Kick users off the economy system.
       -  Ability to modify any attribute of the economy system with ease of any user (credits to [DB Browser for SQlite](https://sqlitebrowser.org/) for this.)
@@ -71,14 +71,14 @@ We are 2 teenagers in the UK studying A-Levels, and chose to make this Discord b
 ## Developer's Favourite Feature
 The help command. It is an interactive menu sorting all the commands within cogs by category and assumes each cog fits into one category. A dropdown is displayed to list the available categories and clicking any given one provides an embed edited from the original response containing every single command that corresponds to the category. My thought process at the time of making it was robust. There has only been situation encountered in which it faltered, which was where it had trouble responding to tapping the Music category. This is because the image theme used for this category's help embed is a local file, not hosted online.
 
-In the course of making this bot, I learnt a lot of things. I was just a beginner at first and had no idea how to read or even understand the discord.py documentation. I think it was my initiative one day to just completley absolve the documentation and of all of its contents one day that led me to where this project has come now. And also the programming tips I've gotten over the years. It is a passion project and I am not considering disbanding the project any time soon.
+In the course of making this bot, I learnt a lot of things. I was just a beginner at first and had no idea how to read or even understand the discord.py documentation. I think it was my initiative one day to just completley absolve the documentation and of all of its contents one day that led me to where this project has come now. And also the programming tips I've gotten over the years. It is a passion project and We are not considering disbanding the project any time soon.
 
 > [!NOTE]
 > The future of this project is uncertain. Given my limited free time, I may not be able to update the code after breaking changes to the library/API take place. This will only dwindle in the future. [See Version Guarantees for discord.py.](https://discordpy.readthedocs.io/en/stable/version_guarantees.html)
 
 ## Credits
 Of course, we didn't make it work all by ourselves. We have to acknowledge these author's for making certain features possible:
-- **The [discord.py](https://discord.gg/r3sSKJJ) server**: almost every question/bug ive encountered has been solved on their discord server, so many situations to fix burning problems were fixed because of them. It is also a great place to learn code optimizations that lower speed and time complexity for the bot.
+- **The [discord.py](https://discord.gg/r3sSKJJ) server**: almost every question/bug we have encountered has been solved on their discord server, so many situations to fix burning problems were fixed because of them. It is also a great place to learn code optimizations that lower speed and time complexity for the bot.
 - **[API Ninjas](https://api-ninjas.com/)**: their are a diverse range of APIs available for free (10,000 requests per month)
 - **[Stack Overflow](https://stackoverflow.com/)**: a pretty good place for to find answers to your general python bugs and errors
 - **[DrenJaha's Blackjack Discord Bot](https://github.com/DrenJaha/discord-blackjack-bot)**: his bot and functions for the blackjack system were used as the foundation for building up the blackjack command for what it is today. We made large changes to the design, but the method of storing data remains largely the same.
