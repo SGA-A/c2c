@@ -1,9 +1,38 @@
-# c2c
+
 <div align="center">
 <img src="testing/99d48ed4682a0c26cb135ed5e5a788f9 (1).png" width="100" height="100"/>
 </div>
-A highly integrated and powerful discord bot.
-I have been actively working on this project for the past 3 years. The app was created and destroyed numerous times due to the 'reward lifecycle'. As of now, the latest app was created on the 30th of November on 2022.
+
+<h2 align="center">c2c</h2>
+
+<p align="center">
+  <em>
+    Made in Python
+    · A highly integrated and powerful discord bot.
+    · Made using discord.py
+    · Created on 30/11/2022
+  </em>
+  <br />
+  <em>
+    Features
+    · Error Handler
+    · Components
+  </em>
+  <br />
+</p>
+<p align="center">
+  <a href="https://img.shields.io/badge/speed-blazing%20%F0%9F%94%A5-brightgreen.svg?style=flat-square">
+    <img alt="Blazing Fast" src="https://img.shields.io/badge/speed-blazing%20%F0%9F%94%A5-brightgreen.svg?style=flat-square"></a>
+  <a href="https://img.shields.io/badge/os-windows-yellow">
+    <img alt="Windows" src="https://img.shields.io/badge/os-windows-yellow"></a>
+  <a href="https://img.shields.io/badge/os-linux-yellow">
+    <img alt="Linux" src="https://img.shields.io/badge/os-windows-yellow"></a>
+  <br/>
+</p>
+<div align="center">
+  
+[![python badge](http://ForTheBadge.com/images/badges/made-with-python.svg)](https://www.python.org/ "Python")
+</div>
 
 ## Installation
 Regarding setting up this bot yourself, the installation guide will not provided. I have not designed this bot to be used for others nor do I encourage this to take place. If you wish to fork this repo and setup a version of my bot however, you may do so. I am not responsible for any errors that may occur when running this bot.
