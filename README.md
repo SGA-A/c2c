@@ -40,9 +40,9 @@
 
 
 ## Developer Team
-We are 2 young teenagers in the UK studying A-Levels, and have a burning passion to make new things that are needed in today's world!
-- [Splint](https://discordapp.com/users/992152414566232139/)
-- [inter_geo](https://discordapp.com/users/546086191414509599)
+We are 2 teenagers in the UK studying A-Levels, and chose to make this Discord bot as a side hussle.
+- [Splint](https://discordapp.com/users/992152414566232139/): The primary developer for most commands in the bot.
+- [inter_geo](https://discordapp.com/users/546086191414509599): The secondary developer, making some commands in the bot.
 
 ## Installation
 > [!CAUTION]
@@ -81,6 +81,7 @@ Of course, we didn't make it work all by ourselves. We have to acknowledge these
 - **The [discord.py](https://discord.gg/r3sSKJJ) server**: almost every question/bug ive encountered has been solved on their discord server, so many situations to fix burning problems were fixed because of them. It is also a great place to learn code optimizations that lower speed and time complexity for the bot.
 - **[API Ninjas](https://api-ninjas.com/)**: their are a diverse range of APIs available for free (10,000 requests per month)
 - **[Stack Overflow](https://stackoverflow.com/)**: a pretty good place for to find answers to your general python bugs and errors
-- **[DrenJaha's Blackjack Discord Bot](https://github.com/DrenJaha/discord-blackjack-bot)**: his bot and functions for the blackjack system were used as the foundation for building up the blackjack command for what it is today.
+- **[DrenJaha's Blackjack Discord Bot](https://github.com/DrenJaha/discord-blackjack-bot)**: his bot and functions for the blackjack system were used as the foundation for building up the blackjack command for what it is today. We made large changes to the design, but the method of storing data remains largely the same.
 - **[Danny's Eval Command](https://github.com/Rapptz/RoboDanny/blob/rewrite/cogs/admin.py#L214-L259)**: still use it and made minor tweaks to it.
-- **[skrphenix's Economy System in `aiosqlite`](https://github.com/Modern-Realm/economy-bot-discord.py/tree/master/economy%20with%20aiosqlite)**: this was a big one, the project structure and design was straightforward making it easy to change, though i had eventually migrated to [Danny's `asqlite` lib](https://github.com/Rapptz/asqlite) afterward as i was frustrated with the way it was code. Instead of creating connections every time the command is called, multiple connections are made in a 'connection pool' and on each query a connection is 'acquired' from the pool and then later on 'released' back into the pool. This did make asynchronous transactions even more faster and reliable.
+- **[skrphenix's Economy System in aiosqlite](https://github.com/Modern-Realm/economy-bot-discord.py/tree/master/economy%20with%20aiosqlite)**: The project structure and design was straightforward making it easy to change, though i had eventually migrated to [Danny's asqlite lib](https://github.com/Rapptz/asqlite) afterward as we were frustrated with the way it was coded. Instead of creating connections every time the command is called, multiple connections are made in a 'connection pool' and on each query a connection is 'acquired' from the pool and then later on 'released' back into the pool. Asynchronous transactions have now become even more faster and reliable. It has `WAL` enabled. See below for a description as for what that is:
+> There are advantages and disadvantages to using WAL instead of a rollback journal. Read more about it [here.](https://www.sqlite.org/wal.html)
