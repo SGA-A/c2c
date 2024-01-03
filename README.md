@@ -8,7 +8,7 @@
 <p align="center">
   <em>
     About
-    · A highly integrated and powerful discord bot
+    · A highly integrated and powerful application
     · Made using discord.py
     · Created on 30/11/2022
   </em>
