@@ -3,7 +3,7 @@
 <img src="testing/99d48ed4682a0c26cb135ed5e5a788f9 (1).png" width="100" height="100"/>
 </div>
 A highly integrated and powerful discord bot.
-I have been actively working on this project for the past 3 years, it is rare to encounter any bugs on the bot. 
+I have been actively working on this project for the past 3 years. The app was created and destroyed numerous times due to the 'reward lifecycle'. As of now, the latest app was created on the 30th of November on 2022.
 
 ## Installation
 Regarding setting up this bot yourself, the installation guide will not provided. I have not designed this bot to be used for others nor do I encourage this to take place. If you wish to fork this repo and setup a version of my bot however, you may do so. I am not responsible for any errors that may occur when running this bot.
