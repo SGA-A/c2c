@@ -1,7 +1,10 @@
 from traceback import print_exception
+
+import discord
 from discord import Embed, Interaction
 from discord.ext import commands
-from discord.app_commands import AppCommandError, CheckFailure, MissingRole, MissingPermissions, CommandOnCooldown, CommandNotFound, CommandAlreadyRegistered, CommandInvokeError
+from discord.app_commands import AppCommandError, CheckFailure, MissingRole, MissingPermissions
+from discord.app_commands import CommandOnCooldown, CommandNotFound, CommandAlreadyRegistered, CommandInvokeError
 
 
 class SlashExceptionHandler(commands.Cog):
@@ -16,39 +19,41 @@ class SlashExceptionHandler(commands.Cog):
     @commands.Cog.listener("on_app_command_error")
     async def get_app_command_error(self, interaction: Interaction,
                                     error: AppCommandError):
-        await interaction.response.defer(thinking=True)  # type: ignore
+
+        if not interaction.response.is_done(): # type: ignore
+            await interaction.response.defer(thinking=True) # type: ignore
+
         if isinstance(error, CheckFailure):
-            exception = Embed(title='Caught Exception of type CheckFailure',
-                                      colour=0x2F3136)
+            exception = Embed(title='Exception', colour=0x2F3136)
 
             if isinstance(error, MissingRole):  # when a user has a missing role
 
-                exception.description = (f'**{interaction.user.name}**, you are missing a role.\n\n'
-                                         f'**Required Role**: <@&{error.missing_role}>')
-                exception.set_footer(icon_url=self.client.user.avatar.url,
-                                     text='you should already know why this error occurred!')
+                exception.description = f'{interaction.user.name}, you are missing a role.'
 
-                return await interaction.followup.send(embed=exception)
+                exception.add_field(name='Required Role', value=f"<@&{error.missing_role}>", inline=False)
 
             elif isinstance(error, MissingPermissions):  # when a user has missing permissions
 
-                exception.description = (f"**{interaction.user.name}**, you lack some permissions required to use this "
-                                         f"command.")
+                exception.description = (f"{interaction.user.name}, you're missing "
+                                         f"some permissions required to use this command.")
                 exception.add_field(name='Required permissions',
                                     value=', '.join(error.missing_permissions))
 
-                return await interaction.followup.send(embed=exception)
 
             elif isinstance(error, CommandOnCooldown):  # when the command a user executes is on cooldown
-                exception.description = (f"**{interaction.user.name}**, this command is on cooldown!\n"
-                                         f"you may use this command again after **{error.retry_after:.2f}** seconds.")
+                exception.description = (f"- **{interaction.user.name}**, you're on cooldown.\n"
+                                         f" - You may use this command again after **{error.retry_after:.2f}** seconds.")
 
-                return await interaction.followup.send(embed=exception)
+            else:
+                exception.description = "Certain conditions needed to call this command were not met."
+
+            # if isinstance(interaction.response.type, discord.InteractionResponseType.deferred_channel_message,) or if isinstance(interaction.response)
+            return await interaction.followup.send(embed=exception)
 
         if isinstance(error, CommandNotFound):
             content = (
-                f"**{interaction.user.name}**, the command of name **{error.name}** was not found (type {str(error.type)}). "
-                f"it may have been recently removed or is replaced with an alternative.")
+                f"- The commmand with name {error.name} was not found.\n"
+                f"- It may have been recently removed or has been replaced with an alternative.")
 
             return await interaction.followup.send(content)
 
@@ -56,20 +61,23 @@ class SlashExceptionHandler(commands.Cog):
         if isinstance(error, CommandAlreadyRegistered):
 
             content = (
-                f"**{interaction.user.name}**, the command of name **{error.name}** is already registered "
-                f"(possible overlook in function definitions)!\n"
-                f"guild id this command was already registered at: `{error.guild_id}` (if `None` then it was a global "
+                f"- **{interaction.user.name}**, the command of name **{error.name}** is already registered.\n"
+                f" - This may be a possible overlook in the function definitions (bot issue)\n"
+                f" - The command is already registered at the guild with ID: `{error.guild_id}` (if `None` then it was a global "
                 f"command).")
 
             return await interaction.followup.send(content)
 
         if isinstance(error, CommandInvokeError):
-            content = (
-                f"Unacceptable input for {interaction.command.name}, {interaction.user.name}.")
 
             print_exception(type(error), error, error.__traceback__)
-            await interaction.followup.send(content)
 
+            await interaction.followup.send(
+                embed=Embed(description=f"## An invalid process for {interaction.command.name} took place.\n"
+                                        f"- This is more likely a problem with the bot itself as the error was not "
+                                        f"handled by the command itself.\n"
+                                        f"- Regardless, you should check your input was valid before filing a report to "
+                                        f"the c2c developers."))
         else:
             print_exception(type(error), error, error.__traceback__)
             cause = error.__cause__ or error
