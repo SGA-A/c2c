@@ -1,11 +1,12 @@
 from discord.ext import commands
 import io
-from cogs.economy import CURRENCY, determine_exponent, fmt_timestamp
+from cogs.economy import CURRENCY, determine_exponent, Economy, get_profile_key_value, modify_profile
+from random import randint
 from datetime import timedelta, datetime
 from textwrap import indent
 from contextlib import redirect_stdout
 from traceback import format_exc
-from typing import Optional, Any, Literal, Union
+from typing import Optional, Any, Literal
 import discord
 from discord import Object
 from asqlite import Connection as asqlite_Connection
@@ -14,13 +15,6 @@ from discord import app_commands
 
 
 BANK_TABLE_NAME = 'bank'
-columns = ["wallet", "bank", "slotw", "slotl", "betw", "betl"]
-
-
-def is_owner(interaction: discord.Interaction):
-    if interaction.user.id in [546086191414509599, 992152414566232139]:
-        return True
-    return False
 
 
 class Administrate(commands.Cog):
@@ -28,10 +22,28 @@ class Administrate(commands.Cog):
         self.client = client
         self._last_result: Optional[Any] = None
 
+    async def cog_check(self, ctx: commands.Context) -> bool:
+        return (ctx.author.id in self.client.owner_ids) and (ctx.guild is not None)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.id in self.client.owner_ids
+
     def return_custom_emoji(self, emoji_name):
         emoji = discord.utils.get(self.client.emojis, name=emoji_name)
         return emoji
 
+    @staticmethod
+    async def fetch_fst_msg(ctx: commands.Context, *, channel_id: discord.TextChannel.id) -> discord.Message | None:
+        """Fetch the first message of a given channel"""
+
+        channel = await ctx.guild.fetch_channel(channel_id)
+        dtls = None
+
+        async for message in channel.history(limit=1, oldest_first=True):
+            dtls = message
+            break  # Exit the loop after retrieving the first message
+
+        return dtls
     @staticmethod
     def cleanup_code(content: str) -> str:
         """Automatically removes code blocks from the code."""
@@ -42,41 +54,97 @@ class Administrate(commands.Cog):
         # remove `foo`
         return content.strip('` \n')
 
-    @staticmethod
-    async def get_bank_data_new(user: discord.Member, conn_input: asqlite_Connection) -> Optional[Any]:
-        """Retrieves robux data and other gambling stats from a registered user."""
-        data = await conn_input.execute(f"SELECT * FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        data = await data.fetchone()
-        return data
+    @commands.command(name='firstmsg', description='fetch the first message of a channel.')
+    async def first_message_fetchit(self, ctx: commands.Context):
+        await ctx.message.delete()
+        msg = await self.fetch_fst_msg(ctx, channel_id=ctx.channel.id)
 
-    @staticmethod
-    async def update_bank_new(user: discord.Member, conn_input: asqlite_Connection, amount: Union[float, int] = 0,
-                              mode: str = "wallet") -> Optional[Any]:
-        """Modifies a user's balance in a given mode: either wallet (default) or bank.
-        It also returns the new balance in the given mode, if any (defaults to wallet).
-        Note that conn_input is not the last parameter, it is the second parameter to be included."""
+        if msg is not None:
+            pinver = await ctx.send(f"\U00002728 First message of"
+                                    f" {ctx.channel.mention} by {msg.author.name}: {msg.jump_url}")
+            try:
+                await pinver.pin(reason='A special message to remember.')
+            except discord.HTTPException:
+                pass
+            return
+        await ctx.send(f"sadly i could not fetch the first message for {ctx.channel.mention} :(")
 
-        data = await conn_input.execute(
-            f"UPDATE `{BANK_TABLE_NAME}` SET `{mode}` = `{mode}` + ? WHERE userID = ? RETURNING `{mode}`",
-            (amount, user.id))
-        users = await data.fetchone()
-        return users
-
-    @app_commands.command(name='uptime', description='returns the time the bot has been active for.')
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
-    @app_commands.check(is_owner)
-    async def uptime(self, interaction: discord.Interaction):
+    @commands.command(name='uptime', description='returns the time the bot has been active for.')
+    async def uptime(self, ctx: commands.Context):
         """Returns the time the bot has been online for (in HH:MM:SS)"""
         new2 = str(datetime.now().strftime("%j:%H:%M:%S"))
         formatter = '%j:%H:%M:%S'
         time_delta = datetime.strptime(new2, formatter) - datetime.strptime(self.client.time_launch, formatter) # type: ignore
-        await interaction.response.send_message(content=f"**Uptime** (in format HH:MM:SS): {time_delta}") # type: ignore
+        await ctx.send(content=f"**Uptime** (in format HH:MM:SS): {time_delta}")
+
+    @commands.command(name="payout-now", description="send the weekly payout to eligible members.",
+                      aliases=('p_n', 'p-n'))
+    async def rewards_user_roles(self, ctx: commands.Context):
+        await ctx.message.delete()
+
+        if ctx.guild.id == 829053898333225010:
+            active_role = ctx.guild.get_role(1190772029830471781)
+            activated_role = ctx.guild.get_role(1190772182591209492)
+
+            active_members = active_role.members
+            activated_members = activated_role.members
+
+            eligible = len(active_members) + len(activated_members)  # i.e total users
+            actual = 0
+
+            async with self.client.pool_connection.acquire() as conn:  # type: ignore
+                conn: asqlite_Connection
+                payouts = dict()
+                for member in active_members:  # active member rewards
+                    if await Economy.can_call_out(member, conn):
+                        continue
+                    amt_active = randint(200000000, 1100000000)
+                    await Economy.update_bank_new(member, conn, amt_active)
+                    payouts.update({f"{member.mention}": (amt_active, active_role.mention)})
+                    actual += 1
+
+                for member in activated_members:  # activated member rewards
+                    if await Economy.can_call_out(member, conn):
+                        continue
+                    amt_activated = randint(1_100_000_000, 2_100_000_000)
+                    await Economy.update_bank_new(member, conn, amt_activated)
+                    payouts.update({f"{member.mention}": (amt_activated, activated_role.mention)})
+                    actual += 1
+
+                dt_now = datetime.now()
+                payday = discord.Embed(colour=discord.Colour.dark_embed(),
+                                       description=f"## Weekly Rewards (for week {dt_now.isocalendar().week} of {dt_now.year})\n"
+                                                   f"These are the users who were eligible to claim this week's activity "
+                                                   f"rewards. Entries that contained users not registered as of "
+                                                   f"{discord.utils.format_dt(dt_now, style="t")} today were "
+                                                   f"ignored. Considering this, `{eligible}` user(s) were eligible,"
+                                                   f" but `{actual}` user(s) were given these rewards.\n")
+
+                payday_notes = set()
+                for member, payout in payouts.items():  #  all members that got paid
+                    payday_notes.add(f"- {member} walked away with \U000023e3 **{payout[0]:,}** from being {payout[1]}.")
+
+                pinned_if_any = get_profile_key_value(f"weeklyr msg id")
+                if pinned_if_any is not None:
+                    try:
+                        already_pinned = await ctx.fetch_message(pinned_if_any)
+                        await already_pinned.unpin(reason="Outdated weekly reward announcement")  # unpin if stored
+                    except discord.NotFound | discord.HTTPException:
+                        await ctx.reply(content="**[WARNING]:** Previous weekly reward announcement was detected, but"
+                                                " could not be found in the invoker channel. Make sure you are "
+                                                "calling this command in the same channel it was sent in.",
+                                        mention_author=True)
+
+                payday.description += '\n'.join(payday_notes)
+                unpinned = await ctx.send(embed=payday)
+                await unpinned.pin(reason="Latest weekly rewards announcement")
+                modify_profile("update", f"weeklyr msg id", unpinned.id)  # store to unpin later
+        else:
+            await ctx.send("This command is to be only in **cc**.")
 
     @app_commands.command(name="config",
                           description="modify the amount of robux a user has directly.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
-    @app_commands.check(is_owner)
-    @app_commands.checks.cooldown(1, 5.0, key=lambda i: (i.guild.id, i.user.id))
     @app_commands.describe(configuration='the type of mode used for modifying robux',
                            amount='the amount of robux to modify. Supports Shortcuts (exponents only).',
                            member='the member to modify the balance of',
@@ -94,17 +162,17 @@ class Administrate(commands.Cog):
         real_amount = determine_exponent(amount)
         async with self.client.pool_connection.acquire() as conn: # type: ignore
             conn: asqlite_Connection
-            users = await self.get_bank_data_new(member, conn)
+            users = await Economy.get_bank_data_new(member, conn)
 
             if configuration == "add":
 
                 match deposit_mode:
                     case "bank":
                         new_amount = users[2] + int(real_amount)
-                        await self.update_bank_new(member, conn, +int(real_amount), deposit_mode)
+                        await Economy.update_bank_new(member, conn, +int(real_amount), deposit_mode)
                     case _:
                         new_amount = users[1] + int(real_amount)
-                        await self.update_bank_new(member, conn, +int(real_amount))
+                        await Economy.update_bank_new(member, conn, +int(real_amount))
 
                 total = (users[1] + users[2]) + int(real_amount)
                 embed2 = discord.Embed(title='Success',
@@ -127,10 +195,10 @@ class Administrate(commands.Cog):
                 match deposit_mode:
                     case "bank":
                         new_amount = users[2] - int(real_amount)
-                        await self.update_bank_new(member, conn, -int(real_amount), deposit_mode)
+                        await Economy.update_bank_new(member, conn, -int(real_amount), deposit_mode)
                     case _:
                         new_amount = users[1] - int(real_amount)
-                        await self.update_bank_new(member, conn, -int(real_amount))
+                        await Economy.update_bank_new(member, conn, -int(real_amount))
 
                 total = (users[1] + users[2]) - int(real_amount)
                 embed3 = discord.Embed(title='Success',
@@ -151,7 +219,7 @@ class Administrate(commands.Cog):
             if configuration == "make":
                 change = int(
                     real_amount) - users[1]  # if amount to change to was 5000 and wallet_amt was 6000, new = -1000
-                await self.update_bank_new(member, conn, +change, deposit_mode)
+                await Economy.update_bank_new(member, conn, +change, deposit_mode)
                 embed4 = discord.Embed(title='Success',
                                        description=f"\U0000279c **{member.display_name}**'s "
                                                    f"**`{deposit_mode}`** balance has been "
@@ -165,30 +233,39 @@ class Administrate(commands.Cog):
 
     @app_commands.command(name='pin', description='pin a specified message in any channel.', )
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
-    @app_commands.check(is_owner)
     @app_commands.describe(message_id='the ID of the message to be pinned',
-                           reason='the reason for pinning this message')
-    async def pin_it(self, interaction: discord.Interaction, message_id: str, reason: Optional[str]):
+                           reason='the reason for pinning this message',
+                           channel_name="the channel to fetch the pinned message from")
+    async def pin_it(self, interaction: discord.Interaction, channel_name: Optional[discord.abc.GuildChannel],
+                     message_id: str, reason: Optional[str]):
+
         try:
-            channel = await self.client.fetch_channel(interaction.channel.id)
+
+            if channel_name is None:
+                channel_name = interaction.channel
+
+            channel = await self.client.fetch_channel(channel_name.id)
             message = await channel.fetch_message(int(message_id))
+
             await message.pin(reason=f'Requested by {interaction.user.name}.') if reason is None else await message.pin(
                 reason=f"Provided by {interaction.user.name}: {reason}")
+
             await interaction.response.send_message( # type: ignore
                 f"successfully pinned the message of id {message_id} sent by {message.author.name}.\n\n",
                 ephemeral=True, delete_after=3.0)
+
         except discord.NotFound:
+
             await interaction.response.send_message( # type: ignore
                 'failed to pin message, it was not found or was deleted.')
 
         except discord.HTTPException:
+
             await interaction.response.send_message( # type: ignore
                 'failed to pin message, probably due to the channel reaching the 50 pin quota.',
                 ephemeral=True, delete_after=3.0)
 
-    @commands.is_owner()
     @commands.command(name='cthr', aliases=['ct', 'create_thread'], description='preset to create forum channels.')
-    @commands.guild_only()
     async def create_thread(self, ctx: commands.Context, thread_name: str):
         if isinstance(ctx.channel, discord.TextChannel):
             thread = await ctx.channel.create_thread(name=thread_name, auto_archive_duration=10080, message=discord.Object(ctx.message.id))
@@ -199,7 +276,6 @@ class Administrate(commands.Cog):
     @app_commands.command(name='react',
                           description='force-react to messages with any reaction.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
-    @app_commands.check(is_owner)
     @app_commands.describe(message_id='the ID of the message to react to:',
                            emote='the name of the emoji to react with, e.g., KarenLaugh')
     async def react(self, interaction: discord.Interaction, message_id: str, emote: str):
@@ -211,37 +287,28 @@ class Administrate(commands.Cog):
             content='the emoji has been added to the message', ephemeral=True, delete_after=3.0)
 
     @commands.command(name='sync', description='refresh the client tree for changes.', aliases=("sy",))
-    @commands.guild_only()
-    @commands.is_owner()
     async def sync_tree(self, ctx: commands.Context) -> None:
+        print("syncing")
         # Application command synchronization
         await ctx.bot.tree.sync(guild=discord.Object(id=780397076273954886))
         await ctx.bot.tree.sync(guild=discord.Object(id=829053898333225010))
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
     @commands.command(name='unload', description='unloads a cog (file) from the client.')
-    @commands.guild_only()
-    @commands.is_owner()
     async def unload(self, ctx: commands.Context, cog_name: str):
         await self.client.unload_extension(cog_name)
         await ctx.send(f'`cogs.{cog_name}` has been unloaded.', ephemeral=True, delete_after=4.0)
 
     @commands.command(name='load', description='loads a cog (file) to the client.')
-    @commands.guild_only()
-    @commands.is_owner()
     async def load(self, ctx: commands.Context, cog_name: str):
         await self.client.load_extension(cog_name)
         await ctx.send(f'`cogs.{cog_name}` has been loaded.', delete_after=4.0)
 
     @commands.command(name='reload', description='reload a cog (file) to the client.')
-    @commands.guild_only()
-    @commands.is_owner()
     async def reload(self, ctx: commands.Context, cog_name: str):
         await self.client.reload_extension(cog_name)
         await ctx.send(f'`cogs.{cog_name}` has been reloaded.', delete_after=4.0)
 
-    @commands.is_owner()
-    @commands.guild_only()
     @commands.command(name='eval', description='evaluates arbitrary code.')
     async def eval(self, ctx, *, script_body: str):
         """Evaluates arbitrary code."""
@@ -293,14 +360,10 @@ class Administrate(commands.Cog):
                 await ctx.send(f'```py\n{value}{ret}\n```')
 
     @commands.command(name='blank', description='newline spam to clear a channel.')
-    @commands.guild_only()
-    @commands.is_owner()
     async def blank(self, ctx):
         await ctx.send(
             ".\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nCleared.")
 
-    @commands.is_owner()
-    @commands.guild_only()
     @commands.command(name='regex', description='preset to create automod regex rule.')
     async def automod_regex(self, ctx):
         await ctx.guild.create_automod_rule(name='new rule by cxc',
@@ -310,8 +373,6 @@ class Administrate(commands.Cog):
                                                 discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
-    @commands.is_owner()
-    @commands.guild_only()
     @commands.command(name='mentions', description='preset to create automod mass_mentions rule.')
     async def automod_mentions(self, ctx):
         await ctx.guild.create_automod_rule(name='new rule by cxc',
@@ -321,8 +382,6 @@ class Administrate(commands.Cog):
                                                 discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
-    @commands.is_owner()
-    @commands.guild_only()
     @commands.command(name='keyword', description='preset to create automod mass_mentions rule.')
     async def automod_keyword(self, ctx, the_word):
         await ctx.guild.create_automod_rule(name='new rule by cxc',
@@ -332,27 +391,32 @@ class Administrate(commands.Cog):
                                                 discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
-    @commands.is_owner()
     @commands.command(name='update', description='preset to update channel info.')
-    @commands.guild_only()
     async def push_update(self, ctx):
 
         await ctx.message.delete()
         channel = await self.client.fetch_channel(1121445944576188517)
         original = await channel.fetch_message(1142392804446830684)
 
-        time_begin = fmt_timestamp(2024, 1, 7,  18, 30, "d")
-        time_beginr = fmt_timestamp(2024, 1, 7, 18, 30, "R")
         embed = discord.Embed(title='Update Schedule',
                               description=f'This embed will post any changes to the server in the near future. This '
                                           f'includes any feature updates within the server and any other optimization '
                                           f'changes.\n'
                                           f'## Coming Soon:\n'
-                                          f'- ({time_begin}) More c2c bugfixes and QoL updates:\n'
-                                          f'  - ({time_beginr}) Rehaul of slave trade system for more multipliers\n'
-                                          f'  - ({time_beginr}) Adding more uses + interesting items into the shop\n'
-                                          f'  - ({time_beginr}) General bugfixes in base commands\n'
-                                          f'*You can read https://discord.com/channels/829053898333225010/'
+                                          f'Until **July**, we will be working on new commands, which is not limited to'
+                                          f' just the Economy system:\n'
+                                          f'- (<t:1719848970:R>) Actively seeking out more web data for command ideas'
+                                          f' (a process known as [web scraping.](https://en.wikipedia.org/wiki/Web_scraping))\n'
+                                          f'- (<t:1719848970:R>) New Buffs System, concerning how rewards scale on owned assets.\n'
+                                          f'- (<t:1719848970:R>) Functions to most shop items are added, many items '
+                                          f'currently have no use.\n'
+                                          f'- (<t:1719848970:R>) Some major improvements to the way slays work.\n'
+                                          f'- (<t:1719848970:R>) Profile Cards concerning a dropdown displaying your '
+                                          f'aspects in the Economy system.\n'
+                                          f' - Some examples include *your* active cooldowns, *your* badges and *your* data.\n'
+                                          f' - These are just ideas of what is to come, it is liable to change and is '
+                                          f'not indicative of the final product.'
+                                          f'\n\n*You can read https://discord.com/channels/829053898333225010/'
                                           f'1124782048041762867/1166793975466831894 for a summary of whats next in '
                                           f'the near future for c2c.*',
                               colour=discord.Colour.from_rgb(101, 242, 171))
@@ -360,9 +424,7 @@ class Administrate(commands.Cog):
                          icon_url='https://pa1.narvii.com/6025/9497042b3aad0518f08dd2bfefb0e2262f4a7149_hq.gif')
         await original.edit(embed=embed)
 
-    @commands.is_owner()
     @commands.command(name='update3', description='preset to modify rules and guidelines.')
-    @commands.guild_only()
     async def push_update3(self, ctx):
         await ctx.message.delete()
         channel = await self.client.fetch_channel(902138223571116052)
@@ -395,9 +457,7 @@ class Administrate(commands.Cog):
 
         await original.edit(embed=r)
 
-    @commands.is_owner()
     @commands.command(name='update2', description='preset to modify channel welcome banner.')
-    @commands.guild_only()
     async def push_update2(self, ctx):
         await ctx.message.delete()
         channel = await self.client.fetch_channel(1121445944576188517)
@@ -507,9 +567,7 @@ class Administrate(commands.Cog):
             ch = self.client.fetch_channel(1124090797613142087)
             await ch.send(err.__cause__)
 
-    @commands.is_owner()
     @commands.command(name='update4', description='updates to a progress tracker.')
-    @commands.guild_only()
     async def override_economy(self, ctx):
         await ctx.message.delete()
         channel = await self.client.fetch_channel(1124782048041762867)
@@ -529,8 +587,8 @@ class Administrate(commands.Cog):
                                   '<:redA:1166790106422722560> - **Not Started**\n'
                                   '<:yelA:1166790134801379378> - **In Progress**\n'
                                   '<:join:1163901334412611605> - **Completed**\n\n'
-                                  '<:yelA:1166790134801379378> **December 2023 (late)**: start of full rehaul of every command that currently exists.\n'
-                                  '<:redA:1166790106422722560> **July 2024 (early)**: new commands/essential functions to the Economy system added.\n'
+                                  '<:join:1163901334412611605> **December 2023 (late)**: start of full rehaul of every command that currently exists.\n'
+                                  '<:yelA:1166790134801379378> **July 2024 (early)**: new commands/essential functions to the Economy system added.\n'
                                   '<:redA:1166790106422722560> **August 2024 (late)**: economy system fully operational and ready for use.')
         temporary.add_field(name="Acknowledgement",
                             value="<a:e1_imhappy:1144654614046724117> <@992152414566232139> (<@&1047576437177200770>) - contributing to **87.5**% of the full programme, making it possible in the first place (will write the code).\n"
@@ -538,10 +596,7 @@ class Administrate(commands.Cog):
                                   "we would not be able to recover the Economy System without <@992152414566232139>, she is the literal backbone of its revival! thank her for making it possible!")
         await original.edit(embed=temporary)
 
-
-    @commands.is_owner()
     @commands.command(name='ccil', description='display\'s the permanent invite link for cc.')
-    @commands.guild_only()
     async def preset_ccil(self, ctx):
         await ctx.message.delete()
         await ctx.send("**Permanent Invite Link** - discord.gg/W3DKAbpJ5E\n"
@@ -550,7 +605,6 @@ class Administrate(commands.Cog):
 
     @app_commands.command(name='edit', description='edit a message sent by the client.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
-    @app_commands.check(is_owner)
     @app_commands.describe(msg='The ID of the message to edit', new_content='The new content to replace it with')
     async def edit_msg(self, interaction: discord.Interaction, msg: str, new_content: str):
         await interaction.response.defer(thinking=True) # type: ignore
@@ -560,18 +614,15 @@ class Administrate(commands.Cog):
         await c.edit(content=new_content)
         await interaction.followup.send(content="The edits have been made", ephemeral=True, delete_after=3.0)
 
-    @commands.is_owner()
     @commands.command(name='quit', description='quits the bot gracefully.')
-    @commands.guild_only()
     async def quit_client(self, ctx):
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
         await self.client.session.close() # type: ignore
         await self.client.pool_connection.close() # type: ignore
+        await self.client.http.close()
         await self.client.close()
 
-    @commands.is_owner()
     @commands.command(name='say', description='repeat what you typed (txt ver).')
-    @commands.guild_only()
     async def say(self, ctx, *, text_to_say):
         """Makes the bot say what you want it to say."""
         await ctx.message.delete()
@@ -579,7 +630,6 @@ class Administrate(commands.Cog):
 
     @app_commands.command(name='repeat', description='repeat what you typed (slash ver).')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
-    @app_commands.check(is_owner)
     @app_commands.describe(message='what should i say?', channel='what channel should i say it in?')
     async def repeat(self, interaction: discord.Interaction, message: str, channel: discord.TextChannel):
 
