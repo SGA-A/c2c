@@ -2,6 +2,7 @@ from asyncio import sleep
 from time import perf_counter
 from PyDictionary import PyDictionary
 import discord
+from xml.etree.ElementTree import fromstring
 from other.pagination import Pagination
 import datetime
 from random import choice
@@ -13,8 +14,41 @@ from other.spshit import get_song_attributes
 from discord import app_commands, Interaction, Object
 from unicodedata import name
 
-
+ARROW = "<:arrowe:1180428600625877054>"
 found_spotify = False
+
+
+def was_called_in_a_nsfw_channel(interaction: discord.Interaction):
+    return interaction.channel.is_nsfw()
+
+
+def extract_attributes(post_element):
+    author = post_element.get("author")
+    created_at = post_element.get("created_at")
+    file_url = post_element.get("file_url")
+    jpeg_url = post_element.get("jpeg_url")
+    preview_url = post_element.get("preview_url")
+    source = post_element.get("source")
+    tags = post_element.get("tags")
+
+    return {
+        "author": author,
+        "created_at": created_at,
+        "file_url": file_url,
+        "jpeg_url": jpeg_url,
+        "preview_url": preview_url,
+        "source": source,
+        "tags": tags,
+    }
+
+
+def parse_xml(xml_content):
+    root = fromstring(xml_content)
+    posts = root.findall(".//post")
+
+    extracted_data = [extract_attributes(post) for post in posts]
+    return extracted_data
+
 
 
 def membed(descriptioner: str) -> discord.Embed:
@@ -76,15 +110,16 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
         channel = interaction.guild.get_channel(1122902104802070572)
         embed = discord.Embed(title=f'New Feedback: {self.fb_title.value or "Untitled"}',
                               description=self.message.value, colour=0x2F3136)
+        avatar = interaction.user.avatar or interaction.user.default_avatar
+        embed.set_author(name=f"Submitted by {interaction.user.name}", icon_url=avatar.url)
 
-        embed.set_author(name=interaction.user)
         await channel.send(embed=embed)
         success = discord.Embed(colour=0x2F3136,
                                 description=f"- Your response has been submitted.\n"
-                                            f" - Developers will consider your feedback accordingly and compensation "
-                                            f"will then be decided upfront.\n\n"
-                                            f"*You may get a unique badge or other type of reward based on how "
-                                            f"constructive and thoughtful your feedback is.*")
+                                            f" - Developers will consider your feedback accordingly within a few days.\n"
+                                            f" - From there, compensation will be decided upfront.\n\n"
+                                            f"You may get a unique badge or other type of reward based on how "
+                                            f"constructive and thoughtful your feedback is.")
         await interaction.response.send_message(embed=success, ephemeral=True) # type: ignore
 
     async def on_error(self, interaction: discord.Interaction, error):
@@ -103,6 +138,26 @@ class InviteButton(discord.ui.View):
 class Miscellaneous(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
+
+    async def get_word_info(self, word):
+        url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
+        async with self.client.session.get(url) as response:  # type: ignore
+            return await response.json()
+
+    async def make_a_kona(self, limit=5, page=1, tags=""):
+        """Returns a list of dictionaries for you to iterate through and fetch their attributes"""
+
+        base_url = "https://konachan.net/post.xml"
+        params = {"limit": limit, "page": page, "tags": tags}
+
+        async with self.client.session.get(base_url, params=params) as response:  # type: ignore
+            status = response.status
+            if status == 200:
+                posts_xml = await response.text()
+                data = parse_xml(posts_xml)
+            else:
+                data = status
+        return data
 
     def len_channels(self):
         total_channels = 0
@@ -127,7 +182,7 @@ class Miscellaneous(commands.Cog):
 
         await sleep(1)
 
-    @commands.command()
+    @commands.command(name='ping', description='check the latency of the bot.')
     async def ping(self, ctx):
         start = perf_counter()
         message = await ctx.send("Ping...")
@@ -154,7 +209,76 @@ class Miscellaneous(commands.Cog):
             else:
                 await interaction.response.send_message( # type: ignore
                     embed=membed("An unsuccessful request was made. Try again later."))
-    # fetches all of the emojis found within the client's internal cache.
+
+    @app_commands.command(name='kona', description='fetches images from the konachan website.')
+    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.check(was_called_in_a_nsfw_channel)
+    @app_commands.describe(tags='the tags to base searches upon, seperated by a space', page='the page to look through under a tag')
+    async def kona_fetch(self, interaction: discord.Interaction, tags: Optional[str], page: Optional[int]):
+
+        if page is None:
+            page = 1
+
+        if tags is None:
+            tags = "original"
+        tagviewing = ', '.join(tags.split(' '))
+
+        embed = discord.Embed(title='Results',
+                              description=f'- Retrieval is based on the following filters:\n'
+                                          f' - **Tags**: {tagviewing}\n'
+                                          f' - **Page**: {page}\n\n',
+                              colour=discord.Colour.from_rgb(255, 233, 220))
+
+        avatar = interaction.user.avatar or interaction.user.default_avatar
+        embed.set_author(icon_url=avatar.url, name=f'Requested by {interaction.user.name}',
+                         url=avatar.url)
+
+        posts_xml = await self.make_a_kona(limit=3, page=page, tags=tags)
+
+        if isinstance(posts_xml, int):  # meaning it did not return a status code of 200: OK
+
+            rmeaning = {
+                403: "Forbidden - Access was denied",
+                404: "Not Found",
+                420: "Invalid Record - The record could not be saved",
+                421: "User Throttled - User is throttled, try again later",
+                422: "Locked - The resource is locked and cannot be modified",
+                423: "Already Exists - The resource already exists",
+                424: "Invalid Parameters - The given parameters were invalid",
+                500: "Internal Server Error - Some unknown error occured on the konachan website's server",
+                503: "Service Unavailable - The konachan website currently cannot handle the request"
+            }
+
+            return await interaction.response.send_message(  # type: ignore
+                embed=membed(f"The [konachan website](https://konachan.net/help) returned an erroneous status code of "
+                             f"`{posts_xml}`: {rmeaning.setdefault(posts_xml, "the cause of the error is not known")}."
+                             f"\nYou should try again later to see if the service improves."))
+
+        if len(posts_xml) == 0:
+            return await interaction.response.send_message(  # type: ignore
+                embed=membed(f"## No results found.\n"
+                             f"- This is often due to entering an invalid tag name.\n"
+                             f" - There are millions of tags that are available to base your search on. By default, "
+                             f"if you don't input a tag, the search defaults to the tag with name `original`.\n"
+                             f" - You can find a tag of your choice [on the website.](https://konachan.net/tag)"))
+
+        attachments = set()
+        descriptionerfyrd = set()
+        for result in posts_xml:
+            tindex = posts_xml.index(result)+1
+            result['source'] = result['source'] or '*Unknown User*'
+            descriptionerfyrd.add(f'**[{tindex}]** *Post by {result['author']}*\n'
+                                  f'- Created <t:{result['created_at']}:R>\n'
+                                  f'- [File URL (source)]({result['file_url']})\n'
+                                  f'- [File URL (jpeg)]({result['jpeg_url']})\n'
+                                  f'- Made by {result['source']}\n'
+                                  f'- Tags: {result['tags']}')
+            attachments.add(f"**[{tindex}]**\n{result['jpeg_url']}")
+
+        embed.description += "\n\n".join(descriptionerfyrd)
+        await interaction.channel.send(content=f"__Attachments for {interaction.user.mention}__\n\n" + "\n".join(attachments))
+        await interaction.response.send_message(embed=embed) # type: ignore
+
 
     @app_commands.command(name='emojis', description='fetches all of the emojis c2c can access.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -282,6 +406,8 @@ class Miscellaneous(commands.Cog):
                                                    description=f'This shows all the available definitions for the word {choicer}.',
                                                    colour=unique_colour)
                         for x in range(0, len(thing)):
+                            if "(" in thing[x]:
+                                thing[x] += ")"
                             the_result.add_field(name=f'Definition {x + 1}', value=f'{thing[x]}')
                         if len(the_result.fields) == 0:
                             the_result.add_field(name=f'Looks like no results were found.',
@@ -406,12 +532,13 @@ class Miscellaneous(commands.Cog):
     async def about_the_bot(self, interaction: discord.Interaction):
         await interaction.response.defer(thinking=True) # type: ignore
         amount = 0
-        lenslash = len(await self.client.tree.fetch_commands(guild=interaction.guild))  # all interaction cmds
+        lenslash = len(await self.client.tree.fetch_commands(guild=Object(id=interaction.guild.id)))
         lentxt = len(self.client.commands)
         amount += (lenslash+lentxt)
-        branch = "<:arrowe:1180428600625877054>"
+        stored = interaction.guild.get_member(interaction.guild.me.id)
         embed = discord.Embed(title='About c2c',
-                              description="c2c was made with creativity in mind. It is a custom bot designed for cc "
+                              description="c2c was made with creativity in mind. It is a custom bot designed for "
+                                          "[cc](https://discord.gg/W3DKAbpJ5E) "
                                           "that provides a wide range of utility and other services.\n\n"
                                           "- We grow based on feedback, it's what empowers our community and without it"
                                           " the bot would not have been the same.\n"
@@ -426,24 +553,24 @@ class Miscellaneous(commands.Cog):
         embed.add_field(name='Run on',
                         value=f'discord.py v{discord.__version__}')
         embed.add_field(name='Activity',
-                        value=f'{self.client.activity.name or "No activity"}')
+                        value=f'{stored.activity.name or "No activity"}')
         embed.add_field(name='Internal Cache Ready',
                         value=f'{str(self.client.is_ready())}')
         embed.add_field(name=f'Process',
-                        value=f'{branch}CPU: {cpu_percent()}%\n'
-                              f'{branch}RAM: {virtual_memory().percent}%')
+                        value=f'{ARROW}CPU: {cpu_percent()}%\n'
+                              f'{ARROW}RAM: {virtual_memory().percent}%')
         embed.add_field(name='Servers',
                         value=f'{len(self.client.guilds)}\n'
-                              f'{branch}{self.len_channels()} channels\n'
-                              f'{branch}{len(self.client.emojis)} emojis\n'
-                              f'{branch}{len(self.client.stickers)} stickers')
+                              f'{ARROW}{self.len_channels()} channels\n'
+                              f'{ARROW}{len(self.client.emojis)} emojis\n'
+                              f'{ARROW}{len(self.client.stickers)} stickers')
         embed.add_field(name='Users',
-                        value=f'{branch}{len(self.client.users)} users\n'
-                              f'{branch}{len(self.client.voice_clients)} voice')
+                        value=f'{ARROW}{len(self.client.users)} users\n'
+                              f'{ARROW}{len(self.client.voice_clients)} voice')
         embed.add_field(name='Total Commands Available',
                         value=f'{amount} total\n'
-                              f'{branch}{lentxt} (text-based)\n'
-                              f'{branch}{lenslash} (slash-based)')
+                              f'{ARROW}{lentxt} (text-based)\n'
+                              f'{ARROW}{lenslash} (slash-based)')
         embed.set_thumbnail(url=self.client.user.avatar.url)
         embed.set_author(name='made possible with discord.py:',
                          icon_url='https://media.discordapp.net/attachments/1124994990246985820/1146442046723330138/'
