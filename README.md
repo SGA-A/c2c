@@ -27,6 +27,8 @@
     <img alt="Windows" src="https://img.shields.io/badge/os-windows-yellow"></a>
   <a href="https://img.shields.io/badge/os-linux-yellow">
     <img alt="Linux" src="https://img.shields.io/badge/os-windows-yellow"></a>
+  <a href="https://pypi.python.org/pypi/discord.py">
+    <img alt="PyPI supported Python versions" src="https://img.shields.io/pypi/pyversions/discord.py.svg"></a>
   <br/>
 </p>
 <div align="center">
@@ -35,8 +37,11 @@
 </div>
 
 ## Installation
-Regarding setting up this bot yourself, the installation guide will not provided. I have not designed this bot to be used for others nor do I encourage this to take place. If you wish to fork this repo and setup a version of my bot however, you may do so. I am not responsible for any errors that may occur when running this bot.
+> [!NOTE]
+> I do not support running an instance of my bot. Setup details will not be given, if you can figure it out, go nuts.
 
+> [!CAUTION]
+> I am not responsible for any errors that may occur when running this bot.
 
 ## Features
 - Advanced economy system (no json, using databases)
