@@ -7,7 +7,7 @@
 
 <p align="center">
   <em>
-    Made in Python
+    About
     · A highly integrated and powerful discord bot.
     · Made using discord.py
     · Created on 30/11/2022
@@ -17,6 +17,8 @@
     Features
     · Error Handler
     · Components
+    · Python 3.12 Compatibility
+    · See more below
   </em>
   <br />
 </p>
@@ -36,11 +38,16 @@
 [![python badge](http://ForTheBadge.com/images/badges/made-with-python.svg)](https://www.python.org/ "Python")
 </div>
 
-## Installation
-> [!NOTE]
-> I do not support running an instance of my bot. Setup details will not be given, if you can figure it out, go nuts.
 
+## Developer Team
+We are 2 young teenagers in the UK studying A-Levels, and have a burning passion to make new things that are needed in today's world!
+- [Splint](https://discordapp.com/users/992152414566232139/)
+- [inter_geo](https://discordapp.com/users/546086191414509599)
+
+## Installation
 > [!CAUTION]
+> I do not support running an instance of my bot. Setup details will not be given, if you can figure it out, go nuts.
+> 
 > I am not responsible for any errors that may occur when running this bot.
 
 ## Features
@@ -48,7 +55,7 @@
   - Running these databases using connection pools via [@Rapptz](https://www.github.com/Rapptz)'s `asqlite` repo.
   - The connection pool makes it fast and reliable, data loss is rare.
   - Rob, Bankrob, Slots, Bets, Highlow, Building robberies
-  - More is being added every month..
+  - More is being added regularly.
 - Miscellaneous Features
   -  Get the time now in Discord's timestamp formatting using any style
   -  Get a list of every emoji the client can access
@@ -56,7 +63,6 @@
   -  Generate a random fact or even ideas of what to do if you're bored..
   -  And so much more..
 -  Some owner-only features I am proud of
-  - Playing local files in a voice-channel (yes)
   - Having **a lot** of control over the economy system
     -  Kick users off the economy system, generate assets without paying etc.
     -  Ability to modify any attribute of the economy system with ease of any user (credits to [DB Browser for SQlite](https://sqlitebrowser.org/) for this.)
@@ -65,6 +71,9 @@
 The help command. It is an interactive menu sorting all the commands within cogs by category and assumes each cog fits into one category. A dropdown is displayed to list the available categories and clicking any given one provides an embed edited from the original response containing every single command that corresponds to the category. My thought process at the time of making it was robust and there has been no situation yet encountered in which it faltered.
 
 In the course of making this bot, I learnt a lot of things. I was just a beginner at first and had no idea how to read or even understand the discord.py documentation. i did not on many tutorials but I think it was my initiative one day to just completley absolve the docs of all of its contents one day that led me to where this project has come now. It is a passion project and I am not considering disbanding the project any time soon.
+
+> [!NOTE]
+> The future of this project is uncertain. Given my limited free time, I may not be able to update the code after breaking changes to the library/API take place. This will only dwindle in the future. [See Version Guarantees for discord.py.](https://discordpy.readthedocs.io/en/stable/version_guarantees.html)
 
 ## Credits
 - **The [discord.py](https://discord.gg/r3sSKJJ) server**: almost every question/bug ive encountered has been solved on their discord server, so many situations to fix burning problems were fixed because of them. It is also a great place to learn code optimizations that lower speed and time complexity for the bot.
