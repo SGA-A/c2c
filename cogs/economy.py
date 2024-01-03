@@ -2632,8 +2632,8 @@ class Economy(commands.Cog):
                                           f"money has been sent to your bank account.")
 
     @app_commands.command(name="balance", description="returns a user's current balance.")
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(user='the user to return the balance of')
+    @app_commands.guild_only()
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def find_balance(self, interaction: discord.Interaction, user: Optional[discord.Member]):
         """Returns a user's balance."""
