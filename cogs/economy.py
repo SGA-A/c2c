@@ -3448,5 +3448,31 @@ class Economy(commands.Cog):
             embed.add_field(name=self.client.user.name, value=f"Rolled `{bot_choice[0]}`")
             await interaction.response.send_message(content=content_before, embed=embed)  
 
+    @withdraw.autocomplete('robux')
+    @play_blackjack.autocomplete('bet_amount')
+    @bet.autocomplete('exponent_amount')
+    @deposit.autocomplete('robux')
+    @withdraw.autocomplete('robux')
+    async def callback_max_100(self, interaction: discord.Interaction, current: str) -> List[
+        app_commands.Choice[str]]:
+
+        chosen = {"all", "max", "50e6", "100e6"}
+        return [
+            app_commands.Choice(name=str(the_chose), value=str(the_chose))
+            for the_chose in chosen if current.lower() in the_chose
+        ]
+
+    @slots.autocomplete('keyword')
+    @highlow.autocomplete('robux')
+    async def callback_max_75(self, interaction: discord.Interaction, current: str) -> List[
+        app_commands.Choice[str]]:
+
+        chosen = {"all", "max", "50e6", "75e6"}
+        return [
+            app_commands.Choice(name=str(the_chose), value=str(the_chose))
+            for the_chose in chosen if current.lower() in the_chose
+        ]
+
+
 async def setup(client: commands.Bot):
     await client.add_cog(Economy(client))
