@@ -2186,7 +2186,7 @@ class Economy(commands.Cog):
             :return: A boolean indicating whether the amount is valid for the function to proceed."""
             if value <= 0:
                 return False
-            elif value > 50000000:
+            elif value > 75_000_000:
                 return False
             elif value < 100000:
                 return False
@@ -2195,33 +2195,28 @@ class Economy(commands.Cog):
             else:
                 return True
 
-        conn = await self.client.pool_connection.acquire() 
-        number = randint(1, 100)
-        hint = f"Your hint is {abs(randint(number - randint(1, 30), number + randint(1, 15)))}"
-        try:
+        async with self.client.pool_connection.acquire() as conn: 
+            conn: asqlite_Connection
+            number = randint(1, 100)
+            hint = f"Your hint is {abs(randint(number - randint(1, 30), number + randint(1, 15)))}"
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered) 
+                return await interaction.response.send_message(embed=self.not_registered)
 
             real_amount = determine_exponent(robux)
             wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
-            try:
-                assert isinstance(real_amount, str)
+            if isinstance(real_amount, str):
                 if real_amount.lower() == 'max' or real_amount.lower() == 'all':
                     if 50000000 > wallet_amt:
                         real_amount = wallet_amt
                     else:
                         real_amount = 50000000
-            except AssertionError:
-                pass
             if not (is_valid(int(real_amount), wallet_amt)):
-                return await interaction.response.send_message(embed=ERR_UNREASON) 
+                return await interaction.response.send_message(embed=ERR_UNREASON)
             extraneous_data.clear()
             extraneous_data.append(number)
             extraneous_data.append(real_amount)
-
-        finally:
-            await self.client.pool_connection.release(conn) 
-            await interaction.response.send_message(f"I am thinking of a number. Guess what it is. **{hint}!**", 
+            
+            await interaction.response.send_message(f"I am thinking of a number. Guess what it is. **{hint}!**",
                                                     view=HighLow(interaction, self.client))
 
     @app_commands.command(name='slots',
