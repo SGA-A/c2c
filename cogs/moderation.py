@@ -15,13 +15,13 @@ class Moderation(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
 
-    # noinspection PyMethodMayBeStatic
-    async def lock_and_close(self, thread: Thread, user: abc.User) -> None:
+    @staticmethod
+    async def lock_and_close(thread: Thread, user: abc.User) -> None:
 
         await thread.edit(
             locked=True,
             archived=True,
-            reason=f'Marked as solved by {user} (ID: {user.id})'
+            reason=f'Requested by {user} (ID: {user.id})'
         )
 
     @commands.command(name="close", description="close the invocation thread.")
