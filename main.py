@@ -218,7 +218,7 @@ class C2C(commands.Bot):
     async def setup_hook(self):
 
         # Confirmation that the bot has logged in
-        print(f"we're in.")
+        print(f"\nwe're in.\n")
 
         # Create a pool connection for database queries
         self.pool_connection = await create_pool('C:\\Users\\georg\\PycharmProjects\\c2c\\db-shit\\economy.db')
@@ -310,7 +310,7 @@ class SelectMenu(ui.Select):
 
             embed = Embed(title='Help: Owner', colour=Colour.from_rgb(91, 170, 239))
             embed.set_image(url='https://media.discordapp.net/attachments/1124994990246985820/1125005648422256692/762082-3602628412.jpg?width=1377&height=701')
-            embed.set_footer(text='Got any suggestions for the bot? use the /feedback command'
+            embed.set_footer(text='Got any suggestions for the bot? use the /feedback command '
                                   'to let us know about it.', icon_url=client.user.avatar.url)
             for cmd, cmd_details in all_cmds.items():
                 total_cmds_cata += 1
@@ -528,6 +528,43 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
     await webhook.send(f'Patch notes for Q1 2024 / This is mostly a `{rtype}` release', embed=embed,
                        thread=Object(id=thread.id), silent=True)
     await ctx.send(f"Done. The webhook was sent to '{thread.name}' with ID {thread.id}.")
+
+
+@client.command(name="reqs")
+async def requirements_for_cogs(ctx: commands.Context):
+    embed = Embed(title="Prerequisites to execute commands",
+                  description="There is a set baseline of conditions that must be met for **all** commands in "
+                              "order to execute the command. If you do not meet this, you will get this error:\n"
+                              "> You have not met a prerequisite before executing this command.\n"
+                              "Any other error that is displayed is irrelevant here, and will not resolve the issue.\n\n"
+                              "This embed will briefly outline what the prequisites for executing commands are. These "
+                              "ultimately depend on what category the command is in, as well as what server you are"
+                              " calling it in. Note there are situations where this is not the case (see below).\n"
+                              "The prerequisites for the following categories are outlined:\n"
+                              "### <a:e1_butterflyB:1124677894275338301> Owner\n"
+                              "- You are the bot owner.\n"
+                              "- You are calling the command in a server, not a DM.\n"
+                              "### <a:e1_starR:1124677520038567946> Moderation\n"
+                              "- You have the specific server management permissions.\n"
+                              " - The permission required for each command varies, use common sense to figure out.\n"
+                              " - **Only applies to** `>close`**:** you could also own the thread to execute it.\n"
+                              "- You are calling the command in a server, not a DM.\n"
+                              "### <a:e1_starG:1124677658500927488> Utility\n"
+                              "- You are calling the command in a server, not a DM.\n"
+                              "- **Only applies to** `/kona`: You must call the command in an NSFW channel.\n"
+                              "- **Only applies to** `>inviter` You have the `Create Invite` permission.\n"
+                              "### <a:e1_starY:1124677741980176495> Economy\n"
+                              "- **Only applies to [cc](https://discord.gg/W3DKAbpJ5E):** "
+                              "You have the <@&1168204249096785980> role.\n"
+                              "### <a:e1_starPur:1125040539943837738> Music\n"
+                              "- **Only applies to [cc](https://discord.gg/W3DKAbpJ5E):** "
+                              "You have the <@&990900517301522432> role.",
+                  colour=Colour.dark_embed())
+    embed.set_footer(text="These conditions only outline what should be met. Not the other way around.",
+                     icon_url=client.user.avatar.url)
+
+    await ctx.send(embed=embed)
+
 
 @client.tree.command(name='help', description='help command for c2c, outlines all categories of commands.',
                      guilds=[Object(id=829053898333225010), Object(id=780397076273954886)])
