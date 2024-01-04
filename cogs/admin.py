@@ -74,7 +74,7 @@ class Administrate(commands.Cog):
         """Returns the time the bot has been online for (in HH:MM:SS)"""
         new2 = str(datetime.now().strftime("%j:%H:%M:%S"))
         formatter = '%j:%H:%M:%S'
-        time_delta = datetime.strptime(new2, formatter) - datetime.strptime(self.client.time_launch, formatter) # type: ignore
+        time_delta = datetime.strptime(new2, formatter) - datetime.strptime(self.client.time_launch, formatter) 
         await ctx.send(content=f"**Uptime** (in format HH:MM:SS): {time_delta}")
 
     @commands.command(name="payout-now", description="send the weekly payout to eligible members.",
@@ -92,7 +92,7 @@ class Administrate(commands.Cog):
             eligible = len(active_members) + len(activated_members)  # i.e total users
             actual = 0
 
-            async with self.client.pool_connection.acquire() as conn:  # type: ignore
+            async with self.client.pool_connection.acquire() as conn:  
                 conn: asqlite_Connection
                 payouts = dict()
                 for member in active_members:  # active member rewards
@@ -160,7 +160,7 @@ class Administrate(commands.Cog):
 
         avatar = member.display_avatar or member.default_avatar
         real_amount = determine_exponent(amount)
-        async with self.client.pool_connection.acquire() as conn: # type: ignore
+        async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             users = await Economy.get_bank_data_new(member, conn)
 
@@ -188,7 +188,7 @@ class Administrate(commands.Cog):
                                   url='https://www.youtube.com/watch?v=dQw4w9WgXcQ')
                 embed2.set_footer(text=f"configuration type: ADD_TO")
 
-                await interaction.response.send_message(embed=embed2, ephemeral=ephemeral) # type: ignore
+                await interaction.response.send_message(embed=embed2, ephemeral=ephemeral) 
 
             if configuration == "remove":
 
@@ -214,7 +214,7 @@ class Administrate(commands.Cog):
                 embed3.set_thumbnail(url=avatar.url)
                 embed3.set_footer(text=f"configuration type: REMOVE_FROM")
 
-                await interaction.response.send_message(embed=embed3, ephemeral=ephemeral) # type: ignore
+                await interaction.response.send_message(embed=embed3, ephemeral=ephemeral) 
 
             if configuration == "make":
                 change = int(
@@ -229,7 +229,7 @@ class Administrate(commands.Cog):
                 embed4.set_thumbnail(url=avatar.url)
                 embed4.set_author(name=f"Requested by {interaction.user.name}", icon_url=interaction.user.avatar.url,
                                   url='https://www.youtube.com/watch?v=dQw4w9WgXcQ')
-                await interaction.response.send_message(embed=embed4, ephemeral=ephemeral) # type: ignore
+                await interaction.response.send_message(embed=embed4, ephemeral=ephemeral) 
 
     @app_commands.command(name='pin', description='pin a specified message in any channel.', )
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -250,18 +250,18 @@ class Administrate(commands.Cog):
             await message.pin(reason=f'Requested by {interaction.user.name}.') if reason is None else await message.pin(
                 reason=f"Provided by {interaction.user.name}: {reason}")
 
-            await interaction.response.send_message( # type: ignore
+            await interaction.response.send_message( 
                 f"successfully pinned the message of id {message_id} sent by {message.author.name}.\n\n",
                 ephemeral=True, delete_after=3.0)
 
         except discord.NotFound:
 
-            await interaction.response.send_message( # type: ignore
+            await interaction.response.send_message( 
                 'failed to pin message, it was not found or was deleted.')
 
         except discord.HTTPException:
 
-            await interaction.response.send_message( # type: ignore
+            await interaction.response.send_message( 
                 'failed to pin message, probably due to the channel reaching the 50 pin quota.',
                 ephemeral=True, delete_after=3.0)
 
@@ -283,7 +283,7 @@ class Administrate(commands.Cog):
         c = await b.fetch_message(int(message_id))
         emoji = self.return_custom_emoji(emote)  # a function to return a custom emoji
         await c.add_reaction(emoji)
-        await interaction.response.send_message( # type: ignore
+        await interaction.response.send_message( 
             content='the emoji has been added to the message', ephemeral=True, delete_after=3.0)
 
     @commands.command(name='sync', description='refresh the client tree for changes.', aliases=("sy",))
@@ -607,7 +607,7 @@ class Administrate(commands.Cog):
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(msg='The ID of the message to edit', new_content='The new content to replace it with')
     async def edit_msg(self, interaction: discord.Interaction, msg: str, new_content: str):
-        await interaction.response.defer(thinking=True) # type: ignore
+        await interaction.response.defer(thinking=True) 
         a = await self.client.fetch_guild(interaction.guild.id)
         b = await a.fetch_channel(interaction.channel.id)
         c = await b.fetch_message(int(msg))
@@ -617,8 +617,8 @@ class Administrate(commands.Cog):
     @commands.command(name='quit', description='quits the bot gracefully.')
     async def quit_client(self, ctx):
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
-        await self.client.session.close() # type: ignore
-        await self.client.pool_connection.close() # type: ignore
+        await self.client.session.close() 
+        await self.client.pool_connection.close() 
         await self.client.http.close()
         await self.client.close()
 
@@ -637,15 +637,15 @@ class Administrate(commands.Cog):
             if channel.id != interaction.channel.id:
                 ch = await self.client.fetch_channel(channel.id)
                 await ch.send(message)
-                return await interaction.response.send_message( # type: ignore
+                return await interaction.response.send_message( 
                     f"Done. Sent to <#{channel.id}>.", ephemeral=True)
             else:
-                return await interaction.response.send_message( # type: ignore
+                return await interaction.response.send_message( 
                     "Point of giving a channel that is the same as the one you're in?", ephemeral=True)
         else:
             ch = await self.client.fetch_channel(interaction.channel.id)
             await ch.send(message)
-            return await interaction.response.send_message("Done.", ephemeral=True) # type: ignore
+            return await interaction.response.send_message("Done.", ephemeral=True) 
 
 
 async def setup(client):
