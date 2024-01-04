@@ -2878,12 +2878,7 @@ class Economy(commands.Cog):
             not_database = []
             index = 1
             unique_badges = {
-                "546086191414509599": "<:in_power:1153754243220647997>",
-                "992152414566232139": "<:e1_stafff:1145039666916110356>",
-                "1134123734421217412": "<:e1_bughunterGold:1145053225414832199>",
-                "1154092136115994687": "<:e1_bughunterGreen:1145052762351095998>",
-                "713736460142116935": "<:e1_giggle:1150899657912893642>",
-                "1047572530422108311": "<:cc:1146092310464049203>"
+                "USER_ID_TO_GIVE_BADGE_TO": "WHAT BADGE THIS IS (EMOJI)"
             }
 
             for member in data:
