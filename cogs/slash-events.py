@@ -1,6 +1,4 @@
 from traceback import print_exception
-
-import discord
 from discord import Embed, Interaction
 from discord.ext import commands
 from discord.app_commands import AppCommandError, CheckFailure, MissingRole, MissingPermissions
@@ -20,19 +18,19 @@ class SlashExceptionHandler(commands.Cog):
     async def get_app_command_error(self, interaction: Interaction,
                                     error: AppCommandError):
 
-        if not interaction.response.is_done(): 
-            await interaction.response.defer(thinking=True) 
+        if not interaction.response.is_done(): # type: ignore
+            await interaction.response.defer(thinking=True) # type: ignore
 
         if isinstance(error, CheckFailure):
             exception = Embed(title='Exception', colour=0x2F3136)
 
-            if isinstance(error, MissingRole):  # when a user has a missing role
+            if isinstance(error, MissingRole): 
 
                 exception.description = f'{interaction.user.name}, you are missing a role.'
 
                 exception.add_field(name='Required Role', value=f"<@&{error.missing_role}>", inline=False)
 
-            elif isinstance(error, MissingPermissions):  # when a user has missing permissions
+            elif isinstance(error, MissingPermissions):
 
                 exception.description = (f"{interaction.user.name}, you're missing "
                                          f"some permissions required to use this command.")
@@ -40,14 +38,13 @@ class SlashExceptionHandler(commands.Cog):
                                     value=', '.join(error.missing_permissions))
 
 
-            elif isinstance(error, CommandOnCooldown):  # when the command a user executes is on cooldown
+            elif isinstance(error, CommandOnCooldown): 
                 exception.description = (f"- **{interaction.user.name}**, you're on cooldown.\n"
                                          f" - You may use this command again after **{error.retry_after:.2f}** seconds.")
 
             else:
-                exception.description = "Certain conditions needed to call this command were not met."
+                exception.description = "Certain conditions needed to call this command were not met. See `>reqs`."
 
-            # if isinstance(interaction.response.type, discord.InteractionResponseType.deferred_channel_message,) or if isinstance(interaction.response)
             return await interaction.followup.send(embed=exception)
 
         if isinstance(error, CommandNotFound):
