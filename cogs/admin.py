@@ -77,7 +77,7 @@ class Administrate(commands.Cog):
         time_delta = datetime.strptime(new2, formatter) - datetime.strptime(self.client.time_launch, formatter) 
         await ctx.send(content=f"**Uptime** (in format HH:MM:SS): {time_delta}")
 
-    @commands.command(name="payout-now", description="send the weekly payout to eligible members.",
+    @commands.command(name="payout-now", description="send payouts to eligible members.",
                       aliases=('p_n', 'p-n'))
     async def rewards_user_roles(self, ctx: commands.Context):
         await ctx.message.delete()
@@ -143,7 +143,7 @@ class Administrate(commands.Cog):
             await ctx.send("This command is to be only in **cc**.")
 
     @app_commands.command(name="config",
-                          description="modify the amount of robux a user has directly.")
+                          description="adjust a user's robux directly.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(configuration='the type of mode used for modifying robux',
                            amount='the amount of robux to modify. Supports Shortcuts (exponents only).',
@@ -231,7 +231,7 @@ class Administrate(commands.Cog):
                                   url='https://www.youtube.com/watch?v=dQw4w9WgXcQ')
                 await interaction.response.send_message(embed=embed4, ephemeral=ephemeral) 
 
-    @app_commands.command(name='pin', description='pin a specified message in any channel.', )
+    @app_commands.command(name='pin', description='pin a message in any channel.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(message_id='the ID of the message to be pinned',
                            reason='the reason for pinning this message',
@@ -286,25 +286,28 @@ class Administrate(commands.Cog):
         await interaction.response.send_message( 
             content='the emoji has been added to the message', ephemeral=True, delete_after=3.0)
 
-    @commands.command(name='sync', description='refresh the client tree for changes.', aliases=("sy",))
+    @commands.command(name='sync', description='sync client tree for changes.', aliases=("sy",))
     async def sync_tree(self, ctx: commands.Context) -> None:
         print("syncing")
         # Application command synchronization
+        # ctx.bot.tree.copy_global_to(guild=discord.Object(id=780397076273954886))
+        # ctx.bot.tree.copy_global_to(guild=discord.Object(id=829053898333225010))
         await ctx.bot.tree.sync(guild=discord.Object(id=780397076273954886))
         await ctx.bot.tree.sync(guild=discord.Object(id=829053898333225010))
+        # await ctx.bot.tree.sync(guild=None)
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
-    @commands.command(name='unload', description='unloads a cog (file) from the client.')
+    @commands.command(name='unload', description='unloads a file from the client.')
     async def unload(self, ctx: commands.Context, cog_name: str):
         await self.client.unload_extension(cog_name)
         await ctx.send(f'`cogs.{cog_name}` has been unloaded.', ephemeral=True, delete_after=4.0)
 
-    @commands.command(name='load', description='loads a cog (file) to the client.')
+    @commands.command(name='load', description='loads a file to the client.')
     async def load(self, ctx: commands.Context, cog_name: str):
         await self.client.load_extension(cog_name)
         await ctx.send(f'`cogs.{cog_name}` has been loaded.', delete_after=4.0)
 
-    @commands.command(name='reload', description='reload a cog (file) to the client.')
+    @commands.command(name='reload', description='reload a file to the client.')
     async def reload(self, ctx: commands.Context, cog_name: str):
         await self.client.reload_extension(cog_name)
         await ctx.send(f'`cogs.{cog_name}` has been reloaded.', delete_after=4.0)
@@ -359,12 +362,12 @@ class Administrate(commands.Cog):
                 self._last_result = ret
                 await ctx.send(f'```py\n{value}{ret}\n```')
 
-    @commands.command(name='blank', description='newline spam to clear a channel.')
+    @commands.command(name='blank', description='newlines to clear a channel.')
     async def blank(self, ctx):
         await ctx.send(
             ".\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nCleared.")
 
-    @commands.command(name='regex', description='preset to create automod regex rule.')
+    @commands.command(name='regex', description='load automod match_regex rules.')
     async def automod_regex(self, ctx):
         await ctx.guild.create_automod_rule(name='new rule by cxc',
                                             event_type=discord.AutoModRuleEventType.message_send,
@@ -373,7 +376,7 @@ class Administrate(commands.Cog):
                                                 discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
-    @commands.command(name='mentions', description='preset to create automod mass_mentions rule.')
+    @commands.command(name='mentions', description='load automod mass_mentions rules.')
     async def automod_mentions(self, ctx):
         await ctx.guild.create_automod_rule(name='new rule by cxc',
                                             event_type=discord.AutoModRuleEventType.message_send,
@@ -382,7 +385,7 @@ class Administrate(commands.Cog):
                                                 discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
-    @commands.command(name='keyword', description='preset to create automod mass_mentions rule.')
+    @commands.command(name='keyword', description='load automod by_keyword rules.')
     async def automod_keyword(self, ctx, the_word):
         await ctx.guild.create_automod_rule(name='new rule by cxc',
                                             event_type=discord.AutoModRuleEventType.message_send,
@@ -457,7 +460,7 @@ class Administrate(commands.Cog):
 
         await original.edit(embed=r)
 
-    @commands.command(name='update2', description='preset to modify channel welcome banner.')
+    @commands.command(name='update2', description='preset to edit welcome banner.')
     async def push_update2(self, ctx):
         await ctx.message.delete()
         channel = await self.client.fetch_channel(1121445944576188517)
@@ -567,7 +570,7 @@ class Administrate(commands.Cog):
             ch = self.client.fetch_channel(1124090797613142087)
             await ch.send(err.__cause__)
 
-    @commands.command(name='update4', description='updates to a progress tracker.')
+    @commands.command(name='update4', description='updates the progress tracker.')
     async def override_economy(self, ctx):
         await ctx.message.delete()
         channel = await self.client.fetch_channel(1124782048041762867)
@@ -596,14 +599,14 @@ class Administrate(commands.Cog):
                                   "we would not be able to recover the Economy System without <@992152414566232139>, she is the literal backbone of its revival! thank her for making it possible!")
         await original.edit(embed=temporary)
 
-    @commands.command(name='ccil', description='display\'s the permanent invite link for cc.')
+    @commands.command(name='ccil', description='sends invite for cc.')
     async def preset_ccil(self, ctx):
         await ctx.message.delete()
         await ctx.send("**Permanent Invite Link** - discord.gg/W3DKAbpJ5E\n"
                        "This link ***will never*** expire, but note that it can "
                        "be disabled by an Administrator without notice.", silent=True)
 
-    @app_commands.command(name='edit', description='edit a message sent by the client.')
+    @app_commands.command(name='edit', description='edit a message from me.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(msg='The ID of the message to edit', new_content='The new content to replace it with')
     async def edit_msg(self, interaction: discord.Interaction, msg: str, new_content: str):
@@ -622,7 +625,7 @@ class Administrate(commands.Cog):
         await self.client.http.close()
         await self.client.close()
 
-    @commands.command(name='say', description='repeat what you typed (txt ver).')
+    @commands.command(name='say', description='repeat what you typed.')
     async def say(self, ctx, *, text_to_say):
         """Makes the bot say what you want it to say."""
         await ctx.message.delete()
