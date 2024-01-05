@@ -74,7 +74,7 @@ The help command. It is an interactive menu sorting all the commands within cogs
 In the course of making this bot, I learnt a lot of things. I was just a beginner at first and had no idea how to read or even understand the discord.py documentation. I think it was my initiative one day to just completley absolve the documentation and of all of its contents one day that led me to where this project has come now. And also the programming tips I've gotten over the years. It is a passion project and We are not considering disbanding the project any time soon.
 
 > [!NOTE]
-> The future of this project is uncertain. Given my limited free time, I may not be able to update the code after breaking changes to the library/API take place. This will only dwindle in the future. [See Version Guarantees for discord.py.](https://discordpy.readthedocs.io/en/stable/version_guarantees.html)
+> The future of this project is uncertain. Given my limited free time, I may not be able to update the code after breaking changes to the library/API take place. This will only dwindle in the future. See https://github.com/SGA-A/c2c/discussions/9 [and the Version Guarantees for discord.py.](https://discordpy.readthedocs.io/en/stable/version_guarantees.html)
 
 ## Credits
 Of course, we didn't make it work all by ourselves. We have to acknowledge these author's for making certain features possible:
