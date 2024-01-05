@@ -127,12 +127,30 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
 
 
 class InviteButton(discord.ui.View):
-    def __init__(self):
+    def __init__(self, client: commands.Bot):
         super().__init__(timeout=60.0)
+        self.client: commands.Bot = client
+
+        perms = discord.Permissions.none()
+        perms.read_messages = True
+        perms.external_emojis = True
+        perms.send_messages = True
+        perms.manage_roles = True
+        perms.manage_channels = True
+        perms.ban_members = True
+        perms.kick_members = True
+        perms.manage_messages = True
+        perms.embed_links = True
+        perms.read_message_history = True
+        perms.attach_files = True
+        perms.add_reactions = True
+        perms.voice()
+        perms.create_instant_invite = True
+        perms.manage_threads = True
+
         self.add_item(discord.ui.Button(
             label="Invite Link",
-            url="https://discord.com/api/oauth2/authorize?client_id=1047572530422108311&permissions=8&scope=applications.commands%20bot",
-            style=discord.ButtonStyle.danger))
+            url=discord.utils.oauth_url(self.client.user.id, permissions=perms)))
 
 
 class Miscellaneous(commands.Cog):
@@ -169,7 +187,7 @@ class Miscellaneous(commands.Cog):
     @commands.guild_only()
     async def invite_bot(self, ctx):
         await ctx.send(embed=membed("The button component gives a direct link to invite me to your server.\n"
-                                    "Bear in mind only the developers can invite the bot."), view=InviteButton())
+                                    "Remember that only developers can invite the bot."), view=InviteButton(self.client))
 
     @commands.command(name='calculate', aliases=('c', 'calc'), description='compute a mathematical expression.')
     @commands.guild_only()
@@ -182,7 +200,7 @@ class Miscellaneous(commands.Cog):
 
         await sleep(1)
 
-    @commands.command(name='ping', description='check the latency of the bot.')
+    @commands.command(name='ping', description='checks latency of the bot.')
     async def ping(self, ctx):
         start = perf_counter()
         message = await ctx.send("Ping...")
@@ -191,7 +209,7 @@ class Miscellaneous(commands.Cog):
         await message.edit(content='REST: {0:.2f}ms **\U0000007c** '
                                    'WS: {1} ms'.format(duration, round(self.client.latency * 1000)))
 
-    @app_commands.command(name='bored', description='find something to do if you\'re bored.')
+    @app_commands.command(name='bored', description="find something to do.")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(activity_type='the type of activity to think of')
     async def prompt_act(self, interaction: discord.Interaction,
@@ -210,7 +228,7 @@ class Miscellaneous(commands.Cog):
                 await interaction.response.send_message( 
                     embed=membed("An unsuccessful request was made. Try again later."))
 
-    @app_commands.command(name='kona', description='fetches images from the konachan website.')
+    @app_commands.command(name='kona', description='fetch images from the konachan website.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.check(was_called_in_a_nsfw_channel)
     @app_commands.describe(tags='the tags to base searches upon, seperated by a space', page='the page to look through under a tag')
@@ -280,7 +298,7 @@ class Miscellaneous(commands.Cog):
         await interaction.response.send_message(embed=embed) 
 
 
-    @app_commands.command(name='emojis', description='fetches all of the emojis c2c can access.')
+    @app_commands.command(name='emojis', description='fetch all the emojis c2c can access.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     async def emojis_paginator(self, interaction: discord.Interaction):
         length = 10
@@ -358,7 +376,7 @@ class Miscellaneous(commands.Cog):
                 "updated in real time!")
             await ctx.send(embed=embed)
 
-    @app_commands.command(name='inviter', description='generate a new server invite link.')
+    @app_commands.command(name='inviter', description='creates a server invite link.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.checks.has_permissions(create_instant_invite=True)
     @app_commands.describe(invite_lifespan='the duration of which the invite should last, must be > 0.',
@@ -389,7 +407,7 @@ class Miscellaneous(commands.Cog):
         success.set_author(name=f'Requested by {interaction.user.name}', icon_url=avatar.url)
         await interaction.response.send_message(embed=success) 
 
-    @app_commands.command(name='define', description='find the definition of any word of your choice.')
+    @app_commands.command(name='define', description='define any word of choice.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.checks.cooldown(1, 3, key=lambda i: i.user.id)
     @app_commands.describe(word='the term that is to be defined for you')
@@ -430,9 +448,9 @@ class Miscellaneous(commands.Cog):
             the_fact = text[0].get('fact')
             await interaction.response.send_message(f"{the_fact}.") 
 
-    @app_commands.command(name='com', description='finds out what the most common letters in word(s) are.')
+    @app_commands.command(name='com', description='finds most common letters in sentences.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
-    @app_commands.describe(word='the word(s) to find the frequent letters of')
+    @app_commands.describe(word='the sentence(s) to find the frequent letters of')
     async def common(self, interaction: Interaction, word: str):
 
         letters = []
@@ -448,7 +466,6 @@ class Miscellaneous(commands.Cog):
 
         n = max(frequency)
 
-        # Look for most common letter(s) and add to commons list
         commons = []
         counter = 0
         for m in frequency:
@@ -456,18 +473,16 @@ class Miscellaneous(commands.Cog):
                 commons.append(letters[counter])
             counter += 1
 
-        # Format most common letters
         commons.sort()
         answer = ''
         for letter in commons:
             answer = answer + letter + ' '
 
-        # Remove extra space at the end of the string
         answer = answer[:-1]
 
         await interaction.response.send_message(embed=membed(f'The most common letter is {answer}.')) 
 
-    @app_commands.command(name='charinfo', description='show info about characters (max 25).')
+    @app_commands.command(name='charinfo', description='show info on characters (max 25).')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(characters='any written letters or symbols')
     async def charinfo(self, interaction: Interaction, *, characters: str):
@@ -487,7 +502,7 @@ class Miscellaneous(commands.Cog):
             return
         await interaction.response.send_message(content=f'{msg}') 
 
-    @commands.command(name='spotify', aliases=('sp', 'spot'), description='display a user\'s spotify RP information.')
+    @commands.command(name='spotify', aliases=('sp', 'spot'), description="fetch spotify RP information.")
     @commands.guild_only()
     async def find_spotify_activity(self, ctx: commands.Context, *, username: Union[discord.Member, discord.User] = None):
         global found_spotify
@@ -520,13 +535,13 @@ class Miscellaneous(commands.Cog):
                     return await ctx.send(f"{username.display_name} is not listening to Spotify.")
             await ctx.send(f"{username.display_name} has no activity.")
 
-    @app_commands.command(name='feedback', description='send your feedback to the c2c developers.')
+    @app_commands.command(name='feedback', description='send feedback to the c2c developers.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     async def feedback(self, interaction: discord.Interaction):
         feedback_modal = FeedbackModal()
         await interaction.response.send_modal(feedback_modal) 
 
-    @app_commands.command(name='about', description='shows some stats related to the client.')
+    @app_commands.command(name='about', description='shows stats related to the client.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.checks.cooldown(1, 3, key=lambda i: i.user.id)
     async def about_the_bot(self, interaction: discord.Interaction):
@@ -579,7 +594,7 @@ class Miscellaneous(commands.Cog):
         await sleep(5)
         await interaction.followup.send(embed=embed, silent=True)
 
-    @app_commands.command(name='tn', description="returns the time now in any given format.")
+    @app_commands.command(name='tn', description="get time now in a chosen format.")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.rename(spec="mode")
     @app_commands.describe(spec='the mode of displaying the current time now')
