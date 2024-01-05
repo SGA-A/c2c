@@ -3448,7 +3448,6 @@ class Economy(commands.Cog):
             embed.add_field(name=self.client.user.name, value=f"Rolled `{bot_choice[0]}`")
             await interaction.response.send_message(content=content_before, embed=embed)  
 
-    @withdraw.autocomplete('robux')
     @play_blackjack.autocomplete('bet_amount')
     @bet.autocomplete('exponent_amount')
     @deposit.autocomplete('robux')
