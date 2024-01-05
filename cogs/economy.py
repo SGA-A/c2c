@@ -42,7 +42,12 @@ BANK_COLUMNS = ["wallet", "bank", "pmulti", "job", "bounty", "prestige"]
 invoker_ch = int()
 participants = set()
 DOWN = True
-
+UNIQUE_BADGES = {
+            EXAMPLE_UID: "<:e1_stafff:1145039666916110356>",
+            EXAMPLE_UID_2: "<:in_power:1153754243220647997>",
+            EXAMPLE_UID_3: "<:e1_bughunterGold:1145053225414832199>",
+            EXAMPLE_UID_4: "<:e1_bughunterGreen:1145052762351095998>",
+            EXAMPLE_UID_5: "<:cc:1146092310464049203>"}
 SERVER_MULTIPLIERS = {
     829053898333225010: 120,
     780397076273954886: 160,
@@ -139,7 +144,7 @@ with open('C:\\Users\\georg\\PycharmProjects\\c2c\\cogs\\claimed.json') as file_
     claims = json.load(file_name_four)
 
 
-def save_times():  # Note that this used to be called save_amount_job_times, just in case anything breaks
+def save_times():
     with open('C:\\Users\\georg\\PycharmProjects\\c2c\\cogs\\times.json', 'w') as file_name_seven:
         json.dump(times, file_name_seven, indent=4)
 
@@ -165,12 +170,9 @@ def make_plural(word, count):
 
 def plural_for_own(count: int) -> str:
     """Only use this pluralizer if the term is 'own'. Nothing else."""
-    # Check if count is not equal to 1
     if count != 1:
-        # Add 's' to the word to make it plural
         return "own"
     else:
-        # Return the singular form of the word
         return "owns"
 
 def return_rand_str():
@@ -219,11 +221,9 @@ def determine_exponent(rinput: str) -> str | int:
         ten_exponent = int(after_e_str)
         actual_value = before_e * (10 ** ten_exponent)
     else:
-        # Handle cases where 'e' is not present
         try:
             actual_value = int(rinput)
         except ValueError:
-            # Handle invalid input
             return rinput
 
     return floor(abs(actual_value))
@@ -294,7 +294,7 @@ def get_profile_key_value(key: str) -> Any:
 def display_user_friendly_deck_format(deck: list, /):
     """Convert a deck view into a more user-friendly view of the deck."""
     remade = list()
-    suits = ["♥", "♦", "♣", "♠"]  # hearts diamonds, clubs, spades
+    suits = ["♥", "♦", "♣", "♠"]
     ranks = {10: ["K", "Q", "J"], 1: "A"}
     chosen_suit = choice(suits)
     for number in deck:
@@ -314,7 +314,7 @@ def display_user_friendly_deck_format(deck: list, /):
 
 def display_user_friendly_card_format(number: int, /):
     """Convert a single card into the user-friendly card version linked and ranked."""
-    suits = ["♥", "♦", "♣", "♠"]  # hearts diamonds, clubs, spades
+    suits = ["♥", "♦", "♣", "♠"] 
     ranks = {10: ["K", "Q", "J"]}
     chosen_suit = choice(suits)
     conversion_letter = ranks.setdefault(number, None)
@@ -403,7 +403,7 @@ class ConfirmDeny(discord.ui.View):
     @discord.ui.button(label='Confirm', style=discord.ButtonStyle.danger)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         tables_to_delete = [BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME]
-        # Execute DELETE queries using a loop
+        
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             for table in tables_to_delete:
@@ -418,55 +418,10 @@ class ConfirmDeny(discord.ui.View):
 
     @discord.ui.button(label='Deny', style=discord.ButtonStyle.green)
     async def deny(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # await interaction.response.send_message("Request denied.", ephemeral=True)
         self.timed_out = False
         for item in self.children:
             item.disabled = True
         await interaction.message.edit(content="The operation was cancelled, as per-request.", view=None)
-
-
-# class GroupModal(discord.ui.Modal, title='Create your clan'):
-#     # Our modal classes MUST subclass `discord.ui.Modal`,
-#     # but the title can be whatever you want.
-#
-#     # This will be a short input, where the user can enter their name
-#     # It will also have a placeholder, as denoted by the `placeholder` kwarg.
-#     # By default, it is required and is a short-style input which is exactly
-#     # what we want.
-#     name = discord.ui.TextInput(
-#         label='Clan Name',
-#         placeholder='The name of your clan e.g, One Love 2 Killers',
-#         min_length=3, max_length=20
-#     )
-#
-#     tag = discord.ui.TextInput(
-#         label='Clan Tag',
-#         placeholder='A brief sequence of letters to represent your clan e.g., 1K2L',
-#         min_length=2, max_length=8
-#     )
-#
-#     # This is a longer, paragraph style input, where user can submit feedback
-#     # Unlike the name, it is not required. If filled out, however, it will
-#     # only accept a maximum of 300 characters, as denoted by the
-#     # `max_length=300` kwarg.
-#     desc = discord.ui.TextInput(
-#         label='Clan Description',
-#         style=discord.TextStyle.long,
-#         placeholder='Tell us about your clan..',
-#         max_length=300,
-#         min_length=10
-#     )
-#
-#
-#     async def on_submit(self, interaction: discord.Interaction):
-#
-#         await interaction.response.send_message(f'Thanks for your feedback, {self.name.value}!', ephemeral=True)
-#
-#     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
-#         await interaction.response.send_message('Oops! Something went wrong.', ephemeral=True)
-#
-#         # Make sure we know what the error actually is
-#         traceback.print_exception(type(error), error, error.__traceback__)
 
 
 class BlackjackUi(discord.ui.View):
@@ -645,7 +600,7 @@ class BlackjackUi(discord.ui.View):
             popped = deck.pop()
 
             # not ui friendly
-            dealer_hand.append(popped)  # not ui friendly
+            dealer_hand.append(popped)
 
             # ui friendly
             self.client.games[interaction.user.id][-3].append(display_user_friendly_card_format(popped)) 
@@ -672,7 +627,6 @@ class BlackjackUi(discord.ui.View):
                 new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
                 amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
                 await Economy.update_bank_new(interaction.user, conn, amount_after_multi, "bjwa")
-                # tma = amount_after_multi - namount
                 new_amount_balance = await Economy.update_bank_new(interaction.user, conn, amount_after_multi)
 
             win = discord.Embed(colour=discord.Colour.brand_green(),
@@ -732,7 +686,6 @@ class BlackjackUi(discord.ui.View):
                 pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
                 new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
                 amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
-                # tma = amount_after_multi - namount
                 new_amount_balance = await Economy.update_bank_new(interaction.user, conn, amount_after_multi)
                 await Economy.update_bank_new(interaction.user, conn, amount_after_multi, "bjwa")
 
@@ -785,8 +738,8 @@ class BlackjackUi(discord.ui.View):
             new_bj_lose = await Economy.update_bank_new(interaction.user, conn, 1, "bjl")
             new_total = new_bj_lose[0] + bj_win[0]
             await Economy.update_bank_new(interaction.user, conn, namount, "bjla")
-            await Economy.update_bank_new(self.interaction.guild.me, conn, namount)  # give to bot
-            new_amount_balance = await Economy.update_bank_new(interaction.user, conn, -namount)  # take from human
+            await Economy.update_bank_new(self.interaction.guild.me, conn, namount) 
+            new_amount_balance = await Economy.update_bank_new(interaction.user, conn, -namount) 
 
         loser = discord.Embed(colour=discord.Colour.brand_red(),
                               description=f"**You forfeit. The dealer took half of your bet for surrendering.**\n"
@@ -1017,6 +970,186 @@ class UpdateInfo(discord.ui.Modal, title='Update your Profile'):
         return await interaction.response.send_message(embed=notsuccess) 
 
 
+class DropdownLB(discord.ui.Select):
+    def __init__(self, client: commands.Bot):
+        optionss = [
+            SelectOption(label='Bank + Wallet', description='Sort by the sum of bank and wallet.', default=True),
+            SelectOption(label='Wallet', description='Sort by the wallet amount only.'),
+            SelectOption(label='Bank', description='Sort by the bank amount only.'),
+            SelectOption(label='Inventory Net', description='Sort by the net value of your inventory.')
+        ]
+        super().__init__(placeholder="Leaderboard Filter", options=optionss)
+        self.client: commands.Bot = client
+
+    async def callback(self, interaction: discord.Interaction):
+
+        chosen_choice = self.values[0]
+
+        for option in self.options:
+            if option.value == chosen_choice:
+                option.default = True
+            else:
+                option.default = False
+
+        if chosen_choice == 'Bank + Wallet':
+
+            async with self.client.pool_connection.acquire() as conn:
+                conn: asqlite_Connection = conn
+
+                data = await conn.execute(
+                    f"SELECT `userID`, SUM(`wallet` + `bank`) as total_balance FROM `{BANK_TABLE_NAME}` GROUP BY `userID` ORDER BY total_balance DESC",
+                    ())
+                data = await data.fetchall()
+
+                not_database = []
+                index = 1
+
+                for member in data:
+                    member_name = await self.client.fetch_user(member[0])
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    member_amt = member[1]
+                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member_amt:,}"
+                    not_database.append(msg1)
+                    index += 1
+
+                msg = "\n".join(not_database)
+
+                lb = discord.Embed(
+                    title=f"Leaderboard: {chosen_choice}",
+                    description=f"Displaying the top `{index-1}` users.\n\n"
+                                f"{msg}",
+                    color=0x2F3136,
+                    timestamp=discord.utils.utcnow()
+                )
+                lb.set_footer(
+                    text=f"Ranked globally",
+                    icon_url=self.client.user.avatar.url)
+
+            await interaction.response.edit_message(content=None, embed=lb, view=self.view)
+
+        elif chosen_choice == 'Wallet':
+
+            async with self.client.pool_connection.acquire() as conn:
+                conn: asqlite_Connection = conn
+
+                data = await conn.execute(
+                    f"SELECT `userID`, `wallet` as total_balance FROM `{BANK_TABLE_NAME}` GROUP BY `userID` ORDER BY total_balance DESC",
+                    ())
+
+                data = await data.fetchall()
+
+                not_database = []
+                index = 1
+
+                for member in data:
+                    member_name = await self.client.fetch_user(member[0])
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    member_amt = member[1]
+                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member_amt:,}"
+                    not_database.append(msg1)
+                    index += 1
+
+                msg = "\n".join(not_database)
+
+                lb = discord.Embed(
+                    title=f"Leaderboard: {chosen_choice}",
+                    description=f"Displaying the top `{index-1}` users.\n\n"
+                                f"{msg}",
+                    color=0x2F3136,
+                    timestamp=discord.utils.utcnow()
+                )
+                lb.set_footer(
+                    text=f"Ranked globally",
+                    icon_url=self.client.user.avatar.url)
+
+            await interaction.response.edit_message(content=None, embed=lb, view=self.view)
+
+        elif chosen_choice == 'Bank':
+            async with self.client.pool_connection.acquire() as conn:
+                conn: asqlite_Connection = conn
+
+                data = await conn.execute(
+                    f"SELECT `userID`, `bank` as total_balance FROM `{BANK_TABLE_NAME}` GROUP BY `userID` ORDER BY total_balance DESC",
+                    ())  
+
+                data = await data.fetchall()
+
+                not_database = []
+                index = 1
+
+                for member in data:
+                    member_name = await self.client.fetch_user(member[0])
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    member_amt = member[1]
+                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member_amt:,}"
+                    not_database.append(msg1)
+                    index += 1
+
+                msg = "\n".join(not_database)
+
+                lb = discord.Embed(
+                    title=f"Leaderboard: {chosen_choice}",
+                    description=f"Displaying the top `{index-1}` users.\n\n"
+                                f"{msg}",
+                    color=0x2F3136,
+                    timestamp=discord.utils.utcnow()
+                )
+                lb.set_footer(
+                    text=f"Ranked globally",
+                    icon_url=self.client.user.avatar.url)
+
+            await interaction.response.edit_message(content=None, embed=lb, view=self.view)
+
+        else:
+            async with self.client.pool_connection.acquire() as conn:
+                conn: asqlite_Connection = conn
+
+                data = await conn.execute(
+                    f"SELECT `userID`, SUM(`Keycard` * ? + `Trophy` * ? + `Dynamic_Item` * ? + `Resistor` * ? + `Clan_License` * ? + `Hyperion` * ? + `Crisis` * ? + `Odd_Eye` * ? + `Amulet` * ?) as total_net FROM `{INV_TABLE_NAME}` GROUP BY `userID` ORDER BY total_net DESC",
+                    (SHOP_ITEMS[0]["cost"], SHOP_ITEMS[1]["cost"], SHOP_ITEMS[2]["cost"], SHOP_ITEMS[3]["cost"], SHOP_ITEMS[4]["cost"], SHOP_ITEMS[5]["cost"], SHOP_ITEMS[6]["cost"], SHOP_ITEMS[7]["cost"], SHOP_ITEMS[8]["cost"]))
+
+
+                data = await data.fetchall()
+
+                not_database = []
+                index = 1
+
+                for member in data:
+                    member_name = await self.client.fetch_user(member[0])
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    member_amt = member[1]
+                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member_amt:,}"
+                    not_database.append(msg1)
+                    index += 1
+
+                msg = "\n".join(not_database)
+
+                lb = discord.Embed(
+                    title=f"Leaderboard: {chosen_choice}",
+                    description=f"Displaying the top `{index-1}` users.\n\n"
+                                f"{msg}",
+                    color=0x2F3136,
+                    timestamp=discord.utils.utcnow()
+                )
+                lb.set_footer(
+                    text=f"Ranked globally",
+                    icon_url=self.client.user.avatar.url)
+
+            await interaction.response.edit_message(content=None, embed=lb, view=self.view)
+
+class Leaderboard(discord.ui.View):
+    def __init__(self, client: commands.Bot):
+        super().__init__(timeout=40.0)
+        self.add_item(DropdownLB(client))
+
+    async def on_timeout(self) -> None:
+
+        for item in self.children:
+            item.disabled = True
+        
+        await self.message.edit(view=self)
+
+
 class Economy(commands.Cog):
 
     def __init__(self, client: commands.Bot):
@@ -1193,7 +1326,6 @@ class Economy(commands.Cog):
                                      (amount, user.id))
             await conn_input.commit()
 
-        # Retrieve and return the updated value
         updated_user = await conn_input.execute(f"SELECT `{mode}` FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
         updated_user = await updated_user.fetchone()
         return updated_user
@@ -1208,7 +1340,6 @@ class Economy(commands.Cog):
             await conn_input.execute(f"UPDATE `{INV_TABLE_NAME}` SET `{mode}` = ? WHERE userID = ?", (amount, user.id))
             await conn_input.commit()
 
-        # Retrieve and return the updated value
         updated_data = await conn_input.execute(f"SELECT `{mode}` FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
         updated_data = await updated_data.fetchone()
         return updated_data
@@ -1300,20 +1431,17 @@ class Economy(commands.Cog):
 
     @staticmethod
     async def get_slays(conn_input: asqlite_Connection, user: discord.Member):
-        # Define your SQL statement with a placeholder for the test value
+        
         sql = "SELECT * FROM slay WHERE userID = ?"
 
-        # Execute the SQL statement with the test value as a parameter
         new_data = await conn_input.execute(sql, (user.id,))
 
-        # Fetch all rows that match the condition
         selected_rows = await new_data.fetchall()
 
         return selected_rows
 
     @staticmethod
     async def change_slay_field(conn_input: asqlite_Connection, user: discord.Member, field: str, new_val: Any):
-        # Define your SQL statement with a placeholder for the test value
         await conn_input.execute(
             f"UPDATE `{SLAY_TABLE_NAME}` SET `{field}` = ? WHERE userID = ?",
             (new_val, user.id,))
@@ -1323,10 +1451,8 @@ class Economy(commands.Cog):
     async def delete_slay(conn_input: asqlite_Connection, user: discord.Member, slay_name):
         """Remove a single slay row from the db and return 1 if the row existed, 0 otherwise."""
 
-        # Define your SQL statement with the "IF EXISTS" clause
         sql = "DELETE FROM slay WHERE userID = ? AND slay_name = ?"
 
-        # Execute the SQL statement with the user ID and slay name as parameters
         await conn_input.execute(sql, (user.id, slay_name))
         await conn_input.commit()
 
@@ -1334,16 +1460,12 @@ class Economy(commands.Cog):
     async def count_happiness_above_threshold(conn_input: asqlite_Connection, user: discord.Member):
         """Count the number of rows for a given user ID where happiness is greater than 30."""
 
-        # Define your SQL statement to retrieve happiness values for a specific user ID
         sql = "SELECT happiness FROM slay WHERE userID = ?"
 
-        # Fetch all rows with the specified user ID
         rows = await conn_input.fetchall(sql, user.id)
 
-        # Initialize a variable to count happiness values above 30
         count = 0
-
-        # Iterate through the rows and check happiness values
+        
         for row in rows:
             happiness_value = row['happiness']
             if happiness_value > 30:
@@ -1355,15 +1477,12 @@ class Economy(commands.Cog):
     async def modify_happiness(conn_input: asqlite_Connection, slaves_for_user: discord.Member):
         """Modify every row's happiness field for a given user ID with a different random number."""
 
-        # Define your SQL statement to update the happiness field with a random number
         sql = "UPDATE slay SET happiness = ? WHERE userID = ?"
 
-        # Retrieve all rows with the specified user ID
         rows = await conn_input.fetchall("SELECT * FROM slay WHERE userID = ?", slaves_for_user.id)
 
-        # Iterate through the rows and update the happiness field with a random number
         for _ in rows:
-            random_happiness = randint(20, 40)  # Adjust the range as needed
+            random_happiness = randint(20, 40)
             await conn_input.execute(sql, (random_happiness, slaves_for_user.id))
 
         await conn_input.commit()
@@ -1391,7 +1510,7 @@ class Economy(commands.Cog):
             their_multi = await Economy.get_pmulti_data_only(user_name, conn)
 
             avatar = user_name.display_avatar or user_name.default_avatar
-            if their_multi[0] == 0 and (user_name.id == interaction.user.id):  # only author can create their own pmulti
+            if their_multi[0] == 0 and (user_name.id == interaction.user.id):
                 rand = randint(30, 90)
                 await Economy.change_pmulti_new(user_name, conn, rand)
                 multi_own = discord.Embed(colour=0x2F3136,
@@ -1834,7 +1953,7 @@ class Economy(commands.Cog):
                         embed=membed("You got no slays to send to work.")
                     )
 
-                res_duration = parse_duration(duration)  # a datetime object
+                res_duration = parse_duration(duration)
 
                 cooldown = await self.fetch_cooldown(conn, user=interaction.user, cooldown_type="slaywork")
                 # If the cooldown is nothing by default
@@ -2233,7 +2352,7 @@ class Economy(commands.Cog):
                 await interaction.response.send_message(embed=self.not_registered) 
 
         # --------------- Checks before betting i.e. has keycard, meets bet constraints. -------------
-        data = await self.get_one_inv_data_new(interaction.user, "Keycard", conn)  # no need to do data[0] here
+        data = await self.get_one_inv_data_new(interaction.user, "Keycard", conn) 
         has_keycard = data and True
         expo = determine_exponent(keyword)
         try:
@@ -2251,7 +2370,6 @@ class Economy(commands.Cog):
         # --------------- Contains checks before betting i.e. has keycard, meets bet constraints. -------------
         wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
         if has_keycard:
-            # if the user has a keycard
             if (amount > 75000000) or (amount < 30000):
                 err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the slot machine criteria:\n'
                                                                  f'- You wanted to bet {CURRENCY}**{amount:,}**\n'
@@ -2284,20 +2402,19 @@ class Economy(commands.Cog):
 
         # ------------------ THE SLOT MACHINE ITESELF ------------------------
 
-        emoji_outcome = generate_slot_combination()  # this is a string
+        emoji_outcome = generate_slot_combination() 
         freq1, freq2, freq3 = emoji_outcome[0], emoji_outcome[1], emoji_outcome[2]
         slot_stuff = await self.get_bank_data_new(interaction.user, conn)
         id_won_amount, id_lose_amount = slot_stuff[3], slot_stuff[4]
         avatar = interaction.user.display_avatar or interaction.user.default_avatar
 
-        if emoji_outcome.count(freq1) > 1:  # WINNING SLOT MACHINE
-            # most_frequent_emoji_outcome = freq1
+        if emoji_outcome.count(freq1) > 1: 
 
             emulti = BONUS_MULTIPLIERS[f'{freq1 * emoji_outcome.count(freq1)}']
-            serv_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0)  # Get server multiplier
-            new_multi = serv_multi + emulti  # Server multiplier PLUS slot machine multiplier
-            amount_after_multi = floor(((new_multi / 100) * amount) + amount)  # New amount AFTER all multipliers
-            tma = amount_after_multi - amount  # The multiplier amount
+            serv_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0)
+            new_multi = serv_multi + emulti 
+            amount_after_multi = floor(((new_multi / 100) * amount) + amount)
+            tma = amount_after_multi - amount  
             await self.update_bank_new(interaction.user, conn, amount_after_multi, "slotwa")
             new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
             new_id_won_amount = await self.update_bank_new(interaction.user, conn, 1, "slotw")
@@ -2316,14 +2433,14 @@ class Economy(commands.Cog):
                              icon_url=avatar.url)
             await interaction.response.send_message(embed=embed) 
 
-        elif emoji_outcome.count(freq2) > 1:  # STILL A WINNING SLOT MACHINE
+        elif emoji_outcome.count(freq2) > 1:
 
             emulti = BONUS_MULTIPLIERS[f'{freq2 * emoji_outcome.count(freq2)}']
 
-            serv_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0)  # Get server multiplier
-            new_multi = serv_multi + emulti  # Server multiplier PLUS slot machine multiplier
-            amount_after_multi = floor(((new_multi / 100) * amount) + amount)  # New amount AFTER all multipliers
-            tma = amount_after_multi - amount  # The multiplier amount
+            serv_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0)
+            new_multi = serv_multi + emulti
+            amount_after_multi = floor(((new_multi / 100) * amount) + amount)
+            tma = amount_after_multi - amount
             await self.update_bank_new(interaction.user, conn, amount_after_multi, "slotwa")
             new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
             new_id_won_amount = await self.update_bank_new(interaction.user, conn, 1, "slotw")
@@ -2342,7 +2459,7 @@ class Economy(commands.Cog):
                              icon_url=avatar.url)
             await interaction.response.send_message(embed=embed) 
 
-        else:  # A LOSING SLOT MACHINE
+        else:
 
             await self.update_bank_new(interaction.user, conn, amount, "slotla")
             new_amount_balance = await self.update_bank_new(interaction.user, conn, -amount)
@@ -2449,7 +2566,7 @@ class Economy(commands.Cog):
             wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
 
             for item in SHOP_ITEMS:
-                access_name = ' '.join(item["name"].split('_'))  # Dynamic_Item becomes Dynamic Item
+                access_name = ' '.join(item["name"].split('_')) 
 
                 if item_name == access_name:
                     ie = item['emoji']
@@ -2582,28 +2699,23 @@ class Economy(commands.Cog):
 
             resp = {"0": "None", 0: "None"}
             job_description = await self.get_job_data_only(user=interaction.user,
-                                                           conn_input=conn)  # Ensure consistency, save to job dictionary
+                                                           conn_input=conn) 
             job_val = resp.setdefault(job_description[0], job_description[0])
 
             if job_val == "None":
                 return await interaction.followup.send(embed=membed("You don't have a job, get one first."))
 
             possible_words: tuple = words.get(job_val)[0]
-            # Pick a random word from possible_words
             selected_word = choice(possible_words)
 
-            # Determine the number of letters to hide (excluding spaces)
-            letters_to_hide = max(1, len(selected_word) // 3)  # You can adjust this ratio
+            letters_to_hide = max(1, len(selected_word) // 3) 
 
-            # Get the indices of letters to hide (excluding spaces)
             indices_to_hide = [i for i, char in enumerate(selected_word) if char.isalpha()]
             indices_hidden = sample(indices_to_hide, min(letters_to_hide, len(indices_to_hide)))
 
-            # Replace selected letters with '_'
             hidden_word_list = [char if i not in indices_hidden else '_' for i, char in enumerate(selected_word)]
             hidden_word = ''.join(hidden_word_list)
 
-            # Display the hidden word to the user
 
             def check(m):
                 return m.content.lower() == selected_word.lower() and m.channel == interaction.channel and m.author == interaction.user
@@ -2680,7 +2792,7 @@ class Economy(commands.Cog):
                     inv += int(cost) * data
 
                 resp = {"0": "None", 0: "None"}
-                job_description = await self.get_job_data_only(user=user, conn_input=conn)  # Ensure consistency, save to job dictionary
+                job_description = await self.get_job_data_only(user=user, conn_input=conn)
                 job_val = resp.setdefault(job_description[0], job_description[0])
 
                 balance = discord.Embed(color=0x2F3136, timestamp=discord.utils.utcnow())
@@ -2708,10 +2820,10 @@ class Economy(commands.Cog):
         if member is None:
             member = interaction.user
 
-        if interaction.user.id not in {992152414566232139, 546086191414509599}:  # if author is not geo or splint
-            if member is not None:  # if member content was written
+        if interaction.user.id not in {992152414566232139, 546086191414509599}:
+            if member is not None:
                 return await interaction.response.send_message(embed=ERR_UNREASON) 
-        else:  # if author is geo or splint
+        else:
             if member.bot:
                 return await interaction.response.send_message(embed=ERR_UNREASON) 
 
@@ -2735,7 +2847,7 @@ class Economy(commands.Cog):
                     view.msg = await interaction.original_response()
                     return
                 tables_to_delete = [BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME]
-                # Execute DELETE queries using a loop
+                
                 for table in tables_to_delete:
                     await conn.execute(f"DELETE FROM `{table}` WHERE userID = ?", (member.id,))
 
@@ -2848,7 +2960,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=embed) 
             else:
                 wallet_new = await self.update_bank_new(user, conn, -amount_conv)
-                bank_new = await self.update_bank_new(user, conn, +amount_conv, "bank")  # \U000023e3
+                bank_new = await self.update_bank_new(user, conn, +amount_conv, "bank")
 
                 embed = discord.Embed(colour=0x2F3136)
                 embed.add_field(name="Deposited", value=f"\U000023e3 {amount_conv:,}", inline=False)
@@ -2857,12 +2969,12 @@ class Economy(commands.Cog):
 
                 return await interaction.response.send_message(embed=embed) 
 
-    @app_commands.command(name='leaderboard', description='ranks users with the most robux.')
+    @app_commands.command(name='leaderboard', description='ranks users according to various stats.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def get_leaderboard(self, interaction: discord.Interaction):
 
-        async with self.client.pool_connection.acquire() as conn: 
+        async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection = conn
 
             data = await conn.execute(
@@ -2872,34 +2984,31 @@ class Economy(commands.Cog):
 
             not_database = []
             index = 1
-            unique_badges = {
-                "USER_ID_TO_GIVE_BADGE_TO": "WHAT BADGE THIS IS (EMOJI)"
-            }
 
             for member in data:
-                # if index > 10:
-                #     break
                 member_name = await self.client.fetch_user(member[0])
-                their_badge = unique_badges.setdefault(str(member_name.id), f"")
+                their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
                 member_amt = member[1]
-                msg1 = f"**{index}.** {member_name.name} {their_badge}\n{CURRENCY}{member_amt:,}"
+                msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member_amt:,}"
                 not_database.append(msg1)
                 index += 1
 
-            msg = "\n\n".join(not_database)
+            msg = "\n".join(not_database)
 
             lb = discord.Embed(
-                title=f"Leaderboard",
-                description=f"The top `{index - 1}` users with the most amount of robux are displayed here.\n"
-                            f"this is calculated based on net value of all users (wallet + bank).\n\n{msg}",
+                title=f"Leaderboard: Bank + Wallet",
+                description=f"Displaying the top `{index-1}` users.\n\n"
+                            f"{msg}",
                 color=0x2F3136,
                 timestamp=discord.utils.utcnow()
             )
             lb.set_footer(
-                text=f"all leaderboards are ranked globally",
+                text=f"Ranked globally",
                 icon_url=self.client.user.avatar.url)
 
-            await interaction.response.send_message(embed=lb) 
+        lb_view = Leaderboard(self.client)
+        await interaction.response.send_message(embed=lb, view=lb_view)
+        lb_view.message = await interaction.original_response()
 
     @commands.guild_only()
     @commands.cooldown(1, 5)
@@ -2961,7 +3070,7 @@ class Economy(commands.Cog):
             elif other_id == "992152414566232139":
                 embed = membed('You are not allowed to rob the developer of this bot.')
                 return await interaction.response.send_message(embed=embed) 
-            elif not (await self.can_call_out_either(interaction.user, other, conn)):  # if len of tup isnt 2, meaning one isnt registered
+            elif not (await self.can_call_out_either(interaction.user, other, conn)):
                 embed = membed(f'- Either you or {other.name} does not have an account.\n'
                                f' - </balance:1179817617435926686> to register.')
                 return await interaction.response.send_message(embed=embed) 
@@ -2970,7 +3079,7 @@ class Economy(commands.Cog):
                 host_bal = await self.get_bank_data_new(other, conn)
 
                 caught = [0, 1]
-                result = choices(caught, weights=(49, 51), k=1)  # more likely to successfully rob
+                result = choices(caught, weights=(49, 51), k=1)
 
                 if not result[0]:
                     fine = randint(1, prim_bal[1])
@@ -3048,7 +3157,7 @@ class Economy(commands.Cog):
                                          f"- Your items and robux will not be lost.\n"
                                          f"- Police forces were alerted and escorted you out of the building.\n"
                                          f"- You may not enter the casino for another **{timeout}** hours."))
-                            ncd = datetime.datetime.now() + datetime.timedelta(hours=timeout)  # the cd
+                            ncd = datetime.datetime.now() + datetime.timedelta(hours=timeout)
                             ncd = datetime_to_string(ncd)
                             await self.update_cooldown(conn, user=interaction.user, cooldown_type="casino", new_cd=ncd)
                         else:
@@ -3071,7 +3180,7 @@ class Economy(commands.Cog):
                             wllt = await self.update_bank_new(interaction.user, conn, +overall)
 
                             timeout = randint(18, 24)
-                            ncd = datetime.datetime.now() + datetime.timedelta(hours=timeout)  # the cd
+                            ncd = datetime.datetime.now() + datetime.timedelta(hours=timeout)
                             ncd = datetime_to_string(ncd)
                             await self.update_cooldown(conn, user=interaction.user, cooldown_type="casino", new_cd=ncd)
                             bounty = randint(12500000, 105_000_000)
@@ -3174,8 +3283,6 @@ class Economy(commands.Cog):
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.followup.send(embed=self.not_registered)
 
-        # --------------------------------------------------------------
-
         # ----------------- Game setup ---------------------------------
 
         deck = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10] * 4
@@ -3191,7 +3298,7 @@ class Economy(commands.Cog):
         has_keycard = keycard_amt >= 1
         # ----------- Check what the bet amount is, converting where necessary -----------
 
-        expo = determine_exponent(bet_amount)  # negatives and decimals removed already
+        expo = determine_exponent(bet_amount)
 
         try:
             assert isinstance(expo, int)
@@ -3209,7 +3316,6 @@ class Economy(commands.Cog):
         # -------------------- Check to see if user has sufficient balance --------------------------
 
         if has_keycard:
-            # if the user has a keycard
             if (namount > 100_000_000) or (namount < 500_000):
                 err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the blackjack criteria:\n'
                                                                  f'- You wanted to bet {CURRENCY}**{namount:,}**\n'
@@ -3254,7 +3360,6 @@ class Economy(commands.Cog):
 
             new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
             amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
-            # tma = amount_after_multi - namount
             await self.update_bank_new(interaction.user, conn, amount_after_multi, "bjwa")
             new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
             d_fver_p = display_user_friendly_deck_format(player_hand)
@@ -3284,8 +3389,7 @@ class Economy(commands.Cog):
             remade = display_user_friendly_card_format(number)
             shallow_dv.append(remade)
 
-        # self.client.games[ctx.author.id] = (deck, player_hand, dealer_hand, namount)    # before
-        self.client.games[interaction.user.id] = (deck, player_hand, dealer_hand, shallow_dv, shallow_pv, namount)   # after
+        self.client.games[interaction.user.id] = (deck, player_hand, dealer_hand, shallow_dv, shallow_pv, namount)
 
 
         start = discord.Embed(colour=discord.Colour.dark_theme(),
@@ -3324,7 +3428,7 @@ class Economy(commands.Cog):
             wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
             pmulti = await self.get_pmulti_data_only(interaction.user, conn)
             has_keycard = keycard_amt >= 1
-            expo = determine_exponent(exponent_amount)  # negatives and decimals removed already
+            expo = determine_exponent(exponent_amount)
 
             try:
                 assert isinstance(expo, int)
@@ -3338,7 +3442,6 @@ class Economy(commands.Cog):
             if amount == 0:
                 await interaction.response.send_message(embed=ERR_UNREASON) 
             if has_keycard:
-                # if the user has a keycard
                 if (amount > 100000000) or (amount < 100000):
                     err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the bet criteria:\n'
                                                                      f'- You wanted to bet {CURRENCY}**{amount:,}**\n'
@@ -3386,7 +3489,7 @@ class Economy(commands.Cog):
             content_before = (f"{interaction.user.mention}, you don't have a personal multiplier yet. **Set "
                               f"one up now:** </multi view:1179817617251369074>.") if pmulti[0] in {"0", 0} else ""
 
-            if your_choice[0] > bot_choice[0]:  # this roll is considered a win, so give them the amount bet PLUS the multi effect.
+            if your_choice[0] > bot_choice[0]: 
 
                 bet_stuff = await self.get_bank_data_new(interaction.user, conn)
                 id_won_amount, id_lose_amount = bet_stuff[5], bet_stuff[6]
@@ -3420,7 +3523,7 @@ class Economy(commands.Cog):
                                                   f"**Tie.** You lost nothing nor gained anything!",
                                       colour=discord.Color.yellow())
 
-            else:  # not considered a win
+            else: 
 
                 bet_stuff = await self.get_bank_data_new(interaction.user, conn)
                 id_won_amount, id_lose_amount = bet_stuff[5], bet_stuff[6]
