@@ -599,10 +599,10 @@ class BlackjackUi(discord.ui.View):
         while dealer_total < 17:
             popped = deck.pop()
 
-            # not ui friendly
+            
             dealer_hand.append(popped)
 
-            # ui friendly
+            
             self.client.games[interaction.user.id][-3].append(display_user_friendly_card_format(popped)) 
 
             dealer_total = calculate_hand(dealer_hand)
@@ -1612,7 +1612,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=embed) 
             else:
                 quantity = await self.update_inv_new(interaction.user, 0, item_name, conn)
-                if amount > quantity[0]:  # if interaction user tries to give more than (s)he owns
+                if amount > quantity[0]:  
                     return await interaction.response.send_message(embed=ERR_UNREASON) 
                 else:
                     avatar = interaction.user.display_avatar or interaction.user.default_avatar
@@ -1956,7 +1956,7 @@ class Economy(commands.Cog):
                 res_duration = parse_duration(duration)
 
                 cooldown = await self.fetch_cooldown(conn, user=interaction.user, cooldown_type="slaywork")
-                # If the cooldown is nothing by default
+                
                 if cooldown is not None:
                     if cooldown[0] in {"0", 0}:
                         day = number_to_ordinal(int(res_duration.strftime("%d")))
@@ -2118,7 +2118,7 @@ class Economy(commands.Cog):
                 "when we figure out!"
             )
             match item:
-                case 'Keycard':  # if items are collectibles, put in this branch
+                case 'Keycard':  
                     return await interaction.response.send_message(  
                         embed=membed("This item is a collectible and cannot be used.")
                     )
@@ -2283,12 +2283,12 @@ class Economy(commands.Cog):
 
             if get_profile_key_value(f"{main_id} bio") is not None:
                 procfile.add_field(name='Bio', value=f'{get_profile_key_value(f"{main_id} bio")}', inline=False)
-            if get_profile_key_value(f"{main_id} avatar_url") is None:  # if user has a custom avatar url
+            if get_profile_key_value(f"{main_id} avatar_url") is None:  
                 procfile.set_thumbnail(url=their_avatar.url)
-            else:  # if the user does not have a custom avatar url set
-                try:  # try to set the custom url as the embed thumbnail
+            else:  
+                try:  
                     procfile.set_thumbnail(url=get_profile_key_value(f"{main_id} avatar_url"))
-                except discord.HTTPException:  # use default avatar if doesn't work
+                except discord.HTTPException:  
                     procfile.set_thumbnail(url=their_avatar.url)
             return await interaction.response.send_message(embed=procfile, silent=True) 
 
