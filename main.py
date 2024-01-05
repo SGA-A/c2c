@@ -287,7 +287,7 @@ class SelectMenu(ui.Select):
         ]
         super().__init__(placeholder="Name of category", options=optionss)
 
-    async def callback(self, interaction: Interaction):
+        async def callback(self, interaction: Interaction):
 
         choice = self.values[0]
         cmd_formatter: set = set()
@@ -309,16 +309,18 @@ class SelectMenu(ui.Select):
             all_cmds: dict = return_interaction_cmds_last(new_dict, "Administrate")
 
             embed = Embed(title='Help: Owner', colour=Colour.from_rgb(91, 170, 239))
-            embed.set_image(url='https://media.discordapp.net/attachments/1124994990246985820/1125005648422256692/762082-3602628412.jpg?width=1377&height=701')
+            embed.set_thumbnail(url='https://cdn.discordapp.com/icons/592654230112698378/1a4fed4eca3d81da620a662a8b383c5b.png?size=512')
             embed.set_footer(text='Got any suggestions for the bot? use the /feedback command '
                                   'to let us know about it.', icon_url=client.user.avatar.url)
             for cmd, cmd_details in all_cmds.items():
                 total_cmds_cata += 1
+
                 if cmd_details[-1] == 'txt':
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
-                else:
-                    command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010)) 
-                    cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
+                    continue
+
+                command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010))
+                cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
 
             embed.add_field(name='About: Owner',
                             value=f'Contains commands that are only able to be utilized by the bot developers, and mostly '
@@ -331,7 +333,7 @@ class SelectMenu(ui.Select):
 
             embed.description = "\n".join(cmd_formatter)
 
-            await interaction.response.edit_message(attachments=[], embed=embed, view=self.view) 
+            await interaction.response.edit_message(embed=embed, view=self.view) 
 
         elif choice == 'Moderation':
 
@@ -342,21 +344,22 @@ class SelectMenu(ui.Select):
                     option.default = False
 
             the_dict = {}
-            new_dict = return_txt_cmds_first(the_dict, choice) 
-            all_cmdss: dict = return_interaction_cmds_last(new_dict, choice) 
+            new_dict = return_txt_cmds_first(the_dict, choice)
+            all_cmdss: dict = return_interaction_cmds_last(new_dict, choice)
 
             embed = Embed(title='Help: Moderation', colour=Colour.from_rgb(247, 14, 115))
-            embed.set_image(url='https://media.discordapp.net/attachments/1124994990246985820/1125041765200703528/pink.jpg?width=1247&height=701')
+            embed.set_thumbnail(url='https://emoji.discadia.com/emojis/74e65408-2adb-46dc-86a7-363f3096b6b2.PNG')
             embed.set_footer(text='Got any suggestions for the bot? use the /feedback command to let us know about it.', icon_url=client.user.avatar.url)
 
             for cmd, cmd_details in all_cmdss.items():
+                total_cmds_cata += 1
                 if cmd_details[-1] == 'txt':
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     total_cmds_cata += 1
-                else:
-                    command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010)) 
-                    cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
-                    total_cmds_cata += 1
+                    continue
+
+                command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010))
+                cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
 
             embed.add_field(name='About: Mod',
                             value=f'Contains commands that are related to server management and moderation, hence these '
@@ -368,7 +371,7 @@ class SelectMenu(ui.Select):
                                   f'- Status: **READY**')
             embed.description = "\n".join(cmd_formatter)
 
-            await interaction.response.edit_message(attachments=[], embed=embed, view=self.view) 
+            await interaction.response.edit_message(embed=embed, view=self.view)
 
         elif choice == 'Utility':
 
@@ -383,17 +386,16 @@ class SelectMenu(ui.Select):
             all_cmdsss: dict = return_interaction_cmds_last(new_dict, "Miscellaneous")
 
             embed = Embed(title='Help: Utility', colour=Colour.from_rgb(15, 255, 135))
-            embed.set_image(url='https://media.discordapp.net/attachments/1124994990246985820/1125009796429520936/wp6063334-2886616470.jpg?width=1168&height=701')
+            embed.set_thumbnail(url='https://img.lovepik.com/element/40053/1035.png_1200.png')
             embed.set_footer(text='Got any suggestions for the bot? use the /feedback command to let us know about it.', icon_url=client.user.avatar.url)
 
             for cmd, cmd_details in all_cmdsss.items():
+                total_cmds_cata += 1
                 if cmd_details[-1] == 'txt':
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
-                    total_cmds_cata += 1
-                else:
-                    command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010)) 
-                    cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
-                    total_cmds_cata += 1
+                    continue
+                command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010)) # type: ignore
+                cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
 
             embed.add_field(name='About: Utility',
                             value=f'Contains commands that may serve useful to some users, especially to some of the geeks out there.\n'
@@ -404,7 +406,7 @@ class SelectMenu(ui.Select):
                                   f'- Status: **READY**')
             embed.description = "\n".join(cmd_formatter)
 
-            await interaction.response.edit_message(attachments=[], embed=embed, view=self.view) 
+            await interaction.response.edit_message(embed=embed, view=self.view)
 
         elif choice == 'Economy':
 
@@ -415,7 +417,7 @@ class SelectMenu(ui.Select):
                     option.default = False
 
             embed = Embed(title='Help: Economy', colour=Colour.from_rgb(255, 215, 0))
-            embed.set_image(url='https://media.discordapp.net/attachments/1124994990246985820/1125010187812605972/wp6402672.jpg?width=1247&height=701')
+            embed.set_thumbnail(url='https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Robux_2019_Logo_gold.svg/200px-Robux_2019_Logo_gold.svg.png')
             embed.set_footer(text='Got any suggestions for the bot? use the /feedback command to let us know about it.', icon_url=client.user.avatar.url)
 
             the_dict = {}
@@ -423,14 +425,25 @@ class SelectMenu(ui.Select):
             all_cmdssss: dict = return_interaction_cmds_last(new_dict, "Economy")
 
             for cmd, cmd_details in all_cmdssss.items():
+                total_cmds_cata += 1
                 if cmd_details[-1] == 'txt':
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     total_cmds_cata += 1
-                else:
-                    command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010)) 
-                    cmd_formatter.add(
-                        f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
-                    total_cmds_cata += 1
+                    continue
+
+                command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010))
+                try:
+                    got_something = False
+                    if command_manage.options:
+                        for option in command_manage.options:
+                            if isinstance(option, app_commands.AppCommandGroup):
+                                got_something = True
+                                cmd_formatter.add(
+                                    f"\U0000279c {option.mention} - {option.description}")
+                    if not got_something:
+                        cmd_formatter.add(f"\U0000279c {command_manage.mention} - {cmd_details[1]}")
+                except AttributeError:
+                    cmd_formatter.add(f"\U0000279c </balance:1192188834134376500> - {cmd_details[1]}")
 
             embed.description = "\n".join(cmd_formatter)
             embed.add_field(name='About: Economy',
@@ -441,7 +454,7 @@ class SelectMenu(ui.Select):
                                   f'- Last modified: <t:1702722548:D> (**<t:1702722548:R>**)\n'
                                   f'- Status: **LOCKED**')
 
-            await interaction.response.edit_message(attachments=[], embed=embed, view=self.view) 
+            await interaction.response.edit_message(embed=embed, view=self.view)
         else:
             for option in self.options:
                 if option.value == "Music":
@@ -450,9 +463,7 @@ class SelectMenu(ui.Select):
                     option.default = False
 
             embed = Embed(title='Help: Music', colour=Colour.from_rgb(105, 83, 224))
-            that_file = File("C:\\Users\\georg\\Downloads\\Media\\wallpaper\\purple-wp.jpg",
-                                     filename="image.png")
-            embed.set_image(url="attachment://image.png")
+            embed.set_thumbnail(url="https://www.neonsignsus.com/images/big/Music-Note-Purple-Neon-Sign.jpg")
             embed.set_footer(text='Got any suggestions for the bot? use the /feedback command to let us know about it.',
                              icon_url=client.user.avatar.url)
 
@@ -472,7 +483,7 @@ class SelectMenu(ui.Select):
                                   f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%** of all commands.\n'
                                   f'- Last modified: <t:1703857689:D> (**<t:1703857689:R>**)\n'
                                   f'- Status: **READY**')
-            await interaction.response.edit_message(attachments=[that_file], embed=embed, view=self.view) 
+            await interaction.response.edit_message(embed=embed, view=self.view)
 
 
 class Select(ui.View):
