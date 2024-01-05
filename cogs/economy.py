@@ -137,19 +137,19 @@ SHOP_ITEMS = [
 ]
 
 
-with open('C:\\Users\\georg\\PycharmProjects\\c2c\\cogs\\times.json') as file_name_thi:
+with open('C:\\Users\\YOUR_NAME\\PycharmProjects\\c2c\\cogs\\times.json') as file_name_thi:
     times = json.load(file_name_thi)
 
-with open('C:\\Users\\georg\\PycharmProjects\\c2c\\cogs\\claimed.json') as file_name_four:
+with open('C:\\Users\\YOUR_NAME\\PycharmProjects\\c2c\\cogs\\claimed.json') as file_name_four:
     claims = json.load(file_name_four)
 
 
 def save_times():
-    with open('C:\\Users\\georg\\PycharmProjects\\c2c\\cogs\\times.json', 'w') as file_name_seven:
+    with open('C:\\Users\\YOUR_NAME\\PycharmProjects\\c2c\\cogs\\times.json', 'w') as file_name_seven:
         json.dump(times, file_name_seven, indent=4)
 
 def acknowledge_claim():
-    with open('C:\\Users\\georg\\PycharmProjects\\c2c\\cogs\\claimed.json', 'w') as file_name_nine:
+    with open('C:\\Users\\YOUR_NAME\\PycharmProjects\\c2c\\cogs\\claimed.json', 'w') as file_name_nine:
         json.dump(claims, file_name_nine, indent=4)
 
 
@@ -287,7 +287,7 @@ def fmt_timestamp(year_inp: int, month_inp: int, day_inp: int, hour_inp: int, mi
 
 def get_profile_key_value(key: str) -> Any:
     """Fetch a profile key (attribute) from the database. Returns None if no key is found."""
-    with open_shelve("C:\\Users\\georg\\PycharmProjects\\c2c\\db-shit\\profile_mods") as dbmr:
+    with open_shelve("C:\\Users\\YOUR_NAME\\PycharmProjects\\c2c\\db-shit\\profile_mods") as dbmr:
         return dbmr.setdefault(key, None)
 
 
@@ -332,7 +332,7 @@ def modify_profile(typemod: Literal["update", "create", "delete"], key: str, new
     :param typemod: type of modification to the profile. could be ``update`` to update an already existing key, or ``create`` to create a new key or ``delete`` to delete a key
     :param key: The key to modify/delete.
     :param new_value: The new value to replace the old value with. For a typemod of ``delete``, this argument will not matter at all, since only the key name is required to delete a key."""
-    with open_shelve("C:\\Users\\georg\\PycharmProjects\\c2c\\db-shit\\profile_mods") as dbm:
+    with open_shelve("C:\\Users\\YOUR_NAME\\PycharmProjects\\c2c\\db-shit\\profile_mods") as dbm:
         match typemod:
             case "update" | "create":
                 dbm.update({f'{key}': new_value})
@@ -348,7 +348,7 @@ def modify_profile(typemod: Literal["update", "create", "delete"], key: str, new
 
 def get_stock(item: str) -> int:
     """Find out how much of an item is available."""
-    with open_shelve("C:\\Users\\georg\\PycharmProjects\\c2c\\db-shit\\stock") as dbm:
+    with open_shelve("C:\\Users\\YOUR_NAME\\PycharmProjects\\c2c\\db-shit\\stock") as dbm:
         a = dbm.get(f"{item}")
         if a is None:
             a = 0
@@ -357,7 +357,7 @@ def get_stock(item: str) -> int:
 
 def modify_stock(item: str, modify_type: Literal["+", "-"], amount: int) -> int:
     """Directly modify the amount of stocks available for an item, returns the new amount that is available."""
-    with open_shelve("C:\\Users\\georg\\PycharmProjects\\c2c\\db-shit\\stock") as dbm:
+    with open_shelve("C:\\Users\\YOUR_NAME\\PycharmProjects\\c2c\\db-shit\\stock") as dbm:
         match modify_type:
             case "+":
                 a = dbm.get(f"{item}")
