@@ -224,7 +224,7 @@ class C2C(commands.Bot):
         self.pool_connection = await create_pool('C:\\Users\\georg\\PycharmProjects\\c2c\\db-shit\\economy.db')
 
         # Modify the client variable
-        self.time_launch = str(datetime.now().strftime("%j:%H:%M:%S"))
+        self.time_launch = datetime.now()
 
         # Create a aiohttp session once and reuse this throughout the bot.
         self.session = ClientSession()
