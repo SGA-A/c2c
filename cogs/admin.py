@@ -71,11 +71,12 @@ class Administrate(commands.Cog):
 
     @commands.command(name='uptime', description='returns the time the bot has been active for.')
     async def uptime(self, ctx: commands.Context):
-        """Returns the time the bot has been online for (in HH:MM:SS)"""
-        new2 = str(datetime.now().strftime("%j:%H:%M:%S"))
-        formatter = '%j:%H:%M:%S'
-        time_delta = datetime.strptime(new2, formatter) - datetime.strptime(self.client.time_launch, formatter) 
-        await ctx.send(content=f"**Uptime** (in format HH:MM:SS): {time_delta}")
+        diff = datetime.now() - self.client.time_launch  # type: ignore
+        minutes, seconds = divmod(diff.total_seconds(), 60)
+        hours, minutes = divmod(minutes, 60)
+        days, hours = divmod(hours, 24)
+        await ctx.send(content=f"**Uptime**: {int(days)} days, {int(hours)} hours, "
+                               f"{int(minutes)} minutes and {int(seconds)} seconds.")
 
     @commands.command(name="payout-now", description="send payouts to eligible members.",
                       aliases=('p_n', 'p-n'))
