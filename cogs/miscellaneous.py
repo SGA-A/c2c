@@ -9,7 +9,6 @@ from random import choice
 from github import Github
 import psutil
 from typing import Literal, Union, Optional
-from math import log10, floor
 from discord.ext import commands
 from other.spshit import get_song_attributes
 from discord import app_commands, Interaction, Object
@@ -70,19 +69,6 @@ def membed(descriptioner: str) -> discord.Embed:
     membedder = discord.Embed(colour=0x2F3136,
                            description=descriptioner)
     return membedder
-
-
-def round_to_sf(number, sf=2):
-    """
-    Round a number to a specified number of significant figures.
-    """
-    if number == 0:
-        return 0.0
-
-    order_of_magnitude = 10 ** (sf - int(floor(log10(abs(number)))) - 1)
-    rounded_number = round(number * order_of_magnitude) / order_of_magnitude
-
-    return rounded_number
 
 
 def return_random_color():
