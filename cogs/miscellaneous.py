@@ -545,54 +545,82 @@ class Miscellaneous(commands.Cog):
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.checks.cooldown(1, 3, key=lambda i: i.user.id)
     async def about_the_bot(self, interaction: discord.Interaction):
-        await interaction.response.defer(thinking=True) 
+
+        await interaction.response.defer(thinking=True) # type: ignore
         amount = 0
-        lenslash = len(await self.client.tree.fetch_commands(guild=Object(id=interaction.guild.id)))
+        lenslash = len(await self.client.tree.fetch_commands(guild=Object(id=interaction.guild.id)))+1
         lentxt = len(self.client.commands)
         amount += (lenslash+lentxt)
-        stored = interaction.guild.get_member(interaction.guild.me.id)
-        embed = discord.Embed(title='About c2c',
-                              description="c2c was made with creativity in mind. It is a custom bot designed for "
-                                          "[cc](https://discord.gg/W3DKAbpJ5E) "
-                                          "that provides a wide range of utility and other services.\n\n"
-                                          "- We grow based on feedback, it's what empowers our community and without it"
-                                          " the bot would not have been the same.\n"
-                                          " - </feedback:1179817617767268353> is the medium through which we receive "
-                                          "your feedback, although it doesn't have to be. Simply relaying your thoughts"
-                                          " to the developers is enough as well!\n"
-                                          " - We accept **any** requests or features to the bot, as a community-based "
-                                          "bot thrives based on the user's needs. So yes, **your feedback matters.**\n",
-                              timestamp=datetime.datetime.now(datetime.UTC),
-                              colour=discord.Colour.from_rgb(145, 149, 213),
-                              url=self.client.user.avatar.url)
-        embed.add_field(name='Run on',
-                        value=f'discord.py v{discord.__version__}')
-        embed.add_field(name='Activity',
-                        value=f'{stored.activity.name or "No activity"}')
-        embed.add_field(name='Internal Cache Ready',
-                        value=f'{str(self.client.is_ready())}')
-        embed.add_field(name=f'Process',
-                        value=f'{ARROW}CPU: {cpu_percent()}%\n'
-                              f'{ARROW}RAM: {virtual_memory().percent}%')
-        embed.add_field(name='Servers',
+
+        username = 'SGA-A'
+        token = 'youshallnotpass'
+        repository_name = 'c2c'
+
+        g = Github(username, token)
+
+        repo = g.get_repo(f'{username}/{repository_name}')
+
+        commits = repo.get_commits()[:3]
+        revision = list()
+
+        for commit in commits:
+            revision.append(f"[`{commit.sha[:6]}`]({commit.url}) {commit.commit.message} {format_relative(commit.commit.author.date)}")
+
+        embed = discord.Embed(description=f'Latest Changes:\n'
+                                          f'{"\n".join(revision)}')
+        embed.title = 'Official Bot Server Invite'
+        embed.url = 'https://discord.gg/W3DKAbpJ5E'
+        embed.colour = discord.Colour.blurple()
+
+        geo = self.client.get_user(546086191414509599)
+        embed.set_author(name=geo.name, icon_url=geo.display_avatar.url)
+
+        total_members = 0
+        total_unique = len(self.client.users)
+
+        text = 0
+        voice = 0
+        guilds = 0
+
+        for guild in self.client.guilds:
+            guilds += 1
+            if guild.unavailable:
+                continue
+
+            total_members += guild.member_count or 0
+            for channel in guild.channels:
+                if isinstance(channel, discord.TextChannel):
+                    text += 1
+                elif isinstance(channel, discord.VoiceChannel):
+                    voice += 1
+
+        memory_usage = self.process.memory_full_info().uss / 1024 ** 2
+        cpu_usage = self.process.cpu_percent() / psutil.cpu_count()
+        embed.timestamp = discord.utils.utcnow()
+
+        diff = datetime.datetime.now() - self.client.time_launch  # type: ignore
+        minutes, seconds = divmod(diff.total_seconds(), 60)
+        hours, minutes = divmod(minutes, 60)
+        days, hours = divmod(hours, 24)
+
+        embed.add_field(name='Members', value=f'{total_members} total\n{total_unique} unique')
+        embed.add_field(name='Channels', value=f'{text + voice} total\n{text} text\n{voice} voice')
+        embed.add_field(name='Process', value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU')
+        embed.add_field(name='Guilds',
                         value=f'{len(self.client.guilds)}\n'
-                              f'{ARROW}{self.len_channels()} channels\n'
+                              f'{ARROW}{guilds} channels\n'
                               f'{ARROW}{len(self.client.emojis)} emojis\n'
                               f'{ARROW}{len(self.client.stickers)} stickers')
-        embed.add_field(name='Users',
-                        value=f'{ARROW}{len(self.client.users)} users\n'
-                              f'{ARROW}{len(self.client.voice_clients)} voice')
         embed.add_field(name='Total Commands Available',
                         value=f'{amount} total\n'
-                              f'{ARROW}{lentxt} (text-based)\n'
-                              f'{ARROW}{lenslash} (slash-based)')
-        embed.set_thumbnail(url=self.client.user.avatar.url)
-        embed.set_author(name='made possible with discord.py:',
-                         icon_url='https://media.discordapp.net/attachments/1124994990246985820/1146442046723330138/'
-                                  '3aa641b21acded468308a37eef43d7b3.png?width=411&height=411',
-                         url='https://discordpy.readthedocs.io/en/latest/index.html')
-        await sleep(5)
-        await interaction.followup.send(embed=embed, silent=True)
+                              f'{ARROW}{lentxt} (prefix)\n'
+                              f'{ARROW}{lenslash} (slash)')
+        embed.add_field(name='Uptime',
+                        value=f"{int(days)}d {int(hours)}h "
+                              f"{int(minutes)}m {int(seconds)}s")
+        embed.set_footer(text=f'Made with discord.py v{discord.__version__}', icon_url='http://i.imgur.com/5BFecvA.png')
+        await sleep(1)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name='tn', description="get time now in a chosen format.")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
