@@ -6,7 +6,8 @@ from xml.etree.ElementTree import fromstring
 from other.pagination import Pagination
 import datetime
 from random import choice
-from psutil import cpu_percent, virtual_memory
+from github import Github
+import psutil
 from typing import Literal, Union, Optional
 from math import log10, floor
 from discord.ext import commands
@@ -40,6 +41,19 @@ def extract_attributes(post_element):
         "source": source,
         "tags": tags,
     }
+
+
+def format_dt(dt: datetime.datetime, style: Optional[str] = None) -> str:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+
+    if style is None:
+        return f'<t:{int(dt.timestamp())}>'
+    return f'<t:{int(dt.timestamp())}:{style}>'
+
+
+def format_relative(dt: datetime.datetime) -> str:
+    return format_dt(dt, 'R')
 
 
 def parse_xml(xml_content):
@@ -156,6 +170,7 @@ class InviteButton(discord.ui.View):
 class Miscellaneous(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
+        self.process = psutil.Process()
 
     async def get_word_info(self, word):
         url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
