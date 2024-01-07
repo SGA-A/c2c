@@ -403,28 +403,13 @@ class Administrate(commands.Cog):
         original = await channel.fetch_message(1142392804446830684)
 
         embed = discord.Embed(title='Update Schedule',
-                              description=f'This embed will post any changes to the server in the near future. This '
+                              description=f'This embed will post any **changes to the server** in the near future. This '
                                           f'includes any feature updates within the server and any other optimization '
-                                          f'changes.\n'
-                                          f'## Coming Soon:\n'
-                                          f'Until **July**, we will be working on new commands, which is not limited to'
-                                          f' just the Economy system:\n'
-                                          f'- (<t:1719848970:R>) Actively seeking out more web data for command ideas'
-                                          f' (a process known as [web scraping.](https://en.wikipedia.org/wiki/Web_scraping))\n'
-                                          f'- (<t:1719848970:R>) New Buffs System, concerning how rewards scale on owned assets.\n'
-                                          f'- (<t:1719848970:R>) Functions to most shop items are added, many items '
-                                          f'currently have no use.\n'
-                                          f'- (<t:1719848970:R>) Some major improvements to the way slays work.\n'
-                                          f'- (<t:1719848970:R>) Profile Cards concerning a dropdown displaying your '
-                                          f'aspects in the Economy system.\n'
-                                          f' - Some examples include *your* active cooldowns, *your* badges and *your* data.\n'
-                                          f' - These are just ideas of what is to come, it is liable to change and is '
-                                          f'not indicative of the final product.'
-                                          f'\n\n*You can read https://discord.com/channels/829053898333225010/'
-                                          f'1124782048041762867/1166793975466831894 for a summary of whats next in '
-                                          f'the near future for c2c.*',
+                                          f'changes.\n',
                               colour=discord.Colour.from_rgb(101, 242, 171))
-        embed.set_footer(text='check back later for more scheduled updates..',  # replace 'more' w/ 'any known'
+        embed.add_field(name="There's nothing here yet.",
+                        value="There are no planned changes for the server right now.")
+        embed.set_footer(text='Check back later for any known scheduled updates..',  # replace 'more' w/ 'any known'
                          icon_url='https://pa1.narvii.com/6025/9497042b3aad0518f08dd2bfefb0e2262f4a7149_hq.gif')
         await original.edit(embed=embed)
 
