@@ -18,7 +18,7 @@ class Pagination(discord.ui.View):
         super().__init__(timeout=100)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Make sure only"""
+        """Only the user that invoked the original interaction can use this paginator."""
         if interaction.user == self.interaction.user:
             return True
         else:
@@ -42,6 +42,7 @@ class Pagination(discord.ui.View):
         await interaction.response.edit_message(embed=emb, view=self)
 
     def update_buttons(self):
+        """Paginator logic to update buttons where needed."""
         if self.index > self.total_pages // 2:
             self.children[2].emoji = "⏮️"
         else:
