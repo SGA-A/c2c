@@ -484,9 +484,8 @@ class BlackjackUi(discord.ui.View):
         deck = self.client.games[interaction.user.id][0]  
         player_hand = self.client.games[interaction.user.id][1]  
 
-        popped = deck.pop()
-        player_hand.append(popped)
-        self.client.games[interaction.user.id][-2].append(display_user_friendly_card_format(popped)) 
+        player_hand.append(deck.pop())
+        self.client.games[interaction.user.id][-2].append(display_user_friendly_card_format(player_hand[-1]))
         player_sum = sum(player_hand)
 
         if player_sum > 21:
