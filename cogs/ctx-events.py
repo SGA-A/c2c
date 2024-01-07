@@ -1,12 +1,12 @@
 from traceback import print_exception
-from discord import Embed
+from discord import Embed, Colour
 from discord.ext import commands
 from discord.ext.commands import errors
 
 
 def membed(custom_description: str) -> Embed:
     """Quickly create an embed with a custom description using the preset."""
-    membedder = Embed(colour=0x2F3136,
+    membedder = Embed(colour=Colour.dark_embed(),
                            description=custom_description)
     return membedder
 
@@ -18,19 +18,26 @@ class ContextCommandHandler(commands.Cog):
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, err: Exception):
 
-        if isinstance(err, errors.MissingRequiredArgument):
-            print_exception(type(err), err, err.__traceback__)
-            await ctx.reply(
-                embed=membed(f"## A required argument is missing.\n"
-                             f"- `{err.param.name}` of type **`{err.param.kind}`**."), mention_author=False)
+        if isinstance(err, errors.UserInputError):
 
-        elif isinstance(err, errors.BadArgument):
-            print_exception(type(err), err, err.__traceback__)
-            await ctx.reply(
-                embed=membed("## Bad arguments were encountered:\n"
-                             "A parsing or conversion failure has been encountered on an argument "
-                             "to pass into the command. This is an issue with the bot, you should report this to the "
-                             "c2c developers."))
+            if isinstance(err, errors.MissingRequiredArgument):
+                print_exception(type(err), err, err.__traceback__)
+                await ctx.reply(
+                    embed=membed(f"## A required argument is missing.\n"
+                                 f"- `{err.param.name}` of type **`{err.param.kind}`**."), mention_author=False)
+
+            elif isinstance(err, errors.BadArgument):
+                print_exception(type(err), err, err.__traceback__)
+                await ctx.reply(
+                    embed=membed("## Bad arguments were encountered:\n"
+                                 "A parsing or conversion failure has been encountered on an argument "
+                                 "to pass into the command. The errors that occur to make this happen are entirely due "
+                                 "to Discord limitations. Meaning you are attempting to do something that is not possible "
+                                 "under the limits of the API. Check what your inputs are, and try again."))
+            else:
+                params = ctx.command.params
+                await ctx.reply(f"Some inputs we've received from you aren't valid forms of input.\n"
+                                f"We expect these arguments from you when calling this command: {', '.join(params.keys())}")
 
         elif isinstance(err, errors.CheckFailure):
 
@@ -53,32 +60,24 @@ class ContextCommandHandler(commands.Cog):
 
             elif isinstance(err, errors.NoPrivateMessage):
                 embed = membed(
-                    f"## <:warningYellow:1159512635218342009> {ctx.author.name}, Do not send DMs here.\n"
-                    f"- **Your messages are being monitored by the OAuth2 Bot API for event calls.**\n"
-                    f" - *This is also the reason why you received this DM in the first place.*\n"
-                    f"- You should use my commands in a server e.g. {ctx.author.mutual_guilds[0].name}")
+                    f"<:warningYellow:1159512635218342009> Do not send private messages to me.\n"
+                    f"Use my commands in a server, for example in {ctx.author.mutual_guilds[0].name}.")
                 msg = await ctx.send(embed=embed)
                 await msg.delete(delay=15.0)
                 return
             else:
                 await ctx.reply(f"You have not met a prerequisite before executing this command.")
 
-        elif isinstance(err, errors.MaxConcurrencyReached):
-            await ctx.reply(f"You've reached max capacity of command usage at once, "
-                            f"please finish the previous one first.", mention_author=False)
-
         elif isinstance(err, errors.CommandOnCooldown):
-            if ctx.author.id in self.client.owner_ids:
-                ctx.command.reset_cooldown(ctx)
-                return await ctx.reply(f"The internal cooldown for {ctx.command.name} has been "
-                                       f"reset for you, you may now call the command again.")
-            await ctx.reply(f"This command is on cooldown... try again in {err.retry_after:.2f} seconds.",
-                            mention_author=False)
+            exception = membed(f"You're on cooldown to avoid overloading the bot.\n"
+                               f"Try again after **{err.retry_after:.2f}** seconds.")
+            await ctx.reply(embed=exception)
 
         elif isinstance(err, errors.CommandNotFound):
-            await ctx.reply(f"The command requested for was not found.",
-                            mention_author=False)
+            await ctx.reply(f"The command requested for was not found.", mention_author=False)
+
         else:
+            await ctx.reply(f"Something went wrong. The developers have been notified.")
             print_exception(type(err), err, err.__traceback__)
 
 
