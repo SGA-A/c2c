@@ -9,10 +9,10 @@ from discord.ext import commands
 from math import floor
 from random import randint, choices, choice, sample, shuffle
 from pluralizer import Pluralizer
-from discord import app_commands
+from discord import app_commands, SelectOption
 import json
 from asqlite import Connection as asqlite_Connection
-from typing import Optional, Literal, Any, Union
+from typing import Optional, Literal, Any, Union, List
 from tatsu.wrapper import ApiWrapper
 
 
@@ -430,7 +430,7 @@ class BlackjackUi(discord.ui.View):
     def __init__(self, interaction: discord.Interaction, client: commands.Bot):
         self.interaction = interaction
         self.client: commands.Bot = client
-        self.finishedr = False
+        self.finished = False
         super().__init__(timeout=30)
 
     async def disable_all_items(self) -> None:
@@ -439,7 +439,7 @@ class BlackjackUi(discord.ui.View):
 
     async def on_timeout(self) -> None:
         await self.disable_all_items()
-        if not self.finishedr:
+        if not self.finished:
 
             namount = self.client.games[self.interaction.user.id][-1]  
             namount = floor(((130 / 100) * namount))
@@ -459,9 +459,8 @@ class BlackjackUi(discord.ui.View):
                             f" - An additional 30% tax was as included as part of a gambling duty.\n"
                             f"- {self.interaction.user.mention} now has \U000023e3 {new_amount_balance[0]:,}."
             )
-            avatar = self.interaction.user.avatar or self.interaction.user.default_avatar
             losse.set_author(name=f"{self.interaction.user.name}'s timed-out blackjack game",
-                             icon_url=avatar.url)
+                             icon_url=self.interaction.user.display_avatar.url)
 
             return await self.message.edit( 
                 content=None, embed=losse, view=self)
@@ -491,7 +490,7 @@ class BlackjackUi(discord.ui.View):
         if player_sum > 21:
 
             await self.disable_all_items()
-            self.finishedr = True
+            self.finished = True
             dealer_hand = self.client.games[interaction.user.id][2] 
             d_fver_p = [num for num in self.client.games[interaction.user.id][-2]] 
             d_fver_d = [num for num in self.client.games[interaction.user.id][-3]] 
@@ -518,13 +517,13 @@ class BlackjackUi(discord.ui.View):
                 embed.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
                                                                             f"**Total** - `{sum(dealer_hand)}`")
 
-                avatar = interaction.user.avatar or interaction.user.default_avatar
-                embed.set_author(name=f"{interaction.user.name}'s losing blackjack game", icon_url=avatar.url)
+                embed.set_author(name=f"{interaction.user.name}'s losing blackjack game", 
+                                 icon_url=interaction.user.display_avatar.url)
                 await interaction.response.edit_message(content=None, embed=embed, view=None) 
 
         elif sum(player_hand) == 21:
 
-            self.finishedr = True
+            self.finished = True
             await self.disable_all_items()
 
             dealer_hand = self.client.games[interaction.user.id][2] 
@@ -558,8 +557,7 @@ class BlackjackUi(discord.ui.View):
                                                                         f"**Total** - `{player_sum}`")
                 win.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
                                                                           f"**Total** - `{sum(dealer_hand)}`")
-                avatar = interaction.user.avatar or interaction.user.default_avatar
-                win.set_author(name=f"{interaction.user.name}'s winning blackjack game", icon_url=avatar.url)
+                win.set_author(name=f"{interaction.user.name}'s winning blackjack game", icon_url=interaction.user.display_avatar.url)
                 await interaction.response.edit_message(content=None, embed=win, view=None) 
 
         else:
@@ -576,9 +574,8 @@ class BlackjackUi(discord.ui.View):
             prg.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {necessary_show} `?`\n"
                                                                       f"**Total** - ` ? `")
 
-            avatar = interaction.user.avatar or interaction.user.default_avatar
             prg.set_footer(text="K, Q, J = 10  |  A = 1 or 11")
-            prg.set_author(icon_url=avatar.url, name=f"{interaction.user.name}'s blackjack game")
+            prg.set_author(icon_url=interaction.user.display_avatar.url, name=f"{interaction.user.name}'s blackjack game")
             await interaction.response.edit_message( 
                 content="Press **Hit** to hit, **Stand** to finalize your deck or "
                         "**Forfeit** to end your hand prematurely.", embed=prg, view=self)
@@ -612,7 +609,7 @@ class BlackjackUi(discord.ui.View):
         del self.client.games[interaction.user.id] 
 
         if dealer_total > 21:
-            self.finishedr = True
+            self.finished = True
             async with self.client.pool_connection.acquire() as conn:  
                 conn: asqlite_Connection
 
@@ -639,12 +636,11 @@ class BlackjackUi(discord.ui.View):
             win.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
                                                                       f"**Total** - `{dealer_total}`")
 
-            avatar = interaction.user.avatar or interaction.user.default_avatar
-            win.set_author(icon_url=avatar.url, name=f"{interaction.user.name}'s winning blackjack game")
+            win.set_author(icon_url=interaction.user.display_avatar.url, name=f"{interaction.user.name}'s winning blackjack game")
             await interaction.response.edit_message(content=None, embed=win, view=None) 
 
         elif dealer_total > sum(player_hand):
-            self.finishedr = True
+            self.finished = True
             async with self.client.pool_connection.acquire() as conn:  
                 conn: asqlite_Connection
 
@@ -667,12 +663,11 @@ class BlackjackUi(discord.ui.View):
                                                                       f"**Total** - `{player_sum}`")
             loser.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
                                                                         f"**Total** - `{dealer_total}`")
-            avatar = interaction.user.avatar or interaction.user.default_avatar
-            loser.set_author(icon_url=avatar.url, name=f"{interaction.user.name}'s losing blackjack game")
+            loser.set_author(icon_url=interaction.user.display_avatar.url, name=f"{interaction.user.name}'s losing blackjack game")
             await interaction.response.edit_message(content=None, embed=loser, view=None) 
 
         elif dealer_total < sum(player_hand):
-            self.finishedr = True
+            self.finished = True
             async with self.client.pool_connection.acquire() as conn:  
                 conn: asqlite_Connection
 
@@ -697,11 +692,10 @@ class BlackjackUi(discord.ui.View):
                                                                     f"**Total** - `{player_sum}`")
             win.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
                                                                       f"**Total** - `{dealer_total}`")
-            avatar = interaction.user.avatar or interaction.user.default_avatar
-            win.set_author(icon_url=avatar.url, name=f"{interaction.user.name}'s winning blackjack game")
+            win.set_author(icon_url=interaction.user.display_avatar.url, name=f"{interaction.user.name}'s winning blackjack game")
             await interaction.response.edit_message(content=None, embed=win, view=None) 
         else:
-            self.finishedr = True
+            self.finished = True
             async with self.client.pool_connection.acquire() as conn:  
                 conn: asqlite_Connection
                 wallet_amt = await Economy.get_wallet_data_only(interaction.user, conn)
@@ -712,13 +706,12 @@ class BlackjackUi(discord.ui.View):
                                                                     f"**Total** - `{player_sum}`")
             tie.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
                                                                       f"**Total** - `{dealer_total}`")
-            avatar = interaction.user.avatar or interaction.user.default_avatar
-            tie.set_author(icon_url=avatar.url, name=f"{interaction.user.name}'s blackjack game")
+            tie.set_author(icon_url=interaction.user.display_avatar.url, name=f"{interaction.user.name}'s blackjack game")
             await interaction.response.edit_message(content=None, embed=tie, view=None) 
 
     @discord.ui.button(label='Forfeit', style=discord.ButtonStyle.blurple)
     async def forfeit_bj(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.finishedr = True
+        self.finished = True
         await self.disable_all_items()
         namount = self.client.games[interaction.user.id][-1] 
         namount = namount // 2
@@ -750,8 +743,7 @@ class BlackjackUi(discord.ui.View):
                                                                         f"**Total** - `{player_sum}`")
         loser.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
                                                                             f"**Total** - `{dealer_total}`")
-        avatar = interaction.user.avatar or interaction.user.default_avatar
-        loser.set_author(icon_url=avatar.url, name=f"{interaction.user.name}'s losing blackjack game")
+        loser.set_author(icon_url=interaction.user.display_avatar.url, name=f"{interaction.user.name}'s losing blackjack game")
 
         await interaction.response.edit_message(content=None, embed=loser, view=None) 
 
@@ -787,7 +779,6 @@ class HighLow(discord.ui.View):
 
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
-            avatar = interaction.user.display_avatar or interaction.user.default_avatar
 
             if 33 >= extraneous_data[0] > 0:
 
@@ -805,7 +796,7 @@ class HighLow(discord.ui.View):
                                                 f' - {PREMIUM_CURRENCY} **{bonus:,}** won from a **{new_multi}**% multi.\n'
                                                 f'- Your new `wallet` balance is **\U000023e3 {new_balance[0]:,}**.\n',
                                     colour=discord.Color.brand_green())
-                win.set_thumbnail(url=avatar.url)
+                win.set_thumbnail(url=interaction.user.display_avatar.url)
 
                 await interaction.followup.send(embed=win)
                 await interaction.message.edit(
@@ -822,7 +813,7 @@ class HighLow(discord.ui.View):
                                                  f'- No multiplier accrued due to a lost bet.\n'
                                                  f'- Your new `wallet` balance is **\U000023e3 {new_balance[0]:,}**.\n',
                                      colour=discord.Color.brand_red())
-                lose.set_thumbnail(url=avatar.url)
+                lose.set_thumbnail(url=interaction.user.display_avatar.url)
 
                 await interaction.followup.send(embed=lose)
                 await interaction.message.edit(
@@ -855,7 +846,7 @@ class HighLow(discord.ui.View):
                                                 f'- Your new `wallet` balance is **\U000023e3 {new_balance[0]:,}**.\n',
                                     colour=discord.Color.brand_green())
 
-                win.set_thumbnail(url=avatar.url)
+                win.set_thumbnail(url=interaction.user.display_avatar.url)
                 await interaction.followup.send(embed=win)
                 await interaction.message.edit(
                     content=f'{interaction.user.display_name}, you won. the number i was guessing '
@@ -871,7 +862,7 @@ class HighLow(discord.ui.View):
                                                  f'- No multiplier accrued due to a lost bet.\n'
                                                  f'- Your new balance is **\U000023e3 {new_balance[0]:,}**',
                                      colour=discord.Color.brand_red())
-                lose.set_thumbnail(url=avatar.url)
+                lose.set_thumbnail(url=interaction.user.display_avatar.url)
 
                 await interaction.followup.send(embed=lose)
                 await interaction.message.edit(
@@ -886,7 +877,6 @@ class HighLow(discord.ui.View):
 
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
-            avatar = interaction.user.display_avatar or interaction.user.default_avatar
 
             if 100 >= extraneous_data[0] > 66:
 
@@ -903,7 +893,7 @@ class HighLow(discord.ui.View):
                                                 f' - {PREMIUM_CURRENCY} **{bonus:,}** won from a **{new_multi}**% multi.\n'
                                                 f'- Your new `wallet` balance is **\U000023e3 {new_balance[0]:,}**.\n',
                                     colour=discord.Color.brand_green())
-                win.set_thumbnail(url=avatar.url)
+                win.set_thumbnail(url=interaction.user.display_avatar.url)
 
                 await interaction.followup.send(embed=win)
                 await interaction.message.edit(
@@ -919,7 +909,7 @@ class HighLow(discord.ui.View):
                                                  f'- No multiplier accrued due to a lost bet.\n'
                                                  f'- your new balance is **\U000023e3 {new_balance[0]:,}**',
                                      colour=discord.Color.brand_red())
-                lose.set_thumbnail(url=avatar.url)
+                lose.set_thumbnail(url=interaction.user.display_avatar.url)
 
                 await interaction.followup.send(embed=lose)
                 await interaction.message.edit(
@@ -1508,7 +1498,6 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=NOT_REGISTERED) 
             their_multi = await Economy.get_pmulti_data_only(user_name, conn)
 
-            avatar = user_name.display_avatar or user_name.default_avatar
             if their_multi[0] == 0 and (user_name.id == interaction.user.id):
                 rand = randint(30, 90)
                 await Economy.change_pmulti_new(user_name, conn, rand)
@@ -1528,7 +1517,7 @@ class Economy(commands.Cog):
             elif (their_multi[0] == 0) and (user_name.id != interaction.user.id):
                 multi_own = discord.Embed(colour=0x2F3136, description=f'{user_name.name} doesn\'t have a personal '
                                                                        f'multiplier associated with their account.')
-                multi_own.set_author(name=f'Viewing {user_name.name}\'s multipliers', icon_url=avatar.url)
+                multi_own.set_author(name=f'Viewing {user_name.name}\'s multipliers', icon_url=user_name.display_avatar.url)
             else:
                 server_bs = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0)
                 multi_own = discord.Embed(colour=0x2F3136,
@@ -1538,8 +1527,8 @@ class Economy(commands.Cog):
                                                       f'Global multiplier: **{server_bs:,}**%\n'
                                                       f'*A multiplier that changes based on the server you are calling'
                                                       f' commands in.*')
-                multi_own.set_author(name=f'Viewing {user_name.name}\'s multipliers', icon_url=avatar.url)
-                multi_own.set_thumbnail(url=avatar.url)
+                multi_own.set_author(name=f'Viewing {user_name.name}\'s multipliers', icon_url=user_name.display_avatar.url)
+                multi_own.set_thumbnail(url=user_name.display_avatar.url)
 
             await interaction.response.send_message(embed=multi_own) 
 
@@ -1565,7 +1554,6 @@ class Economy(commands.Cog):
             else:
                 real_amount = determine_exponent(amount)
                 wallet_amt_host = await Economy.get_wallet_data_only(interaction.user, conn)
-                avatar = interaction.user.display_avatar or interaction.user.default_avatar
 
                 if isinstance(real_amount, str):
                     if real_amount.lower() == 'all' or real_amount.lower() == 'max':
@@ -1588,7 +1576,7 @@ class Economy(commands.Cog):
                                                   f'- {clr.mention} now has \U000023e3 {host_amt[0]:,} in their wallet.\n'
                                                   f'- {other.mention} now has \U000023e3 {recp_amt[0]:,} in their wallet.',
                                       colour=0x2F3136)
-                embed.set_author(name=f'Transaction made by {interaction.user.name}', icon_url=avatar.url)
+                embed.set_author(name=f'Transaction made by {interaction.user.name}', icon_url=interaction.user.display_avatar.url)
                 return await interaction.response.send_message(embed=embed) 
 
     @share.command(name='items', description='share items with another user.')
@@ -1614,7 +1602,6 @@ class Economy(commands.Cog):
                 if amount > quantity[0]:  
                     return await interaction.response.send_message(embed=ERR_UNREASON) 
                 else:
-                    avatar = interaction.user.display_avatar or interaction.user.default_avatar
                     receiver = await self.update_inv_new(username, +amount, item_name, conn)
                     new_after_transaction = quantity[0] - amount
                     sender = await self.change_inv_new(interaction.user, new_after_transaction, item_name, conn)
@@ -1628,7 +1615,7 @@ class Economy(commands.Cog):
                                                                     f'- {otherm} now has **{receiver[0]}** {teir_cont}',
                                                         colour=interaction.user.colour)
                     transaction_success.set_author(name=f'Transaction made by {interaction.user.name}',
-                                                   icon_url=avatar.url)
+                                                   icon_url=interaction.user.display_avatar.url)
 
                     await interaction.response.send_message(embed=transaction_success) 
 
@@ -1915,8 +1902,7 @@ class Economy(commands.Cog):
             stats = {1: "Free", 0: "Working"}
             slays = await self.get_slays(conn, interaction.user)
             embed = discord.Embed(colour=0x2F3136)
-            avatar = user.display_avatar or user.default_avatar
-            embed.set_author(name=f'{user.name}\'s Slays', icon_url=avatar.url)
+            embed.set_author(name=f'{user.name}\'s Slays', icon_url=user.display_avatar.url)
 
             if len(slays) == 0:
                 embed.add_field(name="Nothingness.", value="This user has no slays yet.", inline=False)
@@ -2037,8 +2023,7 @@ class Economy(commands.Cog):
 
                             await self.modify_happiness(conn, interaction.user)
                             net_returns = await self.update_bank_new(interaction.user, conn, total_fund)
-                            avatar = interaction.user.display_avatar or interaction.user.default_avatar
-                            summ.set_footer(icon_url=avatar.url, text=f"For {interaction.user.name}")
+                            summ.set_footer(icon_url=interaction.user.display_avatar.url, text=f"For {interaction.user.name}")
                             summ.description = (f"## <a:2635serversubscriptionsanimated:1174417911344013523> Paycheck\n"
                                                 f"> Your slays have made **\U000023e3 {slay_fund:,}**.\n"
                                                 f"> Your new `wallet` balance now is **\U000023e3 {net_returns[0]:,}**."
@@ -2232,7 +2217,6 @@ class Economy(commands.Cog):
             their_prest = user_data[-1]
             pr_no = their_prest + 1 if user.id == 546086191414509599 else their_prest
             corresp_preste = PRESTIGE_EMOTES.setdefault(pr_no, "")
-            their_avatar = user.display_avatar or user.default_avatar
             their_badges = get_profile_key_value(f"{main_id} badges") or "No badges acquired yet"
 
             procfile = discord.Embed(colour=user.colour, timestamp=discord.utils.utcnow())
@@ -2283,12 +2267,12 @@ class Economy(commands.Cog):
             if get_profile_key_value(f"{main_id} bio") is not None:
                 procfile.add_field(name='Bio', value=f'{get_profile_key_value(f"{main_id} bio")}', inline=False)
             if get_profile_key_value(f"{main_id} avatar_url") is None:  
-                procfile.set_thumbnail(url=their_avatar.url)
+                procfile.set_thumbnail(url=user.display_avatar.url)
             else:  
                 try:  
                     procfile.set_thumbnail(url=get_profile_key_value(f"{main_id} avatar_url"))
                 except discord.HTTPException:  
-                    procfile.set_thumbnail(url=their_avatar.url)
+                    procfile.set_thumbnail(url=user.display_avatar.url)
             return await interaction.response.send_message(embed=procfile, silent=True) 
 
     @app_commands.command(name='highlow', description='Guess if a number is high, low, or jackpot!')
@@ -2405,7 +2389,6 @@ class Economy(commands.Cog):
         freq1, freq2, freq3 = emoji_outcome[0], emoji_outcome[1], emoji_outcome[2]
         slot_stuff = await self.get_bank_data_new(interaction.user, conn)
         id_won_amount, id_lose_amount = slot_stuff[3], slot_stuff[4]
-        avatar = interaction.user.display_avatar or interaction.user.default_avatar
 
         if emoji_outcome.count(freq1) > 1: 
 
@@ -2429,7 +2412,7 @@ class Economy(commands.Cog):
                                               f"**{new_amount_balance[0]:,}**.",
                                   colour=discord.Color.brand_green())
             embed.set_footer(text=f"You've won {prcntw}% of all slots games. ({new_id_won_amount[0]:,}/{new_total:,})",
-                             icon_url=avatar.url)
+                             icon_url=interaction.user.display_avatar.url)
             await interaction.response.send_message(embed=embed) 
 
         elif emoji_outcome.count(freq2) > 1:
@@ -2455,7 +2438,7 @@ class Economy(commands.Cog):
                                               f"**{new_amount_balance[0]:,}**.",
                                   colour=discord.Color.brand_green())
             embed.set_footer(text=f"You've won {prcntw}% of all slot games. ({new_id_won_amount[0]:,}/{new_total:,})",
-                             icon_url=avatar.url)
+                             icon_url=interaction.user.display_avatar.url)
             await interaction.response.send_message(embed=embed) 
 
         else:
@@ -2475,7 +2458,7 @@ class Economy(commands.Cog):
                                               f"**{new_amount_balance[0]:,}**.",
                                   colour=discord.Color.brand_red())
             embed.set_footer(text=f"You've lost {prcntl}% of all slots games. ({new_id_lose_amount[0]:,}/{new_total:,})",
-                             icon_url=avatar.url)
+                             icon_url=interaction.user.display_avatar.url)
             await interaction.response.send_message(embed=embed) 
 
     @app_commands.command(name='inventory', description='view your currently owned items.')
@@ -3041,8 +3024,7 @@ class Economy(commands.Cog):
                                      f"\U0000279c Web Status: {user_stats['web']}\n"
                                      f"\U0000279c Is on Mobile: {user_stats['is_on_mobile']}\n"
                                      f"\U0000279c Voice State: {user_stats['voice_status']}", )
-            procfile.set_thumbnail(url=username.avatar.url) if username.avatar else procfile.set_thumbnail(
-                url=username.default_avatar.url)
+            procfile.set_thumbnail(url=username.display_avatar.url)
             procfile.set_footer(text=f"{discord.utils.utcnow().strftime('%A %d %b %Y, %I:%M%p')}")
             await ctx.send(embed=procfile)
 
@@ -3399,8 +3381,7 @@ class Economy(commands.Cog):
                                                                   f"**Total** - `{sum(player_hand)}`")
         start.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {shallow_dv[0]} `?`\n"
                                                                f"**Total** - ` ? `")
-        avatar = interaction.user.avatar or interaction.user.default_avatar
-        start.set_author(icon_url=avatar.url, name=f"{interaction.user.name}'s blackjack game")
+        start.set_author(icon_url=interaction.user.display_avatar.url, name=f"{interaction.user.name}'s blackjack game")
         start.set_footer(text="K, Q, J = 10  |  A = 1 or 11")
         my_view = BlackjackUi(interaction, self.client)
         await interaction.followup.send(
@@ -3492,7 +3473,6 @@ class Economy(commands.Cog):
 
                 bet_stuff = await self.get_bank_data_new(interaction.user, conn)
                 id_won_amount, id_lose_amount = bet_stuff[5], bet_stuff[6]
-                avatar = interaction.user.display_avatar or interaction.user.default_avatar
 
                 new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
                 amount_after_multi = floor(((new_multi / 100) * amount) + amount)
@@ -3515,7 +3495,7 @@ class Economy(commands.Cog):
                                       colour=discord.Color.brand_green())
 
                 embed.set_footer(text=f"You've won {prcntw}% of all games. ({new_id_won_amount[0]:,}/{new_total:,})",
-                                 icon_url=avatar.url)
+                                 icon_url=interaction.user.display_avatar.url)
 
             elif your_choice[0] == bot_choice[0]:
                 embed = discord.Embed(description=f"## {interaction.user.mention}'s gambling game\n"
@@ -3526,7 +3506,6 @@ class Economy(commands.Cog):
 
                 bet_stuff = await self.get_bank_data_new(interaction.user, conn)
                 id_won_amount, id_lose_amount = bet_stuff[5], bet_stuff[6]
-                avatar = interaction.user.display_avatar or interaction.user.default_avatar
 
                 await self.update_bank_new(interaction.user, conn, amount, "betla")
                 new_amount_balance = await self.update_bank_new(interaction.user, conn, -amount)
@@ -3544,7 +3523,7 @@ class Economy(commands.Cog):
 
                 embed.set_footer(
                     text=f"You've lost {prcntl}% of all games. ({new_id_lose_amount[0]:,}/{new_total:,})",
-                    icon_url=avatar.url)
+                    icon_url=interaction.user.display_avatar.url)
 
             embed.add_field(name=interaction.user.name, value=f"Rolled `{your_choice[0]}`")
             embed.add_field(name=self.client.user.name, value=f"Rolled `{bot_choice[0]}`")
