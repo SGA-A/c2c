@@ -494,14 +494,13 @@ class Miscellaneous(commands.Cog):
         def to_string(c):
             digit = f'{ord(c):x}'
             the_name = name(c, 'Name not found.')
-            return f'`\\U{digit:>08}`: {the_name} - {c} \N{EM DASH} <http://www.fileformat.info/info/unicode/char/{digit}>'
+            c = '\\`' if c == '`' else c
+            return f'[`\\U{digit:>08}`](http://www.fileformat.info/info/unicode/char/{digit}): {the_name} **\N{EM DASH}** {c}'
 
         msg = '\n'.join(map(to_string, characters))
         if len(msg) > 2000:
-            await interaction.response.send_message( 
-                content='the output is too long to display', ephemeral=True, delete_after=4.0)
-            return
-        await interaction.response.send_message(content=f'{msg}') 
+            return await interaction.response.send_message('Output too long to display.')
+        await interaction.response.send_message(msg, suppress_embeds=True)
 
     @commands.command(name='spotify', aliases=('sp', 'spot'), description="fetch spotify RP information.")
     @commands.guild_only()
