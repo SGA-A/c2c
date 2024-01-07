@@ -7,7 +7,7 @@ from other.pagination import Pagination
 import datetime
 from random import choice
 from github import Github
-import psutil
+from psutil import Process, cpu_count
 from typing import Literal, Union, Optional
 from discord.ext import commands
 from other.spshit import get_song_attributes
@@ -61,7 +61,6 @@ def parse_xml(xml_content):
 
     extracted_data = [extract_attributes(post) for post in posts]
     return extracted_data
-
 
 
 def membed(descriptioner: str) -> discord.Embed:
@@ -156,7 +155,7 @@ class InviteButton(discord.ui.View):
 class Miscellaneous(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
-        self.process = psutil.Process()
+        self.process = Process()
 
     async def get_word_info(self, word):
         url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
@@ -178,28 +177,20 @@ class Miscellaneous(commands.Cog):
                 data = status
         return data
 
-    def len_channels(self):
-        total_channels = 0
-        for guild in self.client.guilds:
-            total_channels += len(guild.channels)
-        return total_channels
-
     @commands.command(name='invite', description='link to invite c2c to your server.')
     @commands.guild_only()
     async def invite_bot(self, ctx):
         await ctx.send(embed=membed("The button component gives a direct link to invite me to your server.\n"
                                     "Remember that only developers can invite the bot."), view=InviteButton(self.client))
 
-    @commands.command(name='calculate', aliases=('c', 'calc'), description='compute a mathematical expression.')
+    @commands.command(name='calculate', aliases=('c', 'calc'), description='compute a string / math expression.')
     @commands.guild_only()
     async def calculator(self, ctx: commands.Context, *, expression):
         try:
-            result = eval(expression)
+            result = eval(expression) or "Invalid"
             await ctx.reply(f'**{ctx.author.name}**, the answer is `{result}`', mention_author=False)
         except Exception as e:
             await ctx.reply(f'**Error:** {str(e)}', mention_author=False)
-
-        await sleep(1)
 
     @commands.command(name='ping', description='checks latency of the bot.')
     async def ping(self, ctx):
@@ -595,7 +586,7 @@ class Miscellaneous(commands.Cog):
                     voice += 1
 
         memory_usage = self.process.memory_full_info().uss / 1024 ** 2
-        cpu_usage = self.process.cpu_percent() / psutil.cpu_count()
+        cpu_usage = self.process.cpu_percent() / cpu_count()
         embed.timestamp = discord.utils.utcnow()
 
         diff = datetime.datetime.now() - self.client.time_launch  # type: ignore
@@ -611,7 +602,7 @@ class Miscellaneous(commands.Cog):
                               f'{ARROW}{guilds} channels\n'
                               f'{ARROW}{len(self.client.emojis)} emojis\n'
                               f'{ARROW}{len(self.client.stickers)} stickers')
-        embed.add_field(name='Total Commands Available',
+        embed.add_field(name='Commands',
                         value=f'{amount} total\n'
                               f'{ARROW}{lentxt} (prefix)\n'
                               f'{ARROW}{lenslash} (slash)')
@@ -619,7 +610,6 @@ class Miscellaneous(commands.Cog):
                         value=f"{int(days)}d {int(hours)}h "
                               f"{int(minutes)}m {int(seconds)}s")
         embed.set_footer(text=f'Made with discord.py v{discord.__version__}', icon_url='http://i.imgur.com/5BFecvA.png')
-        await sleep(1)
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name='tn', description="get time now in a chosen format.")
@@ -631,9 +621,9 @@ class Miscellaneous(commands.Cog):
                  "D - returns long date (format DD Month Year)", "F - returns long date and time (format Day, DD Month Year HH:MM)",
                  "R - returns the relative time since now"] = None) -> None:
         speca = spec[0] if spec else None
-        format_dt = discord.utils.format_dt(datetime.datetime.now(), style=speca)
-        embed = discord.Embed(description=f'## Timestamp Conversion\n{format_dt}\n'
-                                          f'- The epoch time in this format is: `{format_dt}`',
+        format_dtime = discord.utils.format_dt(datetime.datetime.now(), style=speca)
+        embed = discord.Embed(description=f'## Timestamp Conversion\n{format_dtime}\n'
+                                          f'- The epoch time in this format is: `{format_dtime}`',
                               colour=return_random_color())
         if interaction.user.avatar: embed.set_thumbnail(url=interaction.user.avatar.url)
         await interaction.response.send_message(embed=embed, ephemeral=True) 
