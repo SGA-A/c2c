@@ -39,19 +39,3 @@ def get_song_attributes(sname):
         })
 
     return song_results
-
-song_name = "see you again wiz"
-results = get_song_attributes(song_name)
-lisr = []
-for index, result in enumerate(results, start=1):
-    if 0 <= result['popularity'] <= 33:
-        rating = '\U00002b50 (Unpopular)'
-    elif 33 <= result['popularity'] <= 66:
-        rating = '\U0001f31f (Quite Popular)'
-    else:
-        rating = '\U00002728 (Very Popular)'
-    lisr.append(f'Result {index}:\n'
-                f'**Song Name**: {result['song_name']}\n'
-                f'**Artist(s)**: {', '.join(result['artists'])}\n'
-                f'Track URL: [Click Here]({result['external_urls']['spotify']})\n'
-                f'Popularity: {result['popularity']} {rating}')
