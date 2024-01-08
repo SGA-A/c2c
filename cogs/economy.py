@@ -1691,7 +1691,8 @@ class Economy(commands.Cog):
 
         successful = discord.Embed(colour=0x2B2D31,
                                    description=f"Your avatar url has been added.\n"
-                                               f"If it is a valid, it will look like this ----->")
+                                               f"If valid, it will look like this ----->\n"
+                                               f"If you can't see it, change it!")
         successful.set_thumbnail(url=url)
         modify_profile("update", f"{interaction.user.id} avatar_url", url)
         await interaction.response.send_message(embed=successful) 
