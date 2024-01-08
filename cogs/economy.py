@@ -2186,8 +2186,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=self.not_registered) 
 
             await self.change_job_new(interaction.user, conn, job_name=job_name)
-            recruited = membed(f"Success! You are now a **{job_name}**.")
-            await interaction.response.send_message(embed=recruited) 
+            await interaction.response.send_message(embed=membed(f"Success! You are now a **{job_name}**."))
 
     @app_commands.command(name='profile', description='view user information and stats.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
