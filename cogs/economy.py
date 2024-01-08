@@ -2183,17 +2183,17 @@ class Economy(commands.Cog):
                                      f"Tokens: `{format_number_short(tatsu.tokens)}`\n"
                                      f"XP: `{format_number_short(tatsu.xp)}`")
 
-            if get_profile_key_value(f"{user.id} bio") is not None:
+            if get_profile_key_value(f"{user.id} bio"):
                 procfile.add_field(name='Bio', value=f'{get_profile_key_value(f"{user.id} bio")}', inline=False)
-            if get_profile_key_value(f"{user.id} avatar_url") is None:
-                procfile.set_thumbnail(url=user.display_avatar.url)
-            else:
+            if get_profile_key_value(f"{user.id} avatar_url"):
                 try:
                     procfile.set_thumbnail(url=get_profile_key_value(f"{user.id} avatar_url"))
                 except discord.HTTPException:
-                    modify_profile("update", f"{user.id} bio", "yeah")
+                    modify_profile("delete", f"{user.id} avatar_url", "yeah")
                     procfile.set_thumbnail(url=user.display_avatar.url)
-            return await interaction.response.send_message(embed=procfile, silent=True) 
+            else:
+                procfile.set_thumbnail(url=user.display_avatar.url)
+            return await interaction.response.send_message(embed=procfile, silent=True) # type: ignore
 
     @app_commands.command(name='highlow', description='guess high, low, or jackpot for a number.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
