@@ -2049,25 +2049,25 @@ class Economy(commands.Cog):
         except ValueError as veer:
             await interaction.followup.send(f"{veer}")
 
-    @commands.command(name='reasons', description='reasons why the user not registered error is caused.')
+    @commands.command(name='reasons', description='identify causes of registration errors.')
     @commands.cooldown(1, 6)
     async def not_registered_why(self, ctx: commands.Context):
         async with ctx.typing():
-            embed = discord.Embed(title="Not registered? But why?",
-                                  description='This list is not exhaustive, all known causes will be displayed:\n'
-                                              f'- You were removed by the c2c developers.\n'
-                                              f'- You opted out of the system yourself.\n'
-                                              f'- The database is currently under construction.\n'
-                                              f'- The database malfunctioned due to a undelivered transaction.\n'
-                                              f'- You called a command that is using an outdated database.\n'
-                                              f'- The database unexpectedly closed (likely due to maintenance).\n'
-                                              f'- The developers are modifying the database contents.\n'
-                                              f'- The database is closed and a connection has not been yet.\n'
-                                              f'- The command hasn\'t acquired a pool connection (devs know why).\n\n'
-                                              f'Found an unusual bug on a command? **Report it now to prevent further '
-                                              f'issues.**', colour=0x2F3136)
-        await ctx.send(embed=embed)
-
+            await ctx.send(
+            embed=discord.Embed(
+                title="Not registered? But why?",
+                description='This list is not exhaustive, all known causes will be displayed:\n'
+                            '- You were removed by the c2c developers.\n'
+                            '- You opted out of the system yourself.\n'
+                            '- The database is currently under construction.\n'
+                            '- The database malfunctioned due to a undelivered transaction.\n'
+                            '- You called a command that is using an outdated database.\n'
+                            '- The database unexpectedly closed (likely due to maintenance).\n'
+                            '- The developers are modifying the database contents.\n'
+                            '- The database is closed and a connection has not been yet.\n'
+                            '- The command hasn\'t acquired a pool connection (devs know why).\n\n'
+                            'Found an unusual bug on a command? **Report it now to prevent further '
+                            'issues.**', colour=discord.Colour.dark_embed()))
 
     @app_commands.command(name="use", description="use an item you own from your inventory.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
