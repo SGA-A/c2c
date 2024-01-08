@@ -9,7 +9,7 @@ from discord.ext import commands
 from math import floor
 from random import randint, choices, choice, sample, shuffle
 from pluralizer import Pluralizer
-from discord import app_commands, SelectOption
+from discord import app_commands, SelectOptimon
 import json
 from asqlite import Connection as asqlite_Connection
 from typing import Optional, Literal, Any, Union, List
@@ -1168,9 +1168,9 @@ class Economy(commands.Cog):
 
     async def fetch_tatsu_profile(self, user_id: int):
         """Get tatsu data associated with a given user."""
-        wrapper = ApiWrapper(key=self.client.TATSU_API_KEY)  
-        result = await wrapper.get_profile(user_id)
-        return result
+        repeat = ApiWrapper(key=self.client.TATSU_API_KEY)  
+        repeat = await wrapper.get_profile(user_id)
+        return repeat
 
     @staticmethod
     def calculate_hand(hand):
@@ -1184,28 +1184,19 @@ class Economy(commands.Cog):
         return total
 
     # ------------------ BANK FUNCS ------------------ #
-
-    @staticmethod
-    async def create_table(conn_input: asqlite_Connection) -> None:
-        await conn_input.execute(f"CREATE TABLE IF NOT EXISTS `{BANK_TABLE_NAME}`(userID BIGINT)")
-        for col in BANK_COLUMNS:
-            await conn_input.execute(f"ALTER TABLE `{BANK_TABLE_NAME}` ADD COLUMN `{col}` BIGINT")
-        await conn_input.commit()
-
+    
     @staticmethod
     async def open_bank_new(user: discord.Member, conn_input: asqlite_Connection) -> None:
         """Register the user, if they don't exist. Only use in balance commands (reccommended.)"""
-        users = await conn_input.execute(f"SELECT * FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        new_data = await users.fetchone()
-        if new_data is None:
-            await conn_input.execute(
-                f"INSERT INTO `{BANK_TABLE_NAME}`(userID, {', '.join(BANK_COLUMNS)}) VALUES(?, {', '.join(['0'] * len(BANK_COLUMNS))})",
-                (user.id,))
 
-            ranumber = randint(10000000, 50000000)
-            await conn_input.execute(f"UPDATE `{BANK_TABLE_NAME}` SET `wallet` = ? WHERE userID = ?",
-                                     (ranumber, user.id))
-            await conn_input.commit()
+        await conn_input.execute(
+            f"INSERT INTO `{BANK_TABLE_NAME}`(userID, {', '.join(BANK_COLUMNS)}) VALUES(?, {', '.join(['0'] * len(BANK_COLUMNS))})",
+            (user.id,))
+
+        ranumber = randint(500_000_000, 3_000_000_000)
+        await conn_input.execute(f"UPDATE `{BANK_TABLE_NAME}` SET `wallet` = ? WHERE userID = ?",
+                                 (ranumber, user.id))
+        await conn_input.commit()
 
     @staticmethod
     async def can_call_out(user: discord.Member, conn_input: asqlite_Connection):
@@ -1216,11 +1207,11 @@ class Economy(commands.Cog):
 
         This is what should be done all the time to check if a user IS NOT REGISTERED.
         """
-        result = await conn_input.execute(f"SELECT EXISTS (SELECT 1 FROM `{BANK_TABLE_NAME}` WHERE userID = ?)",
+        data = await conn_input.execute(f"SELECT EXISTS (SELECT 1 FROM `{BANK_TABLE_NAME}` WHERE userID = ?)",
                                           (user.id,))
-        exists = await result.fetchone()
+        data = await result.fetchone()
 
-        return not exists[0]
+        return not data[0]
 
     @staticmethod
     async def can_call_out_either(user1: discord.Member, user2: discord.Member, conn_input: asqlite_Connection):
@@ -1231,11 +1222,11 @@ class Economy(commands.Cog):
             do something
 
         This is what should be done all the time to check if a user IS NOT REGISTERED."""
-        users = await conn_input.execute(f"SELECT COUNT(*) FROM `{BANK_TABLE_NAME}` WHERE userID IN (?, ?)",
+        data = await conn_input.execute(f"SELECT COUNT(*) FROM `{BANK_TABLE_NAME}` WHERE userID IN (?, ?)",
                                          (user1.id, user2.id))
-        count = await users.fetchone()
+        data = await data.fetchone()
 
-        return count[0] == 2
+        return data[0] == 2
 
     @staticmethod
     async def get_bank_data_new(user: discord.Member, conn_input: asqlite_Connection) -> Optional[Any]:
@@ -1248,16 +1239,16 @@ class Economy(commands.Cog):
     async def get_wallet_data_only(user: discord.Member, conn_input: asqlite_Connection) -> Optional[Any]:
         """Retrieves the wallet amount only from a registered user's bank data."""
         data = await conn_input.execute(f"SELECT wallet FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        wallet_amount = await data.fetchone()
-        return wallet_amount[0]
+        data = await data.fetchone()
+        return data[0]
 
     @staticmethod
     async def get_spec_bank_data(user: discord.Member, field_name: str, conn_input: asqlite_Connection) -> Optional[
         Any]:
         """Retrieves a specific field name only from the bank table."""
         data = await conn_input.execute(f"SELECT {field_name} FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        field_val = await data.fetchone()
-        return field_val[0]
+        data = await data.fetchone()
+        return data[0]
 
     @staticmethod
     async def update_bank_new(user: discord.Member | discord.User, conn_input: asqlite_Connection, amount: Union[float, int] = 0,
@@ -1269,8 +1260,8 @@ class Economy(commands.Cog):
         data = await conn_input.execute(
             f"UPDATE `{BANK_TABLE_NAME}` SET `{mode}` = `{mode}` + ? WHERE userID = ? RETURNING `{mode}`",
             (amount, user.id))
-        users = await data.fetchone()
-        return users
+        data = await data.fetchone()
+        return data
 
     # ------------------ INVENTORY FUNCS ------------------ #
 
@@ -1291,7 +1282,7 @@ class Economy(commands.Cog):
 
     @staticmethod
     async def get_inv_data_new(user: discord.Member, conn_input: asqlite_Connection) -> Optional[Any]:
-        """Fetch inventory data."""
+        """Fetch all inventory data from a user."""
         users = await conn_input.execute(f"SELECT * FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
         users = await users.fetchone()
         return users
@@ -1308,30 +1299,20 @@ class Economy(commands.Cog):
                              conn_input: asqlite_Connection) -> Optional[Any]:
         """Modify a user's inventory."""
 
-        data = await conn_input.execute(f"SELECT * FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
+        data = await conn_input.execute(f"UPDATE `{INV_TABLE_NAME}` SET `{mode}` = `{mode}` + ? WHERE userID = ? RETURNING `{mode}`", 
+                                        (amount, user.id))
+        await conn_input.commit()
         data = await data.fetchone()
-        if data is not None:
-            await conn_input.execute(f"UPDATE `{INV_TABLE_NAME}` SET `{mode}` = `{mode}` + ? WHERE userID = ?",
-                                     (amount, user.id))
-            await conn_input.commit()
-
-        updated_user = await conn_input.execute(f"SELECT `{mode}` FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        updated_user = await updated_user.fetchone()
-        return updated_user
+        return data
 
     @staticmethod
     async def change_inv_new(user: discord.Member, amount: Union[float, int, None], mode: str,
                              conn_input: asqlite_Connection) -> Optional[Any]:
 
-        data = await conn_input.execute(f"SELECT * FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
+        data = await conn_input.execute(f"UPDATE `{INV_TABLE_NAME}` SET `{mode}` = ? WHERE userID = ? RETURNING `{mode}`", (amount, user.id))
+        await conn_input.commit()
         data = await data.fetchone()
-        if data is not None:
-            await conn_input.execute(f"UPDATE `{INV_TABLE_NAME}` SET `{mode}` = ? WHERE userID = ?", (amount, user.id))
-            await conn_input.commit()
-
-        updated_data = await conn_input.execute(f"SELECT `{mode}` FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        updated_data = await updated_data.fetchone()
-        return updated_data
+        return data
 
     # ------------ JOB FUNCS ----------------
 
@@ -1339,8 +1320,8 @@ class Economy(commands.Cog):
     async def get_job_data_only(user: discord.Member, conn_input: asqlite_Connection) -> Optional[Any]:
         """Retrieves the users current job."""
         data = await conn_input.execute(f"SELECT job FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        job_name = await data.fetchone()
-        return job_name
+        data = await data.fetchone()
+        return data
 
     @staticmethod
     async def change_job_new(user: discord.Member, conn_input: asqlite_Connection,
@@ -1359,14 +1340,12 @@ class Economy(commands.Cog):
     @staticmethod
     async def open_cooldowns(user: discord.Member, conn_input: asqlite_Connection):
         cd_columns = ["slaywork", "casino"]
-        users = await conn_input.execute(f"SELECT * FROM `{COOLDOWN_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        new_data = await users.fetchone()
-        if new_data is None:
-            await conn_input.execute(
-                f"INSERT INTO `{COOLDOWN_TABLE_NAME}`(userID, {', '.join(cd_columns)}) VALUES(?, {', '.join(['0'] * len(cd_columns))})",
-                (user.id,))
-            await conn_input.commit()
-            return 1
+        data = await conn_input.execute(f"SELECT * FROM `{COOLDOWN_TABLE_NAME}` WHERE userID = ?", (user.id,))
+        data = await data.fetchone()
+        await conn_input.execute(
+            f"INSERT INTO `{COOLDOWN_TABLE_NAME}`(userID, {', '.join(cd_columns)}) VALUES(?, {', '.join(['0'] * len(cd_columns))})",
+            (user.id,))
+        await conn_input.commit()
 
     @staticmethod
     async def fetch_cooldown(conn_input: asqlite_Connection, *, user: discord.Member, cooldown_type: str):
@@ -1380,6 +1359,7 @@ class Economy(commands.Cog):
         """Update a user's cooldown. Requires accessing the return value via the index, so [0].
 
         Use this func to reset and create a cooldown."""
+        
         data = await conn_input.execute(
             f"UPDATE `{'cooldowns'}` SET `{cooldown_type}` = ? WHERE userID = ? RETURNING `{cooldown_type}`",
             (new_cd, user.id))
@@ -1393,8 +1373,8 @@ class Economy(commands.Cog):
     async def get_pmulti_data_only(user: discord.Member, conn_input: asqlite_Connection) -> Optional[Any]:
         """Retrieves the pmulti amount only from a registered user's bank data."""
         data = await conn_input.execute(f"SELECT pmulti FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        pmulti_amt = await data.fetchone()
-        return pmulti_amt
+        data = await data.fetchone()
+        return data
 
     @staticmethod
     async def change_pmulti_new(user: discord.Member, conn_input: asqlite_Connection, amount: Union[float, int] = 0,
@@ -1405,59 +1385,49 @@ class Economy(commands.Cog):
             f"UPDATE `{BANK_TABLE_NAME}` SET `{mode}` = ? WHERE userID = ? RETURNING `{mode}`",
             (amount, user.id))
         await conn_input.commit()
-        users = await data.fetchone()
-        return users
+        data = await data.fetchone()
+        return data
 
     # ------------------- slay ----------------
 
     @staticmethod
     async def open_slay(conn_input: asqlite_Connection, user: discord.Member, sn: str, gd: str, pd: float, happy: int, stus: int):
-        sql = "INSERT INTO slay (slay_name, userID, gender, productivity, happiness, status) VALUES (?, ?, ?, ?, ?, ?)"
-        values = (sn, user.id, gd, pd, happy, stus)
-
-        await conn_input.execute(sql, values)
+        await conn_input.execute(
+            "INSERT INTO slay (slay_name, userID, gender, productivity, happiness, status) VALUES (?, ?, ?, ?, ?, ?)",
+            (sn, user.id, gd, pd, happy, stus))
         await conn_input.commit()
 
     @staticmethod
     async def get_slays(conn_input: asqlite_Connection, user: discord.Member):
-        
-        sql = "SELECT * FROM slay WHERE userID = ?"
 
-        new_data = await conn_input.execute(sql, (user.id,))
+        new_data = await conn_input.execute("SELECT * FROM slay WHERE userID = ?", (user.id,))
+        new_data = await new_data.fetchall()
 
-        selected_rows = await new_data.fetchall()
-
-        return selected_rows
+        return new_data
 
     @staticmethod
     async def change_slay_field(conn_input: asqlite_Connection, user: discord.Member, field: str, new_val: Any):
-        await conn_input.execute(
-            f"UPDATE `{SLAY_TABLE_NAME}` SET `{field}` = ? WHERE userID = ?",
-            (new_val, user.id,))
+        # Define your SQL statement with a placeholder for the test value
+        await conn_input.execute(f"UPDATE `{SLAY_TABLE_NAME}` SET `{field}` = ? WHERE userID = ?", (new_val, user.id,))
         await conn_input.commit()
 
     @staticmethod
     async def delete_slay(conn_input: asqlite_Connection, user: discord.Member, slay_name):
         """Remove a single slay row from the db and return 1 if the row existed, 0 otherwise."""
 
-        sql = "DELETE FROM slay WHERE userID = ? AND slay_name = ?"
-
-        await conn_input.execute(sql, (user.id, slay_name))
+        await conn_input.execute("DELETE FROM slay WHERE userID = ? AND slay_name = ?", (user.id, slay_name))
         await conn_input.commit()
 
     @staticmethod
     async def count_happiness_above_threshold(conn_input: asqlite_Connection, user: discord.Member):
         """Count the number of rows for a given user ID where happiness is greater than 30."""
 
-        sql = "SELECT happiness FROM slay WHERE userID = ?"
-
-        rows = await conn_input.fetchall(sql, user.id)
+        rows = await conn_input.fetchall("SELECT happiness FROM slay WHERE userID = ?", user.id)
 
         count = 0
-        
+
         for row in rows:
-            happiness_value = row['happiness']
-            if happiness_value > 30:
+            if row["happiness"] > 30:
                 count += 1
 
         return count
@@ -1466,13 +1436,11 @@ class Economy(commands.Cog):
     async def modify_happiness(conn_input: asqlite_Connection, slaves_for_user: discord.Member):
         """Modify every row's happiness field for a given user ID with a different random number."""
 
-        sql = "UPDATE slay SET happiness = ? WHERE userID = ?"
-
         rows = await conn_input.fetchall("SELECT * FROM slay WHERE userID = ?", slaves_for_user.id)
 
         for _ in rows:
-            random_happiness = randint(20, 40)
-            await conn_input.execute(sql, (random_happiness, slaves_for_user.id))
+            await conn_input.execute("UPDATE slay SET happiness = ? WHERE userID = ?",
+                                     (randint(20, 40), slaves_for_user.id))
 
         await conn_input.commit()
 
