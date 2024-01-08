@@ -2118,7 +2118,7 @@ class Economy(commands.Cog):
                         embed=unavailable
                     )
 
-    @app_commands.command(name='stats', description='view user stats relevant to the virtual economy.')
+    @app_commands.command(name='stats', description="see stats for users in the economy.")
     @app_commands.checks.cooldown(1, 10)
     @app_commands.describe(user="the user to fetch the stats of")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -2127,51 +2127,51 @@ class Economy(commands.Cog):
         if user is None:
             user = interaction.user
 
-        async with self.client.pool_connection.acquire() as conn: 
+        async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
             if await self.can_call_out(user, conn):
-                return await interaction.response.send_message(embed=NOT_REGISTERED) 
+                return await interaction.response.send_message(embed=NOT_REGISTERED)
 
-            users = await conn.execute(f"SELECT * FROM `bank` WHERE userID = ?", (user.id,))
-            user_data = await users.fetchone()
-            total_slots = user_data[3] + user_data[4]
-            total_bets = user_data[5] + user_data[6]
-            total_blackjacks = user_data[7] + user_data[8]
+            data = await conn.execute(f"SELECT * FROM `bank` WHERE userID = ?", (user.id,))
+            data = await data.fetchone()
+            total_slots = data[3] + data[4]
+            total_bets = data[5] + data[6]
+            total_blackjacks = data[7] + data[8]
 
             try:
-                winbe = round((user_data[5] / total_bets) * 100)
+                winbe = round((data[5] / total_bets) * 100)
             except ZeroDivisionError:
                 winbe = 0
             try:
-                winsl = round((user_data[3]/total_slots)*100)
+                winsl = round((data[3] / total_slots) * 100)
             except ZeroDivisionError:
                 winsl = 0
             try:
-                winbl = round((user_data[7]/total_blackjacks)*100)
+                winbl = round((data[7] / total_blackjacks) * 100)
             except ZeroDivisionError:
                 winbl = 0
 
             stats = discord.Embed(title=f"{user.name}'s gambling stats",
                                   colour=discord.Colour.dark_embed())
             stats.add_field(name=f"BET ({total_bets:,})",
-                            value=f"Won: \U000023e3 {user_data[11]:,}\n"
-                                  f"Lost: \U000023e3 {user_data[12]:,}\n"
-                                  f"Net: \U000023e3 {user_data[11]-user_data[12]:,}\n"
-                                  f"Win: {winbe}% ({user_data[5]})")
+                            value=f"Won: \U000023e3 {data[11]:,}\n"
+                                  f"Lost: \U000023e3 {data[12]:,}\n"
+                                  f"Net: \U000023e3 {data[11] - data[12]:,}\n"
+                                  f"Win: {winbe}% ({data[5]})")
             stats.add_field(name=f"SLOTS ({total_slots:,})",
-                            value=f"Won: \U000023e3 {user_data[9]:,}\n"
-                                  f"Lost: \U000023e3 {user_data[10]:,}\n"
-                                  f"Net: \U000023e3 {user_data[9]-user_data[10]:,}\n"
-                                  f"Win: {winsl}% ({user_data[3]})")
+                            value=f"Won: \U000023e3 {data[9]:,}\n"
+                                  f"Lost: \U000023e3 {data[10]:,}\n"
+                                  f"Net: \U000023e3 {data[9] - data[10]:,}\n"
+                                  f"Win: {winsl}% ({data[3]})")
             stats.add_field(name=f"BLACKJACK ({total_blackjacks:,})",
-                            value=f"Won: \U000023e3 {user_data[13]:,}\n"
-                                  f"Lost: \U000023e3 {user_data[14]:,}\n"
-                                  f"Net: \U000023e3 {user_data[13]-user_data[14]:,}\n"
-                                  f"Win: {winbl}% ({user_data[7]})")
+                            value=f"Won: \U000023e3 {data[13]:,}\n"
+                                  f"Lost: \U000023e3 {data[14]:,}\n"
+                                  f"Net: \U000023e3 {data[13] - data[14]:,}\n"
+                                  f"Win: {winbl}% ({data[7]})")
             stats.set_footer(text="The number next to the name is how many matches are recorded")
 
-            await interaction.response.send_message(embed=stats) 
+            await interaction.response.send_message(embed=stats)
 
     @app_commands.command(name="getjob", description="earn a salary becoming employed.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
