@@ -1479,7 +1479,7 @@ class Economy(commands.Cog):
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
 
-    pmulti = app_commands.Group(name='multi', description='[Group Command] No description.',
+    pmulti = app_commands.Group(name='multi', description='related to your multiplier.',
                                 guild_only=True, guild_ids=[829053898333225010, 780397076273954886])
 
     @pmulti.command(name='view', description='view personal and global multipliers.')
@@ -1532,7 +1532,7 @@ class Economy(commands.Cog):
 
             await interaction.response.send_message(embed=multi_own) 
 
-    share = app_commands.Group(name='share', description='[Group Command] share different assets with others.',
+    share = app_commands.Group(name='share', description='share different assets with others.',
                                guild_only=True, guild_ids=[829053898333225010, 780397076273954886])
 
     @share.command(name="robux", description="share robux with another user.")
@@ -1541,26 +1541,23 @@ class Economy(commands.Cog):
     @app_commands.rename(other='user')
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def give_robux(self, interaction: discord.Interaction, other: discord.Member, amount: str):
-        clr = interaction.user
-
+        inter_user = interaction.user
+    
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
-
-            if not (await self.can_call_out_either(interaction.user, other, conn)):
-                await interaction.response.defer(thinking=True) 
-                embed = membed(f'- Either you or {other.name} does not have an account.\n'
-                               f' - </balance:1179817617435926686> to register.')
-                return await interaction.followup.send(embed=embed)
+    
+            if not (await self.can_call_out_either(inter_user, other, conn)):
+                return await interaction.response.send_message(embed=NOT_REGISTERED) 
             else:
                 real_amount = determine_exponent(amount)
-                wallet_amt_host = await Economy.get_wallet_data_only(interaction.user, conn)
-
+                wallet_amt_host = await Economy.get_wallet_data_only(inter_user, conn)
+    
                 if isinstance(real_amount, str):
                     if real_amount.lower() == 'all' or real_amount.lower() == 'max':
                         real_amount = wallet_amt_host
                     else:
                         return await interaction.response.send_message(embed=ERR_UNREASON) 
-                    host_amt = await self.update_bank_new(interaction.user, conn, -int(real_amount))
+                    host_amt = await self.update_bank_new(inter_user, conn, -int(real_amount))
                     recp_amt = await self.update_bank_new(other, conn, int(real_amount))
                 else:
                     if real_amount == 0:
@@ -1568,15 +1565,17 @@ class Economy(commands.Cog):
                     elif real_amount > wallet_amt_host:
                         return await interaction.response.send_message(embed=ERR_UNREASON) 
                     else:
-                        host_amt = await self.update_bank_new(interaction.user, conn, -int(real_amount))
+                        host_amt = await self.update_bank_new(inter_user, conn, -int(real_amount))
                         recp_amt = await self.update_bank_new(other, conn, int(real_amount))
-
-                embed = discord.Embed(title='Transaction Complete',
-                                      description=f'- {clr.mention} has given {other.mention} \U000023e3 {real_amount:,}\n'
-                                                  f'- {clr.mention} now has \U000023e3 {host_amt[0]:,} in their wallet.\n'
-                                                  f'- {other.mention} now has \U000023e3 {recp_amt[0]:,} in their wallet.',
-                                      colour=0x2F3136)
-                embed.set_author(name=f'Transaction made by {interaction.user.name}', icon_url=interaction.user.display_avatar.url)
+    
+                embed = discord.Embed(
+                    title='Transaction Complete',
+                    description=f'- {inter_user.mention} has given {other.mention} \U000023e3 {real_amount:,}\n'
+                                f'- {inter_user.mention} now has \U000023e3 {host_amt[0]:,} in their wallet.\n'
+                                f'- {other.mention} now has \U000023e3 {recp_amt[0]:,} in their wallet.',
+                    colour=0x2F3136)
+                embed.set_author(name=f'Transaction made by {inter_user.name}',
+                                 icon_url=inter_user.display_avatar.url)
                 return await interaction.response.send_message(embed=embed) 
 
     @share.command(name='items', description='share items with another user.')
@@ -1586,40 +1585,37 @@ class Economy(commands.Cog):
     async def give_items(self, interaction: discord.Interaction,
                          item_name: Literal['Keycard', 'Trophy', 'Clan License', 'Resistor', 'Amulet', 'Dynamic Item', 'Hyperion', 'Crisis', 'Odd Eye'],
                          amount: Literal[1, 2, 3, 4, 5], username: discord.Member):
-        primm = interaction.user.mention
-        otherm = username.mention
+        primm = interaction.user
 
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             item_name = item_name.replace(" ", "_")
-            if not(await self.can_call_out_either(interaction.user, username, conn)):
+            if not(await self.can_call_out_either(primm, username, conn)):
                 embed = discord.Embed(description=f'Either you or {username.name} does not have an account.\n'
                                                   f'</balance:1179817617435926686> to register.',
                                       colour=0x2F3136)
                 return await interaction.response.send_message(embed=embed) 
             else:
-                quantity = await self.update_inv_new(interaction.user, 0, item_name, conn)
-                if amount > quantity[0]:  
+                quantity = await self.update_inv_new(primm, 0, item_name, conn)
+                if amount > quantity[0]:
                     return await interaction.response.send_message(embed=ERR_UNREASON) 
                 else:
                     receiver = await self.update_inv_new(username, +amount, item_name, conn)
                     new_after_transaction = quantity[0] - amount
-                    sender = await self.change_inv_new(interaction.user, new_after_transaction, item_name, conn)
+                    sender = await self.change_inv_new(primm, new_after_transaction, item_name, conn)
                     item_name = " ".join(item_name.split("_"))
-                    send_amt = make_plural(item_name, amount)
-                    send_cont = make_plural(item_name, sender[0])
-                    teir_cont = make_plural(item_name, receiver[0])
-                    transaction_success = discord.Embed(title="Transaction Complete",
-                                                        description=f'- {primm} has given **{amount}** {send_amt}\n'
-                                                                    f'- {primm} now has **{sender[0]}** {send_cont}\n'
-                                                                    f'- {otherm} now has **{receiver[0]}** {teir_cont}',
-                                                        colour=interaction.user.colour)
-                    transaction_success.set_author(name=f'Transaction made by {interaction.user.name}',
-                                                   icon_url=interaction.user.display_avatar.url)
+                    transaction_success = discord.Embed(
+                        title="Transaction Complete",
+                        description=f'- {primm} has given **{amount}** {make_plural(item_name, amount)}\n'
+                                    f'- {primm} now has **{sender[0]}** {make_plural(item_name, sender[0])}\n'
+                                    f'- {username.mention} now has **{receiver[0]}** {make_plural(item_name, receiver[0])}',
+                        colour=primm.colour)
+                    transaction_success.set_author(name=f'Transaction made by {primm.name}',
+                                                   icon_url=primm.display_avatar.url)
 
                     await interaction.response.send_message(embed=transaction_success) 
 
-    shop = app_commands.Group(name='shop', description='[Group Command] view items available for purchase.', guild_only=True,
+    shop = app_commands.Group(name='shop', description='view items available for purchase.', guild_only=True,
                               guild_ids=[829053898333225010, 780397076273954886])
 
     @shop.command(name='view', description='view items that are available for purchase.')
@@ -1630,23 +1626,20 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered) 
-            additional_notes: set = set()
+            additional_notes = set()
             em = discord.Embed(
                 title="Shop",
-                color=0x2F3136
+                color=discord.Colour.dark_embed()
             )
 
             for item in SHOP_ITEMS:
-                name_beta = item["name"].split("_")
-                name = " ".join(name_beta)
-                item_info = item["info"]
-                item_stock = get_stock(name)
+                name = " ".join(item["name"].split("_"))
 
                 additional_notes.add(
                     f"{item['emoji']} __{name}__ \U00002014 [\U000023e3 **{item['cost']:,}**](https://youtu.be/dQw4w9WgXcQ)\n"
-                    f"{ARROW}{item_info}\n"
+                    f"{ARROW}{item["info"]}\n"
                     f"{ARROW}ID: `{item['id']}`\n"
-                    f"{ARROW}Quantity Remaining: `{item_stock}`")
+                    f"{ARROW}Quantity Remaining: `{get_stock(name)}`")
                 all_items = "\n\n".join(additional_notes)
                 em.description = f"{all_items}"
             await interaction.response.send_message(embed=em) 
@@ -1664,6 +1657,7 @@ class Economy(commands.Cog):
                 stock_resp = f"*Shortage in stocks, only **{item_stock}** remain.*"
             case _:
                 stock_resp = f"*No stock shortages currently for this item ({item_stock} available).*"
+                
         match item_name:
             case 'Keycard':
                 clr = discord.Colour.from_rgb(80, 85, 252)
@@ -1681,7 +1675,6 @@ class Economy(commands.Cog):
             name_beta = stored.split("_")
             name = " ".join(name_beta)
             cost = item["cost"]
-            item_info = item["info"]
 
             if name == item_name:
                 async with self.client.pool_connection.acquire() as conn:  
@@ -1692,24 +1685,22 @@ class Economy(commands.Cog):
 
                 em = discord.Embed(
                     description=f"# About Item: {name} {item['emoji']}\n"
-                                f"{ARROW}{item_info}\n"
+                                f"{ARROW}{item["info"]}\n"
                                 f"{ARROW}**[Stock Status]**: {stock_resp}\n"
                                 f"{ARROW}**{owned_by_how_many}** {make_plural("person", owned_by_how_many)} "
                                 f"{plural_for_own(owned_by_how_many)} this item.",
                     colour=clr
                 )
 
-                sell_amt = int(abs(int(cost) / 4))
-
                 em.add_field(name="Buying price", value=f"<:robux:1146394968882151434> {cost:,}")
                 em.add_field(name="Selling price",
-                             value=f"<:robux:1146394968882151434> {sell_amt:,}")
+                             value=f"<:robux:1146394968882151434> {abs(int(cost) / 4):,}")
 
                 return await interaction.response.send_message(embed=em) 
 
         await interaction.response.send_message(f"There is no item named {item_name}.") 
 
-    profile = app_commands.Group(name='editprofile', description='[Group Command] custom-profile-orientated.',
+    profile = app_commands.Group(name='editprofile', description='custom-profile-orientated commands for use.',
                                  guild_only=True, guild_ids=[829053898333225010, 780397076273954886])
 
     @profile.command(name='bio', description='add a bio to your profile.')
@@ -1718,9 +1709,8 @@ class Economy(commands.Cog):
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
-                embed = discord.Embed(colour=0x2F3136,
-                                      description='You cannot use this command until you register.')
-                return await interaction.response.send_message(embed=embed) 
+                return await interaction.response.send_message(
+                    embed=membed('You cannot use this command until you register.'))
             await interaction.response.send_modal(UpdateInfo()) 
 
     @profile.command(name='avatar', description='modify the avatar displayed on your profile.')
@@ -1731,9 +1721,8 @@ class Economy(commands.Cog):
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
-                embed = discord.Embed(colour=0x2F3136,
-                                      description='You cannot use this command until you register.')
-                return await interaction.response.send_message(embed=embed) 
+                return await interaction.response.send_message( 
+                    embed=membed('You cannot use this command until you register.')) 
 
         if url.lower() in {"reset", "default", "delete"}:
             res = modify_profile("delete", f"{interaction.user.id} avatar_url", url)
@@ -1745,24 +1734,23 @@ class Economy(commands.Cog):
             result = discord.Embed(colour=0x2F3136, description=res)
             return await interaction.response.send_message(embed=result) 
 
-        successful = discord.Embed(colour=0x2F3136,
-                                   description=f"Your avatar url has been added. If it is a valid url, it will look "
-                                               f"like this ----->")
+        successful = discord.Embed(colour=discord.Colour.dark_embed(),
+                                   description=f"Your avatar url has been added.\n"
+                                               f"If it is a valid, it will look like this ----->")
         successful.set_thumbnail(url=url)
         modify_profile("update", f"{interaction.user.id} avatar_url", url)
         await interaction.response.send_message(embed=successful) 
 
     @update_avatar_profile.error
     async def uap_error(self, interaction: discord.Interaction, err: discord.app_commands.AppCommandError):
-        if isinstance(err, discord.app_commands.CommandInvokeError):
-            successful = discord.Embed(colour=0x2F3136,
-                                       description=f"The avatar url requested for could not be added:\n"
-                                                   f"- The URL provided was not well formed.\n"
-                                                   f"- Discord embed thumbnails have specific image requirements to "
-                                                   f"ensure proper display.\n"
-                                                   f" - **The recommended size for a thumbnail is 80x80 pixels.**")
-
-            return await interaction.response.send_message(embed=successful) 
+        modify_profile("delete", f"{interaction.user.id} avatar_url", "who cares")
+        return await interaction.response.send_message(
+            embed=membed(
+                f"The avatar url requested for could not be added:\n"
+                f"- The URL provided was not well formed.\n"
+                f"- Discord embed thumbnails have specific image requirements to "
+                f"ensure proper display.\n"
+                f" - **The recommended size for a thumbnail is 80x80 pixels.**")) 
 
     @profile.command(name='visibility', description='hide your profile for privacy.')
     @app_commands.describe(mode='Toggle public or private profile')
@@ -1772,14 +1760,13 @@ class Economy(commands.Cog):
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
-                embed = discord.Embed(colour=0x2F3136,
-                                      description='You cannot use this command until you register.')
-                return await interaction.response.send_message(embed=embed) 
+                return await interaction.response.send_message(
+                    embed=membed("You cannot use this command until you register.")) 
 
         modify_profile("update", f"{interaction.user.id} vis", mode)
         await interaction.response.send_message(f"Your profile is now {mode}.", ephemeral=True, delete_after=7.5) 
 
-    slay = app_commands.Group(name='slay', description='[Group Command] manage your slay.',
+    slay = app_commands.Group(name='slay', description='manage your slay.',
                               guild_only=True,
                               guild_ids=[829053898333225010, 780397076273954886])
 
@@ -1797,8 +1784,6 @@ class Economy(commands.Cog):
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.followup.send(embed=self.not_registered)
 
-            wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
-
             if user and (interaction.user.id == user.id):
                 return await interaction.followup.send("Why would you make yourself a slay?")
             elif (user is None) and (new_slay_name is None):
@@ -1806,7 +1791,7 @@ class Economy(commands.Cog):
             elif (new_slay_name is not None) and (user is not None):
                 return await interaction.followup.send("You cannot name your slay if the user has also "
                                                        "been inputted. Remove this argument if needed.")
-            elif abs(investment) > wallet_amt:
+            elif abs(investment) > await self.get_wallet_data_only(interaction.user, conn):
                 return await interaction.followup.send(
                     embed=membed("Your slay will not obey your orders if you do not "
                                  "guarantee your investment.\n"
@@ -1839,23 +1824,22 @@ class Economy(commands.Cog):
                                          "You must abandon a current slay before hiring a new one."))
 
                     for slay in slays:
-                        name =  slay[0]
-                        if new_slay_name == name:
+                        if new_slay_name == slay[0]:
                             return await interaction.followup.send(
                                 "You already own a slay with that name."
                             )
 
                     await self.open_slay(conn, interaction.user, new_slay_name, gender, prod, 100, 1)
 
-                    slayyy = discord.Embed(description=f"## Slay Summary\n"
+                    slaye = discord.Embed(description=f"## Slay Summary\n"
                                                       f"- Paid **\U000023e3 {investment:,}** for the following:\n"
                                                       f" - Your brand new slay named {new_slay_name}\n"
                                                       f" - {new_slay_name} has a productivity level "
                                                       f"of `{prod}`.",
                                           color=discord.Color.from_rgb(0, 0, 0))
-                    slayyy.set_footer(text=f"{len(slays)+1}/6 slay slots consumed")
+                    slaye.set_footer(text=f"{len(slays)+1}/6 slay slots consumed")
 
-                    await interaction.followup.send(embed=slayyy)
+                    await interaction.followup.send(embed=slaye)
 
     @slay.command(name='abandon', description='abandon your slay')
     @app_commands.rename(slay_purge='slay')
@@ -1938,10 +1922,10 @@ class Economy(commands.Cog):
                         embed=membed("You got no slays to send to work.")
                     )
 
-                res_duration = parse_duration(duration)
+                res_duration = parse_duration(duration)  # a datetime object
 
                 cooldown = await self.fetch_cooldown(conn, user=interaction.user, cooldown_type="slaywork")
-                
+                # If the cooldown is nothing by default
                 if cooldown is not None:
                     if cooldown[0] in {"0", 0}:
                         day = number_to_ordinal(int(res_duration.strftime("%d")))
@@ -1954,12 +1938,9 @@ class Economy(commands.Cog):
                                                         f"{ARROW}As commanded, they will work until {shallow} (UTC).")
                     else:
                         cooldown = string_to_datetime(cooldown[0])
-                        now = datetime.datetime.now()
-                        diff = cooldown - now
+                        diff = cooldown - datetime.datetime.now()
 
                         if diff.total_seconds() <= 0:
-
-                            slays = await self.get_slays(conn, interaction.user)
                             content = set()
                             await self.update_cooldown(conn, user=interaction.user, cooldown_type="slaywork",
                                                        new_cd="0")
@@ -1990,35 +1971,34 @@ class Economy(commands.Cog):
                             slay_fund = randint(50000000, 325000000 * happy_slays)
                             total_fund = 0 + slay_fund
                             disproportionate_share = 0
-                            dissatisfaction = 100 - randint(20, 67)
                             await self.change_slay_field(conn, interaction.user, "status", 1)
-                            await self.change_slay_field(conn, interaction.user, "happiness", dissatisfaction)
+                            await self.change_slay_field(conn, interaction.user, "happiness", 100 - randint(20, 67))
                             summ = discord.Embed(colour=discord.Colour.from_rgb(66, 164, 155))
+                            slays = await self.get_slays(conn, interaction.user)
                             for slay in slays:
-                                tname = slay[0]
-                                happiness = slay[-2]
-                                if happiness > 30:
+                                if slay[-2] > 30:
                                     doing_what = labour_actions.get(index_l)
                                     disproportionate_share = randint(20000000, slay_fund-disproportionate_share)
                                     bonus = round((1.2 / 100) * disproportionate_share) + disproportionate_share
                                     total_fund += bonus
 
-                                    content.add(f'- {tname} was {doing_what} and got a total '
+                                    content.add(f'- {slay[0]} was {doing_what} and got a total '
                                                 f'of **\U000023e3 {disproportionate_share:,}**\n'
                                                 f' - Bonus: **\U000023e3 {bonus:,}**')
                                 else:
                                     doing_what = sad_actions.get(index_l)
-                                    loss = (happiness/100)*disproportionate_share
+                                    loss = (slay[-2]/100)*disproportionate_share
                                     disproportionate_share = randint(2000, abs(slay_fund - disproportionate_share))
-                                    content.add(f'- {tname} was {doing_what} and got a total '
+                                    content.add(f'- {slay[0]} was {doing_what} and got a total '
                                                 f'of **\U000023e3 {loss:,}**\n'
                                                 f' - Bonus: **\U000023e3 {bonus:,}**')
                                     def d():
                                         pass
-                                    summ.add_field(name='You have an unhappy slay.',
-                                                   value='Paying too little attention to your slay\'s needs will result'
-                                                         ' in your slay running away.',
-                                                   inline=False) if summ.fields == 0 else d()
+                                    if not summ.fields:
+                                        summ.add_field(name='You have an unhappy slay.',
+                                                       value='Paying too little attention to your '
+                                                             'slay\'s needs will result in your slay running away.',
+                                                       inline=False)
                                 index_l += 1
 
                             await self.modify_happiness(conn, interaction.user)
@@ -2194,10 +2174,10 @@ class Economy(commands.Cog):
 
         tatsu = await self.fetch_tatsu_profile(user.id)
 
-        async with self.client.pool_connection.acquire() as conn: # type: ignore
+        async with self.client.pool_connection.acquire() as conn: 
 
             if await self.can_call_out(user, conn):
-                return await interaction.response.send_message(embed=NOT_REGISTERED) # type: ignore
+                return await interaction.response.send_message(embed=NOT_REGISTERED) 
 
             users = await conn.execute(f"SELECT * FROM `bank` WHERE userID = ?", (user.id,))
             user_data = await users.fetchone()
@@ -3010,7 +2990,7 @@ class Economy(commands.Cog):
             procfile.set_footer(text=f"{discord.utils.utcnow().strftime('%A %d %b %Y, %I:%M%p')}")
             await ctx.send(embed=procfile)
 
-    rob = app_commands.Group(name='rob', description='[Group Command] rob different places or people.',
+    rob = app_commands.Group(name='rob', description='rob different places or people.',
                                 guild_only=True, guild_ids=[829053898333225010, 780397076273954886])
 
     @rob.command(name="user", description="rob robux from another user.")
