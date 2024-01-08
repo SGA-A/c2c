@@ -1669,9 +1669,9 @@ class Economy(commands.Cog):
             await interaction.response.send_modal(UpdateInfo()) 
 
     @profile.command(name='avatar', description='change your profile avatar.')
-    @app_commands.describe(url='The url of the new avatar. Type "reset" to remove.')
+    @app_commands.describe(url='The url of the new avatar. Leave blank to remove.')
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    async def update_avatar_profile(self, interaction: discord.Interaction, url: str):
+    async def update_avatar_profile(self, interaction: discord.Interaction, url: Optional[str]):
 
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
@@ -1679,18 +1679,18 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message( 
                     embed=membed('You cannot use this command until you register.'))
 
-        if url.lower() in {"reset", "default", "delete"}:
+        if url is None:
             res = modify_profile("delete", f"{interaction.user.id} avatar_url", url)
             match res:
                 case 0:
-                    res = "No avatar url was found under your account."
+                    res = "No custom avatar was found under your account."
                 case _:
-                    res = "Your avatar url was removed."
+                    res = "Your custom avatar was removed."
             result = discord.Embed(colour=0x2F3136, description=res)
             return await interaction.response.send_message(embed=result) 
 
         successful = discord.Embed(colour=0x2B2D31,
-                                   description=f"Your avatar url has been added.\n"
+                                   description=f"Your custom avatar has been added.\n"
                                                f"If valid, it will look like this ----->\n"
                                                f"If you can't see it, change it!")
         successful.set_thumbnail(url=url)
