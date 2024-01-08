@@ -2087,20 +2087,7 @@ class Economy(commands.Cog):
             if quantity < 1:
                 return await interaction.response.send_message( 
                     embed=membed(f"You don't have this item in your inventory."))
-
-            unavailable = discord.Embed(title='We need your feedback!',
-                                        colour=0x2F3136)
-            unavailable.description = (
-                "We have created multiple items in this release of c2c, but we have no idea what uses they should have."
-                " Therefore, you must submit your ideas and suggestions for what this item should implement through "
-                "the </feedback:1179817617767268353>.\n\n"
-                "- Set the title of your feedback as the name of the item that you want to create a use for.\n"
-                "- Briefly describe in the description header what you would like to see for that item you've chosen.\n"
-                "- Your ideas will be sent to the developers and from there, it will (usually) be immediately accepted."
-                "\n\nIt is not a requirement for you to submit ideas which are reflected in the bot, but you may do so "
-                "if you would like to see the functionality for these items earlier on instead of years later "
-                "when we figure out!"
-            )
+                
             match item:
                 case 'Keycard':  
                     return await interaction.response.send_message(  
@@ -2114,9 +2101,10 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message( 
                         f"{interaction.user.name} is flexing on you all with their <:tr1:1165936712468418591> **~~PEPE~~ TROPHY**{content}")
                 case _:
-                    return await interaction.response.send_message( 
-                        embed=unavailable
-                    )
+                    return await interaction.response.send_message(
+                        embed=membed("The functions for this item aren't available.\n"
+                                     "If you wish to submit an idea for what these items do, "
+                                     "comment on [this issue on our Github.](https://github.com/SGA-A/c2c/issues/12)"))
 
     @app_commands.command(name='stats', description="see stats for users in the economy.")
     @app_commands.checks.cooldown(1, 10)
