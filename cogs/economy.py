@@ -18,7 +18,7 @@ from tatsu.wrapper import ApiWrapper
 
 def membed(custom_description: str) -> discord.Embed:
     """Quickly create an embed with a custom description using the preset."""
-    membedder = discord.Embed(colour=discord.Colour.dark_embed(),
+    membedder = discord.Embed(colour=0x2B2D31,
                               description=custom_description)
     return membedder
 
@@ -452,7 +452,7 @@ class BlackjackUi(discord.ui.View):
                 new_amount_balance = await Economy.update_bank_new(self.interaction.user, conn, -namount)
 
             losse = discord.Embed(
-                colour=discord.Colour.dark_embed(),
+                colour=0x2B2D31,
                 description=f"## No response detected.\n"
                             f"- {self.interaction.user.mention} was fined \U000023e3 {namount:,} for unpunctuality.\n"
                             f" - The dealer received {self.interaction.user.display_name}'s bet in full.\n"
@@ -567,7 +567,7 @@ class BlackjackUi(discord.ui.View):
             necessary_show = self.client.games[interaction.user.id][-3][0] 
             ts = sum(player_hand)
 
-            prg = discord.Embed(colour=discord.Colour.dark_theme(),
+            prg = discord.Embed(colour=0x2B2D31,
                                 description=f"**Your move. Your hand is now {ts}**.")
             prg.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
                                                                     f"**Total** - `{ts}`")
@@ -922,41 +922,37 @@ class UpdateInfo(discord.ui.Modal, title='Update your Profile'):
     bio = discord.ui.TextInput(
         style=discord.TextStyle.paragraph,
         label='Bio',
-        required=True,
-        placeholder="Insert your bio here.. (Type 'delete' or 'none' here to remove your existent bio)"
+        required=False,
+        placeholder="Insert your bio here.. (Leave blank to remove your existent bio)"
     )
 
-    async def on_submit(self, interaction: discord.Interaction):
-        user_id = str(interaction.user.id)
-        val = get_profile_key_value(f"{user_id} bio")
-        if val is None:
-            phrases = "added your new"
-            modify_profile("create", f"{user_id} bio", self.bio.value)
-        else:
-            if self.bio.value.lower() in {"delete", "none"}:
-                res = modify_profile("delete", f"{user_id} bio", "placeholder")
-                if res:
-                    embed = discord.Embed(description=f'Your bio has been removed, {interaction.user.name}.\n**The '
-                                                      f'changes have taken effect immediately.**', colour=0x2F3136)
-                else:
-                    embed = discord.Embed(
-                        description=f'You don\'t have a bio yet. **Add one first.**', colour=0x2F3136)
-                return await interaction.response.send_message(embed=embed) 
-            phrases = "updated your"
-            modify_profile("update", f"{user_id} bio", self.bio.value)
+        async def on_submit(self, interaction: discord.Interaction):
 
-        successful = discord.Embed(description=f"Successfully {phrases} bio to: \n"
-                                               f"> {self.bio.value}\n"
-                                               f"- The changes have taken effect immediatley.\n\n"
-                                               f"{FEEDBACK_GLOBAL}", colour=0x2F3136)
+        if self.bio.value is None:
+            res = modify_profile("delete", f"{interaction.user.id} bio", "placeholder")
+            if res:
+                return await interaction.response.send_message( # type: ignore
+                    embed=f'Your bio has been removed, {interaction.user.name}.\n'
+                          f'The changes have taken effect immediately.'
+                )
+            else:
+                return await interaction.response.send_message( # type: ignore
+                    embed=membed("You don't have a bio yet. Add one first."))
 
-        return await interaction.response.send_message(embed=successful) 
+        phrases = "added your new" if get_profile_key_value(f"{interaction.user.id} bio") is None else "created your new"
+        modify_profile("update", f"{interaction.user.id} bio", self.bio.value)
+
+        return await interaction.response.send_message( # type: ignore
+            embed=membed(
+                f"Successfully {phrases} bio to: \n"
+                f"> {self.bio.value}\n"
+                f"- The changes have taken effect immediatley.\n\n"
+                f"{FEEDBACK_GLOBAL}")) 
 
     async def on_error(self, interaction: discord.Interaction, error):
-        notsuccess = discord.Embed(description=f"An error occured.\n\n"
-                                               f"> {error.__cause__}", colour=0x2F3136)
-
-        return await interaction.response.send_message(embed=notsuccess) 
+        
+        return await interaction.response.send_message(
+            embed=membed(f"An error occured.\n\n> {error.__cause__}"))
 
 
 class DropdownLB(discord.ui.Select):
@@ -977,8 +973,8 @@ class DropdownLB(discord.ui.Select):
         for option in self.options:
             if option.value == chosen_choice:
                 option.default = True
-            else:
-                option.default = False
+                continue
+            option.default = False
 
         if chosen_choice == 'Bank + Wallet':
 
@@ -996,8 +992,7 @@ class DropdownLB(discord.ui.Select):
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
                     their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
-                    member_amt = member[1]
-                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member_amt:,}"
+                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
 
@@ -1033,8 +1028,7 @@ class DropdownLB(discord.ui.Select):
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
                     their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
-                    member_amt = member[1]
-                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member_amt:,}"
+                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
 
@@ -1069,8 +1063,7 @@ class DropdownLB(discord.ui.Select):
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
                     their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
-                    member_amt = member[1]
-                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member_amt:,}"
+                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
 
@@ -1106,8 +1099,7 @@ class DropdownLB(discord.ui.Select):
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
                     their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
-                    member_amt = member[1]
-                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member_amt:,}"
+                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
 
@@ -1340,8 +1332,6 @@ class Economy(commands.Cog):
     @staticmethod
     async def open_cooldowns(user: discord.Member, conn_input: asqlite_Connection):
         cd_columns = ["slaywork", "casino"]
-        data = await conn_input.execute(f"SELECT * FROM `{COOLDOWN_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        data = await data.fetchone()
         await conn_input.execute(
             f"INSERT INTO `{COOLDOWN_TABLE_NAME}`(userID, {', '.join(cd_columns)}) VALUES(?, {', '.join(['0'] * len(cd_columns))})",
             (user.id,))
@@ -2121,7 +2111,7 @@ class Economy(commands.Cog):
                 winbl = 0
 
             stats = discord.Embed(title=f"{user.name}'s gambling stats",
-                                  colour=discord.Colour.dark_embed())
+                                  colour=0x2B2D31)
             stats.add_field(name=f"BET ({total_bets:,})",
                             value=f"Won: \U000023e3 {user_data[11]:,}\n"
                                   f"Lost: \U000023e3 {user_data[12]:,}\n"
@@ -2239,7 +2229,8 @@ class Economy(commands.Cog):
             else:  
                 try:  
                     procfile.set_thumbnail(url=get_profile_key_value(f"{main_id} avatar_url"))
-                except discord.HTTPException:  
+                except discord.HTTPException:
+                    modify_profile("delete", f"{user_id} bio", "yeah")
                     procfile.set_thumbnail(url=user.display_avatar.url)
             return await interaction.response.send_message(embed=procfile, silent=True) 
 
@@ -3341,7 +3332,7 @@ class Economy(commands.Cog):
         self.client.games[interaction.user.id] = (deck, player_hand, dealer_hand, shallow_dv, shallow_pv, namount)
 
 
-        start = discord.Embed(colour=discord.Colour.dark_theme(),
+        start = discord.Embed(colour=0x2B2D31,
                               description=f"The game has started. May the best win.\n"
                                           f"`\U000023e3 ~{format_number_short(namount)}` is up for grabs on the table.")
 
