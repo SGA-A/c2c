@@ -2189,7 +2189,7 @@ class Economy(commands.Cog):
             recruited = membed(f"Success! You are now a **{job_name}**.")
             await interaction.response.send_message(embed=recruited) 
 
-    @app_commands.command(name='profile', description='view information about a user and their stats.')
+    @app_commands.command(name='profile', description='view user information and stats.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(user='the profile of the user to find')
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
@@ -2198,26 +2198,23 @@ class Economy(commands.Cog):
             user = interaction.user
 
         if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id != user.id):
-            embed = discord.Embed(
-                colour=0x2F3136,
-                description=f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
-                            f"- Only approved users can view {user.name}'s profile.")
-            return await interaction.response.send_message(embed=embed) 
 
-        main_id = str(user.id)
-        tatsu = await self.fetch_tatsu_profile(int(main_id))
+            return await interaction.response.send_message( 
+                embed=discord.Embed(
+                    colour=0x2F3136,
+                    description=f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
+                                f"- Only approved users can view {user.name}'s profile."))
 
-        async with self.client.pool_connection.acquire() as conn: 
+        tatsu = await self.fetch_tatsu_profile(user.id)
+
+        async with self.client.pool_connection.acquire() as conn: # type: ignore
 
             if await self.can_call_out(user, conn):
-                return await interaction.response.send_message(embed=NOT_REGISTERED) 
+                return await interaction.response.send_message(embed=NOT_REGISTERED) # type: ignore
 
             users = await conn.execute(f"SELECT * FROM `bank` WHERE userID = ?", (user.id,))
             user_data = await users.fetchone()
-            their_prest = user_data[-1]
-            pr_no = their_prest + 1 if user.id == 546086191414509599 else their_prest
-            corresp_preste = PRESTIGE_EMOTES.setdefault(pr_no, "")
-            their_badges = get_profile_key_value(f"{main_id} badges") or "No badges acquired yet"
+            their_badges = get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"
 
             procfile = discord.Embed(colour=user.colour, timestamp=discord.utils.utcnow())
             inv = 0
@@ -2225,14 +2222,12 @@ class Economy(commands.Cog):
             total = 0
 
             for item in SHOP_ITEMS:
-                name = item["name"]
-                cost = item["cost"]
-                data = await self.get_one_inv_data_new(user, name, conn)
-                inv += int(cost) * data
+                data = await self.get_one_inv_data_new(user, item["name"], conn)
+                inv += item["cost"] * data
                 total += data
                 unique += 1 if data else 0
 
-            if main_id == "992152414566232139":
+            if user.id == 992152414566232139:
                 procfile.set_image(
                     url="https://media.discordapp.net/attachments/1124672402413072446/1164912661004292136/20231010000451.png?ex=6544f075&is=65327b75&hm=dfef49bfcab2ca0f8f2d50db7733c5e3ba6cf691f5350ddf8fb8350fc2bb38d8&=&width=1246&height=701")
 
@@ -2243,9 +2238,9 @@ class Economy(commands.Cog):
                 case _:
                     note = ""
 
-            procfile.description = (f"### {user.name}'s Profile - [{tatsu.title or 'No title set'}](https://www.google.com)\n"
+            procfile.description = (f"### {user.name}'s Profile - [{tatsu.title or 'No title set'}](https://tatsu.gg/profile)\n"
                                     f"{note}"
-                                    f"{corresp_preste} Prestige Level **{their_prest}**\n"
+                                    f"{PRESTIGE_EMOTES.setdefault(user_data[-1], "")} Prestige Level **{user_data[-1]}**\n"
                                     f"Bounty: \U000023e3 **{user_data[-2]:,}**\n"
                                     f"{their_badges}")
 
@@ -2264,16 +2259,16 @@ class Economy(commands.Cog):
                                      f"Tokens: `{format_number_short(tatsu.tokens)}`\n"
                                      f"XP: `{format_number_short(tatsu.xp)}`")
 
-            if get_profile_key_value(f"{main_id} bio") is not None:
-                procfile.add_field(name='Bio', value=f'{get_profile_key_value(f"{main_id} bio")}', inline=False)
-            if get_profile_key_value(f"{main_id} avatar_url") is None:  
+            if get_profile_key_value(f"{user.id} bio") is not None:
+                procfile.add_field(name='Bio', value=f'{get_profile_key_value(f"{user.id} bio")}', inline=False)
+            if get_profile_key_value(f"{user.id} avatar_url") is None:
                 procfile.set_thumbnail(url=user.display_avatar.url)
-            else:  
-                try:  
-                    procfile.set_thumbnail(url=get_profile_key_value(f"{main_id} avatar_url"))
-                except discord.HTTPException:  
+            else:
+                try:
+                    procfile.set_thumbnail(url=get_profile_key_value(f"{user.id} avatar_url"))
+                except discord.HTTPException:
                     procfile.set_thumbnail(url=user.display_avatar.url)
-            return await interaction.response.send_message(embed=procfile, silent=True) 
+            return await interaction.response.send_message(embed=procfile, silent=True)
 
     @app_commands.command(name='highlow', description='Guess if a number is high, low, or jackpot!')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
