@@ -2234,6 +2234,7 @@ class Economy(commands.Cog):
                 try:
                     procfile.set_thumbnail(url=get_profile_key_value(f"{user.id} avatar_url"))
                 except discord.HTTPException:
+                    modify_profile("delete", f"{user_id} bio", "yeah")
                     procfile.set_thumbnail(url=user.display_avatar.url)
             return await interaction.response.send_message(embed=procfile, silent=True)
 
