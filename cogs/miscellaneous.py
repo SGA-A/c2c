@@ -179,7 +179,7 @@ class Miscellaneous(commands.Cog):
             else:
                 data = status
         return data
-
+    
     @commands.command(name='invite', description='link to invite c2c to your server.')
     async def invite_bot(self, ctx):
         await ctx.send(embed=membed("The button component gives a direct link to invite me to your server.\n"
@@ -623,6 +623,38 @@ class Miscellaneous(commands.Cog):
                     "The request failed, you should try again later.")
             data = await resp.json()
             await interaction.response.send_message(data["results"][0]["url"])  # type: ignore
+
+    @commands.command(name="pickupline", description="get pick up lines to use.", aliases=('pul',))
+    @commands.guild_only()
+    async def pick_up_lines(self, ctx: commands.Context):
+        async with ctx.typing():
+            async with self.client.session.get(f"https://api.popcat.xyz/pickuplines") as resp:  # type: ignore
+                if resp.status != 200:
+                    return await ctx.send("The request failed, you should try again later.")
+                data = await resp.json()
+                await ctx.reply(data["pickupline"])  # type: ignore
+
+    @commands.command(name="wyr", description="get 'would you rather' questions.")
+    @commands.guild_only()
+    async def would_yr(self, ctx: commands.Context):
+        async with ctx.typing():
+            async with self.client.session.get(f"https://api.popcat.xyz/wyr") as resp:  # type: ignore
+                if resp.status != 200:
+                    return await ctx.send("The request failed, you should try again later.")
+                data = await resp.json()
+                await ctx.reply(f'Would you rather:\n'
+                                f'1. {data["ops1"].capitalize()} or..\n'
+                                f'2. {data["ops2"].capitalize()}')
+
+    @commands.command(name="alert", description="real incoming iphone alerts.")
+    @commands.guild_only()
+    async def alert_iph(self, ctx: commands.Context, *, custom_text: str):
+        async with ctx.typing():
+            custom_text = '+'.join(custom_text.split(' '))
+            async with self.client.session.get(f"https://api.popcat.xyz/alert?text={custom_text}") as resp:  # type: ignore
+                if resp.status != 200:
+                    return await ctx.send("The service is currently not available, try again later.")
+                await ctx.send(resp.url)
     
     @app_commands.command(name='tn', description="get time now in a chosen format.")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
