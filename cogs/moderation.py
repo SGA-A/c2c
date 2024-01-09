@@ -1,4 +1,4 @@
-from discord import abc, Thread, HTTPException, NotFound, Forbidden, Member
+from discord import Thread
 from discord.ext import commands
 
 
