@@ -296,13 +296,13 @@ class SelectMenu(ui.Select):
 
         total_cmds_cata = 0
 
+        for option in self.options:
+            if option.value == choice:
+                option.default = True
+                continue
+            option.default = False
+        
         if choice == 'Owner':
-
-            for option in self.options:
-                if option.value == "Owner":
-                    option.default = True
-                else:
-                    option.default = False
 
             the_dict = {}
             new_dict = return_txt_cmds_first(the_dict, "Administrate")
@@ -336,12 +336,6 @@ class SelectMenu(ui.Select):
 
         elif choice == 'Moderation':
 
-            for option in self.options:
-                if option.value == "Moderation":
-                    option.default = True
-                else:
-                    option.default = False
-
             the_dict = {}
             new_dict = return_txt_cmds_first(the_dict, choice)
             all_cmdss: dict = return_interaction_cmds_last(new_dict, choice)
@@ -373,12 +367,6 @@ class SelectMenu(ui.Select):
 
         elif choice == 'Utility':
 
-            for option in self.options:
-                if option.value == "Utility":
-                    option.default = True
-                else:
-                    option.default = False
-
             the_dict = {}
             new_dict = return_txt_cmds_first(the_dict, "Miscellaneous")
             all_cmdsss: dict = return_interaction_cmds_last(new_dict, "Miscellaneous")
@@ -407,12 +395,6 @@ class SelectMenu(ui.Select):
 
         elif choice == 'Economy':
 
-            for option in self.options:
-                if option.value == "Economy":
-                    option.default = True
-                else:
-                    option.default = False
-
             embed = Embed(title='Help: Economy', colour=Colour.from_rgb(255, 215, 0))
             embed.set_thumbnail(url='https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Robux_2019_'
                                     'Logo_gold.svg/200px-Robux_2019_Logo_gold.svg.png')
@@ -425,10 +407,9 @@ class SelectMenu(ui.Select):
                 total_cmds_cata += 1
                 if cmd_details[-1] == 'txt':
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
-                    total_cmds_cata += 1
                     continue
 
-                command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010))
+                command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010))   # type: ignore
                 try:
                     got_something = False
                     if command_manage.options:
@@ -452,12 +433,8 @@ class SelectMenu(ui.Select):
                                   f'- Status: **LOCKED**')
 
             await interaction.response.edit_message(embed=embed, view=self.view)
+            
         else:
-            for option in self.options:
-                if option.value == "Music":
-                    option.default = True
-                else:
-                    option.default = False
 
             embed = Embed(title='Help: Music', colour=Colour.from_rgb(105, 83, 224))
             embed.set_thumbnail(url="https://i.imgur.com/nFZTMFl.png")
