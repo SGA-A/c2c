@@ -235,10 +235,9 @@ class Administrate(commands.Cog):
     @app_commands.command(name='pin', description='pin a message in any channel.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(message_id='the ID of the message to be pinned',
-                           reason='the reason for pinning this message',
                            channel_name="the channel to fetch the pinned message from")
     async def pin_it(self, interaction: discord.Interaction, channel_name: Optional[discord.abc.GuildChannel],
-                     message_id: str, reason: Optional[str]):
+                     message_id: str):
 
         try:
 
@@ -248,25 +247,24 @@ class Administrate(commands.Cog):
             channel = await self.client.fetch_channel(channel_name.id)
             message = await channel.fetch_message(int(message_id))
 
-            await message.pin(reason=f'Requested by {interaction.user.name}.') if reason is None else await message.pin(
-                reason=f"Provided by {interaction.user.name}: {reason}")
+            await message.pin(reason=f'Requested by {interaction.user.name}.')
 
             await interaction.response.send_message( 
-                f"successfully pinned the message of id {message_id} sent by {message.author.name}.\n\n",
+                f"Successfully pinned the message of id {message_id} sent by {message.author.name}.\n\n",
                 ephemeral=True, delete_after=3.0)
 
         except discord.NotFound:
 
             await interaction.response.send_message( 
-                'failed to pin message, it was not found or was deleted.')
+                'Failed to pin the message, it was not found or was deleted.')
 
-        except discord.HTTPException:
+        except discord.HTTPException as http:
 
             await interaction.response.send_message( 
-                'failed to pin message, probably due to the channel reaching the 50 pin quota.',
+                f'Failed to pin the message, with a return status code of `{http.status}`.',
                 ephemeral=True, delete_after=3.0)
 
-    @commands.command(name='cthr', aliases=['ct', 'create_thread'], description='preset to create forum channels.')
+    @commands.command(name='cthr', aliases=('ct', 'create_thread'), description='preset to create forum channels.')
     async def create_thread(self, ctx: commands.Context, thread_name: str):
         if isinstance(ctx.channel, discord.TextChannel):
             thread = await ctx.channel.create_thread(name=thread_name, auto_archive_duration=10080, message=discord.Object(ctx.message.id))
