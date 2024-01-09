@@ -296,21 +296,6 @@ class Administrate(commands.Cog):
         # await ctx.bot.tree.sync(guild=None)
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
-    @commands.command(name='unload', description='unloads a file from the client.')
-    async def unload(self, ctx: commands.Context, cog_name: str):
-        await self.client.unload_extension(cog_name)
-        await ctx.send(f'`cogs.{cog_name}` has been unloaded.', ephemeral=True, delete_after=4.0)
-
-    @commands.command(name='load', description='loads a file to the client.')
-    async def load(self, ctx: commands.Context, cog_name: str):
-        await self.client.load_extension(cog_name)
-        await ctx.send(f'`cogs.{cog_name}` has been loaded.', delete_after=4.0)
-
-    @commands.command(name='reload', description='reload a file to the client.')
-    async def reload(self, ctx: commands.Context, cog_name: str):
-        await self.client.reload_extension(cog_name)
-        await ctx.send(f'`cogs.{cog_name}` has been reloaded.', delete_after=4.0)
-
     @commands.command(name='eval', description='evaluates arbitrary code.')
     async def eval(self, ctx, *, script_body: str):
         """Evaluates arbitrary code."""
