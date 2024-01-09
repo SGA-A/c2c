@@ -612,6 +612,21 @@ class Miscellaneous(commands.Cog):
         embed.set_footer(text=f'Made with discord.py v{discord.__version__}', icon_url='http://i.imgur.com/5BFecvA.png')
         await interaction.followup.send(embed=embed)
 
+    @app_commands.command(name='char', description="retrieve sfw anime images.")
+    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.describe(filter_by='what type of image ')
+    async def get_via_nekos(self, interaction: discord.Interaction,
+                            filter_by: Optional[Literal["neko", "kitsune", "waifu", "husbando"]]):
+
+        if filter_by is None:
+            filter_by = "neko"
+
+        async with self.client.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                await interaction.response.send_message(data["results"][0]["url"])
+            await interaction.response.send_message("The request failed, you should try again later.")
+    
     @app_commands.command(name='tn', description="get time now in a chosen format.")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.rename(spec="mode")
