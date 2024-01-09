@@ -345,13 +345,7 @@ class SelectMenu(ui.Select):
             
             for cmd, cmd_details in all_cmdss.items():
                 total_cmds_cata += 1
-                if cmd_details[-1] == 'txt':
-                    cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
-                    total_cmds_cata += 1
-                    continue
-
-                command_manage = client.tree.get_app_command(cmd, guild=Object(id=829053898333225010))
-                cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
+                cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
 
             embed.add_field(name='About: Mod',
                             value=f'Contains commands that are related to server management and moderation, hence these '
