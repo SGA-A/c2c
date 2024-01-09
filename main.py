@@ -310,8 +310,7 @@ class SelectMenu(ui.Select):
 
             embed = Embed(title='Help: Owner', colour=Colour.from_rgb(91, 170, 239))
             embed.set_thumbnail(url='https://cdn.discordapp.com/icons/592654230112698378/1a4fed4eca3d81da620a662a8b383c5b.png?size=512')
-            embed.set_footer(text='Got any suggestions for the bot? use the /feedback command '
-                                  'to let us know about it.', icon_url=client.user.avatar.url)
+
             for cmd, cmd_details in all_cmds.items():
                 total_cmds_cata += 1
 
@@ -349,8 +348,7 @@ class SelectMenu(ui.Select):
 
             embed = Embed(title='Help: Moderation', colour=Colour.from_rgb(247, 14, 115))
             embed.set_thumbnail(url='https://emoji.discadia.com/emojis/74e65408-2adb-46dc-86a7-363f3096b6b2.PNG')
-            embed.set_footer(text='Got any suggestions for the bot? use the /feedback command to let us know about it.', icon_url=client.user.avatar.url)
-
+            
             for cmd, cmd_details in all_cmdss.items():
                 total_cmds_cata += 1
                 if cmd_details[-1] == 'txt':
@@ -386,8 +384,7 @@ class SelectMenu(ui.Select):
             all_cmdsss: dict = return_interaction_cmds_last(new_dict, "Miscellaneous")
 
             embed = Embed(title='Help: Utility', colour=Colour.from_rgb(15, 255, 135))
-            embed.set_thumbnail(url='https://img.lovepik.com/element/40053/1035.png_1200.png')
-            embed.set_footer(text='Got any suggestions for the bot? use the /feedback command to let us know about it.', icon_url=client.user.avatar.url)
+            embed.set_thumbnail(url='https://i.imgur.com/YHBLgVx.png')
 
             for cmd, cmd_details in all_cmdsss.items():
                 total_cmds_cata += 1
@@ -417,8 +414,8 @@ class SelectMenu(ui.Select):
                     option.default = False
 
             embed = Embed(title='Help: Economy', colour=Colour.from_rgb(255, 215, 0))
-            embed.set_thumbnail(url='https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Robux_2019_Logo_gold.svg/200px-Robux_2019_Logo_gold.svg.png')
-            embed.set_footer(text='Got any suggestions for the bot? use the /feedback command to let us know about it.', icon_url=client.user.avatar.url)
+            embed.set_thumbnail(url='https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Robux_2019_'
+                                    'Logo_gold.svg/200px-Robux_2019_Logo_gold.svg.png')
 
             the_dict = {}
             new_dict = return_txt_cmds_first(the_dict, "Economy")
@@ -463,10 +460,8 @@ class SelectMenu(ui.Select):
                     option.default = False
 
             embed = Embed(title='Help: Music', colour=Colour.from_rgb(105, 83, 224))
-            embed.set_thumbnail(url="https://www.neonsignsus.com/images/big/Music-Note-Purple-Neon-Sign.jpg")
-            embed.set_footer(text='Got any suggestions for the bot? use the /feedback command to let us know about it.',
-                             icon_url=client.user.avatar.url)
-
+            embed.set_thumbnail(url="https://i.imgur.com/nFZTMFl.png")
+            
             the_dict: dict = {}
             all_cmdssss = return_txt_cmds_first(the_dict, "Music")
 
