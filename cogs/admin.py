@@ -381,33 +381,6 @@ class Administrate(commands.Cog):
             "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
             "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
             "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n> Blanked out the channel.")
-        
-    @commands.command(name='regex', description='load automod match_regex rules.')
-    async def automod_regex(self, ctx):
-        await ctx.guild.create_automod_rule(name='new rule by cxc',
-                                            event_type=discord.AutoModRuleEventType.message_send,
-                                            trigger=discord.AutoModTrigger(regex_patterns=["a", "b", "c", "d", "e"]),
-                                            actions=[
-                                                discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
-        await ctx.message.add_reaction('<:successful:1183089889269530764>')
-
-    @commands.command(name='mentions', description='load automod mass_mentions rules.')
-    async def automod_mentions(self, ctx):
-        await ctx.guild.create_automod_rule(name='new rule by cxc',
-                                            event_type=discord.AutoModRuleEventType.message_send,
-                                            trigger=discord.AutoModTrigger(mention_limit=5),
-                                            actions=[
-                                                discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
-        await ctx.message.add_reaction('<:successful:1183089889269530764>')
-
-    @commands.command(name='keyword', description='load automod by_keyword rules.')
-    async def automod_keyword(self, ctx, the_word):
-        await ctx.guild.create_automod_rule(name='new rule by cxc',
-                                            event_type=discord.AutoModRuleEventType.message_send,
-                                            trigger=discord.AutoModTrigger(keyword_filter=[f'{the_word}']),
-                                            actions=[
-                                                discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
-        await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
     @commands.command(name='update', description='preset to update channel info.')
     async def push_update(self, ctx):
