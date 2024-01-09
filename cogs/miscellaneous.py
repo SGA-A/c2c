@@ -290,7 +290,6 @@ class Miscellaneous(commands.Cog):
         await interaction.channel.send(content=f"__Attachments for {interaction.user.mention}__\n\n" + "\n".join(attachments))
         await interaction.response.send_message(embed=embed) 
 
-
     @app_commands.command(name='emojis', description='fetch all the emojis c2c can access.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     async def emojis_paginator(self, interaction: discord.Interaction):
@@ -344,7 +343,6 @@ class Miscellaneous(commands.Cog):
                             f'**Track URL**: [Click Here]({result['external_urls']['spotify']})\n'
                             f'**Popularity**: {result['popularity']} {rating}')
 
-            # noinspection PyUnboundLocalVariable
             song_emb.description = (f"## Search Results\n"
                                     f'> The **`popularity`** attribute may be difficult to understand. Type the command '
                                     f'[`>aboutpop`](https://www.google.com) to learn more about this attribute.'
