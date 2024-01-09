@@ -25,17 +25,25 @@ class Moderation(commands.Cog):
         )
 
     @commands.command(name="close", description="close the invocation thread.")
-    @commands.check(is_thread)
     @commands.guild_only()
     async def close_thread(self, ctx: commands.Context):
+        await ctx.message.delete()
+        if isinstance(ctx.channel, Thread):
+            permissions = ctx.channel.permissions_for(ctx.author)
 
-        if can_close_threads(ctx):
-            await ctx.send("**This thread has been auto-archived and locked due to lack of use.** it may be re-opened"
-                           " if needed by contacting an admin.")
-            await self.lock_and_close(ctx.channel, ctx.author)
-            return
+            if permissions.manage_threads or (ctx.channel.owner_id == ctx.author.id):
+
+                await ctx.send("This thread has been auto-archived and locked due to lack of use.\n"
+                               "It may be re-opened if needed by contacting an admin.")
+                await ctx.channel.edit(
+                    locked=True,
+                    archived=True,
+                    reason=f'Marked as closed by {ctx.author} (ID: {ctx.author.id})'
+                )
+                return
+            return await ctx.reply("You don't have the necessary permissions.", mention_author=False)
         else:
-            await ctx.send("This is not a thread.")
+            await ctx.reply("This is not a thread.", mention_author=False)
 
     @commands.command(name="kick", description="kicks a user from the invocation server.")
     @commands.has_permissions(kick_members=True)
