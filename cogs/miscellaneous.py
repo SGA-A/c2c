@@ -157,6 +157,9 @@ class Miscellaneous(commands.Cog):
         self.client = client
         self.process = Process()
 
+    async def cog_check(self, ctx: commands.Context) -> bool:
+        return ctx.guild is not None
+    
     async def get_word_info(self, word):
         url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
         async with self.client.session.get(url) as response:  
@@ -178,13 +181,11 @@ class Miscellaneous(commands.Cog):
         return data
 
     @commands.command(name='invite', description='link to invite c2c to your server.')
-    @commands.guild_only()
     async def invite_bot(self, ctx):
         await ctx.send(embed=membed("The button component gives a direct link to invite me to your server.\n"
                                     "Remember that only developers can invite the bot."), view=InviteButton(self.client))
 
     @commands.command(name='calculate', aliases=('c', 'calc'), description='compute a string / math expression.')
-    @commands.guild_only()
     async def calculator(self, ctx: commands.Context, *, expression):
         try:
             result = eval(expression) or "Invalid"
@@ -320,7 +321,6 @@ class Miscellaneous(commands.Cog):
         await Pagination(interaction, get_page_part).navigate()
 
     @commands.command(name='spsearch', description='search for songs on spotify.', aliases=('sps', 'ss'))
-    @commands.guild_only()
     async def search_sp(self, ctx, *, name_of_song):
         async with ctx.typing():
             song_emb = discord.Embed(colour=discord.Colour.from_rgb(79, 190, 78),
@@ -352,7 +352,6 @@ class Miscellaneous(commands.Cog):
             await ctx.send(embed=song_emb)
 
     @commands.command(name='aboutpop', description='explains how popularity is calculated.')
-    @commands.guild_only()
     async def about_pop_attr(self, ctx: commands.Context):
         async with ctx.typing():
             embed = membed(
@@ -494,7 +493,6 @@ class Miscellaneous(commands.Cog):
         await interaction.response.send_message(msg, suppress_embeds=True)
 
     @commands.command(name='spotify', aliases=('sp', 'spot'), description="fetch spotify RP information.")
-    @commands.guild_only()
     async def find_spotify_activity(self, ctx: commands.Context, *, username: Union[discord.Member, discord.User] = None):
         global found_spotify
         async with ctx.typing():
