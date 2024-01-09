@@ -621,11 +621,12 @@ class Miscellaneous(commands.Cog):
         if filter_by is None:
             filter_by = "neko"
 
-        async with self.client.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                await interaction.response.send_message(data["results"][0]["url"])
-            await interaction.response.send_message("The request failed, you should try again later.")
+        async with self.client.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp: # type: ignore
+            if resp.status != 200:
+                return await interaction.response.send_message( # type: ignore
+                    "The request failed, you should try again later.")
+            data = await resp.json()
+            await interaction.response.send_message(data["results"][0]["url"])  # type: ignore
     
     @app_commands.command(name='tn', description="get time now in a chosen format.")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
