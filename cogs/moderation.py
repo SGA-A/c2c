@@ -2,15 +2,6 @@ from discord import abc, Thread, HTTPException, NotFound, Forbidden, Member
 from discord.ext import commands
 
 
-def is_thread(ctx: commands.Context):
-    return isinstance(ctx.channel, Thread)
-
-
-def can_close_threads(ctx: commands.Context) -> bool:
-    permissions = ctx.channel.permissions_for(ctx.author)
-    return permissions.manage_threads or (ctx.channel.owner_id == ctx.author.id)
-
-
 class Moderation(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
