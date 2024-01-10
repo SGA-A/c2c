@@ -158,8 +158,6 @@ class Administrate(commands.Cog):
                      deposit_mode: Literal["bank", "wallet"]):
         """Generates or deducts a given amount of robux to the mentioned user."""
 
-
-        avatar = member.display_avatar or member.default_avatar
         real_amount = determine_exponent(amount)
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
@@ -184,9 +182,9 @@ class Administrate(commands.Cog):
                                                    f"\U0000279c **{member.display_name}**'s total balance now "
                                                    f"is {CURRENCY}{total:,}",
                                        colour=discord.Colour.dark_green(), timestamp=datetime.now())
-                embed2.set_thumbnail(url=avatar.url)
-                embed2.set_author(name=f"Requested by {interaction.user.name}", icon_url=interaction.user.avatar.url,
-                                  url='https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+                embed2.set_thumbnail(url=member.display_avatar.url)
+                embed2.set_author(name=f"Requested by {interaction.user.name}", 
+                                  icon_url=interaction.user.display_avatar.url)
                 embed2.set_footer(text=f"configuration type: ADD_TO")
 
                 await interaction.response.send_message(embed=embed2, ephemeral=ephemeral) 
@@ -210,9 +208,9 @@ class Administrate(commands.Cog):
                                                    f"\U0000279c **{member.display_name}**'s total balance now "
                                                    f"is {CURRENCY}{total:,}",
                                        colour=discord.Colour.dark_red(), timestamp=datetime.now())
-                embed3.set_author(name=f"Requested by {interaction.user.name}", icon_url=interaction.user.avatar.url,
-                                  url='https://www.youtube.com/watch?v=dQw4w9WgXcQ')
-                embed3.set_thumbnail(url=avatar.url)
+                embed3.set_author(name=f"Requested by {interaction.user.name}", 
+                                  icon_url=interaction.user.display_avatar.url)
+                embed3.set_thumbnail(url=member.display_avatar.url)
                 embed3.set_footer(text=f"configuration type: REMOVE_FROM")
 
                 await interaction.response.send_message(embed=embed3, ephemeral=ephemeral) 
@@ -227,9 +225,9 @@ class Administrate(commands.Cog):
                                                    f"changed to {CURRENCY}{abs(users[1] + change):,}.",
                                        colour=discord.Colour.dark_purple(), timestamp=datetime.now())
                 embed4.set_footer(text=f"configuration type: ALTER_TO")
-                embed4.set_thumbnail(url=avatar.url)
-                embed4.set_author(name=f"Requested by {interaction.user.name}", icon_url=interaction.user.avatar.url,
-                                  url='https://www.youtube.com/watch?v=dQw4w9WgXcQ')
+                embed4.set_thumbnail(url=member.display_avatar.url)
+                embed4.set_author(name=f"Requested by {interaction.user.name}", 
+                                  icon_url=interaction.user.display_avatar.url)
                 await interaction.response.send_message(embed=embed4, ephemeral=ephemeral) 
 
     @app_commands.command(name='pin', description='pin a message in any channel.')
