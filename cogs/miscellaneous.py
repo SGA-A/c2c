@@ -134,8 +134,8 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
         channel = interaction.guild.get_channel(1122902104802070572)
         embed = discord.Embed(title=f'New Feedback: {self.fb_title.value or "Untitled"}',
                               description=self.message.value, colour=0x2F3136)
-        avatar = interaction.user.avatar or interaction.user.default_avatar
-        embed.set_author(name=f"Submitted by {interaction.user.name}", icon_url=avatar.url)
+        embed.set_author(name=interaction.user.name, 
+                         icon_url=interaction.user.display_avatar.url)
 
         await channel.send(embed=embed)
         success = discord.Embed(colour=0x2F3136,
@@ -269,7 +269,7 @@ class Miscellaneous(commands.Cog):
                                           f' - **Page**: {page}\n\n',
                               colour=discord.Colour.from_rgb(255, 233, 220))
 
-        embed.set_author(icon_url=interaction.user.display_avatar.url, name=f'Requested by {interaction.user.name}',
+        embed.set_author(icon_url=interaction.user.display_avatar.url, name=interaction.user.name,
                          url=interaction.user.display_avatar.url)
 
         posts_xml = await self.retrieve_via_kona(tags=tags, limit=3, page=page, mode="image", tag_pattern=None) 
@@ -311,7 +311,7 @@ class Miscellaneous(commands.Cog):
 
         embed = discord.Embed(title='Results', colour=discord.Colour.dark_embed())
         embed.set_footer(text="The most popular tags are displayed first.")
-        embed.set_author(icon_url=interaction.user.display_avatar.url, name=f'Requested by {interaction.user.name}',
+        embed.set_author(icon_url=interaction.user.display_avatar.url, name=interaction.user.name,
                          url=interaction.user.display_avatar.url)
 
         posts_xml = await self.retrieve_via_kona(tag_pattern=tag_pattern, mode="tag", tags=None) 
@@ -367,8 +367,8 @@ class Miscellaneous(commands.Cog):
             offset = (page - 1) * length
             for user in emotes_all[offset:offset + length]:
                 emb.description += f"{user}\n"
-            emb.set_author(name=f"Requested by {interaction.user.name}",
-                           icon_url=f"{interaction.user.avatar.url if interaction.user.avatar else None}")
+            emb.set_author(name=interaction.user.name,
+                           icon_url=interaction.user.display_avatar.url)
             n = Pagination.compute_total_pages(len(emotes_all), length)
             emb.set_footer(text=f"This is page {page} of {n}")
             return emb, n
@@ -432,11 +432,12 @@ class Miscellaneous(commands.Cog):
                 embed=membed("The invite lifespan cannot be **less than or equal to 0**."))
 
         maximum_uses = abs(maximum_uses)
-        day_to_sec = invite_lifespan * 86400
-        invoker_channel = interaction.channel
-        avatar = interaction.user.avatar or interaction.user.default_avatar
-        generated_invite = await invoker_channel.create_invite(reason=f'Creation requested by {interaction.user.name}',
-                                                               max_age=day_to_sec, max_uses=maximum_uses)
+        invite_lifespan = invite_lifespan * 86400
+      
+        generated_invite = await interaction.channel.create_invite(
+          reason=f'Creation requested by {interaction.user.name}', 
+          max_age=day_to_sec, max_uses=maximum_uses)
+      
         match maximum_uses:
             case 0:
                 maxim_usage = "No limit to maximum usage"
@@ -449,7 +450,8 @@ class Miscellaneous(commands.Cog):
                                             f'- Expires {formatted_expiry}\n'
                                             f'- Invite Link is: {generated_invite.url}',
                                 colour=0x2F3136)
-        success.set_author(name=f'Requested by {interaction.user.name}', icon_url=avatar.url)
+        success.set_author(name=interaction.user.name,
+                           icon_url=interaction.user.display_avatar.url)
         await interaction.response.send_message(embed=success) 
 
     @app_commands.command(name='define', description='define any word of choice.')
@@ -564,10 +566,8 @@ class Miscellaneous(commands.Cog):
                         duration = str(activity.duration)
                         final_duration = duration[3:7]
                         embed.set_thumbnail(url=activity.album_cover_url)
-                        if username.avatar:
-                            embed.set_author(name=f"{username.display_name}", icon_url=username.avatar.url)
-                        else:
-                            embed.set_author(name=f"{username.display_name}")
+                        embed.set_author(name=username.name, 
+                                         icon_url=username.display_avatar.url)
                         embed.add_field(name="Artist", value=activity.artist)
                         embed.add_field(name="Album", value=activity.album)
                         embed.add_field(name="Song Duration", value=final_duration)
@@ -724,7 +724,7 @@ class Miscellaneous(commands.Cog):
         embed = discord.Embed(description=f'## Timestamp Conversion\n{format_dtime}\n'
                                           f'- The epoch time in this format is: `{format_dtime}`',
                               colour=return_random_color())
-        if interaction.user.avatar: embed.set_thumbnail(url=interaction.user.avatar.url)
+        embed.set_thumbnail(url=interaction.user.display_avatar.url)
         await interaction.response.send_message(embed=embed, ephemeral=True) 
 
     @commands.command(name='avatar', description='display a user\'s enlarged avatar.')
@@ -733,7 +733,7 @@ class Miscellaneous(commands.Cog):
         embed = discord.Embed(colour=0x2F3136)
         username = username or ctx.author
         avatar = username.display_avatar.with_static_format('png')
-        embed.set_author(name=str(username), url=avatar)
+        embed.set_author(name=username.name, url=avatar)
         embed.set_image(url=avatar)
         await ctx.send(embed=embed)
 
