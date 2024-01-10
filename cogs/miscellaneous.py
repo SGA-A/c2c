@@ -326,7 +326,7 @@ class Miscellaneous(commands.Cog):
     async def tag_fetch(self, interaction: discord.Interaction, tag_pattern: str):
 
         embed = discord.Embed(title='Results', colour=discord.Colour.dark_embed())
-        embed.set_footer(text="The most popular tags are displayed first.")
+        embed.set_footer(text="Some tags here don't have any posts.")
         embed.set_author(icon_url=interaction.user.display_avatar.url, name=interaction.user.name,
                          url=interaction.user.display_avatar.url)
 
