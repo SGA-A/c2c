@@ -241,12 +241,11 @@ async def load_cogs():
         if filename.endswith(".py"):
             await client.load_extension(f"cogs.{filename[:-3]}")
 
+
 def return_txt_cmds_first(command_holder: dict,
                           category: Literal["Economy", "Moderation", "Miscellaneous", "Administrate", "Music"]) -> dict:
     """Displays all the text-based commands that are defined within a cog as a dict. This should always be called first for consistency."""
-    the_cog = client.get_cog(category)
-    cog_cmds = the_cog.get_commands()
-    for cmd in cog_cmds:
+    for cmd in client.get_cog(category).get_commands():
         command_holder.update({cmd.name: deque([f'{category}', f'{cmd.description}', 'txt'])})
     return command_holder
 
@@ -254,19 +253,15 @@ def return_txt_cmds_first(command_holder: dict,
 def return_interaction_cmds_last(command_holder: dict,
                                  category: Literal["Economy", "Moderation", "Miscellaneous", "Administrate", "Music"]) -> dict:
     """Displays all the app commands and grouped app commands that are defined within a cog as a dict. This should always be called last for consistency."""
-    the_cog = client.get_cog(category)
-    cog_cmds = the_cog.get_app_commands()
 
-    for cmd in cog_cmds:
+    for cmd in client.get_cog(category).get_app_commands():
         command_holder.update({cmd.name: deque([f'{category}', f'{cmd.description}', 'sla'])})
     return command_holder
 
+
 async def total_command_count(interaction: Interaction) -> int:
     """Return the total amount of commands detected within the client, including text and slash commands."""
-    amount = 0
-    lenslash = len(await client.tree.fetch_commands(guild=Object(id=interaction.guild.id)))
-    lentxt = len(client.commands)
-    amount += (lenslash+lentxt)
+    amount = (len(await client.tree.fetch_commands(guild=Object(id=interaction.guild.id)))+1) + len(client.commands)
     return amount
 
 
