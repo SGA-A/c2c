@@ -281,12 +281,16 @@ class Miscellaneous(commands.Cog):
                              f"`{posts_xml}`: {rmeaning.setdefault(posts_xml, "the cause of the error is not known")}."
                              f"\nYou should try again later to see if the service improves."))
 
-        if len(posts_xml) == 0:
-            return await interaction.response.send_message(  
-                embed=membed(f"## No results found.\n"
-                             f"- This is often due to entering an invalid tag pattern **or** there"
-                             f" are no images associated with these images yet.\n"
-                             f" - You can find a tag of your choice [on the website.](https://konachan.net/tag)"))
+          if len(posts_xml) == 0:
+            return await interaction.response.send_message(  # type: ignore
+                embed=membed(f"## No posts found.\n"
+                             f"- There are a few reasons this could occur:\n"
+                             f" - Accessing some posts under the `copyright` tag.\n"
+                             f" - Entering an invalid tag name.\n"
+                             f" - There are no posts found under this tag.\n"
+                             f" - The page requested exceeds the max length.\n"
+                             f"- You can find a tag and post of your choice [on the website.](https://konachan.net/tag)"
+                             f""))
 
         attachments = set()
         descriptionerfyrd = set()
@@ -314,20 +318,21 @@ class Miscellaneous(commands.Cog):
         embed.set_author(icon_url=interaction.user.display_avatar.url, name=interaction.user.name,
                          url=interaction.user.display_avatar.url)
 
-        posts_xml = await self.retrieve_via_kona(tag_pattern=tag_pattern, mode="tag", tags=None) 
+        tags_xml = await self.retrieve_via_kona(tag_pattern=tag_pattern, mode="tag", tags=None) 
 
-        if isinstance(posts_xml, int):
+        if isinstance(tags_xml, int):
 
             return await interaction.response.send_message(  
                 embed=membed(f"The [konachan website](https://konachan.net/help) returned an erroneous status code of "
-                             f"`{posts_xml}`: {rmeaning.setdefault(posts_xml, "the cause of the error is not known")}."
+                             f"`{tags_xml}`: {rmeaning.setdefault(tags_xml, "the cause of the error is not known")}."
                              f"\nYou should try again later to see if the service improves."))
 
-        if len(posts_xml) == 0:
-            return await interaction.response.send_message(  
-                embed=membed(f"## No results found.\n"
-                             f"- This is often due to entering an invalid tag pattern.\n"
-                             f" - You can find a tag of your choice [on the website.](https://konachan.net/tag)"))
+          if len(tags_xml) == 0:
+            return await interaction.response.send_message(
+                embed=membed(f"## No tags found.\n"
+                             f"- There is only one known cause:\n"
+                             f" - No matching tags exist yet under the given tag pattern.\n"
+                             f"- You can find a tag of your choice [on the website.](https://konachan.net/tag)"))
 
         type_of_tag = {
             0: "`general`",
@@ -339,7 +344,7 @@ class Miscellaneous(commands.Cog):
 
         descriptionerfyrd = set()
         pos = 0
-        for result in posts_xml:
+        for result in tags_xml:
             descriptionerfyrd.add(f'{pos}. '
                                   f'{result['name']} ({type_of_tag.setdefault(int(result['tag_type']), "Unknown Tag Type")})')
 
