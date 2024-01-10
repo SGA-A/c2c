@@ -282,15 +282,27 @@ class Miscellaneous(commands.Cog):
                              f"\nYou should try again later to see if the service improves."))
 
           if len(posts_xml) == 0:
-            return await interaction.response.send_message(  # type: ignore
+            await interaction.response.defer(thinking=True, ephemeral=True)
+            tagsearch = self.client.tree.get_app_command(
+                'tagsearch', guild=discord.Object(id=interaction.guild.id)) 
+
+            # You can use the below code to make a given command mentionable, even if they are out of sync
+            if tagsearch is None:
+                await self.client.tree._update_cache(
+                    await self.client.tree.fetch_commands(
+                        guild=discord.Object(id=interaction.guild.id)), guild=discord.Object(id=interaction.guild.id))
+                tagsearch = self.client.tree.get_app_command(
+                    'tagsearch', guild=discord.Object(id=interaction.guild.id)) 
+            
+            return await interaction.followup.send(
                 embed=membed(f"## No posts found.\n"
-                             f"- There are a few reasons this could occur:\n"
-                             f" - Accessing some posts under the `copyright` tag.\n"
+                             f"- There are a few known causes:\n"
                              f" - Entering an invalid tag name.\n"
+                             f" - Accessing some posts under the `copyright` tag.\n"
                              f" - There are no posts found under this tag.\n"
                              f" - The page requested exceeds the max length.\n"
-                             f"- You can find a tag and post of your choice [on the website.](https://konachan.net/tag)"
-                             f""))
+                             f"- You can find a tag by using {tagsearch.mention} "
+                             f"or [the website.](https://konachan.net/tag)"))
 
         attachments = set()
         descriptionerfyrd = set()
