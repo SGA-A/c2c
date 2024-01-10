@@ -1,4 +1,3 @@
-from asyncio import sleep
 from time import perf_counter
 from PyDictionary import PyDictionary
 import discord
@@ -16,29 +15,50 @@ from unicodedata import name
 
 ARROW = "<:arrowe:1180428600625877054>"
 found_spotify = False
+rmeaning = {
+                403: "Forbidden - Access was denied",
+                404: "Not Found",
+                420: "Invalid Record - The record could not be saved",
+                421: "User Throttled - User is throttled, try again later",
+                422: "Locked - The resource is locked and cannot be modified",
+                423: "Already Exists - The resource already exists",
+                424: "Invalid Parameters - The given parameters were invalid",
+                500: "Internal Server Error - Some unknown error occured on the konachan website's server",
+                503: "Service Unavailable - The konachan website currently cannot handle the request"
+            }
 
 
 def was_called_in_a_nsfw_channel(interaction: discord.Interaction):
     return interaction.channel.is_nsfw()
 
 
-def extract_attributes(post_element):
-    author = post_element.get("author")
-    created_at = post_element.get("created_at")
-    file_url = post_element.get("file_url")
-    jpeg_url = post_element.get("jpeg_url")
-    preview_url = post_element.get("preview_url")
-    source = post_element.get("source")
-    tags = post_element.get("tags")
+def extract_attributes(post_element, mode: Literal["image", "tag"]):
+
+    if mode == "image":
+        author = post_element.get("author")
+        created_at = post_element.get("created_at")
+        file_url = post_element.get("file_url")
+        jpeg_url = post_element.get("jpeg_url")
+        preview_url = post_element.get("preview_url")
+        source = post_element.get("source")
+        tags = post_element.get("tags")
+
+        return {
+            "author": author,
+            "created_at": created_at,
+            "file_url": file_url,
+            "jpeg_url": jpeg_url,
+            "preview_url": preview_url,
+            "source": source,
+            "tags": tags,
+        }
+
+    tag_name = post_element.get("name")
+    tag_type = post_element.get("type")
 
     return {
-        "author": author,
-        "created_at": created_at,
-        "file_url": file_url,
-        "jpeg_url": jpeg_url,
-        "preview_url": preview_url,
-        "source": source,
-        "tags": tags,
+        "name": tag_name,
+        "tag_type": tag_type
     }
 
 
@@ -55,11 +75,16 @@ def format_relative(dt: datetime.datetime) -> str:
     return format_dt(dt, 'R')
 
 
-def parse_xml(xml_content):
-    root = fromstring(xml_content)
-    posts = root.findall(".//post")
+def parse_xml(xml_content, mode: Literal["image", "tag"]):
+    if mode == "image":
+        root = fromstring(xml_content)
+        result = root.findall(".//post")
+    else:
+        root = fromstring(xml_content)
+        result = root.findall(".//tag")
 
-    extracted_data = [extract_attributes(post) for post in posts]
+
+    extracted_data = [extract_attributes(res, mode=mode) for res in result]
     return extracted_data
 
 
@@ -159,27 +184,31 @@ class Miscellaneous(commands.Cog):
 
     async def cog_check(self, ctx: commands.Context) -> bool:
         return ctx.guild is not None
-    
+
     async def get_word_info(self, word):
         url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
         async with self.client.session.get(url) as response:  
             return await response.json()
 
-    async def make_a_kona(self, limit=5, page=1, tags=""):
+    async def retrieve_via_kona(self, tag_pattern: Optional[str], tags: Optional[str],
+                                limit=5, page=1, mode=Literal["image", "tag"]):
         """Returns a list of dictionaries for you to iterate through and fetch their attributes"""
-
-        base_url = "https://konachan.net/post.xml"
-        params = {"limit": limit, "page": page, "tags": tags}
+        if mode == "image":
+            base_url = "https://konachan.net/post.xml"
+            params = {"limit": limit, "page": page, "tags": tags}
+        else:
+            base_url = "https://konachan.net/tag.xml"
+            params = {"name": tag_pattern, "page": page, "order": "count", "limit": 20}
 
         async with self.client.session.get(base_url, params=params) as response:  
-            status = response.status
-            if status == 200:
+            if response.status == 200:
                 posts_xml = await response.text()
-                data = parse_xml(posts_xml)
+                data = parse_xml(posts_xml, mode=mode) 
             else:
-                data = status
+                data = response.status
         return data
-    
+
+
     @commands.command(name='invite', description='link to invite c2c to your server.')
     async def invite_bot(self, ctx):
         await ctx.send(embed=membed("The button component gives a direct link to invite me to your server.\n"
@@ -187,9 +216,10 @@ class Miscellaneous(commands.Cog):
 
     @commands.command(name='calculate', aliases=('c', 'calc'), description='compute a string / math expression.')
     async def calculator(self, ctx: commands.Context, *, expression):
+
         try:
             result = eval(expression) or "Invalid"
-            await ctx.reply(f'**{ctx.author.name}**, the answer is `{result}`', mention_author=False)
+            await ctx.reply(f'**{ctx.author.name}**, the result is `{result}`', mention_author=False)
         except Exception as e:
             await ctx.reply(f'**Error:** {str(e)}', mention_author=False)
 
@@ -221,17 +251,16 @@ class Miscellaneous(commands.Cog):
                 await interaction.response.send_message( 
                     embed=membed("An unsuccessful request was made. Try again later."))
 
-    @app_commands.command(name='kona', description='fetch images from the konachan website.')
+    @app_commands.command(name='kona', description='retrieve nsfw images from konachan.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
-    @app_commands.check(was_called_in_a_nsfw_channel)
-    @app_commands.describe(tags='the tags to base searches upon, seperated by a space', page='the page to look through under a tag')
+    @app_commands.describe(tags='the tags to base searches upon', page='the page to look through under a tag')
     async def kona_fetch(self, interaction: discord.Interaction, tags: Optional[str], page: Optional[int]):
-
-        if page is None:
-            page = 1
 
         if tags is None:
             tags = "original"
+        if page is None:
+            page = 1
+
         tagviewing = ', '.join(tags.split(' '))
 
         embed = discord.Embed(title='Results',
@@ -240,25 +269,12 @@ class Miscellaneous(commands.Cog):
                                           f' - **Page**: {page}\n\n',
                               colour=discord.Colour.from_rgb(255, 233, 220))
 
-        avatar = interaction.user.avatar or interaction.user.default_avatar
-        embed.set_author(icon_url=avatar.url, name=f'Requested by {interaction.user.name}',
-                         url=avatar.url)
+        embed.set_author(icon_url=interaction.user.display_avatar.url, name=f'Requested by {interaction.user.name}',
+                         url=interaction.user.display_avatar.url)
 
-        posts_xml = await self.make_a_kona(limit=3, page=page, tags=tags)
+        posts_xml = await self.retrieve_via_kona(tags=tags, limit=3, page=page, mode="image", tag_pattern=None) 
 
-        if isinstance(posts_xml, int):  # meaning it did not return a status code of 200: OK
-
-            rmeaning = {
-                403: "Forbidden - Access was denied",
-                404: "Not Found",
-                420: "Invalid Record - The record could not be saved",
-                421: "User Throttled - User is throttled, try again later",
-                422: "Locked - The resource is locked and cannot be modified",
-                423: "Already Exists - The resource already exists",
-                424: "Invalid Parameters - The given parameters were invalid",
-                500: "Internal Server Error - Some unknown error occured on the konachan website's server",
-                503: "Service Unavailable - The konachan website currently cannot handle the request"
-            }
+        if isinstance(posts_xml, int):
 
             return await interaction.response.send_message(  
                 embed=membed(f"The [konachan website](https://konachan.net/help) returned an erroneous status code of "
@@ -268,27 +284,67 @@ class Miscellaneous(commands.Cog):
         if len(posts_xml) == 0:
             return await interaction.response.send_message(  
                 embed=membed(f"## No results found.\n"
-                             f"- This is often due to entering an invalid tag name.\n"
-                             f" - There are millions of tags that are available to base your search on. By default, "
-                             f"if you don't input a tag, the search defaults to the tag with name `original`.\n"
+                             f"- This is often due to entering an invalid tag pattern **or** there"
+                             f" are no images associated with these images yet.\n"
                              f" - You can find a tag of your choice [on the website.](https://konachan.net/tag)"))
 
         attachments = set()
         descriptionerfyrd = set()
         for result in posts_xml:
             tindex = posts_xml.index(result)+1
-            result['source'] = result['source'] or '*Unknown User*'
             descriptionerfyrd.add(f'**[{tindex}]** *Post by {result['author']}*\n'
                                   f'- Created <t:{result['created_at']}:R>\n'
                                   f'- [File URL (source)]({result['file_url']})\n'
                                   f'- [File URL (jpeg)]({result['jpeg_url']})\n'
-                                  f'- Made by {result['source']}\n'
+                                  f'- Made by {result['source'] or '*Unknown User*'}\n'
                                   f'- Tags: {result['tags']}')
             attachments.add(f"**[{tindex}]**\n{result['jpeg_url']}")
 
         embed.description += "\n\n".join(descriptionerfyrd)
         await interaction.channel.send(content=f"__Attachments for {interaction.user.mention}__\n\n" + "\n".join(attachments))
         await interaction.response.send_message(embed=embed) 
+
+    @app_commands.command(name='tagsearch', description='retrieve tags from konachan.')
+    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.describe(tag_pattern="the pattern to use to find match results")
+    async def tag_fetch(self, interaction: discord.Interaction, tag_pattern: str):
+
+        embed = discord.Embed(title='Results', colour=discord.Colour.dark_embed())
+        embed.set_footer(text="The most popular tags are displayed first.")
+        embed.set_author(icon_url=interaction.user.display_avatar.url, name=f'Requested by {interaction.user.name}',
+                         url=interaction.user.display_avatar.url)
+
+        posts_xml = await self.retrieve_via_kona(tag_pattern=tag_pattern, mode="tag", tags=None) 
+
+        if isinstance(posts_xml, int):
+
+            return await interaction.response.send_message(  
+                embed=membed(f"The [konachan website](https://konachan.net/help) returned an erroneous status code of "
+                             f"`{posts_xml}`: {rmeaning.setdefault(posts_xml, "the cause of the error is not known")}."
+                             f"\nYou should try again later to see if the service improves."))
+
+        if len(posts_xml) == 0:
+            return await interaction.response.send_message(  
+                embed=membed(f"## No results found.\n"
+                             f"- This is often due to entering an invalid tag pattern.\n"
+                             f" - You can find a tag of your choice [on the website.](https://konachan.net/tag)"))
+
+        type_of_tag = {
+            0: "`general`",
+            1: "`artist`",
+            2: "`uer`",
+            3: "`copyright`",
+            4: "`character`"
+        }
+
+        descriptionerfyrd = set()
+        pos = 0
+        for result in posts_xml:
+            descriptionerfyrd.add(f'{pos}. '
+                                  f'{result['name']} ({type_of_tag.setdefault(int(result['tag_type']), "Unknown Tag Type")})')
+
+        embed.description = "\n".join(descriptionerfyrd)
+        await interaction.response.send_message(embed=embed)  
 
     @app_commands.command(name='emojis', description='fetch all the emojis c2c can access.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -466,7 +522,7 @@ class Miscellaneous(commands.Cog):
         answer = ''
         for letter in commons:
             answer = answer + letter + ' '
-
+            
         answer = answer[:-1]
 
         await interaction.response.send_message(embed=membed(f'The most common letter is {answer}.')) 
@@ -487,8 +543,8 @@ class Miscellaneous(commands.Cog):
 
         msg = '\n'.join(map(to_string, characters))
         if len(msg) > 2000:
-            return await interaction.response.send_message('Output too long to display.')
-        await interaction.response.send_message(msg, suppress_embeds=True)
+            return await interaction.response.send_message('Output too long to display.') 
+        await interaction.response.send_message(msg, suppress_embeds=True) 
 
     @commands.command(name='spotify', aliases=('sp', 'spot'), description="fetch spotify RP information.")
     async def find_spotify_activity(self, ctx: commands.Context, *, username: Union[discord.Member, discord.User] = None):
@@ -530,16 +586,16 @@ class Miscellaneous(commands.Cog):
 
     @app_commands.command(name='about', description='shows stats related to the client.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
-    @app_commands.checks.cooldown(1, 3, key=lambda i: i.user.id)
+    @app_commands.checks.cooldown(1, 10, key=lambda i: i.guild.id)
     async def about_the_bot(self, interaction: discord.Interaction):
 
-        await interaction.response.defer(thinking=True) # type: ignore
+        await interaction.response.defer(thinking=True) 
         amount = 0
         lenslash = len(await self.client.tree.fetch_commands(guild=Object(id=interaction.guild.id)))+1
         lentxt = len(self.client.commands)
         amount += (lenslash+lentxt)
 
-        username = 'SGA-A'
+        username = 'YOUR_USER_NAME'
         token = 'youshallnotpass'
         repository_name = 'c2c'
 
@@ -551,7 +607,7 @@ class Miscellaneous(commands.Cog):
         revision = list()
 
         for commit in commits:
-            revision.append(f"[`{commit.sha[:6]}`]({commit.url}) {commit.commit.message} {format_relative(commit.commit.author.date)}")
+            revision.append(f"[`{commit.sha[:6]}`]({commit.html_url}) {commit.commit.message.splitlines()[0]} ({format_relative(commit.commit.author.date)})")
 
         embed = discord.Embed(description=f'Latest Changes:\n'
                                           f'{"\n".join(revision)}')
@@ -585,7 +641,7 @@ class Miscellaneous(commands.Cog):
         cpu_usage = self.process.cpu_percent() / cpu_count()
         embed.timestamp = discord.utils.utcnow()
 
-        diff = datetime.datetime.now() - self.client.time_launch  # type: ignore
+        diff = datetime.datetime.now() - self.client.time_launch  
         minutes, seconds = divmod(diff.total_seconds(), 60)
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
@@ -594,8 +650,7 @@ class Miscellaneous(commands.Cog):
         embed.add_field(name='Channels', value=f'{text + voice} total\n{text} text\n{voice} voice')
         embed.add_field(name='Process', value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU')
         embed.add_field(name='Guilds',
-                        value=f'{len(self.client.guilds)}\n'
-                              f'{ARROW}{guilds} channels\n'
+                        value=f'{guilds} total\n'
                               f'{ARROW}{len(self.client.emojis)} emojis\n'
                               f'{ARROW}{len(self.client.stickers)} stickers')
         embed.add_field(name='Commands',
@@ -610,35 +665,35 @@ class Miscellaneous(commands.Cog):
 
     @app_commands.command(name='char', description="retrieve sfw anime images.")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
-    @app_commands.describe(filter_by='what type of image ')
+    @app_commands.describe(filter_by='what type of image to retrieve')
     async def get_via_nekos(self, interaction: discord.Interaction,
                             filter_by: Optional[Literal["neko", "kitsune", "waifu", "husbando"]]):
 
         if filter_by is None:
             filter_by = "neko"
 
-        async with self.client.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp: # type: ignore
+        async with self.client.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp: 
             if resp.status != 200:
-                return await interaction.response.send_message( # type: ignore
+                return await interaction.response.send_message( 
                     "The request failed, you should try again later.")
             data = await resp.json()
-            await interaction.response.send_message(data["results"][0]["url"])  # type: ignore
+            await interaction.response.send_message(data["results"][0]["url"])  
 
     @commands.command(name="pickupline", description="get pick up lines to use.", aliases=('pul',))
     @commands.guild_only()
     async def pick_up_lines(self, ctx: commands.Context):
         async with ctx.typing():
-            async with self.client.session.get(f"https://api.popcat.xyz/pickuplines") as resp:  # type: ignore
+            async with self.client.session.get(f"https://api.popcat.xyz/pickuplines") as resp:  
                 if resp.status != 200:
                     return await ctx.send("The request failed, you should try again later.")
                 data = await resp.json()
-                await ctx.reply(data["pickupline"])  # type: ignore
+                await ctx.reply(data["pickupline"])  
 
     @commands.command(name="wyr", description="get 'would you rather' questions.")
     @commands.guild_only()
     async def would_yr(self, ctx: commands.Context):
         async with ctx.typing():
-            async with self.client.session.get(f"https://api.popcat.xyz/wyr") as resp:  # type: ignore
+            async with self.client.session.get(f"https://api.popcat.xyz/wyr") as resp:  
                 if resp.status != 200:
                     return await ctx.send("The request failed, you should try again later.")
                 data = await resp.json()
@@ -651,11 +706,11 @@ class Miscellaneous(commands.Cog):
     async def alert_iph(self, ctx: commands.Context, *, custom_text: str):
         async with ctx.typing():
             custom_text = '+'.join(custom_text.split(' '))
-            async with self.client.session.get(f"https://api.popcat.xyz/alert?text={custom_text}") as resp:  # type: ignore
+            async with self.client.session.get(f"https://api.popcat.xyz/alert?text={custom_text}") as resp:  
                 if resp.status != 200:
                     return await ctx.send("The service is currently not available, try again later.")
                 await ctx.send(resp.url)
-    
+
     @app_commands.command(name='tn', description="get time now in a chosen format.")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.rename(spec="mode")
