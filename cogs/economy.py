@@ -11,6 +11,7 @@ from random import randint, choices, choice, sample, shuffle
 from pluralizer import Pluralizer
 from discord import app_commands, SelectOption
 import json
+from ImageCharts import ImageCharts
 from asqlite import Connection as asqlite_Connection
 from typing import Optional, Literal, Any, Union, List
 from tatsu.wrapper import ApiWrapper
@@ -2098,6 +2099,16 @@ class Economy(commands.Cog):
             stats.set_footer(text="The number next to the name is how many matches are recorded")
 
             await interaction.response.send_message(embed=stats) 
+            try:
+                its_sum = total_bets + total_slots + total_blackjacks
+                pie = (ImageCharts()
+                       .chd(f"t:{(total_bets/its_sum)*100},{(total_slots/its_sum)*100},{(total_blackjacks/its_sum)*100}")
+                       .chf("b0,lg,90,68cefd,0,96a6ff,1").chl(f"BET ({total_bets})|SLOTS ({total_slots})|BJ ({total_blackjacks})")
+                       .chdl("Total bet games|Total slot games|Total blackjack games").chli(f"{its_sum}").chs("600x480")
+                       .cht("pd").chtt(f"{user.name}'s total games played"))
+                await interaction.channel.send(pie.to_url())
+            except ZeroDivisionError:
+                await interaction.channel.send(f"{user.display_name} hasn't got enough data to form a pie chart!")
 
     @app_commands.command(name="getjob", description="earn a salary becoming employed.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
