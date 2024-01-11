@@ -253,6 +253,7 @@ class Miscellaneous(commands.Cog):
 
     @app_commands.command(name='kona', description='retrieve nsfw images from konachan.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.check(was_called_in_a_nsfw_channel)
     @app_commands.describe(tags='the tags to base searches upon', page='the page to look through under a tag')
     async def kona_fetch(self, interaction: discord.Interaction, tags: Optional[str], page: Optional[int]):
 
@@ -322,6 +323,7 @@ class Miscellaneous(commands.Cog):
 
     @app_commands.command(name='tagsearch', description='retrieve tags from konachan.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.check(was_called_in_a_nsfw_channel)
     @app_commands.describe(tag_pattern="the pattern to use to find match results")
     async def tag_fetch(self, interaction: discord.Interaction, tag_pattern: str):
 
