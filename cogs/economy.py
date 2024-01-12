@@ -3402,9 +3402,9 @@ class Economy(commands.Cog):
                 badges.add(PREMIUM_CURRENCY)
             if has_keycard:
                 badges.add("<:lanyard:1165935243140796487>")
-                your_choice = choices([1, 2, 3, 4, 5, 6], weights=[35/3, 35/3, 35/3, 65/3, 65/3, 65/3], k=1)
+                your_choice = choices([1, 2, 3, 4, 5, 6], weights=[37/3, 37/3, 37/3, 63/3, 63/3, 63/3], k=1)
                 bot_choice = choices([1, 2, 3, 4, 5, 6],
-                                     weights=[70/4, 70/4, 70/4, 70/4, 15, 15], k=1)
+                                     weights=[65/4, 65/4, 65/4, 65/4, 35/2, 35/2], k=1)
             else:
                 bot_choice = choices([1, 2, 3, 4, 5, 6],
                                      weights=[10, 10, 15, 27, 15, 23], k=1)
