@@ -1167,8 +1167,8 @@ class Economy(commands.Cog):
             else:
                 hook = await self.client.fetch_webhook(hook_id)
 
-            await hook.send(f"Hey {interaction.user.display_name}! We noticed you have not set a personal "
-                            f"multiplier. You should set one up now and increase your returns!")
+            await hook.send(f"{interaction.user.mention}, hey! We noticed you have not set a personal "
+                            f"multiplier. Set one up now to increase your returns in robux and other items!")
     
     @staticmethod
     def calculate_hand(hand):
