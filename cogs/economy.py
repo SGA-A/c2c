@@ -403,18 +403,20 @@ class ConfirmDeny(discord.ui.View):
 
     @discord.ui.button(label='Confirm', style=discord.ButtonStyle.danger)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.timed_out = False
+        for item in self.children:
+            item.disabled = True
+
         tables_to_delete = [BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME]
-        async with self.client.pool_connection.acquire() as conn: 
+        async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
             for table in tables_to_delete:
                 await conn.execute(f"DELETE FROM `{table}` WHERE userID = ?", (self.member.id,))
 
             await conn.commit()
-            embed = discord.Embed(colour=0x2F3136,
-                                  description=f"## <:successful:1183089889269530764> Your records have been wiped.\n"
-                                              f"- You can register again at any time if you wish.\n"
-                                              f" - Doing so will not recover your past data however.")
-            await interaction.message.edit(embed=embed, view=None)
+            await interaction.message.edit(
+                content="You're now basically out of our database, we no longer have any EUD from you (end user data).",
+                view=None)
 
     @discord.ui.button(label='Deny', style=discord.ButtonStyle.green)
     async def deny(self, interaction: discord.Interaction, button: discord.ui.Button):
