@@ -2207,7 +2207,7 @@ class Economy(commands.Cog):
                     procfile.set_thumbnail(url=user.display_avatar.url)
             else:
                 procfile.set_thumbnail(url=user.display_avatar.url)
-            return await interaction.response.send_message(embed=procfile, silent=True) # type: ignore
+            return await interaction.response.send_message(embed=procfile, silent=True) 
 
     @app_commands.command(name='highlow', description='guess high, low, or jackpot for a number.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -3333,10 +3333,10 @@ class Economy(commands.Cog):
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered) 
             conn: asqlite_Connection
-            keycard_amt = await self.get_one_inv_data_new(interaction.user, "Keycard", conn)
             wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
             pmulti = await self.get_pmulti_data_only(interaction.user, conn)
-            has_keycard = keycard_amt >= 1
+            has_keycard = await self.get_one_inv_data_new(interaction.user, "Keycard", conn) >= 1
+            hyperion_qty = await self.get_one_inv_data_new(interaction.user, "Hyperion", conn)
             expo = determine_exponent(exponent_amount)
 
             try:
@@ -3386,8 +3386,14 @@ class Economy(commands.Cog):
 
             # --------------------------------------------------------
 
+            badges = set()
+            if hyperion_qty:
+                badges.add("<:DroneCrisisXT:1171491512828297227>")
+            if pmulti[0] in {0, "0"}:
+                badges.add(PREMIUM_CURRENCY)
             if has_keycard:
-                your_choice = choices([1, 2, 3, 4, 5, 6], weights=[40/3, 40/3, 40/3, 60/3, 60/3, 60/3], k=1)
+                badges.add("<:lanyard:1165935243140796487>")
+                your_choice = choices([1, 2, 3, 4, 5, 6], weights=[35/3, 35/3, 35/3, 65/3, 65/3, 65/3], k=1)
                 bot_choice = choices([1, 2, 3, 4, 5, 6],
                                      weights=[70/4, 70/4, 70/4, 70/4, 15, 15], k=1)
             else:
@@ -3395,36 +3401,23 @@ class Economy(commands.Cog):
                                      weights=[10, 10, 15, 27, 15, 23], k=1)
                 your_choice = choices([1, 2, 3, 4, 5, 6], weights=[55/3, 55/3, 55/3, 45/3, 45/3, 45/3], k=1)
 
-            content_before = (f"{interaction.user.mention}, you don't have a personal multiplier yet. **Set "
-                              f"one up now:** </multi view:1179817617251369074>.") if pmulti[0] in {"0", 0} else ""
 
             if your_choice[0] > bot_choice[0]:
 
                 bet_stuff = await self.get_bank_data_new(interaction.user, conn)
                 id_won_amount, id_lose_amount = bet_stuff[5], bet_stuff[6]
-
-                new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
-                amount_after_multi = floor(((new_multi / 100) * amount) + amount)
-                tma = amount_after_multi - amount
+                amount_after_multi = floor(((SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0] / 100) * amount) + amount)
                 await self.update_bank_new(interaction.user, conn, amount_after_multi, "betwa")
                 new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
                 new_id_won_amount = await self.update_bank_new(interaction.user, conn, 1, "betw")
-                new_total = id_lose_amount + new_id_won_amount[0]
+                prcntw = round((new_id_won_amount[0]/(id_lose_amount + new_id_won_amount[0]))*100, 1)
 
-                prcntw = round((new_id_won_amount[0]/new_total)*100, 1)
 
                 embed = discord.Embed(description=f"## {interaction.user.mention}'s winning gambling game\n"
-                                                  f"\U0000279c You won {CURRENCY}**{amount_after_multi:,}** robux.\n"
-                                                  f"\U0000279c Bonus: {PREMIUM_CURRENCY} **{tma:,}** via "
-                                                  f"a `{new_multi}x` multiplier.\n"
-                                                  f"<:linkit:1176970030961930281> `{pmulti[0]}x` Personal Multi, "
-                                                  f"`{new_multi-pmulti[0]}x` Server Multi.\n"
-                                                  f"\U0000279c Your new `wallet` balance is {CURRENCY}"
-                                                  f"**{new_amount_balance[0]:,}**.",
+                                                  f"**You've rolled higher!** You won {CURRENCY}**{amount_after_multi:,}** robux.\n"
+                                                  f"Your new `wallet` balance is {CURRENCY} **{new_amount_balance[0]:,}**.\n"
+                                                  f"You've won {prcntw}% of all games.",
                                       colour=discord.Color.brand_green())
-
-                embed.set_footer(text=f"You've won {prcntw}% of all games. ({new_id_won_amount[0]:,}/{new_total:,})",
-                                 icon_url=interaction.user.display_avatar.url)
 
             elif your_choice[0] == bot_choice[0]:
                 embed = discord.Embed(description=f"## {interaction.user.mention}'s gambling game\n"
@@ -3444,19 +3437,27 @@ class Economy(commands.Cog):
                 prcntl = round((new_id_lose_amount[0]/new_total)*100, 1)
 
                 embed = discord.Embed(description=f"## {interaction.user.mention}'s losing gambling game\n"
-                                                   f"\U0000279c You lost {CURRENCY}**{amount:,}**.\n"
-                                                   f"\U0000279c No multiplier accrued due to a lost bet.\n"
-                                                   f"\U0000279c Your new `wallet` balance "
-                                                   f"is {CURRENCY}**{new_amount_balance[0]:,}**.",
+                                                   f"**You've rolled lower!** You lost {CURRENCY}**{amount:,}**.\n"
+                                                   f"Your new balance is {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                                                   f"You've lost {prcntl}% of all games.",
                                        colour=discord.Color.brand_red())
 
-                embed.set_footer(
-                    text=f"You've lost {prcntl}% of all games. ({new_id_lose_amount[0]:,}/{new_total:,})",
-                    icon_url=interaction.user.display_avatar.url)
-
-            embed.add_field(name=interaction.user.name, value=f"Rolled `{your_choice[0]}`")
+            embed.add_field(name=interaction.user.name, value=f"Rolled `{your_choice[0]}` {''.join(badges)}")
             embed.add_field(name=self.client.user.name, value=f"Rolled `{bot_choice[0]}`")
-            await interaction.response.send_message(content=content_before, embed=embed)  
+            await interaction.response.send_message(embed=embed)  
+
+            if pmulti[0] in {"0", 0}:
+                hook_id = get_profile_key_value(f"{interaction.channel.id} webhook")
+                if hook_id is None:
+                    async with self.client.session.get("https://i.imgur.com/3aMsyXI.jpg") as resp:
+                        avatar_data = await resp.read()
+                    hook = await interaction.channel.create_webhook(name='Notify', avatar=avatar_data)
+                    modify_profile("update", f"{interaction.channel.id} webhook", hook.id)
+                else:
+                    hook = await self.client.fetch_webhook(hook_id)
+
+                await hook.send(f"Hey {interaction.user.display_name}! We noticed you have not set a personal "
+                                f"multiplier. You should set one up now and increase your returns!") 
 
     @play_blackjack.autocomplete('bet_amount')
     @bet.autocomplete('exponent_amount')
