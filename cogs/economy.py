@@ -766,7 +766,7 @@ class HighLow(discord.ui.View):
         if interaction.user == self.interaction.user:
             return True
         else:
-            await interaction.response.send_message( # type: ignore
+            await interaction.response.send_message( 
                 content="A good attempt, but you did not make this interaction. **Start by making one yourself.**",
                 ephemeral=True)
             return False
@@ -774,9 +774,9 @@ class HighLow(discord.ui.View):
     @discord.ui.button(label='Low', style=discord.ButtonStyle.grey)
     async def low(self, interaction: discord.Interaction, button: discord.ui.Button):
         button.disabled = True
-        await interaction.response.defer(thinking=True, ephemeral=True) # type: ignore
+        await interaction.response.defer(thinking=True, ephemeral=True) 
 
-        async with self.client.pool_connection.acquire() as conn: # type: ignore
+        async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
 
             if 33 >= extraneous_data[0] > 0:
@@ -819,10 +819,10 @@ class HighLow(discord.ui.View):
 
     @discord.ui.button(label='JACKPOT!', style=discord.ButtonStyle.green)
     async def jackpot(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(thinking=True, ephemeral=True) # type: ignore
+        await interaction.response.defer(thinking=True, ephemeral=True) 
         button.disabled = True
 
-        async with self.client.pool_connection.acquire() as conn: # type: ignore
+        async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
 
             if 66 >= extraneous_data[0] > 33:
@@ -866,9 +866,9 @@ class HighLow(discord.ui.View):
     @discord.ui.button(label='High', style=discord.ButtonStyle.blurple)
     async def high(self, interaction: discord.Interaction, button: discord.ui.Button):
         button.disabled = True
-        await interaction.response.defer(thinking=True, ephemeral=True) # type: ignore
+        await interaction.response.defer(thinking=True, ephemeral=True) 
 
-        async with self.client.pool_connection.acquire() as conn: # type: ignore
+        async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
 
             if 100 >= extraneous_data[0] > 66:
@@ -1160,7 +1160,7 @@ class Economy(commands.Cog):
         if their_pmulti in {"0", 0}:
             hook_id = get_profile_key_value(f"{interaction.channel.id} webhook")
             if hook_id is None:
-                async with self.client.session.get("https://i.imgur.com/3aMsyXI.jpg") as resp:  # type: ignore
+                async with self.client.session.get("https://i.imgur.com/3aMsyXI.jpg") as resp:  
                     avatar_data = await resp.read()
                 hook = await interaction.channel.create_webhook(name='Notify', avatar=avatar_data)
                 modify_profile("update", f"{interaction.channel.id} webhook", hook.id)
@@ -2269,10 +2269,10 @@ class Economy(commands.Cog):
     @app_commands.describe(keyword='an integer to bet upon. Supports Shortcuts (max, all, exponents).')
     async def slots(self, interaction: discord.Interaction, keyword: str):
 
-        async with self.client.pool_connection.acquire() as conn: # type: ignore
+        async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
-                await interaction.response.send_message(embed=self.not_registered) # type: ignore
+                await interaction.response.send_message(embed=self.not_registered) 
 
         # --------------- Checks before betting i.e. has keycard, meets bet constraints. -------------
         data = await self.get_one_inv_data_new(interaction.user, "Keycard", conn)
@@ -2288,7 +2288,7 @@ class Economy(commands.Cog):
                 else:
                     amount = 50000000
             else:
-                return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
+                return await interaction.response.send_message(embed=ERR_UNREASON) 
 
         # --------------- Contains checks before betting i.e. has keycard, meets bet constraints. -------------
         wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
@@ -2300,13 +2300,13 @@ class Economy(commands.Cog):
                                                                  f'be made\n'
                                                                  f' - A maximum bet of {CURRENCY}**75,000,000** '
                                                                  f'can only be made.')
-                return await interaction.response.send_message(embed=err) # type: ignore
+                return await interaction.response.send_message(embed=err) 
             elif amount > wallet_amt:
                 err = discord.Embed(colour=0x2F3136, description=f'Cannot perform this action, '
                                                                  f'you only have {CURRENCY}**{wallet_amt:,}**.\n'
                                                                  f'You\'ll need {CURRENCY}**{amount - wallet_amt:,}**'
                                                                  f' more in your wallet first.')
-                return await interaction.response.send_message(embed=err) # type: ignore
+                return await interaction.response.send_message(embed=err) 
         else:
             if (amount > 50000000) or (amount < 50000):
                 err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the slot machine criteria:\n'
@@ -2315,13 +2315,13 @@ class Economy(commands.Cog):
                                                                  f'be made.\n'
                                                                  f' - A maximum bet of {CURRENCY}**50,000,000** '
                                                                  f'can only be made.')
-                return await interaction.response.send_message(embed=err) # type: ignore
+                return await interaction.response.send_message(embed=err) 
             elif amount > wallet_amt:
                 err = discord.Embed(colour=0x2F3136, description=f"## Cannot perform this action, "
                                                                  f"You only have {CURRENCY}**{wallet_amt:,}**.\n"
                                                                  f"You'll need {CURRENCY}**{amount - wallet_amt:,}**"
                                                                  f" more in your wallet first.")
-                return await interaction.response.send_message(embed=err) # type: ignore
+                return await interaction.response.send_message(embed=err) 
 
         # ------------------ THE SLOT MACHINE ITESELF ------------------------
 
@@ -2354,7 +2354,7 @@ class Economy(commands.Cog):
                              icon_url=interaction.user.display_avatar.url)
             embed.set_footer(text=f"You've won {prcntw}% of all slots games.",
                              icon_url=interaction.user.display_avatar.url)
-            await interaction.response.send_message(embed=embed) # type: ignore
+            await interaction.response.send_message(embed=embed) 
 
         elif emoji_outcome.count(freq2) > 1:
 
@@ -2380,7 +2380,7 @@ class Economy(commands.Cog):
                              icon_url=interaction.user.display_avatar.url)
             embed.set_footer(text=f"You've won {prcntw}% of all slot games.",
                              icon_url=interaction.user.display_avatar.url)
-            await interaction.response.send_message(embed=embed) # type: ignore
+            await interaction.response.send_message(embed=embed) 
 
         else:
 
@@ -2399,7 +2399,7 @@ class Economy(commands.Cog):
                              icon_url=interaction.user.display_avatar.url)
             embed.set_footer(text=f"You've lost {prcntl}% of all slots games.",
                              icon_url=interaction.user.display_avatar.url)
-            await interaction.response.send_message(embed=embed) # type: ignore
+            await interaction.response.send_message(embed=embed) 
 
     @app_commands.command(name='inventory', description='view your currently owned items.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -3337,9 +3337,9 @@ class Economy(commands.Cog):
         """Bet your robux on a gamble to win or lose robux."""
 
         # --------------- Contains checks before betting i.e. has keycard, meets bet constraints. -------------
-        async with self.client.pool_connection.acquire() as conn: # type: ignore
+        async with self.client.pool_connection.acquire() as conn: 
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered) # type: ignore
+                return await interaction.response.send_message(embed=self.not_registered) 
             conn: asqlite_Connection
             wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
             pmulti = await self.get_pmulti_data_only(interaction.user, conn)
@@ -3354,10 +3354,10 @@ class Economy(commands.Cog):
                 if exponent_amount.lower() in {'max', 'all'}:
                     amount = 100000000 if has_keycard else 50000000
                 else:
-                    return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
+                    return await interaction.response.send_message(embed=ERR_UNREASON) 
 
             if amount == 0:
-                await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
+                await interaction.response.send_message(embed=ERR_UNREASON) 
             if has_keycard:
                 # if the user has a keycard
                 if (amount > 100000000) or (amount < 100000):
@@ -3367,13 +3367,13 @@ class Economy(commands.Cog):
                                                                      f'be made\n'
                                                                      f' - A maximum bet of {CURRENCY}**100,000,000** '
                                                                      f'can only be made.')
-                    return await interaction.response.send_message(embed=err) # type: ignore
+                    return await interaction.response.send_message(embed=err) 
                 elif amount > wallet_amt:
                     err = discord.Embed(colour=0x2F3136, description=f'Cannot perform this action, '
                                                                      f'you only have {CURRENCY}**{wallet_amt:,}**.\n'
                                                                      f'You\'ll need {CURRENCY}**{amount - wallet_amt:,}**'
                                                                      f' more in your wallet first.')
-                    return await interaction.response.send_message(embed=err) # type: ignore
+                    return await interaction.response.send_message(embed=err) 
             else:
                 if (amount > 50000000) or (amount < 500000):
                     err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the bet criteria:\n'
@@ -3385,13 +3385,13 @@ class Economy(commands.Cog):
                                                                      f'can only be made (this can increase when you '
                                                                      f'acquire a <:lanyard:1165935243140796487> '
                                                                      f'Keycard).')
-                    return await interaction.response.send_message(embed=err) # type: ignore
+                    return await interaction.response.send_message(embed=err) 
                 elif amount > wallet_amt:
                     err = discord.Embed(colour=0x2F3136, description=f'Cannot perform this action, '
                                                                      f'you only have {CURRENCY}**{wallet_amt:,}**.\n'
                                                                      f'You\'ll need {CURRENCY}**{amount - wallet_amt:,}**'
                                                                      f' more in your wallet first.')
-                    return await interaction.response.send_message(embed=err) # type: ignore
+                    return await interaction.response.send_message(embed=err) 
 
             # --------------------------------------------------------
             smulti = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
@@ -3454,7 +3454,7 @@ class Economy(commands.Cog):
 
             embed.add_field(name=interaction.user.name, value=f"Rolled `{your_choice[0]}` {''.join(badges)}")
             embed.add_field(name=self.client.user.name, value=f"Rolled `{bot_choice[0]}`")
-            await interaction.response.send_message(embed=embed)  # type: ignore
+            await interaction.response.send_message(embed=embed)  
 
             await self.raise_pmulti_warning(interaction, pmulti[0])
 
