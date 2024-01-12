@@ -2254,7 +2254,19 @@ class Economy(commands.Cog):
 
             await interaction.response.send_message(f"I am thinking of a number. Guess what it is. **{hint}!**", 
                                                     view=HighLow(interaction, self.client))
+            if pmulti[0] in {"0", 0}:
+            hook_id = get_profile_key_value(f"{interaction.channel.id} webhook")
+            if hook_id is None:
+                async with self.client.session.get("https://i.imgur.com/3aMsyXI.jpg") as resp: # type: ignore
+                    avatar_data = await resp.read()
+                hook = await interaction.channel.create_webhook(name='Notify', avatar=avatar_data)
+                modify_profile("update", f"{interaction.channel.id} webhook", hook.id)
+            else:
+                hook = await self.client.fetch_webhook(hook_id)
 
+            await hook.send(f"Hey {interaction.user.display_name}! We noticed you have not set a personal "
+                            f"multiplier. You should set one up now and increase your returns!")
+            
     @app_commands.command(name='slots',
                           description='try your luck on a slot machine.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -3318,6 +3330,19 @@ class Economy(commands.Cog):
                     "your deck or **Forfeit** to end your hand prematurely, sacrificing half of your original bet.",
             embed=start, view=my_view)
         my_view.message = await interaction.original_response()
+        
+        if pmulti[0] in {"0", 0}:
+        hook_id = get_profile_key_value(f"{interaction.channel.id} webhook")
+        if hook_id is None:
+            async with self.client.session.get("https://i.imgur.com/3aMsyXI.jpg") as resp: # type: ignore
+                avatar_data = await resp.read()
+            hook = await interaction.channel.create_webhook(name='Notify', avatar=avatar_data)
+            modify_profile("update", f"{interaction.channel.id} webhook", hook.id)
+        else:
+            hook = await self.client.fetch_webhook(hook_id)
+
+        await hook.send(f"Hey {interaction.user.display_name}! We noticed you have not set a personal "
+                        f"multiplier. You should set one up now and increase your returns!")
 
     @app_commands.command(name="bet",
                           description="bet your robux on a dice roll.")
