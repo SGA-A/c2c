@@ -5,13 +5,13 @@ from shelve import open as open_shelve
 import datetime
 import discord
 from other.pagination import Pagination
+from ImageCharts import ImageCharts
 from discord.ext import commands
 from math import floor
 from random import randint, choices, choice, sample, shuffle
 from pluralizer import Pluralizer
 from discord import app_commands, SelectOption
 import json
-from ImageCharts import ImageCharts
 from asqlite import Connection as asqlite_Connection
 from typing import Optional, Literal, Any, Union, List
 from tatsu.wrapper import ApiWrapper
@@ -766,20 +766,17 @@ class HighLow(discord.ui.View):
         if interaction.user == self.interaction.user:
             return True
         else:
-            emb = discord.Embed(
-                description=f"# You cannot perform this action.\n"
-                            f"A good attempt, but you did not make this interaction. **Start by making one yourself.**",
-                color=0x2F3136
-            )
-            await interaction.response.send_message(embed=emb, ephemeral=True) 
+            await interaction.response.send_message( # type: ignore
+                content="A good attempt, but you did not make this interaction. **Start by making one yourself.**",
+                ephemeral=True)
             return False
 
     @discord.ui.button(label='Low', style=discord.ButtonStyle.grey)
     async def low(self, interaction: discord.Interaction, button: discord.ui.Button):
         button.disabled = True
-        await interaction.response.defer(thinking=True, ephemeral=True) 
+        await interaction.response.defer(thinking=True, ephemeral=True) # type: ignore
 
-        async with self.client.pool_connection.acquire() as conn: 
+        async with self.client.pool_connection.acquire() as conn: # type: ignore
             conn: asqlite_Connection
 
             if 33 >= extraneous_data[0] > 0:
@@ -793,13 +790,12 @@ class HighLow(discord.ui.View):
                 self.foo = False
                 await self.disable_all_items()
 
-                win = discord.Embed(title=f'{interaction.user.display_name}\'s winning high-low game',
-                                    description=f'- You just won **\U000023e3 {total:,}**.\n'
-                                                f' - {PREMIUM_CURRENCY} **{bonus:,}** won from a **{new_multi}**% multi.\n'
-                                                f'- Your new `wallet` balance is **\U000023e3 {new_balance[0]:,}**.\n',
+                win = discord.Embed(description=f'You just won **\U000023e3 {total:,}**.\n'
+                                                f'You also got {PREMIUM_CURRENCY} **{bonus:,}** as part of your **`{new_multi}`**x multi.\n'
+                                                f'Your new balance is **\U000023e3 {new_balance[0]:,}**.\n',
                                     colour=discord.Color.brand_green())
-                win.set_thumbnail(url=interaction.user.display_avatar.url)
-
+                win.set_author(name=f"{interaction.user.name}'s winning high-low game",
+                               icon_url=interaction.user.display_avatar.url)
                 await interaction.followup.send(embed=win)
                 await interaction.message.edit(
                     content=f'{interaction.user.display_name}, you won. the number i was guessing '
@@ -810,13 +806,11 @@ class HighLow(discord.ui.View):
                 self.foo = False
                 await self.disable_all_items()
 
-                lose = discord.Embed(title=f'{interaction.user.display_name}\'s losing high-low game',
-                                     description=f'- You lost **\U000023e3 {int(extraneous_data[1]):,}**.\n'
-                                                 f'- No multiplier accrued due to a lost bet.\n'
-                                                 f'- Your new `wallet` balance is **\U000023e3 {new_balance[0]:,}**.\n',
+                lose = discord.Embed(description=f'You lost **\U000023e3 {int(extraneous_data[1]):,}**.\n'
+                                                 f'Your new wallet balance is **\U000023e3 {new_balance[0]:,}**.\n',
                                      colour=discord.Color.brand_red())
-                lose.set_thumbnail(url=interaction.user.display_avatar.url)
-
+                lose.set_author(name=f"{interaction.user.name}'s losing high-low game",
+                                icon_url=interaction.user.display_avatar.url)
                 await interaction.followup.send(embed=lose)
                 await interaction.message.edit(
                     content=f'{interaction.user.display_name}, you lost unfortunatley. the number i was guessing '
@@ -825,10 +819,10 @@ class HighLow(discord.ui.View):
 
     @discord.ui.button(label='JACKPOT!', style=discord.ButtonStyle.green)
     async def jackpot(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.defer(thinking=True, ephemeral=True) 
+        await interaction.response.defer(thinking=True, ephemeral=True) # type: ignore
         button.disabled = True
 
-        async with self.client.pool_connection.acquire() as conn: 
+        async with self.client.pool_connection.acquire() as conn: # type: ignore
             conn: asqlite_Connection
 
             if 66 >= extraneous_data[0] > 33:
@@ -841,13 +835,12 @@ class HighLow(discord.ui.View):
 
                 self.foo = False
                 await self.disable_all_items()
-                win = discord.Embed(title=f'{interaction.user.display_name}\'s winning high-low game',
-                                    description=f'- You just won **\U000023e3 {total:,}**.\n'
-                                                f' - {PREMIUM_CURRENCY} **{bonus:,}** won from a **{new_multi}**% multi.\n'
-                                                f'- Your new `wallet` balance is **\U000023e3 {new_balance[0]:,}**.\n',
+                win = discord.Embed(description=f'You just won **\U000023e3 {total:,}**.\n'
+                                                f'You also got {PREMIUM_CURRENCY} **{bonus:,}** as part of your **`{new_multi}`**x multi.\n'
+                                                f'Your new balance is **\U000023e3 {new_balance[0]:,}**.\n',
                                     colour=discord.Color.brand_green())
-
-                win.set_thumbnail(url=interaction.user.display_avatar.url)
+                win.set_author(name=f"{interaction.user.name}'s winning high-low game",
+                               icon_url=interaction.user.display_avatar.url)
                 await interaction.followup.send(embed=win)
                 await interaction.message.edit(
                     content=f'{interaction.user.display_name}, you won. the number i was guessing '
@@ -858,12 +851,11 @@ class HighLow(discord.ui.View):
                 self.foo = False
                 await self.disable_all_items()
 
-                lose = discord.Embed(title=f'{interaction.user.display_name}\'s losing high-low game',
-                                     description=f'- You lost **\U000023e3 {int(extraneous_data[1]):,}** robux.\n'
-                                                 f'- No multiplier accrued due to a lost bet.\n'
-                                                 f'- Your new balance is **\U000023e3 {new_balance[0]:,}**',
+                lose = discord.Embed(description=f'You lost **\U000023e3 {int(extraneous_data[1]):,}** robux.\n'
+                                                 f'Your new balance is **\U000023e3 {new_balance[0]:,}**',
                                      colour=discord.Color.brand_red())
-                lose.set_thumbnail(url=interaction.user.display_avatar.url)
+                lose.set_author(name=f"{interaction.user.name}'s losing high-low game",
+                                icon_url=interaction.user.display_avatar.url)
 
                 await interaction.followup.send(embed=lose)
                 await interaction.message.edit(
@@ -874,9 +866,9 @@ class HighLow(discord.ui.View):
     @discord.ui.button(label='High', style=discord.ButtonStyle.blurple)
     async def high(self, interaction: discord.Interaction, button: discord.ui.Button):
         button.disabled = True
-        await interaction.response.defer(thinking=True, ephemeral=True) 
+        await interaction.response.defer(thinking=True, ephemeral=True) # type: ignore
 
-        async with self.client.pool_connection.acquire() as conn: 
+        async with self.client.pool_connection.acquire() as conn: # type: ignore
             conn: asqlite_Connection
 
             if 100 >= extraneous_data[0] > 66:
@@ -889,13 +881,12 @@ class HighLow(discord.ui.View):
 
                 self.foo = False
                 await self.disable_all_items()
-                win = discord.Embed(title=f'{interaction.user.display_name}\'s winning high-low game',
-                                    description=f'- You just won **\U000023e3 {total:,}**.\n'
-                                                f' - {PREMIUM_CURRENCY} **{bonus:,}** won from a **{new_multi}**% multi.\n'
-                                                f'- Your new `wallet` balance is **\U000023e3 {new_balance[0]:,}**.\n',
+                win = discord.Embed(description=f'You just won **\U000023e3 {total:,}**.\n'
+                                                f'You got {PREMIUM_CURRENCY} **{bonus:,}** as part of your **{new_multi}**% multi.\n'
+                                                f'Your new balance is **\U000023e3 {new_balance[0]:,}**.\n',
                                     colour=discord.Color.brand_green())
-                win.set_thumbnail(url=interaction.user.display_avatar.url)
-
+                win.set_author(name=f"{interaction.user.display_name}'s winning high-low game",
+                               icon_url=interaction.user.display_avatar.url)
                 await interaction.followup.send(embed=win)
                 await interaction.message.edit(
                     content=f'{interaction.user.display_name}, you won. the number i was guessing '
@@ -905,12 +896,11 @@ class HighLow(discord.ui.View):
                 new_balance = await Economy.update_bank_new(interaction.user, conn, -int(extraneous_data[1]))
                 self.foo = False
                 await self.disable_all_items()
-                lose = discord.Embed(title=f'{interaction.user.display_name}\'s losing high-low game',
-                                     description=f'- You lost **\U000023e3 {int(extraneous_data[1]):,}** robux.\n'
-                                                 f'- No multiplier accrued due to a lost bet.\n'
-                                                 f'- your new balance is **\U000023e3 {new_balance[0]:,}**',
+                lose = discord.Embed(description=f'You lost **\U000023e3 {int(extraneous_data[1]):,}** robux.\n'
+                                                 f'Your new balance is **\U000023e3 {new_balance[0]:,}**',
                                      colour=discord.Color.brand_red())
-                lose.set_thumbnail(url=interaction.user.display_avatar.url)
+                lose.set_author(name=f"{interaction.user.display_name}'s losing high-low game",
+                                icon_url=interaction.user.display_avatar.url)
 
                 await interaction.followup.send(embed=lose)
                 await interaction.message.edit(
@@ -2279,13 +2269,13 @@ class Economy(commands.Cog):
     @app_commands.describe(keyword='an integer to bet upon. Supports Shortcuts (max, all, exponents).')
     async def slots(self, interaction: discord.Interaction, keyword: str):
 
-        async with self.client.pool_connection.acquire() as conn: 
+        async with self.client.pool_connection.acquire() as conn: # type: ignore
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
-                await interaction.response.send_message(embed=self.not_registered) 
+                await interaction.response.send_message(embed=self.not_registered) # type: ignore
 
         # --------------- Checks before betting i.e. has keycard, meets bet constraints. -------------
-        data = await self.get_one_inv_data_new(interaction.user, "Keycard", conn)  # no need to do data[0] here
+        data = await self.get_one_inv_data_new(interaction.user, "Keycard", conn)
         has_keycard = data and True
         expo = determine_exponent(keyword)
         try:
@@ -2298,7 +2288,7 @@ class Economy(commands.Cog):
                 else:
                     amount = 50000000
             else:
-                return await interaction.response.send_message(embed=ERR_UNREASON) 
+                return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
 
         # --------------- Contains checks before betting i.e. has keycard, meets bet constraints. -------------
         wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
@@ -2310,13 +2300,13 @@ class Economy(commands.Cog):
                                                                  f'be made\n'
                                                                  f' - A maximum bet of {CURRENCY}**75,000,000** '
                                                                  f'can only be made.')
-                return await interaction.response.send_message(embed=err) 
+                return await interaction.response.send_message(embed=err) # type: ignore
             elif amount > wallet_amt:
                 err = discord.Embed(colour=0x2F3136, description=f'Cannot perform this action, '
-                                                                 f'you only have {CURRENCY}**{wallet_amt:,}**\n'
+                                                                 f'you only have {CURRENCY}**{wallet_amt:,}**.\n'
                                                                  f'You\'ll need {CURRENCY}**{amount - wallet_amt:,}**'
                                                                  f' more in your wallet first.')
-                return await interaction.response.send_message(embed=err) 
+                return await interaction.response.send_message(embed=err) # type: ignore
         else:
             if (amount > 50000000) or (amount < 50000):
                 err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the slot machine criteria:\n'
@@ -2325,13 +2315,13 @@ class Economy(commands.Cog):
                                                                  f'be made.\n'
                                                                  f' - A maximum bet of {CURRENCY}**50,000,000** '
                                                                  f'can only be made.')
-                return await interaction.response.send_message(embed=err) 
+                return await interaction.response.send_message(embed=err) # type: ignore
             elif amount > wallet_amt:
-                err = discord.Embed(colour=0x2F3136, description=f'Cannot perform this action, '
-                                                                 f'you only have {CURRENCY}**{wallet_amt:,}**\n'
-                                                                 f'You\'ll need {CURRENCY}**{amount - wallet_amt:,}**'
-                                                                 f' more in your wallet first.')
-                return await interaction.response.send_message(embed=err) 
+                err = discord.Embed(colour=0x2F3136, description=f"## Cannot perform this action, "
+                                                                 f"You only have {CURRENCY}**{wallet_amt:,}**.\n"
+                                                                 f"You'll need {CURRENCY}**{amount - wallet_amt:,}**"
+                                                                 f" more in your wallet first.")
+                return await interaction.response.send_message(embed=err) # type: ignore
 
         # ------------------ THE SLOT MACHINE ITESELF ------------------------
 
@@ -2341,6 +2331,8 @@ class Economy(commands.Cog):
         id_won_amount, id_lose_amount = slot_stuff[3], slot_stuff[4]
 
         if emoji_outcome.count(freq1) > 1:
+
+
             emulti = BONUS_MULTIPLIERS[f'{freq1 * emoji_outcome.count(freq1)}']
             serv_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0)
             new_multi = serv_multi + emulti
@@ -2352,24 +2344,24 @@ class Economy(commands.Cog):
             new_total = id_lose_amount + new_id_won_amount[0]
 
             prcntw = round((new_id_won_amount[0] / new_total) * 100, 1)
-            embed = discord.Embed(description=f"## {interaction.user.mention}'s winning slot machine\n"
-                                              f"**\U0000003e** {emoji_outcome[0]} {emoji_outcome[1]} {emoji_outcome[2]} **\U0000003c**\n\n"
-                                              f"\U0000279c You won {CURRENCY}**{amount_after_multi:,}** robux.\n"
-                                              f"\U0000279c Bonus: {PREMIUM_CURRENCY} **{tma:,}** via a `{new_multi}x` multiplier.\n"
+            embed = discord.Embed(description=f"**\U0000003e** {emoji_outcome[0]} {emoji_outcome[1]} {emoji_outcome[2]} **\U0000003c**\n\n"
+                                              f"**It's a match!** You've won {CURRENCY}**{amount_after_multi:,}** robux.\n"
+                                              f"You got {PREMIUM_CURRENCY} **{tma:,}** as part of your `{new_multi}x` multiplier.\n"
                                               f"<:linkit:1176970030961930281> **{serv_multi}**% Server Multiplier, **{emulti}**% via slots.\n"
-                                              f"\U0000279c Your new `wallet` balance is {CURRENCY}"
-                                              f"**{new_amount_balance[0]:,}**.",
+                                              f"Your new balance is {CURRENCY} **{new_amount_balance[0]:,}**.",
                                   colour=discord.Color.brand_green())
-            embed.set_footer(text=f"You've won {prcntw}% of all slots games. ({new_id_won_amount[0]:,}/{new_total:,})",
+            embed.set_author(name=f"{interaction.user.name}'s winning slot machine",
                              icon_url=interaction.user.display_avatar.url)
-            await interaction.response.send_message(embed=embed) 
+            embed.set_footer(text=f"You've won {prcntw}% of all slots games.",
+                             icon_url=interaction.user.display_avatar.url)
+            await interaction.response.send_message(embed=embed) # type: ignore
 
         elif emoji_outcome.count(freq2) > 1:
 
             emulti = BONUS_MULTIPLIERS[f'{freq2 * emoji_outcome.count(freq2)}']
 
-            serv_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) 
-            new_multi = serv_multi + emulti 
+            serv_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0)
+            new_multi = serv_multi + emulti
             amount_after_multi = floor(((new_multi / 100) * amount) + amount)
             tma = amount_after_multi - amount
             await self.update_bank_new(interaction.user, conn, amount_after_multi, "slotwa")
@@ -2378,19 +2370,19 @@ class Economy(commands.Cog):
             new_total = id_lose_amount + new_id_won_amount[0]
             prcntw = round((new_id_won_amount[0] / new_total) * 100, 1)
 
-            embed = discord.Embed(description=f"## {interaction.user.mention}'s winning slot machine\n"
-                                              f"**\U0000003e** {emoji_outcome[0]} {emoji_outcome[1]} {emoji_outcome[2]} **\U0000003c**\n\n"
-                                              f"\U0000279c You won {CURRENCY}**{amount_after_multi:,}** robux.\n"
-                                              f"\U0000279c Bonus: {PREMIUM_CURRENCY} **{tma:,}** via a `{new_multi}x` multiplier.\n"
+            embed = discord.Embed(description=f"**\U0000003e** {emoji_outcome[0]} {emoji_outcome[1]} {emoji_outcome[2]} **\U0000003c**\n\n"
+                                              f"**It's a match!** You've won {CURRENCY}**{amount_after_multi:,}** robux.\n"
+                                              f"You got {PREMIUM_CURRENCY} **{tma:,}** as part of your `{new_multi}x` multiplier.\n"
                                               f"<:linkit:1176970030961930281> **{serv_multi}**% Server Multiplier, **{emulti}**% via slots.\n"
-                                              f"\U0000279c Your new `wallet` balance is {CURRENCY}"
-                                              f"**{new_amount_balance[0]:,}**.",
+                                              f"Your new balance is {CURRENCY} **{new_amount_balance[0]:,}**.",
                                   colour=discord.Color.brand_green())
-            embed.set_footer(text=f"You've won {prcntw}% of all slot games. ({new_id_won_amount[0]:,}/{new_total:,})",
+            embed.set_author(name=f"{interaction.user.name}'s winning slot machine",
                              icon_url=interaction.user.display_avatar.url)
-            await interaction.response.send_message(embed=embed) 
+            embed.set_footer(text=f"You've won {prcntw}% of all slot games.",
+                             icon_url=interaction.user.display_avatar.url)
+            await interaction.response.send_message(embed=embed) # type: ignore
 
-        else: 
+        else:
 
             await self.update_bank_new(interaction.user, conn, amount, "slotla")
             new_amount_balance = await self.update_bank_new(interaction.user, conn, -amount)
@@ -2399,16 +2391,15 @@ class Economy(commands.Cog):
 
             prcntl = round((new_id_lose_amount[0] / new_total) * 100, 1)
 
-            embed = discord.Embed(description=f"## {interaction.user.mention}'s losing slot machine\n"
-                                              f"**\U0000003e** {emoji_outcome[0]} {emoji_outcome[1]} {emoji_outcome[2]} **\U0000003c**\n\n"
-                                              f"\U0000279c You lost {CURRENCY}**{amount:,}** robux \n"
-                                              f"\U0000279c No multiplier accrued due to a lost bet.\n"
-                                              f"\U0000279c Your new `wallet` balance is {CURRENCY}"
-                                              f"**{new_amount_balance[0]:,}**.",
+            embed = discord.Embed(description=f"**\U0000003e** {emoji_outcome[0]} {emoji_outcome[1]} {emoji_outcome[2]} **\U0000003c**\n\n"
+                                              f"**No match!** You've lost {CURRENCY}**{amount:,}** robux.\n"
+                                              f"Your new balance is {CURRENCY} **{new_amount_balance[0]:,}**.",
                                   colour=discord.Color.brand_red())
-            embed.set_footer(text=f"You've lost {prcntl}% of all slots games. ({new_id_lose_amount[0]:,}/{new_total:,})",
+            embed.set_author(name=f"{interaction.user.name}'s losing slot machine",
                              icon_url=interaction.user.display_avatar.url)
-            await interaction.response.send_message(embed=embed) 
+            embed.set_footer(text=f"You've lost {prcntl}% of all slots games.",
+                             icon_url=interaction.user.display_avatar.url)
+            await interaction.response.send_message(embed=embed) # type: ignore
 
     @app_commands.command(name='inventory', description='view your currently owned items.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -3346,9 +3337,9 @@ class Economy(commands.Cog):
         """Bet your robux on a gamble to win or lose robux."""
 
         # --------------- Contains checks before betting i.e. has keycard, meets bet constraints. -------------
-        async with self.client.pool_connection.acquire() as conn: 
+        async with self.client.pool_connection.acquire() as conn: # type: ignore
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered) 
+                return await interaction.response.send_message(embed=self.not_registered) # type: ignore
             conn: asqlite_Connection
             wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
             pmulti = await self.get_pmulti_data_only(interaction.user, conn)
@@ -3363,11 +3354,12 @@ class Economy(commands.Cog):
                 if exponent_amount.lower() in {'max', 'all'}:
                     amount = 100000000 if has_keycard else 50000000
                 else:
-                    return await interaction.response.send_message(embed=ERR_UNREASON) 
+                    return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
 
             if amount == 0:
-                await interaction.response.send_message(embed=ERR_UNREASON) 
+                await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
             if has_keycard:
+                # if the user has a keycard
                 if (amount > 100000000) or (amount < 100000):
                     err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the bet criteria:\n'
                                                                      f'- You wanted to bet {CURRENCY}**{amount:,}**\n'
@@ -3375,17 +3367,17 @@ class Economy(commands.Cog):
                                                                      f'be made\n'
                                                                      f' - A maximum bet of {CURRENCY}**100,000,000** '
                                                                      f'can only be made.')
-                    return await interaction.response.send_message(embed=err) 
+                    return await interaction.response.send_message(embed=err) # type: ignore
                 elif amount > wallet_amt:
                     err = discord.Embed(colour=0x2F3136, description=f'Cannot perform this action, '
-                                                                     f'you only have {CURRENCY}**{wallet_amt:,}**\n'
+                                                                     f'you only have {CURRENCY}**{wallet_amt:,}**.\n'
                                                                      f'You\'ll need {CURRENCY}**{amount - wallet_amt:,}**'
                                                                      f' more in your wallet first.')
-                    return await interaction.response.send_message(embed=err) 
+                    return await interaction.response.send_message(embed=err) # type: ignore
             else:
                 if (amount > 50000000) or (amount < 500000):
                     err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the bet criteria:\n'
-                                                                     f'- You wanted to bet {CURRENCY}**{amount:,}**\n'
+                                                                     f'- You wanted to bet {CURRENCY}**{amount:,}**.\n'
                                                                      f' - A minimum bet of {CURRENCY}**500,000** must '
                                                                      f'be made (this can decrease when you acquire a'
                                                                      f' <:lanyard:1165935243140796487> Keycard).\n'
@@ -3393,20 +3385,20 @@ class Economy(commands.Cog):
                                                                      f'can only be made (this can increase when you '
                                                                      f'acquire a <:lanyard:1165935243140796487> '
                                                                      f'Keycard).')
-                    return await interaction.response.send_message(embed=err) 
+                    return await interaction.response.send_message(embed=err) # type: ignore
                 elif amount > wallet_amt:
                     err = discord.Embed(colour=0x2F3136, description=f'Cannot perform this action, '
-                                                                     f'you only have {CURRENCY}**{wallet_amt:,}**\n'
+                                                                     f'you only have {CURRENCY}**{wallet_amt:,}**.\n'
                                                                      f'You\'ll need {CURRENCY}**{amount - wallet_amt:,}**'
                                                                      f' more in your wallet first.')
-                    return await interaction.response.send_message(embed=err) 
+                    return await interaction.response.send_message(embed=err) # type: ignore
 
             # --------------------------------------------------------
-
+            smulti = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
             badges = set()
             if hyperion_qty:
                 badges.add("<:bot:1195463351338283199>")
-            if pmulti[0] in {0, "0"}:
+            if pmulti[0] > 0:
                 badges.add(PREMIUM_CURRENCY)
             if has_keycard:
                 badges.add("<:lanyard:1165935243140796487>")
@@ -3423,24 +3415,24 @@ class Economy(commands.Cog):
 
                 bet_stuff = await self.get_bank_data_new(interaction.user, conn)
                 id_won_amount, id_lose_amount = bet_stuff[5], bet_stuff[6]
-                amount_after_multi = floor(((SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0] / 100) * amount) + amount)
+                amount_after_multi = floor(((smulti / 100) * amount) + amount)
                 await self.update_bank_new(interaction.user, conn, amount_after_multi, "betwa")
                 new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
                 new_id_won_amount = await self.update_bank_new(interaction.user, conn, 1, "betw")
                 prcntw = round((new_id_won_amount[0]/(id_lose_amount + new_id_won_amount[0]))*100, 1)
 
 
-                embed = discord.Embed(description=f"## {interaction.user.mention}'s winning gambling game\n"
-                                                  f"**You've rolled higher!** You won {CURRENCY}**{amount_after_multi:,}** robux.\n"
+                embed = discord.Embed(description=f"**You've rolled higher!** You won {CURRENCY}**{amount_after_multi:,}** robux.\n"
                                                   f"Your new `wallet` balance is {CURRENCY} **{new_amount_balance[0]:,}**.\n"
                                                   f"You've won {prcntw}% of all games.",
                                       colour=discord.Color.brand_green())
-
+                embed.set_author(name=f"{interaction.user.name}'s winning gambling game",
+                                 icon_url=interaction.user.display_avatar.url)
             elif your_choice[0] == bot_choice[0]:
-                embed = discord.Embed(description=f"## {interaction.user.mention}'s gambling game\n"
-                                                  f"**Tie.** You lost nothing nor gained anything!",
+                embed = discord.Embed(description=f"**Tie.** You lost nothing nor gained anything!",
                                       colour=discord.Color.yellow())
-
+                embed.set_author(name=f"{interaction.user.name}'s gambling game",
+                                 icon_url=interaction.user.display_avatar.url)
             else:
 
                 bet_stuff = await self.get_bank_data_new(interaction.user, conn)
@@ -3453,16 +3445,17 @@ class Economy(commands.Cog):
 
                 prcntl = round((new_id_lose_amount[0]/new_total)*100, 1)
 
-                embed = discord.Embed(description=f"## {interaction.user.mention}'s losing gambling game\n"
-                                                   f"**You've rolled lower!** You lost {CURRENCY}**{amount:,}**.\n"
-                                                   f"Your new balance is {CURRENCY}**{new_amount_balance[0]:,}**.\n"
-                                                   f"You've lost {prcntl}% of all games.",
+                embed = discord.Embed(description=f"**You've rolled lower!** You lost {CURRENCY}**{amount:,}**.\n"
+                                                  f"Your new balance is {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                                                  f"You've lost {prcntl}% of all games.",
                                        colour=discord.Color.brand_red())
+                embed.set_author(name=f"{interaction.user.name}'s losing gambling game",
+                                 icon_url=interaction.user.display_avatar.url)
 
             embed.add_field(name=interaction.user.name, value=f"Rolled `{your_choice[0]}` {''.join(badges)}")
             embed.add_field(name=self.client.user.name, value=f"Rolled `{bot_choice[0]}`")
-            await interaction.response.send_message(embed=embed)
-            
+            await interaction.response.send_message(embed=embed)  # type: ignore
+
             await self.raise_pmulti_warning(interaction, pmulti[0])
 
     @play_blackjack.autocomplete('bet_amount')
