@@ -1166,6 +1166,20 @@ class Economy(commands.Cog):
         repeat = await repeat.get_profile(user_id)
         return repeat
 
+    async def raise_pmulti_warning(self, interaction: discord.Interaction, their_pmulti: int | str):
+        if their_pmulti in {"0", 0}:
+            hook_id = get_profile_key_value(f"{interaction.channel.id} webhook")
+            if hook_id is None:
+                async with self.client.session.get("https://i.imgur.com/3aMsyXI.jpg") as resp:  # type: ignore
+                    avatar_data = await resp.read()
+                hook = await interaction.channel.create_webhook(name='Notify', avatar=avatar_data)
+                modify_profile("update", f"{interaction.channel.id} webhook", hook.id)
+            else:
+                hook = await self.client.fetch_webhook(hook_id)
+
+            await hook.send(f"Hey {interaction.user.display_name}! We noticed you have not set a personal "
+                            f"multiplier. You should set one up now and increase your returns!")
+    
     @staticmethod
     def calculate_hand(hand):
         aces = hand.count(11)
@@ -2254,18 +2268,8 @@ class Economy(commands.Cog):
 
             await interaction.response.send_message(f"I am thinking of a number. Guess what it is. **{hint}!**", 
                                                     view=HighLow(interaction, self.client))
-            if pmulti[0] in {"0", 0}:
-            hook_id = get_profile_key_value(f"{interaction.channel.id} webhook")
-            if hook_id is None:
-                async with self.client.session.get("https://i.imgur.com/3aMsyXI.jpg") as resp: # type: ignore
-                    avatar_data = await resp.read()
-                hook = await interaction.channel.create_webhook(name='Notify', avatar=avatar_data)
-                modify_profile("update", f"{interaction.channel.id} webhook", hook.id)
-            else:
-                hook = await self.client.fetch_webhook(hook_id)
-
-            await hook.send(f"Hey {interaction.user.display_name}! We noticed you have not set a personal "
-                            f"multiplier. You should set one up now and increase your returns!")
+            pmulti = await self.get_pmulti_data_only(interaction.user, conn)
+            await self.raise_pmulti_warning(interaction, pmulti[0])
             
     @app_commands.command(name='slots',
                           description='try your luck on a slot machine.')
@@ -3330,19 +3334,7 @@ class Economy(commands.Cog):
                     "your deck or **Forfeit** to end your hand prematurely, sacrificing half of your original bet.",
             embed=start, view=my_view)
         my_view.message = await interaction.original_response()
-        
-        if pmulti[0] in {"0", 0}:
-        hook_id = get_profile_key_value(f"{interaction.channel.id} webhook")
-        if hook_id is None:
-            async with self.client.session.get("https://i.imgur.com/3aMsyXI.jpg") as resp: # type: ignore
-                avatar_data = await resp.read()
-            hook = await interaction.channel.create_webhook(name='Notify', avatar=avatar_data)
-            modify_profile("update", f"{interaction.channel.id} webhook", hook.id)
-        else:
-            hook = await self.client.fetch_webhook(hook_id)
-
-        await hook.send(f"Hey {interaction.user.display_name}! We noticed you have not set a personal "
-                        f"multiplier. You should set one up now and increase your returns!")
+        await self.raise_pmulti_warning(interaction, pmulti[0])
 
     @app_commands.command(name="bet",
                           description="bet your robux on a dice roll.")
@@ -3413,7 +3405,7 @@ class Economy(commands.Cog):
 
             badges = set()
             if hyperion_qty:
-                badges.add("<:DroneCrisisXT:1171491512828297227>")
+                badges.add("<:bot:1195463351338283199>")
             if pmulti[0] in {0, "0"}:
                 badges.add(PREMIUM_CURRENCY)
             if has_keycard:
@@ -3469,20 +3461,9 @@ class Economy(commands.Cog):
 
             embed.add_field(name=interaction.user.name, value=f"Rolled `{your_choice[0]}` {''.join(badges)}")
             embed.add_field(name=self.client.user.name, value=f"Rolled `{bot_choice[0]}`")
-            await interaction.response.send_message(embed=embed)  
-
-            if pmulti[0] in {"0", 0}:
-                hook_id = get_profile_key_value(f"{interaction.channel.id} webhook")
-                if hook_id is None:
-                    async with self.client.session.get("https://i.imgur.com/3aMsyXI.jpg") as resp:
-                        avatar_data = await resp.read()
-                    hook = await interaction.channel.create_webhook(name='Notify', avatar=avatar_data)
-                    modify_profile("update", f"{interaction.channel.id} webhook", hook.id)
-                else:
-                    hook = await self.client.fetch_webhook(hook_id)
-
-                await hook.send(f"Hey {interaction.user.display_name}! We noticed you have not set a personal "
-                                f"multiplier. You should set one up now and increase your returns!") 
+            await interaction.response.send_message(embed=embed)
+            
+            await self.raise_pmulti_warning(interaction, pmulti[0])
 
     @play_blackjack.autocomplete('bet_amount')
     @bet.autocomplete('exponent_amount')
