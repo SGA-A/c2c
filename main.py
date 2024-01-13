@@ -541,20 +541,27 @@ async def requirements_for_cogs(ctx: commands.Context):
 @client.tree.command(name='help', description='help command for c2c, outlines all categories of commands.',
                      guilds=[Object(id=829053898333225010), Object(id=780397076273954886)])
 async def help_command(interaction: Interaction):
+    epicker = choice(["<:githubB:1195500626382164119>",
+                      "<:githubBF:1195498685296021535>", "<:githubW:1195499565508460634>"])
+
     embed = Embed(title='Help Menu for c2c',
                   description=f'```fix\n[Patch #26]\n'
                               f'- More commands interacting with API Interfaces\n'
                               f'- Major performance improvements\n'
                               f'- Databases have fully replaced json```\n'
-                              f'Use this dropdown to find a command based on its category. '
                               f'A few things to note:\n'
                               f'- This help command does not display uncategorized commands.\n'
                               f'- The prefix for this bot is `>` (for text commands)\n'
                               f'- Not all categories are accessible to everyone, check the details prior.',
                   colour=Colour.from_rgb(138, 175, 255))
-    embed.add_field(name='Feedback System',
-                    value=f'We have a feedback system! Use the </feedback:1179817617767268353> command to help '
-                          f'improve this experience.')
+    embed.add_field(name="Who are you?",
+                    value=f"I'm a bot made by Splint#6019 and Geo#2181. I've been on Discord since <t:1669831154:f> "
+                          f"and joined {interaction.guild.name} on {format_dt(interaction.guild.me.joined_at, style="f")}.\n\n"
+                          f"I have a variety of features such as an advanced economy system, moderation, debugging "
+                          f"tools and some other random features that may aid you in this journey. "
+                          f"You can get more information on my commands by using the dropdown below.\n\n"
+                          f"I'm also open source. You can see my code on {epicker} [Github](https://github.com/SGA-A/c2c).", inline=False)
+    
     my_view = Select()
     await interaction.response.send_message(embed=embed, view=my_view, ephemeral=True) 
     my_view.message = await interaction.original_response()

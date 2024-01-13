@@ -18,8 +18,8 @@ class SlashExceptionHandler(commands.Cog):
     async def get_app_command_error(self, interaction: Interaction,
                                     error: AppCommandError):
 
-        if not interaction.response.is_done(): 
-            await interaction.response.defer(thinking=True) 
+        if not interaction.response.is_done(): # type: ignore
+            await interaction.response.defer(thinking=True) # type: ignore
 
         if isinstance(error, CheckFailure):
             exception = Embed(title='Exception', colour=Colour.dark_embed())

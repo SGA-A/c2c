@@ -914,36 +914,37 @@ class UpdateInfo(discord.ui.Modal, title='Update your Profile'):
         style=discord.TextStyle.paragraph,
         label='Bio',
         required=False,
-        placeholder="Insert your bio here.. (Leave blank to remove your existent bio)"
+        placeholder="Insert your bio here.. (type 'delete' to remove your existent bio)."
     )
 
     async def on_submit(self, interaction: discord.Interaction):
 
-        if self.bio.value is None:
+        if self.bio.value == "delete":
             res = modify_profile("delete", f"{interaction.user.id} bio", "placeholder")
-            if res:
-                return await interaction.response.send_message( 
-                    embed=f'Your bio has been removed, {interaction.user.name}.\n'
-                          f'The changes have taken effect immediately.'
-                )
-            else:
-                return await interaction.response.send_message( 
-                    embed=membed("You don't have a bio yet. Add one first."))
+            if res == 0:
+                return await interaction.response.send_message(  
+                    embed=membed("<:warning_nr:1195732155544911882> You don't have a bio yet. Add one first."))
 
-        phrases = "added your new" if get_profile_key_value(f"{interaction.user.id} bio") is None else "created your new"
+            else:
+                return await interaction.response.send_message(  
+                    embed=membed(f'## <:trim:1195732275283894292> Your bio has been removed.\n'
+                                 f'The changes have taken effect immediately.'))
+
+
+        phrases = "updated your" if get_profile_key_value(f"{interaction.user.id} bio") is not None else "created a new"
         modify_profile("update", f"{interaction.user.id} bio", self.bio.value)
 
         return await interaction.response.send_message( 
             embed=membed(
-                f"Successfully {phrases} bio to: \n"
-                f"> {self.bio.value}\n"
-                f"- The changes have taken effect immediatley.\n\n"
-                f"{FEEDBACK_GLOBAL}"))
+                f"## <:overwrite:1195729262729240666> Successfully {phrases} bio.\n"
+                f"It is now:\n"
+                f"> {self.bio.value or 'Empty: It should be removed, no input was given.'}\n"
+                f"The changes have taken effect immediatley."))
 
     async def on_error(self, interaction: discord.Interaction, error):
 
         return await interaction.response.send_message( 
-            embed=membed(f"An error occured.\n\n> {error.__cause__}"))
+            embed=membed(f"Something went wrong.\n\n> {error.__cause__}"))
 
 
 class DropdownLB(discord.ui.Select):
@@ -1532,7 +1533,7 @@ class Economy(commands.Cog):
 
                 embed = discord.Embed(
                     title='Transaction Complete',
-                    description=f'- {inter_user.mention} has given {other.mention} \U000023e3 {real_amount:,}\n'
+                    description=f'- <:share_robux:1195762943976030302> {inter_user.mention} has given {other.mention} \U000023e3 {real_amount:,}\n'
                                 f'- {inter_user.mention} now has \U000023e3 {host_amt[0]:,} in their wallet.\n'
                                 f'- {other.mention} now has \U000023e3 {recp_amt[0]:,} in their wallet.',
                     colour=0x2F3136)
@@ -1568,7 +1569,7 @@ class Economy(commands.Cog):
                     item_name = " ".join(item_name.split("_"))
                     transaction_success = discord.Embed(
                         title="Transaction Complete",
-                        description=f'- {primm} has given **{amount}** {make_plural(item_name, amount)}\n'
+                        description=f'- <:share_item:1195762925340737636> {primm} has given **{amount}** {make_plural(item_name, amount)}\n'
                                     f'- {primm} now has **{sender[0]}** {make_plural(item_name, sender[0])}\n'
                                     f'- {username.mention} now has **{receiver[0]}** {make_plural(item_name, receiver[0])}',
                         colour=primm.colour)
@@ -1649,7 +1650,7 @@ class Economy(commands.Cog):
                     description=f"# About Item: {name} {item['emoji']}\n"
                                 f"{ARROW}{item["info"]}\n"
                                 f"{ARROW}**[Stock Status]**: {stock_resp}\n"
-                                f"{ARROW}**{owned_by_how_many}** {make_plural("person", owned_by_how_many)} "
+                                f"{ARROW} <:owned_by:1195764764551426188> **{owned_by_how_many}** {make_plural("person", owned_by_how_many)} "
                                 f"{plural_for_own(owned_by_how_many)} this item.",
                     colour=clr
                 )
@@ -1672,34 +1673,34 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message( 
-                    embed=membed("You cannot use this command until you register."))
+                    embed=membed("<:warning_nr:1195732155544911882> You cannot use this command until you register."))
             await interaction.response.send_modal(UpdateInfo()) 
 
     @profile.command(name='avatar', description='change your profile avatar.')
-    @app_commands.describe(url='The url of the new avatar. Leave blank to remove.')
+    @app_commands.describe(url='the url of the new avatar. leave blank to remove.')
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def update_avatar_profile(self, interaction: discord.Interaction, url: Optional[str]):
 
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
+
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message( 
-                    embed=membed('You cannot use this command until you register.'))
+                    embed=membed('<:warning_nr:1195732155544911882> You cannot use this command until you register.'))
 
         if url is None:
             res = modify_profile("delete", f"{interaction.user.id} avatar_url", url)
             match res:
                 case 0:
-                    res = "No custom avatar was found under your account."
+                    res = "<:warning_nr:1195732155544911882> No custom avatar was found under your account."
                 case _:
-                    res = "Your custom avatar was removed."
-            result = discord.Embed(colour=0x2F3136, description=res)
-            return await interaction.response.send_message(embed=result) 
+                    res = "<:overwrite:1195729262729240666> Your avatar was removed."
+            return await interaction.response.send_message(embed=membed(res)) 
 
         successful = discord.Embed(colour=0x2B2D31,
-                                   description=f"Your custom avatar has been added.\n"
-                                               f"If valid, it will look like this ----->\n"
-                                               f"If you can't see it, change it!")
+                                   description=f"## <:overwrite:1195729262729240666> Your custom has been added.\n"
+                                               f"- If valid, it will look like this ----->\n"
+                                               f"- If you can't see it, change it!")
         successful.set_thumbnail(url=url)
         modify_profile("update", f"{interaction.user.id} avatar_url", url)
         await interaction.response.send_message(embed=successful) 
@@ -1709,7 +1710,7 @@ class Economy(commands.Cog):
         modify_profile("delete", f"{interaction.user.id} avatar_url", "who cares")
         return await interaction.response.send_message( 
             embed=membed(
-                f"The avatar url requested for could not be added:\n"
+                f"<:warning_nr:1195732155544911882> The avatar url requested for could not be added:\n"
                 f"- The URL provided was not well formed.\n"
                 f"- Discord embed thumbnails have specific image requirements to "
                 f"ensure proper display.\n"
@@ -1728,7 +1729,10 @@ class Economy(commands.Cog):
                     embed=membed("You cannot use this command until you register."))
 
         modify_profile("update", f"{interaction.user.id} vis", mode)
-        await interaction.response.send_message(f"Your profile is now {mode}.", ephemeral=True, delete_after=7.5) 
+        cemoji = {"private": "<:privatee:1195728566919385088>",
+                  "public": "<:publice:1195728479715590205>"}
+        cemoji = cemoji.get(mode)
+        await interaction.response.send_message(f"{cemoji} Your profile is now {mode}.", ephemeral=True, delete_after=7.5) 
 
     slay = app_commands.Group(name='slay', description='manage your slay.',
                               guild_only=True,
@@ -2183,7 +2187,7 @@ class Economy(commands.Cog):
             procfile.description = (f"### {user.name}'s Profile - [{tatsu.title or 'No title set'}](https://tatsu.gg/profile)\n"
                                     f"{note}"
                                     f"{PRESTIGE_EMOTES.setdefault(user_data[-1], "")} Prestige Level **{user_data[-1]}**\n"
-                                    f"Bounty: \U000023e3 **{user_data[-2]:,}**\n"
+                                    f"<:bountybag:1195653667135692800> Bounty: \U000023e3 **{user_data[-2]:,}**\n"
                                     f"{their_badges}")
 
             procfile.add_field(name='Robux',
@@ -2641,14 +2645,16 @@ class Economy(commands.Cog):
                 return m.content.lower() == selected_word.lower() and m.channel == interaction.channel and m.author == interaction.user
 
             await interaction.followup.send(
-                f"What is the word?\nReplace the blanks \U0000279c [`{hidden_word}`](https://www.sss.com)")
+                embed=membed(
+                    f"## <:worke:1195716983384191076> What is the word?\n"
+                    f"Replace the blanks \U0000279c [`{hidden_word}`](https://www.sss.com)."))
 
             my_msg = await interaction.channel.send("Waiting for correct input..")
 
             try:
                 await self.client.wait_for('message', check=check, timeout=15.0)
             except asyncTE:
-                await interaction.followup.send(f"`BOSS`: Too slow, you get nothing for the attitude. I expect better "
+                await interaction.followup.send(f"`BOSS`: Too slow, you got nothing for the attitude. I expect better "
                                                 f"of you next time.")
             else:
                 salary = words.get(job_val)[-1]
@@ -2718,12 +2724,12 @@ class Economy(commands.Cog):
                 balance = discord.Embed(color=0x2F3136, timestamp=discord.utils.utcnow())
                 balance.set_author(name=f"{user.name}'s balance", icon_url=user.display_avatar.url)
 
-                balance.add_field(name="Wallet", value=f"\U000023e3 {new_data[1]:,}", inline=True)
-                balance.add_field(name="Bank", value=f"\U000023e3 {new_data[2]:,}", inline=True)
-                balance.add_field(name="Job", value=f"{job_val}", inline=True)
-                balance.add_field(name="Bank Net", value=f"\U000023e3 {bank:,}", inline=True)
-                balance.add_field(name="Inventory Net", value=f"\U000023e3 {inv:,}", inline=True)
-                balance.add_field(name="Total Net", value=f"\U000023e3 {inv+bank:,}", inline=True)
+                balance.add_field(name="<:walleten:1195719280898097192> Wallet", value=f"\U000023e3 {new_data[1]:,}", inline=True)
+                balance.add_field(name="<:banken:1195708938734288967> Bank", value=f"\U000023e3 {new_data[2]:,}", inline=True)
+                balance.add_field(name="<:joben:1195709539853553664> Job", value=f"{job_val}", inline=True)
+                balance.add_field(name="<:netben:1195710007233228850> Money Net", value=f"\U000023e3 {bank:,}", inline=True)
+                balance.add_field(name="<:netinven:1195711122343481364> Inventory Net", value=f"\U000023e3 {inv:,}", inline=True)
+                balance.add_field(name="<:nettotalen:1195710560910725180> Total Net", value=f"\U000023e3 {inv+bank:,}", inline=True)
 
                 if user.id in {992152414566232139, 546086191414509599}:
                     balance.set_footer(icon_url='https://cdn.discordapp.com/emojis/1174417902980583435.webp?size=128&'

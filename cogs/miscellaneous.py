@@ -134,20 +134,20 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
         channel = interaction.guild.get_channel(1122902104802070572)
         embed = discord.Embed(title=f'New Feedback: {self.fb_title.value or "Untitled"}',
                               description=self.message.value, colour=0x2F3136)
-        embed.set_author(name=interaction.user.name, 
+        embed.set_author(name=interaction.user.name,
                          icon_url=interaction.user.display_avatar.url)
 
         await channel.send(embed=embed)
         success = discord.Embed(colour=0x2F3136,
-                                description=f"- Your response has been submitted.\n"
-                                            f" - Developers will consider your feedback accordingly within a few days.\n"
-                                            f" - From there, compensation will be decided upfront.\n\n"
+                                description=f"## <:dispatche:1195745709463441429> Your response has been submitted.\n"
+                                            f"- Developers will consider your feedback accordingly within a few days.\n"
+                                            f"- From there, compensation will be decided upfront.\n\n"
                                             f"You may get a unique badge or other type of reward based on how "
                                             f"constructive and thoughtful your feedback is.")
         await interaction.response.send_message(embed=success, ephemeral=True) 
 
     async def on_error(self, interaction: discord.Interaction, error):
-        return await interaction.response.send_message(f"we had trouble processing your feedback, try again later.") 
+        return await interaction.response.send_message(f"<:warning_nr:1195732155544911882> Something went wrong.") 
 
 
 class InviteButton(discord.ui.View):
@@ -174,6 +174,7 @@ class InviteButton(discord.ui.View):
 
         self.add_item(discord.ui.Button(
             label="Invite Link",
+            emoji="<:addbote:1195744267872768100>",
             url=discord.utils.oauth_url(self.client.user.id, permissions=perms)))
 
 
@@ -219,17 +220,17 @@ class Miscellaneous(commands.Cog):
 
         try:
             result = eval(expression) or "Invalid"
-            await ctx.reply(f'**{ctx.author.name}**, the result is `{result}`', mention_author=False)
+            await ctx.reply(f'<:resultce:1195746711495249931> **{ctx.author.name}**, the result is `{result}`', mention_author=False)
         except Exception as e:
-            await ctx.reply(f'**Error:** {str(e)}', mention_author=False)
+            await ctx.reply(f'<:warning_nr:1195732155544911882> **Error:** {str(e)}', mention_author=False)
 
     @commands.command(name='ping', description='checks latency of the bot.')
     async def ping(self, ctx):
         start = perf_counter()
-        message = await ctx.send("Ping...")
+        message = await ctx.send("<:latencye:1195741921482641579> Ping...")
         end = perf_counter()
         duration = (end - start) * 1000
-        await message.edit(content='REST: {0:.2f}ms **\U0000007c** '
+        await message.edit(content='<:latencye:1195741921482641579> REST: {0:.2f}ms **\U0000007c** '
                                    'WS: {1} ms'.format(duration, round(self.client.latency * 1000)))
 
     @app_commands.command(name='bored', description="find something to do.")
@@ -251,7 +252,7 @@ class Miscellaneous(commands.Cog):
                 await interaction.response.send_message( 
                     embed=membed("An unsuccessful request was made. Try again later."))
 
-    @app_commands.command(name='kona', description='retrieve nsfw images from konachan.')
+    @app_commands.command(name='kona', description='retrieve nsfw posts from konachan.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.check(was_called_in_a_nsfw_channel)
     @app_commands.describe(tags='the tags to base searches upon', page='the page to look through under a tag')
@@ -264,15 +265,6 @@ class Miscellaneous(commands.Cog):
 
         tagviewing = ', '.join(tags.split(' '))
 
-        embed = discord.Embed(title='Results',
-                              description=f'- Retrieval is based on the following filters:\n'
-                                          f' - **Tags**: {tagviewing}\n'
-                                          f' - **Page**: {page}\n\n',
-                              colour=discord.Colour.from_rgb(255, 233, 220))
-
-        embed.set_author(icon_url=interaction.user.display_avatar.url, name=interaction.user.name,
-                         url=interaction.user.display_avatar.url)
-
         posts_xml = await self.retrieve_via_kona(tags=tags, limit=3, page=page, mode="image", tag_pattern=None) 
 
         if isinstance(posts_xml, int):
@@ -282,20 +274,20 @@ class Miscellaneous(commands.Cog):
                              f"`{posts_xml}`: {rmeaning.setdefault(posts_xml, "the cause of the error is not known")}."
                              f"\nYou should try again later to see if the service improves."))
 
-          if len(posts_xml) == 0:
-            await interaction.response.defer(thinking=True, ephemeral=True)
-            tagsearch = self.client.tree.get_app_command(
-                'tagsearch', guild=discord.Object(id=interaction.guild.id)) 
+        if len(posts_xml) == 0:
+            await interaction.response.defer(thinking=True, ephemeral=True) 
+            tagsearch = self.client.tree.get_app_command( 
+                'tagsearch', guild=discord.Object(id=interaction.guild.id))
 
-            # You can use the below code to make a given command mentionable, even if they are out of sync
+            """You can use the below code to make your commands mentionable, even if they are out of sync"""
             if tagsearch is None:
-                await self.client.tree._update_cache(
+                await self.client.tree._update_cache( 
                     await self.client.tree.fetch_commands(
                         guild=discord.Object(id=interaction.guild.id)), guild=discord.Object(id=interaction.guild.id))
-                tagsearch = self.client.tree.get_app_command(
-                    'tagsearch', guild=discord.Object(id=interaction.guild.id)) 
-            
-            return await interaction.followup.send(
+                tagsearch = self.client.tree.get_app_command( 
+                    'tagsearch', guild=discord.Object(id=interaction.guild.id))
+
+            return await interaction.followup.send(  
                 embed=membed(f"## No posts found.\n"
                              f"- There are a few known causes:\n"
                              f" - Entering an invalid tag name.\n"
@@ -317,8 +309,17 @@ class Miscellaneous(commands.Cog):
                                   f'- Tags: {result['tags']}')
             attachments.add(f"**[{tindex}]**\n{result['jpeg_url']}")
 
+        embed = discord.Embed(title='Results',
+                              description=f'- Retrieval is based on the following filters:\n'
+                                          f' - **Tags**: {tagviewing}\n'
+                                          f' - **Page**: {page}\n\n',
+                              colour=discord.Colour.from_rgb(255, 233, 220))
+
+        embed.set_author(icon_url=interaction.user.display_avatar.url, name=interaction.user.name)
         embed.description += "\n\n".join(descriptionerfyrd)
-        await interaction.channel.send(content=f"__Attachments for {interaction.user.mention}__\n\n" + "\n".join(attachments))
+        await interaction.channel.send(content=f"__Attachments "
+                                               f"for {interaction.user.mention}__\n\n" + "\n".join(attachments),
+                                       delete_after=30.0)
         await interaction.response.send_message(embed=embed) 
 
     @app_commands.command(name='tagsearch', description='retrieve tags from konachan.')
@@ -328,7 +329,6 @@ class Miscellaneous(commands.Cog):
     async def tag_fetch(self, interaction: discord.Interaction, tag_pattern: str):
 
         embed = discord.Embed(title='Results', colour=discord.Colour.dark_embed())
-        embed.set_footer(text="Some tags here don't have any posts.")
         embed.set_author(icon_url=interaction.user.display_avatar.url, name=interaction.user.name,
                          url=interaction.user.display_avatar.url)
 
@@ -339,14 +339,14 @@ class Miscellaneous(commands.Cog):
             return await interaction.response.send_message(  
                 embed=membed(f"The [konachan website](https://konachan.net/help) returned an erroneous status code of "
                              f"`{tags_xml}`: {rmeaning.setdefault(tags_xml, "the cause of the error is not known")}."
-                             f"\nYou should try again later to see if the service improves."))
+                             f"\nYou should try again later to see if the service improves."), ephemeral=True)
 
-          if len(tags_xml) == 0:
-            return await interaction.response.send_message(
+        if len(tags_xml) == 0:
+
+            return await interaction.response.send_message(  
                 embed=membed(f"## No tags found.\n"
                              f"- There is only one known cause:\n"
-                             f" - No matching tags exist yet under the given tag pattern.\n"
-                             f"- You can find a tag of your choice [on the website.](https://konachan.net/tag)"))
+                             f" - No matching tags exist yet under the given tag pattern."), ephemeral=True)
 
         type_of_tag = {
             0: "`general`",
@@ -361,7 +361,7 @@ class Miscellaneous(commands.Cog):
         for result in tags_xml:
             descriptionerfyrd.add(f'{pos}. '
                                   f'{result['name']} ({type_of_tag.setdefault(int(result['tag_type']), "Unknown Tag Type")})')
-
+        embed.set_footer(text="Some tags here don't have any posts.")
         embed.description = "\n".join(descriptionerfyrd)
         await interaction.response.send_message(embed=embed)  
 
@@ -452,11 +452,11 @@ class Miscellaneous(commands.Cog):
 
         maximum_uses = abs(maximum_uses)
         invite_lifespan = invite_lifespan * 86400
-      
+
         generated_invite = await interaction.channel.create_invite(
-          reason=f'Creation requested by {interaction.user.name}', 
-          max_age=day_to_sec, max_uses=maximum_uses)
-      
+            reason=f'Creation requested by {interaction.user.name}',
+            max_age=invite_lifespan, max_uses=maximum_uses)
+
         match maximum_uses:
             case 0:
                 maxim_usage = "No limit to maximum usage"
@@ -487,7 +487,7 @@ class Miscellaneous(commands.Cog):
                     if isinstance(thing, list):
                         unique_colour = return_random_color()
                         the_result = discord.Embed(title=f'Define: {choicer.lower()}',
-                                                   description=f'This shows all the available definitions for the word {choicer}.',
+                                                   description=f'<:dictionarye:1195748221994160220> This shows all the available definitions for the word {choicer}.',
                                                    colour=unique_colour)
                         for x in range(0, len(thing)):
                             if "(" in thing[x]:
@@ -543,7 +543,7 @@ class Miscellaneous(commands.Cog):
         answer = ''
         for letter in commons:
             answer = answer + letter + ' '
-            
+          
         answer = answer[:-1]
 
         await interaction.response.send_message(embed=membed(f'The most common letter is {answer}.')) 
@@ -579,17 +579,14 @@ class Miscellaneous(commands.Cog):
                     if str(activity).lower() == "spotify":
                         found_spotify = True
                         embed = discord.Embed(
-                            title=f"{username.name}'s Spotify",
+                            title=f"{username.name}'s on Spotify <:spotifya:1195655823834230875>",
                             description=f"Listening to {activity.title}",
                             color=activity.colour)
-                        duration = str(activity.duration)
-                        final_duration = duration[3:7]
                         embed.set_thumbnail(url=activity.album_cover_url)
-                        embed.set_author(name=username.name, 
-                                         icon_url=username.display_avatar.url)
+                        embed.set_author(name=username.name, icon_url=username.display_avatar.url)
                         embed.add_field(name="Artist", value=activity.artist)
                         embed.add_field(name="Album", value=activity.album)
-                        embed.add_field(name="Song Duration", value=final_duration)
+                        embed.add_field(name="Song Duration", value=str(activity.duration)[3:7])
                         embed.set_footer(text="Song started at {}".format(activity.created_at.strftime("%H:%M %p")))
                         embed.url = f"https://open.spotify.com/embed/track/{activity.track_id}"
                         return await ctx.send(embed=embed)
@@ -614,7 +611,7 @@ class Miscellaneous(commands.Cog):
         lentxt = len(self.client.commands)
         amount += (lenslash+lentxt)
 
-        username = 'YOUR_USER_NAME'
+        username = 'SGA-A'
         token = 'youshallnotpass'
         repository_name = 'c2c'
 
@@ -665,18 +662,18 @@ class Miscellaneous(commands.Cog):
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
 
-        embed.add_field(name='Members', value=f'{total_members} total\n{total_unique} unique')
-        embed.add_field(name='Channels', value=f'{text + voice} total\n{text} text\n{voice} voice')
-        embed.add_field(name='Process', value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU')
-        embed.add_field(name='Guilds',
+        embed.add_field(name='<:membersb:1195752573555183666> Members', value=f'{total_members} total\n{total_unique} unique')
+        embed.add_field(name='<:channelb:1195752572116541590> Channels', value=f'{text + voice} total\n{text} text\n{voice} voice')
+        embed.add_field(name='<:processb:1195752570069713047> Process', value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU')
+        embed.add_field(name='<:serversb:1195752568303927377> Guilds',
                         value=f'{guilds} total\n'
                               f'{ARROW}{len(self.client.emojis)} emojis\n'
                               f'{ARROW}{len(self.client.stickers)} stickers')
-        embed.add_field(name='Commands',
+        embed.add_field(name='<:cmdsb:1195752574821879872> Commands',
                         value=f'{amount} total\n'
                               f'{ARROW}{lentxt} (prefix)\n'
                               f'{ARROW}{lenslash} (slash)')
-        embed.add_field(name='Uptime',
+        embed.add_field(name='<:uptimeb:1195752565208522812> Uptime',
                         value=f"{int(days)}d {int(hours)}h "
                               f"{int(minutes)}m {int(seconds)}s")
         embed.set_footer(text=f'Made with discord.py v{discord.__version__}', icon_url='http://i.imgur.com/5BFecvA.png')
@@ -740,7 +737,7 @@ class Miscellaneous(commands.Cog):
                  "R - returns the relative time since now"] = None) -> None:
         speca = spec[0] if spec else None
         format_dtime = discord.utils.format_dt(datetime.datetime.now(), style=speca)
-        embed = discord.Embed(description=f'## Timestamp Conversion\n{format_dtime}\n'
+        embed = discord.Embed(description=f'## <:watchb:1195754643209334906> Timestamp Conversion\n{format_dtime}\n'
                                           f'- The epoch time in this format is: `{format_dtime}`',
                               colour=return_random_color())
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
