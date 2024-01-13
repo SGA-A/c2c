@@ -1,85 +1,84 @@
 from traceback import print_exception
-from discord import Embed, Colour
+from discord import Embed, Interaction, Colour
 from discord.ext import commands
-from discord.ext.commands import errors
+from discord.app_commands import AppCommandError, CheckFailure, MissingRole, MissingPermissions
+from discord.app_commands import CommandOnCooldown, CommandNotFound, CommandAlreadyRegistered, CommandInvokeError
 
 
-def membed(custom_description: str) -> Embed:
-    """Quickly create an embed with a custom description using the preset."""
-    membedder = Embed(colour=Colour.dark_embed(),
-                           description=custom_description)
-    return membedder
-
-
-class ContextCommandHandler(commands.Cog):
+class SlashExceptionHandler(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
+        client.tree.error(coro=self.__dispatch_to_app_command_handler)
 
-    @commands.Cog.listener()
-    async def on_command_error(self, ctx: commands.Context, err: Exception):
+    async def __dispatch_to_app_command_handler(self, interaction: Interaction,
+                                                error: AppCommandError):
+        self.client.dispatch("app_command_error", interaction, error)
 
-        if isinstance(err, errors.UserInputError):
+    @commands.Cog.listener("on_app_command_error")
+    async def get_app_command_error(self, interaction: Interaction,
+                                    error: AppCommandError):
 
-            if isinstance(err, errors.MissingRequiredArgument):
-                print_exception(type(err), err, err.__traceback__)
-                await ctx.reply(
-                    embed=membed(f"## A required argument is missing.\n"
-                                 f"- `{err.param.name}` of type **`{err.param.kind}`**."), mention_author=False)
+        if not interaction.response.is_done(): # type: ignore
+            await interaction.response.defer(thinking=True) # type: ignore
 
-            elif isinstance(err, errors.BadArgument):
-                print_exception(type(err), err, err.__traceback__)
-                await ctx.reply(
-                    embed=membed("## Bad arguments were encountered:\n"
-                                 "A parsing or conversion failure has been encountered on an argument "
-                                 "to pass into the command. The errors that occur to make this happen are entirely due "
-                                 "to Discord limitations. Meaning you are attempting to do something that is not possible "
-                                 "under the limits of the API. Check what your inputs are, and try again."))
+        if isinstance(error, CheckFailure):
+            exception = Embed(title='Exception', colour=Colour.dark_embed())
+            exception.set_thumbnail(url="https://i.imgur.com/zGtq4Dp.png")
+            if isinstance(error, MissingRole):  # when a user has a missing role
+
+                exception.description = f'{interaction.user.name}, you are missing a role.'
+
+                exception.add_field(name='Required Role', value=f"<@&{error.missing_role}>", inline=False)
+
+            elif isinstance(error, MissingPermissions):  # when a user has missing permissions
+
+                exception.description = (f"{interaction.user.name}, you're missing "
+                                         f"some permissions required to use this command.")
+                exception.add_field(name='Required permissions',
+                                    value=', '.join(error.missing_permissions).title())
+
+            elif isinstance(error, CommandOnCooldown):  # when the command a user executes is on cooldown
+                exception.description = (f"{interaction.user.name}, you're on cooldown to avoid overloading the bot.\n"
+                                         f"Try again after **{error.retry_after:.2f}** seconds.")
             else:
-                params = ctx.command.params
-                await ctx.reply(f"Some inputs we've received from you aren't valid forms of input.\n"
-                                f"We expect these arguments from you when calling this command: {', '.join(params.keys())}")
+                exception.description = "Conditions needed to call this command were not met."
 
-        elif isinstance(err, errors.CheckFailure):
+            return await interaction.followup.send(embed=exception)
 
-            if isinstance(err, errors.NotOwner):
-                await ctx.reply(f"You are not the owner of this bot.", mention_author=False)
+        if isinstance(error, CommandNotFound):
+            content = Embed(
+                description=f"The commmand with name {error.name} was not found.\n"
+                            f"It may have been recently removed or replaced with an alternative.",
+            colour=Colour.dark_embed())
+            content.set_thumbnail(url="https://i.imgur.com/zGtq4Dp.png")
 
-            elif isinstance(err, errors.MissingPermissions):
+            return await interaction.followup.send(content)
 
-                errorc = Embed(
-                    description=f"You're missing some permissions required to use this command.", colour=0x2F3136)
-                errorc.add_field(name='Required permissions',
-                                    value=', '.join(err.missing_permissions), inline=False)
-                await ctx.reply(embed=errorc, mention_author=False)
+        if isinstance(error, CommandAlreadyRegistered):
 
-            elif isinstance(err, errors.MissingRole):
+            content = Embed(
+                description=f"{interaction.user.name}, this command is registered already?\n"
+                            f"This is an issue with the bot, usually resolving itself within a few minutes.",
+            colour=Colour.dark_embed())
+            content.set_thumbnail(url="https://i.imgur.com/zGtq4Dp.png")
+            return await interaction.followup.send(content)
 
-                exception = Embed(description=f'## You are missing a role.', colour=0x2F3136)
-                exception.add_field(name='Required Role', value=f"<@&{err.missing_role}>", inline=False)
-                await ctx.reply(embed=exception, mention_author=False)
+        if isinstance(error, CommandInvokeError):
 
-            elif isinstance(err, errors.NoPrivateMessage):
-                embed = membed(
-                    f"<:warningYellow:1159512635218342009> Do not send private messages to me.\n"
-                    f"Use my commands in a server, for example in {ctx.author.mutual_guilds[0].name}.")
-                msg = await ctx.send(embed=embed)
-                await msg.delete(delay=15.0)
-                return
-            else:
-                await ctx.reply(f"You have not met a prerequisite before executing this command.")
+            print_exception(type(error), error, error.__traceback__)
 
-        elif isinstance(err, errors.CommandOnCooldown):
-            exception = membed(f"You're on cooldown to avoid overloading the bot.\n"
-                               f"Try again after **{err.retry_after:.2f}** seconds.")
-            await ctx.reply(embed=exception)
-
-        elif isinstance(err, errors.CommandNotFound):
-            await ctx.reply(f"The command requested for was not found.", mention_author=False)
+            return await interaction.followup.send(
+                embed=Embed(description=f"An invalid process took place for this command.\n"
+                                        f"50% chance its a issue on your end, 50% chance on our end.\n"
+                                        f"**The bot developers were notified.** "
+                                        f"[See their progress.](https://github.com/SGA-A/c2c/issues)",
+                            colour=Colour.dark_embed()).set_thumbnail(url="https://i.imgur.com/zGtq4Dp.png"))
 
         else:
-            await ctx.reply(f"Something went wrong. The developers have been notified.")
-            print_exception(type(err), err, err.__traceback__)
+            print_exception(type(error), error, error.__traceback__)
+            cause = error.__cause__ or error
+            return await interaction.followup.send(cause)
 
 
-async def setup(client):
-    await client.add_cog(ContextCommandHandler(client))
+async def setup(client: commands.Bot):
+    await client.add_cog(SlashExceptionHandler(client))
