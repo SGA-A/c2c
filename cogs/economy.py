@@ -2641,14 +2641,16 @@ class Economy(commands.Cog):
                 return m.content.lower() == selected_word.lower() and m.channel == interaction.channel and m.author == interaction.user
 
             await interaction.followup.send(
-                f"What is the word?\nReplace the blanks \U0000279c [`{hidden_word}`](https://www.sss.com)")
+                embed=membed(
+                    f"## <:worke:1195716983384191076> What is the word?\n"
+                    f"Replace the blanks \U0000279c [`{hidden_word}`](https://www.sss.com)."))
 
             my_msg = await interaction.channel.send("Waiting for correct input..")
 
             try:
                 await self.client.wait_for('message', check=check, timeout=15.0)
             except asyncTE:
-                await interaction.followup.send(f"`BOSS`: Too slow, you get nothing for the attitude. I expect better "
+                await interaction.followup.send(f"`BOSS`: Too slow, you got nothing for the attitude. I expect better "
                                                 f"of you next time.")
             else:
                 salary = words.get(job_val)[-1]
@@ -2718,7 +2720,7 @@ class Economy(commands.Cog):
                 balance = discord.Embed(color=0x2F3136, timestamp=discord.utils.utcnow())
                 balance.set_author(name=f"{user.name}'s balance", icon_url=user.display_avatar.url)
 
-                balance.add_field(name="<:walleten:1195708880878043156> Wallet", value=f"\U000023e3 {new_data[1]:,}", inline=True)
+                balance.add_field(name="<:walleten:1195719280898097192> Wallet", value=f"\U000023e3 {new_data[1]:,}", inline=True)
                 balance.add_field(name="<:banken:1195708938734288967> Bank", value=f"\U000023e3 {new_data[2]:,}", inline=True)
                 balance.add_field(name="<:joben:1195709539853553664> Job", value=f"{job_val}", inline=True)
                 balance.add_field(name="<:netben:1195710007233228850> Money Net", value=f"\U000023e3 {bank:,}", inline=True)
