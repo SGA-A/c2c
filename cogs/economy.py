@@ -2153,8 +2153,6 @@ class Economy(commands.Cog):
                     description=f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
                                 f"- Only approved users can view {user.name}'s profile."))
 
-        tatsu = await self.fetch_tatsu_profile(user.id)
-
         async with self.client.pool_connection.acquire() as conn: 
 
             if await self.can_call_out(user, conn):
@@ -2165,6 +2163,7 @@ class Economy(commands.Cog):
             their_badges = get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"
 
             procfile = discord.Embed(colour=user.colour, timestamp=discord.utils.utcnow())
+            tatsu = await self.fetch_tatsu_profile(user.id)
             inv = 0
             unique = 0
             total = 0
