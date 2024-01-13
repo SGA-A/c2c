@@ -1672,34 +1672,34 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message( 
-                    embed=membed("You cannot use this command until you register."))
+                    embed=membed("<:warning_nr:1195732155544911882> You cannot use this command until you register."))
             await interaction.response.send_modal(UpdateInfo()) 
 
     @profile.command(name='avatar', description='change your profile avatar.')
-    @app_commands.describe(url='The url of the new avatar. Leave blank to remove.')
+    @app_commands.describe(url='the url of the new avatar. leave blank to remove.')
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def update_avatar_profile(self, interaction: discord.Interaction, url: Optional[str]):
 
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
+
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message( 
-                    embed=membed('You cannot use this command until you register.'))
+                    embed=membed('<:warning_nr:1195732155544911882> You cannot use this command until you register.'))
 
         if url is None:
             res = modify_profile("delete", f"{interaction.user.id} avatar_url", url)
             match res:
                 case 0:
-                    res = "No custom avatar was found under your account."
+                    res = "<:warning_nr:1195732155544911882> No custom avatar was found under your account."
                 case _:
-                    res = "Your custom avatar was removed."
-            result = discord.Embed(colour=0x2F3136, description=res)
-            return await interaction.response.send_message(embed=result) 
+                    res = "<:overwrite:1195729262729240666> Your avatar was removed."
+            return await interaction.response.send_message(embed=membed(res)) 
 
         successful = discord.Embed(colour=0x2B2D31,
-                                   description=f"Your custom avatar has been added.\n"
-                                               f"If valid, it will look like this ----->\n"
-                                               f"If you can't see it, change it!")
+                                   description=f"## <:overwrite:1195729262729240666> Your custom has been added.\n"
+                                               f"- If valid, it will look like this ----->\n"
+                                               f"- If you can't see it, change it!")
         successful.set_thumbnail(url=url)
         modify_profile("update", f"{interaction.user.id} avatar_url", url)
         await interaction.response.send_message(embed=successful) 
@@ -1709,7 +1709,7 @@ class Economy(commands.Cog):
         modify_profile("delete", f"{interaction.user.id} avatar_url", "who cares")
         return await interaction.response.send_message( 
             embed=membed(
-                f"The avatar url requested for could not be added:\n"
+                f"<:warning_nr:1195732155544911882> The avatar url requested for could not be added:\n"
                 f"- The URL provided was not well formed.\n"
                 f"- Discord embed thumbnails have specific image requirements to "
                 f"ensure proper display.\n"
@@ -1728,7 +1728,10 @@ class Economy(commands.Cog):
                     embed=membed("You cannot use this command until you register."))
 
         modify_profile("update", f"{interaction.user.id} vis", mode)
-        await interaction.response.send_message(f"Your profile is now {mode}.", ephemeral=True, delete_after=7.5) 
+        cemoji = {"private": "<:privatee:1195728566919385088>",
+                  "public": "<:publice:1195728479715590205>"}
+        cemoji = cemoji.get(mode)
+        await interaction.response.send_message(f"{cemoji} Your profile is now {mode}.", ephemeral=True, delete_after=7.5) 
 
     slay = app_commands.Group(name='slay', description='manage your slay.',
                               guild_only=True,
