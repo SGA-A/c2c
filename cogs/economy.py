@@ -1533,7 +1533,7 @@ class Economy(commands.Cog):
 
                 embed = discord.Embed(
                     title='Transaction Complete',
-                    description=f'- {inter_user.mention} has given {other.mention} \U000023e3 {real_amount:,}\n'
+                    description=f'- <:share_robux:1195762943976030302> {inter_user.mention} has given {other.mention} \U000023e3 {real_amount:,}\n'
                                 f'- {inter_user.mention} now has \U000023e3 {host_amt[0]:,} in their wallet.\n'
                                 f'- {other.mention} now has \U000023e3 {recp_amt[0]:,} in their wallet.',
                     colour=0x2F3136)
@@ -1569,7 +1569,7 @@ class Economy(commands.Cog):
                     item_name = " ".join(item_name.split("_"))
                     transaction_success = discord.Embed(
                         title="Transaction Complete",
-                        description=f'- {primm} has given **{amount}** {make_plural(item_name, amount)}\n'
+                        description=f'- <:share_item:1195762925340737636> {primm} has given **{amount}** {make_plural(item_name, amount)}\n'
                                     f'- {primm} now has **{sender[0]}** {make_plural(item_name, sender[0])}\n'
                                     f'- {username.mention} now has **{receiver[0]}** {make_plural(item_name, receiver[0])}',
                         colour=primm.colour)
@@ -1650,7 +1650,7 @@ class Economy(commands.Cog):
                     description=f"# About Item: {name} {item['emoji']}\n"
                                 f"{ARROW}{item["info"]}\n"
                                 f"{ARROW}**[Stock Status]**: {stock_resp}\n"
-                                f"{ARROW}**{owned_by_how_many}** {make_plural("person", owned_by_how_many)} "
+                                f"{ARROW} <:owned_by:1195764764551426188> **{owned_by_how_many}** {make_plural("person", owned_by_how_many)} "
                                 f"{plural_for_own(owned_by_how_many)} this item.",
                     colour=clr
                 )
