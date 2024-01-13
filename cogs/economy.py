@@ -914,36 +914,37 @@ class UpdateInfo(discord.ui.Modal, title='Update your Profile'):
         style=discord.TextStyle.paragraph,
         label='Bio',
         required=False,
-        placeholder="Insert your bio here.. (Leave blank to remove your existent bio)"
+        placeholder="Insert your bio here.. (type 'delete' to remove your existent bio)."
     )
 
     async def on_submit(self, interaction: discord.Interaction):
 
-        if self.bio.value is None:
+        if self.bio.value == "delete":
             res = modify_profile("delete", f"{interaction.user.id} bio", "placeholder")
-            if res:
-                return await interaction.response.send_message( 
-                    embed=f'Your bio has been removed, {interaction.user.name}.\n'
-                          f'The changes have taken effect immediately.'
-                )
-            else:
-                return await interaction.response.send_message( 
-                    embed=membed("You don't have a bio yet. Add one first."))
+            if res == 0:
+                return await interaction.response.send_message(  
+                    embed=membed("<:warning_nr:1195732155544911882> You don't have a bio yet. Add one first."))
 
-        phrases = "added your new" if get_profile_key_value(f"{interaction.user.id} bio") is None else "created your new"
+            else:
+                return await interaction.response.send_message(  
+                    embed=membed(f'## <:trim:1195732275283894292> Your bio has been removed.\n'
+                                 f'The changes have taken effect immediately.'))
+
+
+        phrases = "updated your" if get_profile_key_value(f"{interaction.user.id} bio") is not None else "created a new"
         modify_profile("update", f"{interaction.user.id} bio", self.bio.value)
 
         return await interaction.response.send_message( 
             embed=membed(
-                f"Successfully {phrases} bio to: \n"
-                f"> {self.bio.value}\n"
-                f"- The changes have taken effect immediatley.\n\n"
-                f"{FEEDBACK_GLOBAL}"))
+                f"## <:overwrite:1195729262729240666> Successfully {phrases} bio.\n"
+                f"It is now:\n"
+                f"> {self.bio.value or 'Empty: It should be removed, no input was given.'}\n"
+                f"The changes have taken effect immediatley."))
 
     async def on_error(self, interaction: discord.Interaction, error):
 
         return await interaction.response.send_message( 
-            embed=membed(f"An error occured.\n\n> {error.__cause__}"))
+            embed=membed(f"Something went wrong.\n\n> {error.__cause__}"))
 
 
 class DropdownLB(discord.ui.Select):
