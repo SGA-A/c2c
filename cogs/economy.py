@@ -1533,10 +1533,11 @@ class Economy(commands.Cog):
 
                 embed = discord.Embed(
                     title='Transaction Complete',
-                    description=f'- <:share_robux:1195762943976030302> {inter_user.mention} has given {other.mention} \U000023e3 {real_amount:,}\n'
+                    description=f'- {inter_user.mention} has given {other.mention} \U000023e3 {real_amount:,}\n'
                                 f'- {inter_user.mention} now has \U000023e3 {host_amt[0]:,} in their wallet.\n'
                                 f'- {other.mention} now has \U000023e3 {recp_amt[0]:,} in their wallet.',
                     colour=0x2F3136)
+                embed.set_thumbnail(url="https://i.imgur.com/RxQuE8T.png")
                 embed.set_author(name=f'Transaction made by {inter_user.name}',
                                  icon_url=inter_user.display_avatar.url)
                 return await interaction.response.send_message(embed=embed) 
@@ -1569,10 +1570,11 @@ class Economy(commands.Cog):
                     item_name = " ".join(item_name.split("_"))
                     transaction_success = discord.Embed(
                         title="Transaction Complete",
-                        description=f'- <:share_item:1195762925340737636> {primm} has given **{amount}** {make_plural(item_name, amount)}\n'
-                                    f'- {primm} now has **{sender[0]}** {make_plural(item_name, sender[0])}\n'
+                        description=f'- {primm.mention} has given **{amount}** {make_plural(item_name, amount)}\n'
+                                    f'- {primm.mention} now has **{sender[0]}** {make_plural(item_name, sender[0])}\n'
                                     f'- {username.mention} now has **{receiver[0]}** {make_plural(item_name, receiver[0])}',
-                        colour=primm.colour)
+                        colour=0x2B2D31)
+                    transaction_success.set_thumbnail(url="https://i.imgur.com/xRJ2hpF.png")
                     transaction_success.set_author(name=f'Transaction made by {primm.name}',
                                                    icon_url=primm.display_avatar.url)
 
