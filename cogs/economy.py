@@ -2718,12 +2718,12 @@ class Economy(commands.Cog):
                 balance = discord.Embed(color=0x2F3136, timestamp=discord.utils.utcnow())
                 balance.set_author(name=f"{user.name}'s balance", icon_url=user.display_avatar.url)
 
-                balance.add_field(name="<:wallete:1195665940193488936> Wallet", value=f"\U000023e3 {new_data[1]:,}", inline=True)
-                balance.add_field(name="<:banke:1195665997336674376> Bank", value=f"\U000023e3 {new_data[2]:,}", inline=True)
-                balance.add_field(name="<:jobe:1195668989603495998> Job", value=f"{job_val}", inline=True)
-                balance.add_field(name="<:netbe:1195669035258486885> Money Net", value=f"\U000023e3 {bank:,}", inline=True)
-                balance.add_field(name="<:netinve:1195670446398513224> Inventory Net", value=f"\U000023e3 {inv:,}", inline=True)
-                balance.add_field(name="<:nettotale:1195669839495311421>Total Net", value=f"\U000023e3 {inv+bank:,}", inline=True)
+                balance.add_field(name="<:walleten:1195708880878043156> Wallet", value=f"\U000023e3 {new_data[1]:,}", inline=True)
+                balance.add_field(name="<:banken:1195708938734288967> Bank", value=f"\U000023e3 {new_data[2]:,}", inline=True)
+                balance.add_field(name="<:joben:1195709539853553664> Job", value=f"{job_val}", inline=True)
+                balance.add_field(name="<:netben:1195710007233228850> Money Net", value=f"\U000023e3 {bank:,}", inline=True)
+                balance.add_field(name="<:netinven:1195711122343481364> Inventory Net", value=f"\U000023e3 {inv:,}", inline=True)
+                balance.add_field(name="<:nettotalen:1195710560910725180> Total Net", value=f"\U000023e3 {inv+bank:,}", inline=True)
 
                 if user.id in {992152414566232139, 546086191414509599}:
                     balance.set_footer(icon_url='https://cdn.discordapp.com/emojis/1174417902980583435.webp?size=128&'
