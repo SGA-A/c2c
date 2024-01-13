@@ -579,14 +579,13 @@ class Miscellaneous(commands.Cog):
                     if str(activity).lower() == "spotify":
                         found_spotify = True
                         embed = discord.Embed(
-                            title=f"{username.name}'s Spotify",
+                            title=f"{username.name}'s Spotify <:spotifya:1195655823834230875>",
                             description=f"Listening to {activity.title}",
                             color=activity.colour)
                         duration = str(activity.duration)
                         final_duration = duration[3:7]
                         embed.set_thumbnail(url=activity.album_cover_url)
-                        embed.set_author(name=username.name, 
-                                         icon_url=username.display_avatar.url)
+                        embed.set_author(name=username.name, icon_url=username.display_avatar.url)
                         embed.add_field(name="Artist", value=activity.artist)
                         embed.add_field(name="Album", value=activity.album)
                         embed.add_field(name="Song Duration", value=final_duration)
