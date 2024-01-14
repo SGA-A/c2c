@@ -2116,7 +2116,7 @@ class Economy(commands.Cog):
                 its_sum = total_bets + total_slots + total_blackjacks
                 pie = (ImageCharts()
                        .chd(f"t:{(total_bets/its_sum)*100},{(total_slots/its_sum)*100},{(total_blackjacks/its_sum)*100}")
-                       .chf("b0,lg,90,68cefd,0,96a6ff,1").chl(f"BET ({total_bets})|SLOTS ({total_slots})|BJ ({total_blackjacks})")
+                       .chco("EA469E|03A9F4|FFC00C").chl(f"BET ({total_bets})|SLOTS ({total_slots})|BJ ({total_blackjacks})")
                        .chdl("Total bet games|Total slot games|Total blackjack games").chli(f"{its_sum}").chs("600x480")
                        .cht("pd").chtt(f"{user.name}'s total games played"))
                 await interaction.channel.send(pie.to_url())
