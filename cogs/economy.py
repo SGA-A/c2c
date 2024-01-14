@@ -1848,13 +1848,14 @@ class Economy(commands.Cog):
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
 
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.followup.send(embed=NOT_REGISTERED)
-
             if user is None:
                 user = interaction.user
+
+            if await self.can_call_out(user, conn):
+                return await interaction.followup.send(embed=NOT_REGISTERED)
+                
             stats = {1: "Free", 0: "Working"}
-            slays = await self.get_slays(conn, interaction.user)
+            slays = await self.get_slays(conn, user)
             embed = discord.Embed(colour=0x2F3136)
             embed.set_author(name=f'{user.name}\'s Slays', icon_url=user.display_avatar.url)
 
