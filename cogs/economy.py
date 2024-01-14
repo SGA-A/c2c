@@ -2143,16 +2143,20 @@ class Economy(commands.Cog):
     @app_commands.describe(user='the profile of the user to find')
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def find_profile(self, interaction: discord.Interaction, user: Optional[discord.Member]):
+        
         if user is None:
             user = interaction.user
+        ephemerality = False
 
         if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id != user.id):
-
             return await interaction.response.send_message( 
                 embed=discord.Embed(
                     colour=0x2F3136,
                     description=f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
                                 f"- Only approved users can view {user.name}'s profile."))
+
+        if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id == user.id):
+            ephemerality = True
 
         async with self.client.pool_connection.acquire() as conn: 
 
@@ -2160,8 +2164,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=NOT_REGISTERED) 
 
             users = await conn.execute(f"SELECT * FROM `bank` WHERE userID = ?", (user.id,))
-            user_data = await users.fetchone()
-            their_badges = get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"
+            users = await users.fetchone()
 
             procfile = discord.Embed(colour=user.colour, timestamp=discord.utils.utcnow())
             tatsu = await self.fetch_tatsu_profile(user.id)
@@ -2188,14 +2191,14 @@ class Economy(commands.Cog):
 
             procfile.description = (f"### {user.name}'s Profile - [{tatsu.title or 'No title set'}](https://tatsu.gg/profile)\n"
                                     f"{note}"
-                                    f"{PRESTIGE_EMOTES.setdefault(user_data[-1], "")} Prestige Level **{user_data[-1]}**\n"
-                                    f"<:bountybag:1195653667135692800> Bounty: \U000023e3 **{user_data[-2]:,}**\n"
-                                    f"{their_badges}")
+                                    f"{PRESTIGE_EMOTES.setdefault(users[-1], "")} Prestige Level **{users[-1]}**\n"
+                                    f"<:bountybag:1195653667135692800> Bounty: \U000023e3 **{users[-2]:,}**\n"
+                                    f"{get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"}")
 
             procfile.add_field(name='Robux',
-                               value=f"Wallet: `\U000023e3 {format_number_short(user_data[1])}`\n"
-                                     f"Bank: `\U000023e3 {format_number_short(user_data[2])}`\n"
-                                     f"Net: `\U000023e3 {format_number_short(user_data[1]+user_data[2])}`")
+                               value=f"Wallet: `\U000023e3 {format_number_short(users[1])}`\n"
+                                     f"Bank: `\U000023e3 {format_number_short(users[2])}`\n"
+                                     f"Net: `\U000023e3 {format_number_short(users[1] + users[2])}`")
 
             procfile.add_field(name='Items',
                                value=f"Unique: `{unique:,}`\n"
@@ -2213,11 +2216,12 @@ class Economy(commands.Cog):
                 try:
                     procfile.set_thumbnail(url=get_profile_key_value(f"{user.id} avatar_url"))
                 except discord.HTTPException:
-                    modify_profile("delete", f"{user.id} avatar_url", "yeah")
+                    modify_profile("delete", f"{user.id} avatar_url", "placeholder")
                     procfile.set_thumbnail(url=user.display_avatar.url)
             else:
                 procfile.set_thumbnail(url=user.display_avatar.url)
-            return await interaction.response.send_message(embed=procfile, silent=True) 
+            return await interaction.response.send_message( 
+                embed=procfile, silent=True, ephemeral=ephemerality)
 
     @app_commands.command(name='highlow', description='guess high, low, or jackpot for a number.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
