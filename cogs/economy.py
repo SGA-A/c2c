@@ -2153,88 +2153,147 @@ class Economy(commands.Cog):
 
     @app_commands.command(name='profile', description='view user information and stats.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
-    @app_commands.describe(user='the profile of the user to find')
+    @app_commands.describe(user='the profile of the user to find', category='what type of data you want to view')
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    async def find_profile(self, interaction: discord.Interaction, user: Optional[discord.Member]):
-        
+    async def find_profile(self, interaction: discord.Interaction, user: Optional[discord.Member],
+                           category: Optional[Literal["Main Profile", "Gambling Stats"]]):
+
         if user is None:
             user = interaction.user
 
-        async with self.client.pool_connection.acquire() as conn: 
+        if category is None:
+            category = "Main Profile"
+
+        async with self.client.pool_connection.acquire() as conn: # type: ignore
 
             if await self.can_call_out(user, conn):
-                return await interaction.response.send_message(embed=NOT_REGISTERED) 
-                
+                return await interaction.response.send_message(embed=NOT_REGISTERED) # type: ignore
+
+            data = await conn.execute(f"SELECT * FROM `bank` WHERE userID = ?", (user.id,))
+            data = await data.fetchone()
+
             ephemerality = False
-            if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id != user.id):
-                return await interaction.response.send_message( 
-                    embed=discord.Embed(
-                        colour=0x2F3136,
-                        description=f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
-                                    f"- Only approved users can view {user.name}'s profile."))
 
-            if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id == user.id):
-                ephemerality = True
-            
-            users = await conn.execute(f"SELECT * FROM `bank` WHERE userID = ?", (user.id,))
-            users = await users.fetchone()
+            if category == "Main Profile":
+                if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id != user.id):
+                    return await interaction.response.send_message(  # type: ignore
+                        embed=discord.Embed(
+                            colour=0x2F3136,
+                            description=f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
+                                        f"- Only approved users can view {user.name}'s profile."))
 
-            procfile = discord.Embed(colour=user.colour, timestamp=discord.utils.utcnow())
-            tatsu = await self.fetch_tatsu_profile(user.id)
-            inv = 0
-            unique = 0
-            total = 0
+                if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id == user.id):
+                    ephemerality = True
 
-            for item in SHOP_ITEMS:
-                data = await self.get_one_inv_data_new(user, item["name"], conn)
-                inv += item["cost"] * data
-                total += data
-                unique += 1 if data else 0
+                procfile = discord.Embed(colour=user.colour, timestamp=discord.utils.utcnow())
+                tatsu = await self.fetch_tatsu_profile(user.id)
+                inv = 0
+                unique = 0
+                total = 0
 
-            if user.id == 992152414566232139:
-                procfile.set_image(
-                    url="https://media.discordapp.net/attachments/1124672402413072446/1164912661004292136/20231010000451.png?ex=6544f075&is=65327b75&hm=dfef49bfcab2ca0f8f2d50db7733c5e3ba6cf691f5350ddf8fb8350fc2bb38d8&=&width=1246&height=701")
+                for item in SHOP_ITEMS:
+                    data = await self.get_one_inv_data_new(user, item["name"], conn)
+                    inv += item["cost"] * data
+                    total += data
+                    unique += 1 if data else 0
 
-            match user.id:
-                case 546086191414509599 | 992152414566232139:
-                    note = ("> <:cprofile:1174417914183561287> *This user's custom profile contains "
-                            "additional perks that will not be publicized.*\n\n")
-                case _:
-                    note = ""
+                if user.id == 992152414566232139:
+                    procfile.set_image(
+                        url="https://media.discordapp.net/attachments/1124672402413072446/1164912661004292136/20231010000451.png?ex=6544f075&is=65327b75&hm=dfef49bfcab2ca0f8f2d50db7733c5e3ba6cf691f5350ddf8fb8350fc2bb38d8&=&width=1246&height=701")
 
-            procfile.description = (f"### {user.name}'s Profile - [{tatsu.title or 'No title set'}](https://tatsu.gg/profile)\n"
-                                    f"{note}"
-                                    f"{PRESTIGE_EMOTES.setdefault(users[-1], "")} Prestige Level **{users[-1]}**\n"
-                                    f"<:bountybag:1195653667135692800> Bounty: \U000023e3 **{users[-2]:,}**\n"
-                                    f"{get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"}")
+                match user.id:
+                    case 546086191414509599 | 992152414566232139:
+                        note = ("> <:cprofile:1174417914183561287> *This user's custom profile contains "
+                                "additional perks that will not be publicized.*\n\n")
+                    case _:
+                        note = ""
 
-            procfile.add_field(name='Robux',
-                               value=f"Wallet: `\U000023e3 {format_number_short(users[1])}`\n"
-                                     f"Bank: `\U000023e3 {format_number_short(users[2])}`\n"
-                                     f"Net: `\U000023e3 {format_number_short(users[1] + users[2])}`")
+                procfile.description = (f"### {user.name}'s Profile - [{tatsu.title or 'No title set'}](https://tatsu.gg/profile)\n"
+                                        f"{note}"
+                                        f"{PRESTIGE_EMOTES.setdefault(data[-1], "")} Prestige Level **{data[-1]}**\n"
+                                        f"<:bountybag:1195653667135692800> Bounty: \U000023e3 **{data[-2]:,}**\n"
+                                        f"{get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"}")
 
-            procfile.add_field(name='Items',
-                               value=f"Unique: `{unique:,}`\n"
-                                     f"Total: `{format_number_short(total)}`\n"
-                                     f"Worth: `\U000023e3 {format_number_short(inv)}`")
+                procfile.add_field(name='Robux',
+                                   value=f"Wallet: `\U000023e3 {format_number_short(data[1])}`\n"
+                                         f"Bank: `\U000023e3 {format_number_short(data[2])}`\n"
+                                         f"Net: `\U000023e3 {format_number_short(data[1] + data[2])}`")
 
-            procfile.add_field(name='Tatsu',
-                               value=f"Credits: `{format_number_short(tatsu.credits)}`\n"
-                                     f"Tokens: `{format_number_short(tatsu.tokens)}`\n"
-                                     f"XP: `{format_number_short(tatsu.xp)}`")
+                procfile.add_field(name='Items',
+                                   value=f"Unique: `{unique:,}`\n"
+                                         f"Total: `{format_number_short(total)}`\n"
+                                         f"Worth: `\U000023e3 {format_number_short(inv)}`")
 
-            if get_profile_key_value(f"{user.id} bio"):
-                procfile.description += f"\n**Bio:** {get_profile_key_value(f'{user.id} bio')}"
-            if get_profile_key_value(f"{user.id} avatar_url"):
-                try:
-                    procfile.set_thumbnail(url=get_profile_key_value(f"{user.id} avatar_url"))
-                except discord.HTTPException:
-                    modify_profile("delete", f"{user.id} avatar_url", "placeholder")
+                procfile.add_field(name='Tatsu',
+                                   value=f"Credits: `{format_number_short(tatsu.credits)}`\n"
+                                         f"Tokens: `{format_number_short(tatsu.tokens)}`\n"
+                                         f"XP: `{format_number_short(tatsu.xp)}`")
+
+                if get_profile_key_value(f"{user.id} bio"):
+                    procfile.description += f"\n**Bio:** {get_profile_key_value(f'{user.id} bio')}"
+                if get_profile_key_value(f"{user.id} avatar_url"):
+                    try:
+                        procfile.set_thumbnail(url=get_profile_key_value(f"{user.id} avatar_url"))
+                    except discord.HTTPException:
+                        modify_profile("delete", f"{user.id} avatar_url", "placeholder")
+                        procfile.set_thumbnail(url=user.display_avatar.url)
+                else:
                     procfile.set_thumbnail(url=user.display_avatar.url)
+                return await interaction.response.send_message( # type: ignore
+                    embed=procfile, silent=True, ephemeral=ephemerality)
             else:
-                procfile.set_thumbnail(url=user.display_avatar.url)
-            return await interaction.response.send_message( 
-                embed=procfile, silent=True, ephemeral=ephemerality)
+                total_slots = data[3] + data[4]
+                total_bets = data[5] + data[6]
+                total_blackjacks = data[7] + data[8]
+
+                try:
+                    winbe = round((data[5] / total_bets) * 100)
+                except ZeroDivisionError:
+                    winbe = 0
+                try:
+                    winsl = round((data[3] / total_slots) * 100)
+                except ZeroDivisionError:
+                    winsl = 0
+                try:
+                    winbl = round((data[7] / total_blackjacks) * 100)
+                except ZeroDivisionError:
+                    winbl = 0
+
+                stats = discord.Embed(title=f"{user.name}'s gambling stats",
+                                      colour=0x2B2D31)
+
+                stats.add_field(name=f"BET ({total_bets:,})",
+                                value=f"Won: \U000023e3 {data[11]:,}\n"
+                                      f"Lost: \U000023e3 {data[12]:,}\n"
+                                      f"Net: \U000023e3 {data[11] - data[12]:,}\n"
+                                      f"Win: {winbe}% ({data[5]})")
+                stats.add_field(name=f"SLOTS ({total_slots:,})",
+                                value=f"Won: \U000023e3 {data[9]:,}\n"
+                                      f"Lost: \U000023e3 {data[10]:,}\n"
+                                      f"Net: \U000023e3 {data[9] - data[10]:,}\n"
+                                      f"Win: {winsl}% ({data[3]})")
+                stats.add_field(name=f"BLACKJACK ({total_blackjacks:,})",
+                                value=f"Won: \U000023e3 {data[13]:,}\n"
+                                      f"Lost: \U000023e3 {data[14]:,}\n"
+                                      f"Net: \U000023e3 {data[13] - data[14]:,}\n"
+                                      f"Win: {winbl}% ({data[7]})")
+                stats.set_footer(text="The number next to the name is how many matches are recorded")
+
+                await interaction.response.send_message(embed=stats)  # type: ignore
+                resp = await interaction.original_response()
+                try:
+                    its_sum = total_bets + total_slots + total_blackjacks
+                    pie = (ImageCharts()
+                           .chd(
+                        f"t:{(total_bets / its_sum) * 100},{(total_slots / its_sum) * 100},{(total_blackjacks / its_sum) * 100}")
+                           .chco("EA469E|03A9F4|FFC00C").chl(
+                        f"BET ({total_bets})|SLOTS ({total_slots})|BJ ({total_blackjacks})")
+                           .chdl("Total bet games|Total slot games|Total blackjack games").chli(f"{its_sum}").chs(
+                        "600x480")
+                           .cht("pd").chtt(f"{user.name}'s total games played"))
+                    await resp.reply(content=pie.to_url())
+                except ZeroDivisionError:
+                    await resp.reply(content=f"Looks like {user.display_name} hasn't got enough data yet to form a pie chart.")
 
     @app_commands.command(name='highlow', description='guess high, low, or jackpot for a number.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
