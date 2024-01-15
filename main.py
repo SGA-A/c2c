@@ -368,7 +368,7 @@ class SelectMenu(ui.Select):
                 if cmd_details[-1] == 'txt':
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
-                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id)) # type: ignore
+                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id)) 
                 cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
 
             embed.add_field(name='About: Utility',
@@ -398,7 +398,7 @@ class SelectMenu(ui.Select):
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
 
-                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))   # type: ignore
+                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))   
                 try:
                     got_something = False
                     if command_manage.options:
