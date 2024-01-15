@@ -2161,10 +2161,10 @@ class Economy(commands.Cog):
         user = user or interaction.user
         category = category or "Main Profile"
 
-        async with self.client.pool_connection.acquire() as conn: # type: ignore
+        async with self.client.pool_connection.acquire() as conn: 
 
             if await self.can_call_out(user, conn):
-                return await interaction.response.send_message(embed=NOT_REGISTERED) # type: ignore
+                return await interaction.response.send_message(embed=NOT_REGISTERED) 
 
             data = await conn.execute(f"SELECT * FROM `bank` WHERE userID = ?", (user.id,))
             data = await data.fetchone()
@@ -2173,7 +2173,7 @@ class Economy(commands.Cog):
 
             if category == "Main Profile":
                 if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id != user.id):
-                    return await interaction.response.send_message(  # type: ignore
+                    return await interaction.response.send_message(  
                         embed=discord.Embed(
                             colour=0x2F3136,
                             description=f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
@@ -2236,7 +2236,7 @@ class Economy(commands.Cog):
                         procfile.set_thumbnail(url=user.display_avatar.url)
                 else:
                     procfile.set_thumbnail(url=user.display_avatar.url)
-                return await interaction.response.send_message( # type: ignore
+                return await interaction.response.send_message( 
                     embed=procfile, silent=True, ephemeral=ephemerality)
             else:
                 total_slots = data[3] + data[4]
@@ -2276,7 +2276,7 @@ class Economy(commands.Cog):
                                       f"Win: {winbl}% ({data[7]})")
                 stats.set_footer(text="The number next to the name is how many matches are recorded")
 
-                await interaction.response.send_message(embed=stats)  # type: ignore
+                await interaction.response.send_message(embed=stats)  
                 resp = await interaction.original_response()
                 try:
                     its_sum = total_bets + total_slots + total_blackjacks
