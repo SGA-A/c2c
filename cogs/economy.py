@@ -101,40 +101,52 @@ PRESTIGE_EMOTES = {
 }
 
 SHOP_ITEMS = [
-    {"name": "Keycard", "cost": 8269069420, "id": 1, "info": "Allows you to bypass certain restrictions.",
-     "emoji": "<:lanyard:1165935243140796487>", "rarity": "**Common** <:common:1166316338571132928>"},
+    {"name": "Keycard", "cost": 8269069420, "id": 1, "info": "Allows you to bypass certain restrictions, and you get "
+                                                             "more returns from certain activities!",
+     "url": "https://i.imgur.com/WZOWysT.png", "rarity": "**Common** <:common:1166316338571132928>",
+     "emoji": "<:lanyard:1165935243140796487>"},
 
-    {"name": "Trophy", "cost": 5085779847, "id": 2, "info": "Flex on your friends with this trophy!",
-     "emoji": "<:tr1:1165936712468418591>", "rarity": "**Luxurious** <:luxurious:1166316420125163560>"},
+    {"name": "Trophy", "cost": 5085779847, "id": 2, "info": "Flex on your friends with this trophy! There are also "
+                                                            "some hidden side effects..",
+     "url": "https://i.imgur.com/32iEaMb.png", "rarity": "**Luxurious** <:luxurious:1166316420125163560>",
+     "emoji": "<:tr1:1165936712468418591>"},
 
     {"name": "Dynamic_Item", "cost": 55556587196, "id": 3,
      "info": "An item that changes use often. Its transformative functions change to match the seasonality of the year.",
-     "emoji": "<:dynamic:1166082288069648394>", "rarity": "**Rare** <:rare:1166316365892825138>", "qn": "dynamic_item"},
+     "url": "https://i.imgur.com/WX9mbie.png", "rarity": "**Rare** <:rare:1166316365892825138>", "qn": "dynamic_item",
+     "emoji": "<:dynamic:1166082288069648394>"},
 
     {"name": "Resistor", "cost": 18102892402, "id": 4,
-     "info": "Creates an embedded system... No one knows how it works because no one has ever purchased this item.",
-     "emoji": "<:resistor:1165934607447887973>", "rarity": "**Luxurious** <:luxurious:1166316420125163560>"},
+     "info": "No one knows how this works because no one has ever purchased "
+             "this item. May cause distress to certain individuals upon purchase.",
+     "url": "https://i.imgur.com/ggO9QbL.png", "rarity": "**Luxurious** <:luxurious:1166316420125163560>",
+     "emoji": "<:resistor:1165934607447887973>"},
 
     {"name": "Clan_License", "cost": 20876994182, "id": 5,
-     "info": "Create your own clan! It costs a fortune, but with it brings a lot of privileges exclusive to clan members.",
-     "emoji": "<:clan_license:1165936231922806804>", "rarity": "**Rare** <:rare:1166316365892825138>", "qn": "clan_license"},
+     "info": "Create your own clan. It costs a fortune, but with it brings a lot of privileges exclusive to clan members.",
+     "url": "https://i.imgur.com/nPcMNk8.png", "rarity": "**Rare** <:rare:1166316365892825138>", "qn": "clan_license",
+     "emoji": "<:clan_license:1165936231922806804>"},
 
     {"name": "Hyperion", "cost": 49510771984, "id": 6,
      "info": "The `passive` drone that actively helps in increasing the returns in almost everything.",
-     "emoji": "<:DroneHyperion:1171491601726574613>", "rarity": "**Rare** <:rare:1166316365892825138>", "qn": "hyperion_drone"},
+     "url": "https://i.imgur.com/bmNyob0.png", "rarity": "**Rare** <:rare:1166316365892825138>", "qn": "hyperion_drone",
+     "emoji": "<:DroneHyperion:1171491601726574613>"},
 
     {"name": "Crisis", "cost": 765191412472, "id": 7,
      "info": "The `support` drone that can bring status effects into the game, wreaking havoc onto other users!",
-     "emoji": "<:DroneCrisis:1171491564258852894>", "rarity": "**Rare** <:rare:1166316365892825138>", "qn": "crisis_drone"},
+     "url": "https://i.imgur.com/obOJwJm.png", "rarity": "**Rare** <:rare:1166316365892825138>", "qn": "crisis_drone",
+     "emoji": "<:DroneCrisis:1171491564258852894>"},
 
     {"name": "Odd_Eye", "cost": 33206481258, "id": 8,
-     "info": "An eye that may prove advantageous during certain events.",
-     "emoji": "<a:eyeOdd:1166465357142298676>", "rarity": "**Luxurious** <:luxurious:1166316420125163560>",
-     "qn": "odd_eye"},
+     "info": "An eye that may prove advantageous during certain events. It may even become a pet with time..",
+     "url": "https://i.imgur.com/rErrYrH.gif", "rarity": "**Luxurious** <:luxurious:1166316420125163560>",
+     "qn": "odd_eye", "emoji": "<a:eyeOdd:1166465357142298676>"},
 
     {"name": "Amulet", "cost": 159961918315, "id": 9,
-     "info": "Found from a black market, those who wear it are practically invincible in all situations.",
-     "emoji": "<a:amuletrc:1175393496799137842>", "rarity": "**Luxurious** <:luxurious:1166316420125163560>"},
+     "info": "Found from a black market, it is said that it contains an extract found only from the ancient relics "
+             "lost millions of years ago.",
+     "url": "https://i.imgur.com/m8jRWk5.png", "rarity": "**Luxurious** <:luxurious:1166316420125163560>",
+     "emoji": "<:amuletrccc:1196529299847643198>"},
 ]
 
 
@@ -1617,11 +1629,11 @@ class Economy(commands.Cog):
         item_stock = get_stock(item_name)
         match item_stock:
             case 0:
-                stock_resp = f"*This item is currently out of stock.*"
+                stock_resp = f"The item is currently out of stock."
             case 1 | 2 | 3:
-                stock_resp = f"*Shortage in stocks, only **{item_stock}** remain.*"
+                stock_resp = f"There are shortage in stocks, only {item_stock} remain."
             case _:
-                stock_resp = f"*No stock shortages currently for this item ({item_stock} available).*"
+                stock_resp = f"The item is in stock ({item_stock} available)."
 
         match item_name:
             case 'Keycard':
@@ -1642,26 +1654,25 @@ class Economy(commands.Cog):
             cost = item["cost"]
 
             if name == item_name:
-                async with self.client.pool_connection.acquire() as conn:  
+                async with self.client.pool_connection.acquire() as conn: 
                     conn: asqlite_Connection
                     data = await conn.execute(f"SELECT COUNT(*) FROM inventory WHERE {stored} > 0")
                     data = await data.fetchone()
                     owned_by_how_many = data[0]
 
-                em = discord.Embed(
-                    description=f"# About Item: {name} {item['emoji']}\n"
-                                f"{ARROW}{item["info"]}\n"
-                                f"{ARROW}**[Stock Status]**: {stock_resp}\n"
-                                f"{ARROW} <:owned_by:1195764764551426188> **{owned_by_how_many}** {make_plural("person", owned_by_how_many)} "
+                em = discord.Embed(title=name,
+                    description=f"> {item["info"]}\n\n"
+                                f"{stock_resp}\n"
+                                f"{owned_by_how_many} {make_plural("person", owned_by_how_many)} "
                                 f"{plural_for_own(owned_by_how_many)} this item.",
-                    colour=clr
+                    colour=clr, url="https://www.youtube.com"
                 )
-
+                em.set_thumbnail(url=item["url"])
                 em.add_field(name="Buying price", value=f"<:robux:1146394968882151434> {cost:,}")
                 em.add_field(name="Selling price",
-                             value=f"<:robux:1146394968882151434> {abs(int(cost) / 4):,}")
+                             value=f"<:robux:1146394968882151434> {floor(int(cost) / 4):,}")
 
-                return await interaction.response.send_message(embed=em) 
+                return await interaction.response.send_message(embed=em)
 
         await interaction.response.send_message(f"There is no item named {item_name}.") 
 
