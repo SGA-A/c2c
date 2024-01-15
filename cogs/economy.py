@@ -2158,11 +2158,8 @@ class Economy(commands.Cog):
     async def find_profile(self, interaction: discord.Interaction, user: Optional[discord.Member],
                            category: Optional[Literal["Main Profile", "Gambling Stats"]]):
 
-        if user is None:
-            user = interaction.user
-
-        if category is None:
-            category = "Main Profile"
+        user = user or interaction.user
+        category = category or "Main Profile"
 
         async with self.client.pool_connection.acquire() as conn: # type: ignore
 
@@ -2192,10 +2189,10 @@ class Economy(commands.Cog):
                 total = 0
 
                 for item in SHOP_ITEMS:
-                    data = await self.get_one_inv_data_new(user, item["name"], conn)
-                    inv += item["cost"] * data
-                    total += data
-                    unique += 1 if data else 0
+                    item_quantity = await self.get_one_inv_data_new(user, item["name"], conn)
+                    inv += item["cost"] * item_quantity
+                    total += item_quantity
+                    unique += 1 if item_quantity else 0
 
                 if user.id == 992152414566232139:
                     procfile.set_image(
