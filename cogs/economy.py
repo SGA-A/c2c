@@ -1644,7 +1644,7 @@ class Economy(commands.Cog):
                 clr = discord.Colour.from_rgb(209, 30, 54)
             case 'Resistor':
                 clr = discord.Colour.from_rgb(78, 0, 237)
-            case 'Resistor':
+            case 'Dynamic Item':
                 clr = discord.Colour.from_rgb(233, 0, 15)
             case _:
                 clr = discord.Colour.from_rgb(54, 123, 112)
