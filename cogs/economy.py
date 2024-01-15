@@ -2223,7 +2223,8 @@ class Economy(commands.Cog):
                                      f"Tokens: `{format_number_short(tatsu.tokens)}`\n"
                                      f"XP: `{format_number_short(tatsu.xp)}`")
 
-            procfile.description += f"\n**Bio:** {get_profile_key_value(f"{user.id} bio") or ''}"
+            if get_profile_key_value(f"{user.id} bio"):
+                procfile.description += f"\n**Bio:** {get_profile_key_value(f'{user.id} bio')}"
             if get_profile_key_value(f"{user.id} avatar_url"):
                 try:
                     procfile.set_thumbnail(url=get_profile_key_value(f"{user.id} avatar_url"))
