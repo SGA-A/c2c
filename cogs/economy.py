@@ -1280,15 +1280,12 @@ class Economy(commands.Cog):
     async def open_inv_new(user: discord.Member, conn_input: asqlite_Connection) -> None:
         """Register a new user's inventory records into the db."""
 
-        data = await conn_input.execute(f"SELECT * FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        data = await data.fetchone()
-        if data is None:
-            await conn_input.execute(f"INSERT INTO `{INV_TABLE_NAME}`(userID) VALUES(?)", (user.id,))
-
-            for item in SHOP_ITEMS:
-                await conn_input.execute(f"UPDATE `{INV_TABLE_NAME}` SET `{item["name"]}` = ? WHERE userID = ?",
-                                         (0, user.id,))
-            await conn_input.commit()
+        await conn_input.execute(f"INSERT INTO `{INV_TABLE_NAME}`(userID) VALUES(?)", (user.id,))
+        
+        for item in SHOP_ITEMS:
+            await conn_input.execute(f"UPDATE `{INV_TABLE_NAME}` SET `{item["name"]}` = ? WHERE userID = ?",
+                                     (0, user.id,))
+        await conn_input.commit()
 
     @staticmethod
     async def get_inv_data_new(user: discord.Member, conn_input: asqlite_Connection) -> Optional[Any]:
@@ -2484,16 +2481,18 @@ class Economy(commands.Cog):
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(member='the member to view the inventory of:')
     async def inventory(self, interaction: discord.Interaction, member: Optional[discord.Member]):
-        user = member or interaction.user
+        member = member or interaction.user
 
-        if user.bot and user.id != self.client.user.id:
+        if member.bot and member.id != self.client.user.id:
             return await interaction.response.send_message(embed=membed("Bots do not have accounts."), delete_after=5.0) 
 
         async with self.client.pool_connection.acquire() as conn: 
-
             conn: asqlite_Connection
+
+            if await self.can_call_out(member, conn):
+                return await interaction.response.send_message(embed=NOT_REGISTERED)
+
             em = discord.Embed(color=0x2F3136)
-            await self.open_inv_new(user, conn)
             length = 5
             value, svalue = 0, 0
             total_items = 0
@@ -2506,7 +2505,7 @@ class Economy(commands.Cog):
                 item_id = item["id"]
                 item_emoji = item["emoji"]
                 item_type = item["rarity"]
-                data = await self.update_inv_new(user, 0, name, conn)
+                data = await self.update_inv_new(member, 0, name, conn)
                 if data[0] >= 1:
                     value += int(cost) * data[0]
                     svalue += int(cost / 4) * data[0]
@@ -2516,8 +2515,8 @@ class Economy(commands.Cog):
 
 
             if len(owned_items) == 0:
-                em.set_author(name=f"{user.name}'s Inventory", icon_url=user.display_avatar.url)
-                em.description = (f"{user.name} currently has **no items** in their inventory.\n"
+                em.set_author(name=f"{member.name}'s Inventory", icon_url=member.display_avatar.url)
+                em.description = (f"{member.name} currently has **no items** in their inventory.\n"
                                   f"**Net Value:** <:robux:1146394968882151434> 0\n"
                                   f"**Sell Value:** <:robux:1146394968882151434> 0")
 
@@ -2527,11 +2526,11 @@ class Economy(commands.Cog):
 
             async def get_page_part(page: int):
 
-                em.set_author(name=f"{user.name}'s Inventory", icon_url=user.display_avatar.url)
+                em.set_author(name=f"{member.name}'s Inventory", icon_url=member.display_avatar.url)
 
                 offset = (page - 1) * length
 
-                em.description = (f"{user.name} currently has **`{total_items}`** item(s) in their inventory.\n"
+                em.description = (f"{member.name} currently has **`{total_items}`** item(s) in their inventory.\n"
                                   f"**Net Value:** <:robux:1146394968882151434> {value:,}\n"
                                   f"**Sell Value:** <:robux:1146394968882151434> {svalue:,}\n\n")
 
@@ -2630,6 +2629,7 @@ class Economy(commands.Cog):
 
         if sell_quantity is None:
             sell_quantity = 1
+            
         name = item_name.replace(" ", "_")
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
@@ -2747,10 +2747,9 @@ class Economy(commands.Cog):
         """Returns a user's balance."""
 
         await interaction.response.defer(thinking=True) 
-
-        if user is None:
-            user = interaction.user
-
+        
+        user = user or interaction.user
+        
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
 
@@ -2818,8 +2817,7 @@ class Economy(commands.Cog):
     @app_commands.describe(member='the user to remove all of the data of')
     async def discontinue_bot(self, interaction: discord.Interaction, member: Optional[discord.Member]):
 
-        if member is None:
-            member = interaction.user
+        member = member or interaction.user
 
         if interaction.user.id not in {992152414566232139, 546086191414509599}:
             if member is not None: 
@@ -3017,8 +3015,7 @@ class Economy(commands.Cog):
     async def extend_profile(self, ctx: commands.Context, username: Optional[discord.Member]):
         async with ctx.typing():
             user_stats = {}
-            if username is None:
-                username = ctx.author
+            username = username or ctx.author
 
             username = ctx.guild.get_member(username.id)
 
