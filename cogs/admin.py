@@ -130,7 +130,7 @@ class Administrate(commands.Cog):
                     try:
                         already_pinned = await ctx.fetch_message(pinned_if_any)
                         await already_pinned.unpin(reason="Outdated weekly reward announcement")  # unpin if stored
-                    except discord.NotFound | discord.HTTPException:
+                    except Exception:
                         await ctx.reply(content="**[WARNING]:** Previous weekly reward announcement was detected, but"
                                                 " could not be found in the invoker channel. Make sure you are "
                                                 "calling this command in the same channel it was sent in.",
