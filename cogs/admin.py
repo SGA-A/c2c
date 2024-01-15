@@ -71,7 +71,7 @@ class Administrate(commands.Cog):
 
     @commands.command(name='uptime', description='returns the time the bot has been active for.')
     async def uptime(self, ctx: commands.Context):
-        diff = datetime.now() - self.client.time_launch  # type: ignore
+        diff = datetime.now() - self.client.time_launch  
         minutes, seconds = divmod(diff.total_seconds(), 60)
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
