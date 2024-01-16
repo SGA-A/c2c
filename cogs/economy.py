@@ -879,7 +879,7 @@ class HighLow(discord.ui.View):
                                                 f'The hidden number was **{self.true_value}**.\n'
                                                 f'Your new balance is \U000023e3 **{new_bal[0]:,}**.',
                                     colour=discord.Color.brand_green())
-                win.set_author(name=f"{interaction.user.display_name}'s winning high-low game",
+                win.set_author(name=f"{interaction.user.name}'s winning high-low game",
                                icon_url=interaction.user.display_avatar.url)
                 await interaction.response.edit_message(embed=win, view=self)
             else:
@@ -891,7 +891,7 @@ class HighLow(discord.ui.View):
                                                  f'The hidden number was **{self.true_value}**.\n'
                                                  f'Your new balance is \U000023e3 **{new_bal[0]:,}**.',
                                      colour=discord.Color.brand_red())
-                lose.set_author(name=f"{interaction.user.display_name}'s losing high-low game",
+                lose.set_author(name=f"{interaction.user.name}'s losing high-low game",
                                 icon_url=interaction.user.display_avatar.url)
                 await interaction.response.edit_message(embed=lose, view=self)
 
@@ -2303,7 +2303,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=ERR_UNREASON)
 
             number = randint(1, 100)
-            hint = abs(randint(number - randint(1, 30), number + randint(1, 15)))
+            hint = randint(1, 100)
 
             query = discord.Embed(colour=0x2B2D31,
                                   description=f"I just chose a secret number between 0 and 100.\n"
