@@ -2286,12 +2286,10 @@ class Economy(commands.Cog):
             else:
                 return True
 
-        async with self.client.pool_connection.acquire() as conn:  
+        async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
-            number = randint(1, 100)
-            hint = f"Your hint is {abs(randint(number - randint(1, 30), number + randint(1, 15)))}"
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered) 
+                return await interaction.response.send_message(embed=self.not_registered)
 
             real_amount = determine_exponent(robux)
             wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
@@ -2302,13 +2300,21 @@ class Economy(commands.Cog):
                     else:
                         real_amount = 50000000
             if not (is_valid(int(real_amount), wallet_amt)):
-                return await interaction.response.send_message(embed=ERR_UNREASON) 
-            extraneous_data.clear()
-            extraneous_data.append(number)
-            extraneous_data.append(real_amount)
+                return await interaction.response.send_message(embed=ERR_UNREASON)
 
-            await interaction.response.send_message(f"I am thinking of a number. Guess what it is. **{hint}!**", 
-                                                    view=HighLow(interaction, self.client))
+            number = randint(1, 100)
+            hint = abs(randint(number - randint(1, 30), number + randint(1, 15)))
+
+            query = discord.Embed(colour=0x2B2D31,
+                                  description=f"I just chose a secret number between 0 and 100.\n"
+                                              f"Is the secret number *higher* or *lower* than {hint}?")
+            query.set_author(name=f"{interaction.user.name}'s high-low game",
+                             icon_url=interaction.user.display_avatar.url)
+            query.set_footer(text="The jackpot button is if you think it is the same!")
+            await interaction.response.send_message(
+                view=HighLow(interaction, self.client, hint_provided=hint, bet=real_amount, value=number),
+                embed=query)
+
             pmulti = await self.get_pmulti_data_only(interaction.user, conn)
             await self.raise_pmulti_warning(interaction, pmulti[0])
             
