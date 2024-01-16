@@ -1,3 +1,5 @@
+import datetime
+from discord.utils import format_dt
 from traceback import print_exception
 from discord import Embed, Interaction, Colour
 from discord.ext import commands
@@ -18,28 +20,31 @@ class SlashExceptionHandler(commands.Cog):
     async def get_app_command_error(self, interaction: Interaction,
                                     error: AppCommandError):
 
-        if not interaction.response.is_done(): # type: ignore
-            await interaction.response.defer(thinking=True) # type: ignore
+        if not interaction.response.is_done(): 
+            await interaction.response.defer(thinking=True) 
 
         if isinstance(error, CheckFailure):
             exception = Embed(title='Exception', colour=Colour.dark_embed())
             exception.set_thumbnail(url="https://i.imgur.com/zGtq4Dp.png")
-            if isinstance(error, MissingRole):  # when a user has a missing role
+            if isinstance(error, MissingRole):
 
                 exception.description = f'{interaction.user.name}, you are missing a role.'
 
                 exception.add_field(name='Required Role', value=f"<@&{error.missing_role}>", inline=False)
 
-            elif isinstance(error, MissingPermissions):  # when a user has missing permissions
+            elif isinstance(error, MissingPermissions):
 
                 exception.description = (f"{interaction.user.name}, you're missing "
                                          f"some permissions required to use this command.")
                 exception.add_field(name='Required permissions',
                                     value=', '.join(error.missing_permissions).title())
 
-            elif isinstance(error, CommandOnCooldown):  # when the command a user executes is on cooldown
-                exception.description = (f"{interaction.user.name}, you're on cooldown to avoid overloading the bot.\n"
-                                         f"Try again after **{error.retry_after:.2f}** seconds.")
+            elif isinstance(error, CommandOnCooldown):
+                exception.title = "Take a breather.."
+                exception.set_thumbnail(url=None)
+                exception.colour = 0x2B2D31
+                after_cd = datetime.datetime.now() + datetime.timedelta(seconds=error.retry_after)
+                exception.description = f"You can run this command {format_dt(after_cd, style='R')}."
             else:
                 exception.description = "Conditions needed to call this command were not met."
 
