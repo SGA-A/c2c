@@ -2132,6 +2132,15 @@ class Economy(commands.Cog):
                                    value=f"Credits: `{format_number_short(tatsu.credits)}`\n"
                                          f"Tokens: `{format_number_short(tatsu.tokens)}`\n"
                                          f"XP: `{format_number_short(tatsu.xp)}`")
+                
+                procfile.add_field(name='Commands',
+                                   value=f"Total: `{format_number_short(data[15])}`")
+                
+                procfile.add_field(name="Drones",
+                                   value="Limited")
+                
+                procfile.add_field(name="Showcase",
+                                   value="No showcase") # soon!
 
                 if get_profile_key_value(f"{user.id} bio"):
                     procfile.description += f"\n**Bio:** {get_profile_key_value(f'{user.id} bio')}"
