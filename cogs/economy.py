@@ -1174,16 +1174,14 @@ class Economy(commands.Cog):
     @staticmethod
     async def open_bank_new(user: discord.Member, conn_input: asqlite_Connection) -> None:
         """Register the user, if they don't exist. Only use in balance commands (reccommended.)"""
+        ranumber = randint(500_000_000, 3_000_000_000)
 
         await conn_input.execute(
-            f"INSERT INTO `{BANK_TABLE_NAME}`(userID, {', '.join(BANK_COLUMNS)}) VALUES(?, {', '.join(['0'] * len(BANK_COLUMNS))})",
-            (user.id,))
+            f"INSERT INTO `{BANK_TABLE_NAME}`(userID, wallet, job, {', '.join(BANK_COLUMNS)}) VALUES(?, ?, ?, {', '.join(['0'] * len(BANK_COLUMNS))})",
+            (user.id, ranumber, "None"))
 
-        ranumber = randint(500_000_000, 3_000_000_000)
-        await conn_input.execute(f"UPDATE `{BANK_TABLE_NAME}` SET `wallet` = ? WHERE userID = ?",
-                                 (ranumber, user.id))
         await conn_input.commit()
-
+        
     @staticmethod
     async def can_call_out(user: discord.Member, conn_input: asqlite_Connection):
         """Check if the user is NOT in the database and therefore not registered (evaluates True if not in db).
