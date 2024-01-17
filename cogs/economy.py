@@ -39,7 +39,7 @@ def number_to_ordinal(n):
 BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
 COOLDOWN_TABLE_NAME = "cooldowns"
-BANK_COLUMNS = ["wallet", "bank", "pmulti", "job", "bounty", "prestige"]
+BANK_COLUMNS = ["bank", "pmulti", "bounty", "prestige"]
 invoker_ch = int()
 participants = set()
 DOWN = True
