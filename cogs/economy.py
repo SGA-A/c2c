@@ -1303,19 +1303,17 @@ class Economy(commands.Cog):
         """Retrieves the users current job."""
         data = await conn_input.execute(f"SELECT job FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
         data = await data.fetchone()
-        return data
+        return data[0]
 
     @staticmethod
     async def change_job_new(user: discord.Member, conn_input: asqlite_Connection,
                                 job_name: str) -> Optional[Any]:
         """Modifies a user's job, returning the new job after changes were made."""
 
-        data = await conn_input.execute(
-            f"UPDATE `{BANK_TABLE_NAME}` SET `job` = ? WHERE userID = ? RETURNING `job`",
+        await conn_input.execute(
+            f"UPDATE `{BANK_TABLE_NAME}` SET `job` = ? WHERE userID = ?",
             (job_name, user.id))
         await conn_input.commit()
-        data = await data.fetchone()
-        return data
 
     # ------------ cooldowns ----------------
 
@@ -1427,7 +1425,7 @@ class Economy(commands.Cog):
 
     @commands.Cog.listener()
     async def on_app_command_completion(self, interaction: discord.Interaction, command):
-        async with self.client.pool_connection.acquire() as conn: # type: ignore
+        async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
                 return
@@ -2070,15 +2068,67 @@ class Economy(commands.Cog):
     @app_commands.describe(job_name='the name of the job')
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def get_job(self, interaction: discord.Interaction,
-                      job_name: Literal['Plumber', 'Cashier', 'Fisher', 'Janitor', 'Youtuber', 'Police']):
+                      job_name: Literal['Plumber', 'Cashier', 'Fisher', 'Janitor',
+                                        'Youtuber', 'Police', 'I want to resign!']):
 
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered) 
 
-            await self.change_job_new(interaction.user, conn, job_name=job_name)
-            await interaction.response.send_message(embed=membed(f"Success! You are now a **{job_name}**.")) 
+            cooldown = await self.fetch_cooldown(conn, user=interaction.user, cooldown_type="job_change")
+            current_job = await self.get_job_data_only(interaction.user, conn) # default is 'None'
+
+            if cooldown is not None:
+                if cooldown[0] in {"0", 0}:
+
+                    if current_job[0] != job_name:
+
+                        ncd = datetime.datetime.now() + datetime.timedelta(days=2)  # the cd
+                        ncd = datetime_to_string(ncd)
+                        await self.update_cooldown(conn, user=interaction.user, cooldown_type="job_change", new_cd=ncd)
+
+                        if job_name.startswith("I"):
+                            if current_job != "None":
+                                await self.change_job_new(interaction.user, conn, job_name='None')
+                                return await interaction.response.send_message(
+                                    embed=membed(f"Alright, I've removed you from your job.\n"
+                                                 f"You cannot apply to another job for the next **48 hours**."))
+                            return await interaction.response.send_message(
+                                embed=membed("You're already unemployed!?"))
+
+                        await self.change_job_new(interaction.user, conn, job_name=job_name)
+                        return await interaction.response.send_message(
+                            embed=membed(f"Congratulations, you've been hired.\n"
+                                         f"Starting today, you are working as a {job_name.lower()}."))  
+                    return await interaction.response.send_message(
+                        embed=membed(f"You're already a {job_name.lower()}!"))
+
+                else:
+
+                    cooldown = string_to_datetime(cooldown[0])
+                    now = datetime.datetime.now()
+                    diff = cooldown - now
+
+                    if diff.total_seconds() <= 0:
+                        await self.update_cooldown(conn, user=interaction.user, cooldown_type="job_change",
+                                                   new_cd="0")
+                        if current_job is None:
+                            response = "You've just applied for a new job, and got a response already!"
+                        else:
+                            response = "You've done the paperwork and have now resigned from your previous job."
+
+                        await interaction.response.send_message(
+                            embed=membed(f"{response}\n"
+                                         f"Call this command again to begin your new career.")
+                        )
+                    else:
+                        when = datetime.datetime.now() + datetime.timedelta(seconds=diff.total_seconds())
+                        embed = discord.Embed(title="Cannot perform this action",
+                                              description=f"You can change your job "
+                                                          f"{discord.utils.format_dt(when, 'R')}.",
+                                              colour=0x2B2D31)
+                        await interaction.response.send_message(embed=embed) 
 
     @app_commands.command(name='profile', description='view user information and stats.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -2637,12 +2687,9 @@ class Economy(commands.Cog):
 
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.followup.send(embed=self.not_registered)
-
-            resp = {"0": "None", 0: "None"}
-            job_description = await self.get_job_data_only(user=interaction.user,
-                                                           conn_input=conn)
-            job_val = resp.setdefault(job_description[0], job_description[0])
-
+                
+            job_val = await self.get_job_data_only(user=interaction.user, conn_input=conn)
+            
             if job_val == "None":
                 return await interaction.followup.send(embed=membed("You don't have a job, get one first."))
 
@@ -2732,9 +2779,7 @@ class Economy(commands.Cog):
                     data = await self.get_one_inv_data_new(user, name, conn)
                     inv += int(cost) * data
 
-                resp = {"0": "None", 0: "None"}
-                job_description = await self.get_job_data_only(user=user, conn_input=conn)
-                job_val = resp.setdefault(job_description[0], job_description[0])
+                job_val = await self.get_job_data_only(user=user, conn_input=conn)
 
                 balance = discord.Embed(color=0x2F3136, timestamp=discord.utils.utcnow())
                 balance.set_author(name=f"{user.name}'s balance", icon_url=user.display_avatar.url)
