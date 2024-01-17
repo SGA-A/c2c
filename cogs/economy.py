@@ -1423,6 +1423,16 @@ class Economy(commands.Cog):
 
         await conn_input.commit()
 
+    # -----------------------------------------
+
+    @commands.Cog.listener()
+    async def on_app_command_completion(self, interaction: discord.Interaction, command):
+        async with self.client.pool_connection.acquire() as conn: # type: ignore
+            conn: asqlite_Connection
+            if await self.can_call_out(interaction.user, conn):
+                return
+            await self.update_bank_new(interaction.user, conn, 1, "cmds_ran")
+
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
 
