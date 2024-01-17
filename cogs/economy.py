@@ -2090,11 +2090,9 @@ class Economy(commands.Cog):
 
             if category == "Main Profile":
                 if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id != user.id):
-                    return await interaction.response.send_message(  
-                        embed=discord.Embed(
-                            colour=0x2F3136,
-                            description=f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
-                                        f"- Only approved users can view {user.name}'s profile."))
+                    return await interaction.response.send_message( 
+                        embed=membed(f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
+                                     f"Only approved users can view {user.name}'s profile."))
 
                 if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id == user.id):
                     ephemerality = True
