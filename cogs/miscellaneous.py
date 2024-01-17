@@ -252,7 +252,7 @@ class Miscellaneous(commands.Cog):
                 await interaction.response.send_message( 
                     embed=membed("An unsuccessful request was made. Try again later."))
 
-    @app_commands.command(name='kona', description='retrieve nsfw posts from konachan.')
+    @app_commands.command(name='kona', description='retrieve nsfw posts from konachan.', nsfw=True)
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.check(was_called_in_a_nsfw_channel)
     @app_commands.describe(tags='the tags to base searches upon', page='the page to look through under a tag')
@@ -322,7 +322,7 @@ class Miscellaneous(commands.Cog):
                                        delete_after=30.0)
         await interaction.response.send_message(embed=embed) 
 
-    @app_commands.command(name='tagsearch', description='retrieve tags from konachan.')
+    @app_commands.command(name='tagsearch', description='retrieve tags from konachan.', nsfw=True)
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.check(was_called_in_a_nsfw_channel)
     @app_commands.describe(tag_pattern="the pattern to use to find match results")
