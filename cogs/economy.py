@@ -1306,8 +1306,7 @@ class Economy(commands.Cog):
         return data[0]
 
     @staticmethod
-    async def change_job_new(user: discord.Member, conn_input: asqlite_Connection,
-                                job_name: str) -> Optional[Any]:
+    async def change_job_new(user: discord.Member, conn_input: asqlite_Connection, job_name: str) -> None:
         """Modifies a user's job, returning the new job after changes were made."""
 
         await conn_input.execute(
