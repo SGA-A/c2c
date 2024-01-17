@@ -44,7 +44,7 @@ We are 2 teenagers in the UK studying A-Levels, and chose to make this Discord b
 
 ## Installation
 > [!CAUTION]
-> We do not support running an instance of my bot. Setup details will not be given, if you can figure it out, go nuts.
+> We do not support running an instance of the bot. Setup details will not be given, if you can figure it out, go nuts.
 > 
 > We are not responsible for any errors that may occur when running this bot.
 
