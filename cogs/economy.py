@@ -1581,27 +1581,39 @@ class Economy(commands.Cog):
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def view_the_shop(self, interaction: discord.Interaction):
 
-        async with self.client.pool_connection.acquire() as conn: 
+        async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
+
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered) 
-            additional_notes = set()
-            em = discord.Embed(
-                title="Shop",
-                color=discord.Color.dark_embed()
-            )
+                return await interaction.response.send_message(embed=self.not_registered)
+
+            additional_notes = list()
 
             for item in SHOP_ITEMS:
                 name = " ".join(item["name"].split("_"))
 
-                additional_notes.add(
+                additional_notes.append(
                     f"{item['emoji']} __{name}__ \U00002014 [\U000023e3 **{item['cost']:,}**](https://youtu.be/dQw4w9WgXcQ)\n"
                     f"{ARROW}{item["info"]}\n"
                     f"{ARROW}ID: `{item['id']}`\n"
                     f"{ARROW}Quantity Remaining: `{get_stock(name)}`")
-                all_items = "\n\n".join(additional_notes)
-                em.description = f"{all_items}"
-            await interaction.response.send_message(embed=em) 
+
+            async def get_page_part(page: int):
+                emb = discord.Embed(
+                    title="Shop",
+                    color=0x2B2D31,
+                    description=""
+                )
+                offset = (page - 1) * 5
+                length = 3
+
+                for item_mod in additional_notes[offset:offset + length]:
+                    emb.description += f"{item_mod}\n\n"
+                n = Pagination.compute_total_pages(len(additional_notes), length)
+                emb.set_footer(text=f"This is page {page} of {n}")
+                return emb, n
+
+            await Pagination(interaction, get_page_part).navigate()
 
     @shop.command(name='lookup', description='get info about a particular item.')
     @app_commands.describe(item_name='the name of the item you want to sell.')
@@ -2090,11 +2102,9 @@ class Economy(commands.Cog):
 
             if category == "Main Profile":
                 if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id != user.id):
-                    return await interaction.response.send_message(  
-                        embed=discord.Embed(
-                            colour=0x2F3136,
-                            description=f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
-                                        f"- Only approved users can view {user.name}'s profile."))
+                    return await interaction.response.send_message( 
+                        embed=membed(f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
+                                     f"Only approved users can view {user.name}'s profile."))
 
                 if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id == user.id):
                     ephemerality = True
