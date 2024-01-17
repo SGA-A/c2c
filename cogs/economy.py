@@ -1603,9 +1603,9 @@ class Economy(commands.Cog):
             case 0:
                 stock_resp = f"The item is currently out of stock."
             case 1 | 2 | 3:
-                stock_resp = f"There are shortage in stocks, only {item_stock} remain."
+                stock_resp = f"There are shortage in stocks, only **{item_stock}** remain."
             case _:
-                stock_resp = f"The item is in stock ({item_stock} available)."
+                stock_resp = f"The item is in stock (**{item_stock}** available)."
 
         match item_name:
             case 'Keycard':
@@ -1633,12 +1633,14 @@ class Economy(commands.Cog):
                     data = await conn.execute(f"SELECT COUNT(*) FROM inventory WHERE {stored} > 0")
                     data = await data.fetchone()
                     owned_by_how_many = data[0]
+                    their_count = await self.get_one_inv_data_new(interaction.user, stored, conn)
 
                 em = discord.Embed(title=name,
                     description=f"> {item["info"]}\n\n"
                                 f"{stock_resp}\n"
-                                f"{owned_by_how_many} {make_plural("person", owned_by_how_many)} "
-                                f"{plural_for_own(owned_by_how_many)} this item.",
+                                f"**{owned_by_how_many}** {make_plural("person", owned_by_how_many)} "
+                                f"{plural_for_own(owned_by_how_many)} this item.\n"
+                                f"You own **{their_count}**.",
                     colour=clr, url="https://www.youtube.com"
                 )
                 em.set_thumbnail(url=item["url"])
