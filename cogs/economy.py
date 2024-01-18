@@ -3299,7 +3299,7 @@ class Economy(commands.Cog):
                 else:
                     namount = min(50_000_000, wallet_amt)
             else:
-                return await interaction.followup.send(embed=ERR_UNREASON)  # type: ignore
+                return await interaction.followup.send(embed=ERR_UNREASON)  
 
 
         # -------------------- Check to see if user has sufficient balance --------------------------
@@ -3425,12 +3425,13 @@ class Economy(commands.Cog):
                 amount = expo
             except AssertionError:
                 if exponent_amount.lower() in {'max', 'all'}:
-                    amount = 100000000 if has_keycard else 50000000
+                    if has_keycard:
+                        amount = min(100_000_000, wallet_amt)
+                    else:
+                        amount = min(50_000_000, wallet_amt)
                 else:
-                    return await interaction.response.send_message(embed=ERR_UNREASON) 
+                    return await interaction.followup.send(embed=ERR_UNREASON)
 
-            if amount == 0:
-                await interaction.response.send_message(embed=ERR_UNREASON) 
             if has_keycard:
                 if (amount > 100000000) or (amount < 100000):
                     err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the bet criteria:\n'
