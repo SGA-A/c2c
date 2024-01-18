@@ -2815,16 +2815,16 @@ class Economy(commands.Cog):
         member = member or interaction.user
         if interaction.user.id not in {992152414566232139, 546086191414509599}:
             if (member is not None) and (member != interaction.user):
-                return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
+                return await interaction.response.send_message(embed=ERR_UNREASON) 
         else:
             if member.bot:
-                return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
+                return await interaction.response.send_message(embed=ERR_UNREASON) 
 
-        async with self.client.pool_connection.acquire() as conn: # type: ignore
+        async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
 
             if await self.can_call_out(member, conn):
-                await interaction.response.send_message( # type: ignore
+                await interaction.response.send_message( 
                     embed=membed(f"Could not find {member.name} in the database."))
             else:
 
@@ -2837,7 +2837,7 @@ class Economy(commands.Cog):
                                                       "cannot recover this data again.",
                                           colour=0x2B2D31)
 
-                    await interaction.response.send_message(embed=embed, view=view)  # type: ignore
+                    await interaction.response.send_message(embed=embed, view=view)  
                     view.msg = await interaction.original_response()
                     return
 
@@ -2853,7 +2853,7 @@ class Economy(commands.Cog):
                                         colour=discord.Colour.brand_green())
                 success.set_footer(text="Some requirements were bypassed.", icon_url=self.client.user.avatar.url)
 
-                await interaction.response.send_message(embed=embed) # type: ignore
+                await interaction.response.send_message(embed=embed) 
 
     @app_commands.command(name="withdraw", description="withdraw robux from your account.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
