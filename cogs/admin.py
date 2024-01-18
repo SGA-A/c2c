@@ -159,21 +159,22 @@ class Administrate(commands.Cog):
         """Generates or deducts a given amount of robux to the mentioned user."""
 
         real_amount = determine_exponent(amount)
-        async with self.client.pool_connection.acquire() as conn: 
+        async with self.client.pool_connection.acquire() as conn: # type: ignore
             conn: asqlite_Connection
-            users = await Economy.get_bank_data_new(member, conn)
-
+            their_bank = await Economy.get_spec_bank_data(member, "bank", conn)
+            their_wallet = await Economy.get_wallet_data_only(member, conn)
+            
             if configuration == "add":
 
                 match deposit_mode:
                     case "bank":
-                        new_amount = users[2] + int(real_amount)
+                        new_amount = their_bank + int(real_amount)
                         await Economy.update_bank_new(member, conn, +int(real_amount), deposit_mode)
                     case _:
-                        new_amount = users[1] + int(real_amount)
+                        new_amount = their_wallet + int(real_amount)
                         await Economy.update_bank_new(member, conn, +int(real_amount))
 
-                total = (users[1] + users[2]) + int(real_amount)
+                total = (their_bank + their_wallet) + int(real_amount)
                 embed2 = discord.Embed(title='Success',
                                        description=f"\U0000279c added {CURRENCY}{int(real_amount):,} "
                                                    f"robux to **{member.display_name}**'s balance.\n"
@@ -183,23 +184,23 @@ class Administrate(commands.Cog):
                                                    f"is {CURRENCY}{total:,}",
                                        colour=discord.Colour.dark_green(), timestamp=datetime.now())
                 embed2.set_thumbnail(url=member.display_avatar.url)
-                embed2.set_author(name=f"Requested by {interaction.user.name}", 
+                embed2.set_author(name=f"Requested by {interaction.user.name}",
                                   icon_url=interaction.user.display_avatar.url)
                 embed2.set_footer(text=f"configuration type: ADD_TO")
 
-                await interaction.response.send_message(embed=embed2, ephemeral=ephemeral) 
+                await interaction.response.send_message(embed=embed2, ephemeral=ephemeral) # type: ignore
 
-            if configuration == "remove":
+            elif configuration == "remove":
 
                 match deposit_mode:
                     case "bank":
-                        new_amount = users[2] - int(real_amount)
+                        new_amount = their_bank - int(real_amount)
                         await Economy.update_bank_new(member, conn, -int(real_amount), deposit_mode)
                     case _:
-                        new_amount = users[1] - int(real_amount)
+                        new_amount = their_wallet - int(real_amount)
                         await Economy.update_bank_new(member, conn, -int(real_amount))
 
-                total = (users[1] + users[2]) - int(real_amount)
+                total = (their_bank + their_wallet) - int(real_amount)
                 embed3 = discord.Embed(title='Success',
                                        description=f"\U0000279c deducted {CURRENCY}{int(real_amount):,} "
                                                    f"robux from **{member.display_name}**'s balance.\n"
@@ -208,27 +209,27 @@ class Administrate(commands.Cog):
                                                    f"\U0000279c **{member.display_name}**'s total balance now "
                                                    f"is {CURRENCY}{total:,}",
                                        colour=discord.Colour.dark_red(), timestamp=datetime.now())
-                embed3.set_author(name=f"Requested by {interaction.user.name}", 
-                                  icon_url=interaction.user.display_avatar.url)
+                embed3.set_author(name=f"Requested by {interaction.user.name}",
+                                  icon_url=interaction.user.avatar.url)
                 embed3.set_thumbnail(url=member.display_avatar.url)
                 embed3.set_footer(text=f"configuration type: REMOVE_FROM")
 
-                await interaction.response.send_message(embed=embed3, ephemeral=ephemeral) 
+                await interaction.response.send_message(embed=embed3, ephemeral=ephemeral) # type: ignore
 
-            if configuration == "make":
+            else:
                 change = int(
-                    real_amount) - users[1]  # if amount to change to was 5000 and wallet_amt was 6000, new = -1000
+                    real_amount) - their_wallet
                 await Economy.update_bank_new(member, conn, +change, deposit_mode)
                 embed4 = discord.Embed(title='Success',
                                        description=f"\U0000279c **{member.display_name}**'s "
                                                    f"**`{deposit_mode}`** balance has been "
-                                                   f"changed to {CURRENCY}{abs(users[1] + change):,}.",
+                                                   f"changed to {CURRENCY}{abs(their_wallet + change):,}.",
                                        colour=discord.Colour.dark_purple(), timestamp=datetime.now())
                 embed4.set_footer(text=f"configuration type: ALTER_TO")
                 embed4.set_thumbnail(url=member.display_avatar.url)
-                embed4.set_author(name=f"Requested by {interaction.user.name}", 
-                                  icon_url=interaction.user.display_avatar.url)
-                await interaction.response.send_message(embed=embed4, ephemeral=ephemeral) 
+                embed4.set_author(name=f"Requested by {interaction.user.name}",
+                                  icon_url=interaction.user.avatar.url)
+                await interaction.response.send_message(embed=embed4, ephemeral=ephemeral) # type: ignore
 
     @app_commands.command(name='pin', description='pin a message in any channel.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
