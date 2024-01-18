@@ -1189,7 +1189,7 @@ class Economy(commands.Cog):
         ranumber = randint(500_000_000, 3_000_000_000)
 
         await conn_input.execute(
-            f"INSERT INTO `{BANK_TABLE_NAME}`(userID, wallet, job, {', '.join(BANK_COLUMNS)}) VALUES(?, ?, ?, {', '.join(['0'] * len(BANK_COLUMNS))})",
+            f"INSERT INTO `{BANK_TABLE_NAME}`(userID, wallet, job) VALUES (?, ?, ?)",
             (user.id, ranumber, "None"))
 
         await conn_input.commit()
