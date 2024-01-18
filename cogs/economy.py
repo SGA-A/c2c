@@ -2807,50 +2807,53 @@ class Economy(commands.Cog):
 
                 await interaction.followup.send(embed=balance)
 
-    @app_commands.command(name="discontinue", description="opt out of the virtual economy.")
+    @app_commands.command(name="resetmydata", description="opt out of the virtual economy.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(member='the user to remove all of the data of')
     async def discontinue_bot(self, interaction: discord.Interaction, member: Optional[discord.Member]):
 
         member = member or interaction.user
-
         if interaction.user.id not in {992152414566232139, 546086191414509599}:
-            if member is not None:
-                return await interaction.response.send_message(embed=ERR_UNREASON) 
-        else: 
+            if (member is not None) and (member != interaction.user):
+                return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
+        else:
             if member.bot:
-                return await interaction.response.send_message(embed=ERR_UNREASON) 
+                return await interaction.response.send_message(embed=ERR_UNREASON) # type: ignore
 
-        async with self.client.pool_connection.acquire() as conn: 
+        async with self.client.pool_connection.acquire() as conn: # type: ignore
             conn: asqlite_Connection
-            data = await self.get_bank_data_new(member, conn)
 
-            if data is None:
-                await interaction.response.send_message( 
-                    embed=membed(f"Cannot perform this action, {member.name} is not on our database."))
+            if await self.can_call_out(member, conn):
+                await interaction.response.send_message( # type: ignore
+                    embed=membed(f"Could not find {member.name} in the database."))
             else:
 
                 if member.id == interaction.user.id:
                     view = ConfirmDeny(interaction, self.client, member)
-                    await interaction.response.send_message("## Are you sure you want to do this?\n" 
-                                                            "You are about to erase all of your data "
-                                                            "associated with your account.\n"
-                                                            "**This process is irreversible, you cannot "
-                                                            "recover this data afterwards.**",
-                                                            view=view)  
+
+                    embed = discord.Embed(title="Are you sure you want to do this?",
+                                          description="Remember, you are about to erase **all** your data.\n"
+                                                      "This process is irreversible, you "
+                                                      "cannot recover this data again.",
+                                          colour=0x2B2D31)
+
+                    await interaction.response.send_message(embed=embed, view=view)  # type: ignore
                     view.msg = await interaction.original_response()
                     return
-                tables_to_delete = [BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME]
+
+                tables_to_delete = {BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME}
+
                 for table in tables_to_delete:
                     await conn.execute(f"DELETE FROM `{table}` WHERE userID = ?", (member.id,))
 
                 await conn.commit()
-                embed = discord.Embed(colour=0x2F3136,
-                                      description=f"## <:successful:1183089889269530764> {member.name}'s records have been wiped.\n"
-                                                  f"- {member.name} can register again at any time"
-                                                  f" if {member.name} checks their balance.")
+                success = discord.Embed(title="Action Confirmed",
+                                        description=f"{member.name} is now basically out of our database, "
+                                                    f"we no longer have any EUD from {member.name} (end user data).",
+                                        colour=discord.Colour.brand_green())
+                success.set_footer(text="Some requirements were bypassed.", icon_url=self.client.user.avatar.url)
 
-                await interaction.response.send_message(embed=embed) 
+                await interaction.response.send_message(embed=embed) # type: ignore
 
     @app_commands.command(name="withdraw", description="withdraw robux from your account.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
