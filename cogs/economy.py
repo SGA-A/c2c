@@ -3293,14 +3293,14 @@ class Economy(commands.Cog):
             assert isinstance(expo, int)
             namount = expo
         except AssertionError:
-
             if bet_amount.lower() in {'max', 'all'}:
-                if has_keycard and wallet_amt >= 100_000_000:
-                    namount = 100_000_000
+                if has_keycard:
+                    namount = min(100_000_000, wallet_amt)
                 else:
-                    namount = wallet_amt
+                    namount = min(50_000_000, wallet_amt)
             else:
-                return await interaction.followup.send(embed=ERR_UNREASON)  
+                return await interaction.followup.send(embed=ERR_UNREASON)  # type: ignore
+
 
         # -------------------- Check to see if user has sufficient balance --------------------------
 
