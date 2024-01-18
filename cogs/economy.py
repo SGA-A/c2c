@@ -429,9 +429,7 @@ class ConfirmDeny(discord.ui.View):
                                     colour=discord.Colour.brand_green())
 
             await conn.commit()
-            await interaction.message.edit(
-                embed=success,
-                view=None)
+            await interaction.message.edit(embed=success, view=None)
 
     @discord.ui.button(label='Deny', style=discord.ButtonStyle.gray)
     async def deny(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2849,7 +2847,7 @@ class Economy(commands.Cog):
                                         colour=discord.Colour.brand_green())
                 success.set_footer(text="Some requirements were bypassed.", icon_url=self.client.user.avatar.url)
 
-                await interaction.response.send_message(embed=embed) 
+                await interaction.response.send_message(embed=success) 
 
     @app_commands.command(name="withdraw", description="withdraw robux from your account.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
