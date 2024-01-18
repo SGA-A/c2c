@@ -39,7 +39,6 @@ def number_to_ordinal(n):
 BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
 COOLDOWN_TABLE_NAME = "cooldowns"
-BANK_COLUMNS = ["bank", "pmulti", "bounty", "prestige"]
 DOWN = True
 UNIQUE_BADGES = {
             992152414566232139: "<:e1_stafff:1145039666916110356>",
@@ -816,7 +815,7 @@ class HighLow(discord.ui.View):
                                     colour=discord.Color.brand_green())
                 win.set_author(name=f"{interaction.user.name}'s winning high-low game",
                                icon_url=interaction.user.display_avatar.url)
-                await interaction.response.edit_message(embed=win, view=self)
+                await interaction.response.edit_message(embed=win, view=self) 
             else:
                 new_amount = await Economy.update_bank_new(interaction.user, conn, -self.their_bet)
                 await self.make_clicked_blurple_only(button)
@@ -828,7 +827,7 @@ class HighLow(discord.ui.View):
                                      colour=discord.Color.brand_red())
                 lose.set_author(name=f"{interaction.user.name}'s losing high-low game",
                                 icon_url=interaction.user.display_avatar.url)
-                await interaction.response.edit_message(embed=lose, view=self)
+                await interaction.response.edit_message(embed=lose, view=self) 
 
     @discord.ui.button(label='JACKPOT!', style=discord.ButtonStyle.blurple)
     async def jackpot(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -851,7 +850,7 @@ class HighLow(discord.ui.View):
                                     colour=discord.Color.brand_green())
                 win.set_author(name=f"{interaction.user.name}'s winning high-low game",
                                icon_url=interaction.user.display_avatar.url)
-                await interaction.response.edit_message(embed=win, view=self)
+                await interaction.response.edit_message(embed=win, view=self) 
             else:
                 new_bal = await Economy.update_bank_new(interaction.user, conn, -self.their_bet)
                 await self.make_clicked_blurple_only(button)
@@ -864,7 +863,7 @@ class HighLow(discord.ui.View):
                 lose.set_author(name=f"{interaction.user.name}'s losing high-low game",
                                 icon_url=interaction.user.display_avatar.url)
 
-                await interaction.response.edit_message(embed=lose, view=self)
+                await interaction.response.edit_message(embed=lose, view=self) 
 
     @discord.ui.button(label='Higher', style=discord.ButtonStyle.blurple)
     async def high(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -887,7 +886,7 @@ class HighLow(discord.ui.View):
                                     colour=discord.Color.brand_green())
                 win.set_author(name=f"{interaction.user.name}'s winning high-low game",
                                icon_url=interaction.user.display_avatar.url)
-                await interaction.response.edit_message(embed=win, view=self)
+                await interaction.response.edit_message(embed=win, view=self) 
             else:
                 new_bal = await Economy.update_bank_new(interaction.user, conn, -self.their_bet)
                 await self.make_clicked_blurple_only(button)
@@ -899,7 +898,7 @@ class HighLow(discord.ui.View):
                                      colour=discord.Color.brand_red())
                 lose.set_author(name=f"{interaction.user.name}'s losing high-low game",
                                 icon_url=interaction.user.display_avatar.url)
-                await interaction.response.edit_message(embed=lose, view=self)
+                await interaction.response.edit_message(embed=lose, view=self) 
 
 
 class UpdateInfo(discord.ui.Modal, title='Update your Profile'):
@@ -1111,8 +1110,10 @@ class Leaderboard(discord.ui.View):
         self.add_item(DropdownLB(client))
 
     async def on_timeout(self) -> None:
+
         for item in self.children:
             item.disabled = True
+
         await self.message.edit(view=self) 
 
 
@@ -1143,7 +1144,6 @@ class Economy(commands.Cog):
             return True
         return False
 
-
     async def fetch_tatsu_profile(self, user_id: int):
         """Get tatsu data associated with a given user."""
         repeat = ApiWrapper(key=self.client.TATSU_API_KEY)  
@@ -1163,6 +1163,19 @@ class Economy(commands.Cog):
 
             await hook.send(f"Hey {interaction.user.mention}! We noticed you have not set a personal "
                             f"multiplier. You should set one up now to increase your returns!")
+
+    async def send_custom_text(self, interaction: discord.Interaction,
+                               custom_text: str):
+        hook_id = get_profile_key_value(f"{interaction.channel.id} webhook")
+        if hook_id is None:
+            async with self.client.session.get("https://i.imgur.com/3aMsyXI.jpg") as resp:  
+                avatar_data = await resp.read()
+            hook = await interaction.channel.create_webhook(name='Notify', avatar=avatar_data)
+            modify_profile("update", f"{interaction.channel.id} webhook", hook.id)
+        else:
+            hook = await self.client.fetch_webhook(hook_id)
+
+        await hook.send(custom_text)
 
     @staticmethod
     def calculate_hand(hand):
@@ -1187,7 +1200,7 @@ class Economy(commands.Cog):
             (user.id, ranumber, "None"))
 
         await conn_input.commit()
-        
+
     @staticmethod
     async def can_call_out(user: discord.Member, conn_input: asqlite_Connection):
         """Check if the user is NOT in the database and therefore not registered (evaluates True if not in db).
@@ -1220,7 +1233,7 @@ class Economy(commands.Cog):
 
     @staticmethod
     async def get_bank_data_new(user: discord.Member, conn_input: asqlite_Connection) -> Optional[Any]:
-        """Retrieves robux data and other gambling stats from a registered user."""
+        """Retrieves all data from a registered user."""
         data = await conn_input.execute(f"SELECT * FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
         data = await data.fetchone()
         return data
@@ -1250,6 +1263,33 @@ class Economy(commands.Cog):
         data = await conn_input.execute(
             f"UPDATE `{BANK_TABLE_NAME}` SET `{mode}` = `{mode}` + ? WHERE userID = ? RETURNING `{mode}`",
             (amount, user.id))
+        data = await data.fetchone()
+        return data
+
+    @staticmethod
+    async def update_bank_multiple_new(user: discord.Member | discord.User, conn_input: asqlite_Connection,
+                                       mode1: str, amount1: Union[float, int], mode2: str, amount2: Union[float, int],
+                                       table_name: Optional[str] = "bank") -> Optional[Any]:
+        """Modifies any two fields at once by their respective amounts. Returning the values of both fields.
+        You are able to choose what table you wish to modify the contents of."""
+        data = await conn_input.execute(
+            f"UPDATE `{table_name}` SET `{mode1}` = `{mode1}` + ?, `{mode2}` = `{mode2}` + ? WHERE userID = ? "
+            f"RETURNING `{mode1}`, `{mode2}`",
+            (amount1, amount2, user.id))
+        data = await data.fetchone()
+        return data
+
+    @staticmethod
+    async def update_bank_three_new(user: discord.Member | discord.User, conn_input: asqlite_Connection,
+                                       mode1: str, amount1: Union[float, int], mode2: str, amount2: Union[float, int],
+                                       mode3: str, amount3: Union[float, int],
+                                       table_name: Optional[str] = "bank") -> Optional[Any]:
+        """Modifies any two fields at once by their respective amounts. Returning the values of both fields.
+        You are able to choose what table you wish to modify the contents of."""
+        data = await conn_input.execute(
+            f"UPDATE `{table_name}` SET `{mode1}` = `{mode1}` + ?, `{mode2}` = `{mode2}` + ?, `{mode3}` = `{mode3}` + ? WHERE userID = ? "
+            f"RETURNING `{mode1}`, `{mode2}`, `{mode3}`",
+            (amount1, amount2, amount3, user.id))
         data = await data.fetchone()
         return data
 
@@ -1303,8 +1343,8 @@ class Economy(commands.Cog):
     # ------------ JOB FUNCS ----------------
 
     @staticmethod
-    async def get_job_data_only(user: discord.Member, conn_input: asqlite_Connection) -> Optional[Any]:
-        """Retrieves the users current job."""
+    async def get_job_data_only(user: discord.Member, conn_input: asqlite_Connection) -> str:
+        """Retrieves the users current job. This is now always a string."""
         data = await conn_input.execute(f"SELECT job FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
         data = await data.fetchone()
         return data[0]
@@ -1434,6 +1474,7 @@ class Economy(commands.Cog):
                 return
             await self.update_bank_new(interaction.user, conn, 1, "cmds_ran")
 
+
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
 
@@ -1473,13 +1514,15 @@ class Economy(commands.Cog):
                                                       f'If you\'ve received a low roll, there is a very *small chance* '
                                                       f'you can request for a buff (in very unfortunate cases).')
             elif (their_multi[0] == 0) and (user_name.id != interaction.user.id):
-                multi_own = discord.Embed(colour=0x2F3136, description=f'{user_name.name} doesn\'t have a personal '
-                                                                       f'multiplier associated with their account.')
+                multi_own = discord.Embed(colour=0x2F3136, description="No multipliers found for this user.")
                 multi_own.set_author(name=f'Viewing {user_name.name}\'s multipliers', icon_url=user_name.display_avatar.url)
             else:
                 server_bs = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0)
                 multi_own = discord.Embed(colour=0x2F3136,
-                                          description=f'Personal multiplier: **{their_multi[0]:,}**%\n'
+                                          description=f'> **The way multipliers work is being changed soon.** It will '
+                                                      f'no longer be fixed and will offer more flexibility. See [#35]('
+                                                      f'https://github.com/SGA-A/c2c/issues/35) for the details.\n\n'
+                                                      f'Personal multiplier: **{their_multi[0]:,}**%\n'
                                                       f'*A multiplier that is unique to a user and is usually a fixed '
                                                       f'amount.*\n\n'
                                                       f'Global multiplier: **{server_bs:,}**%\n'
@@ -1582,11 +1625,11 @@ class Economy(commands.Cog):
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def view_the_shop(self, interaction: discord.Interaction):
 
-        async with self.client.pool_connection.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered) 
 
             additional_notes = list()
 
@@ -2080,31 +2123,31 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=self.not_registered) 
 
             cooldown = await self.fetch_cooldown(conn, user=interaction.user, cooldown_type="job_change")
-            current_job = await self.get_job_data_only(interaction.user, conn) # default is 'None'
+            current_job = await self.get_job_data_only(interaction.user, conn)
 
             if cooldown is not None:
                 if cooldown[0] in {"0", 0}:
 
                     if current_job[0] != job_name:
 
-                        ncd = datetime.datetime.now() + datetime.timedelta(days=2)  # the cd
+                        ncd = datetime.datetime.now() + datetime.timedelta(days=2)
                         ncd = datetime_to_string(ncd)
                         await self.update_cooldown(conn, user=interaction.user, cooldown_type="job_change", new_cd=ncd)
 
                         if job_name.startswith("I"):
                             if current_job != "None":
                                 await self.change_job_new(interaction.user, conn, job_name='None')
-                                return await interaction.response.send_message(
+                                return await interaction.response.send_message( 
                                     embed=membed(f"Alright, I've removed you from your job.\n"
                                                  f"You cannot apply to another job for the next **48 hours**."))
-                            return await interaction.response.send_message(
+                            return await interaction.response.send_message( 
                                 embed=membed("You're already unemployed!?"))
 
                         await self.change_job_new(interaction.user, conn, job_name=job_name)
-                        return await interaction.response.send_message(
+                        return await interaction.response.send_message( 
                             embed=membed(f"Congratulations, you've been hired.\n"
                                          f"Starting today, you are working as a {job_name.lower()}."))  
-                    return await interaction.response.send_message(
+                    return await interaction.response.send_message( 
                         embed=membed(f"You're already a {job_name.lower()}!"))
 
                 else:
@@ -2121,7 +2164,7 @@ class Economy(commands.Cog):
                         else:
                             response = "You've done the paperwork and have now resigned from your previous job."
 
-                        await interaction.response.send_message(
+                        await interaction.response.send_message( 
                             embed=membed(f"{response}\n"
                                          f"Call this command again to begin your new career.")
                         )
@@ -2155,7 +2198,7 @@ class Economy(commands.Cog):
 
             if category == "Main Profile":
                 if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id != user.id):
-                    return await interaction.response.send_message( 
+                    return await interaction.response.send_message(  
                         embed=membed(f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
                                      f"Only approved users can view {user.name}'s profile."))
 
@@ -2179,9 +2222,8 @@ class Economy(commands.Cog):
                         url="https://media.discordapp.net/attachments/1124672402413072446/1164912661004292136/20231010000451.png?ex=6544f075&is=65327b75&hm=dfef49bfcab2ca0f8f2d50db7733c5e3ba6cf691f5350ddf8fb8350fc2bb38d8&=&width=1246&height=701")
 
                 match user.id:
-                    case 546086191414509599 | 992152414566232139:
-                        note = ("> <:cprofile:1174417914183561287> *This user's custom profile contains "
-                                "additional perks that will not be publicized.*\n\n")
+                    case 546086191414509599 | 992152414566232139 | 1148206353647669298:
+                        note = "> <:e1_stafff:1145039666916110356> *This user is a developer of this bot.*\n\n"
                     case _:
                         note = ""
 
@@ -2205,15 +2247,15 @@ class Economy(commands.Cog):
                                    value=f"Credits: `{format_number_short(tatsu.credits)}`\n"
                                          f"Tokens: `{format_number_short(tatsu.tokens)}`\n"
                                          f"XP: `{format_number_short(tatsu.xp)}`")
-                
+
                 procfile.add_field(name='Commands',
                                    value=f"Total: `{format_number_short(data[15])}`")
-                
+
                 procfile.add_field(name="Drones",
-                                   value="Limited")
-                
+                                   value="See [#32](https://github.com/SGA-A/c2c/issues/32)")
+
                 procfile.add_field(name="Showcase",
-                                   value="No showcase") # soon!
+                                   value="See [#33](https://github.com/SGA-A/c2c/issues/33)")
 
                 if get_profile_key_value(f"{user.id} bio"):
                     procfile.description += f"\n**Bio:** {get_profile_key_value(f'{user.id} bio')}"
@@ -2310,12 +2352,14 @@ class Economy(commands.Cog):
 
             real_amount = determine_exponent(robux)
             wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
+
             if isinstance(real_amount, str):
-                if real_amount.lower() == 'max' or real_amount.lower() == 'all':
+                if real_amount in {'all', 'max'}:
                     if 50000000 > wallet_amt:
                         real_amount = wallet_amt
                     else:
                         real_amount = 50000000
+
             if not (is_valid(int(real_amount), wallet_amt)):
                 return await interaction.response.send_message(embed=ERR_UNREASON) 
 
@@ -2338,139 +2382,133 @@ class Economy(commands.Cog):
     @app_commands.command(name='slots',
                           description='try your luck on a slot machine.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
-    @app_commands.rename(keyword='robux')
-    @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    @app_commands.describe(keyword='an integer to bet upon. Supports Shortcuts (max, all, exponents).')
-    async def slots(self, interaction: discord.Interaction, keyword: str):
+    @app_commands.checks.cooldown(1, 2)
+    @app_commands.rename(amount='robux')
+    @app_commands.describe(amount='an integer to bet upon. Supports Shortcuts (max, all, exponents).')
+    async def slots(self, interaction: discord.Interaction, amount: str):
 
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
+
             if await self.can_call_out(interaction.user, conn):
                 await interaction.response.send_message(embed=self.not_registered) 
 
         # --------------- Checks before betting i.e. has keycard, meets bet constraints. -------------
         data = await self.get_one_inv_data_new(interaction.user, "Keycard", conn)
-        has_keycard = data and True
-        expo = determine_exponent(keyword)
+        amount = determine_exponent(amount)
+
+        slot_stuff = await conn.execute(f"SELECT slotw, slotl, wallet FROM `{BANK_TABLE_NAME}` WHERE userID = ?",
+                                        (interaction.user.id,))
+        slot_stuff = await slot_stuff.fetchone()
+
+        id_won_amount, id_lose_amount, wallet_amt  = slot_stuff[0], slot_stuff[1], slot_stuff[-1]
+
         try:
-            assert isinstance(expo, int)
-            amount = expo
+            assert isinstance(amount, int)
+            amount = amount
         except AssertionError:
-            if keyword.lower() in {'max', 'all'}:
-                if has_keycard:
-                    amount = 75000000
+            if amount in {'max', 'all'}:
+                if data >= 1:
+                    amount = min(75_000_000, wallet_amt)
                 else:
-                    amount = 50000000
+                    amount = min(50_000_000, wallet_amt)
             else:
-                return await interaction.response.send_message(embed=ERR_UNREASON) 
+                return await interaction.response.send_message(embed=ERR_UNREASON)  
 
         # --------------- Contains checks before betting i.e. has keycard, meets bet constraints. -------------
-        wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
-        if has_keycard:
-            if (amount > 75000000) or (amount < 30000):
-                err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the slot machine criteria:\n'
-                                                                 f'- You wanted to bet {CURRENCY}**{amount:,}**\n'
-                                                                 f' - A minimum bet of {CURRENCY}**30,000** must '
-                                                                 f'be made\n'
-                                                                 f' - A maximum bet of {CURRENCY}**75,000,000** '
-                                                                 f'can only be made.')
-                return await interaction.response.send_message(embed=err) 
+        if data >= 1:
+            if not (30000 <= amount <= 75000000):
+                return await interaction.response.send_message(embed=discord.Embed(colour=0x2F3136, description=(  
+                    f'## You did not meet the slot machine criteria.\n'
+                    f'- You wanted to bet {CURRENCY}**{amount:,}**\n'
+                    f' - A minimum bet of {CURRENCY}**30,000** must be made\n'
+                    f' - A maximum bet of {CURRENCY}**75,000,000** can only be made.'
+                )))
             elif amount > wallet_amt:
-                err = discord.Embed(colour=0x2F3136, description=f'Cannot perform this action, '
-                                                                 f'you only have {CURRENCY}**{wallet_amt:,}**.\n'
-                                                                 f'You\'ll need {CURRENCY}**{amount - wallet_amt:,}**'
-                                                                 f' more in your wallet first.')
-                return await interaction.response.send_message(embed=err) 
+                return await interaction.response.send_message(embed=discord.Embed(colour=0x2F3136, description=(  
+                    f'Cannot perform this action.\n'
+                    f'You only have {CURRENCY}**{wallet_amt:,}**.\n'
+                    f'You\'ll need {CURRENCY}**{amount - wallet_amt:,}** more in your wallet first.'
+                )))
         else:
-            if (amount > 50000000) or (amount < 50000):
-                err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the slot machine criteria:\n'
-                                                                 f'- You wanted to bet {CURRENCY}**{amount:,}**\n'
-                                                                 f' - A minimum bet of {CURRENCY}**50,000** must '
-                                                                 f'be made.\n'
-                                                                 f' - A maximum bet of {CURRENCY}**50,000,000** '
-                                                                 f'can only be made.')
-                return await interaction.response.send_message(embed=err) 
+            if not (50000 <= amount <= 50000000):
+                return await interaction.response.send_message(embed=discord.Embed(colour=0x2F3136, description=(  
+                    f'## You did not meet the slot machine criteria.\n'
+                    f'- You wanted to bet {CURRENCY}**{amount:,}**\n'
+                    f' - A minimum bet of {CURRENCY}**50,000** must be made.\n'
+                    f' - A maximum bet of {CURRENCY}**50,000,000** can only be made.'
+                )))
+
             elif amount > wallet_amt:
-                err = discord.Embed(colour=0x2F3136, description=f"## Cannot perform this action, "
-                                                                 f"You only have {CURRENCY}**{wallet_amt:,}**.\n"
-                                                                 f"You'll need {CURRENCY}**{amount - wallet_amt:,}**"
-                                                                 f" more in your wallet first.")
-                return await interaction.response.send_message(embed=err) 
+                return await interaction.response.send_message(embed=discord.Embed(colour=0x2F3136, description=(  
+                    f"## Cannot perform this action.\n"
+                    f"You only have {CURRENCY}**{wallet_amt:,}**.\n"
+                    f"You'll need {CURRENCY}**{amount - wallet_amt:,}** more in your wallet first."
+                )))
 
         # ------------------ THE SLOT MACHINE ITESELF ------------------------
 
         emoji_outcome = generate_slot_combination()
         freq1, freq2, freq3 = emoji_outcome[0], emoji_outcome[1], emoji_outcome[2]
-        slot_stuff = await self.get_bank_data_new(interaction.user, conn)
-        id_won_amount, id_lose_amount = slot_stuff[3], slot_stuff[4]
 
         if emoji_outcome.count(freq1) > 1:
 
-
-            emulti = BONUS_MULTIPLIERS[f'{freq1 * emoji_outcome.count(freq1)}']
-            serv_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0)
-            new_multi = serv_multi + emulti
+            new_multi = (SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) +
+                         BONUS_MULTIPLIERS[f'{freq1 * emoji_outcome.count(freq1)}'])
             amount_after_multi = floor(((new_multi / 100) * amount) + amount)
-            tma = amount_after_multi - amount
-            await self.update_bank_new(interaction.user, conn, amount_after_multi, "slotwa")
-            new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
-            new_id_won_amount = await self.update_bank_new(interaction.user, conn, 1, "slotw")
-            new_total = id_lose_amount + new_id_won_amount[0]
+            updated = await self.update_bank_three_new(interaction.user, conn, "slotwa", amount_after_multi,
+                                             "wallet", amount_after_multi, "slotw", 1)
 
-            prcntw = round((new_id_won_amount[0] / new_total) * 100, 1)
-            embed = discord.Embed(description=f"**\U0000003e** {emoji_outcome[0]} {emoji_outcome[1]} {emoji_outcome[2]} **\U0000003c**\n\n"
-                                              f"**It's a match!** You've won {CURRENCY}**{amount_after_multi:,}** robux.\n"
-                                              f"You got {PREMIUM_CURRENCY} **{tma:,}** as part of your `{new_multi}x` multiplier.\n"
-                                              f"<:linkit:1176970030961930281> **{serv_multi}**% Server Multiplier, **{emulti}**% via slots.\n"
-                                              f"Your new balance is {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+            prcntw = round((updated[2] /(id_lose_amount + updated[2])) * 100, 1)
+
+            embed = discord.Embed(description=f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
+                                              f"**It's a match!** You've won \U000023e3 **{amount_after_multi:,}** robux.\n"
+                                              f"Your new balance is \U000023e3 **{updated[1]:,}**.\n"
                                               f"You've won {prcntw}% of all slots games.",
                                   colour=discord.Color.brand_green())
+
             embed.set_author(name=f"{interaction.user.name}'s winning slot machine",
                              icon_url=interaction.user.display_avatar.url)
-            await interaction.response.send_message(embed=embed) 
+            embed.set_footer(text=f"Multiplier: {new_multi}%")
 
         elif emoji_outcome.count(freq2) > 1:
 
-            emulti = BONUS_MULTIPLIERS[f'{freq2 * emoji_outcome.count(freq2)}']
-
-            serv_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0)
-            new_multi = serv_multi + emulti
+            new_multi = (SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) +
+                         BONUS_MULTIPLIERS[f'{freq2 * emoji_outcome.count(freq2)}'])
             amount_after_multi = floor(((new_multi / 100) * amount) + amount)
-            tma = amount_after_multi - amount
-            await self.update_bank_new(interaction.user, conn, amount_after_multi, "slotwa")
-            new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
-            new_id_won_amount = await self.update_bank_new(interaction.user, conn, 1, "slotw")
-            new_total = id_lose_amount + new_id_won_amount[0]
-            prcntw = round((new_id_won_amount[0] / new_total) * 100, 1)
 
-            embed = discord.Embed(description=f"**\U0000003e** {emoji_outcome[0]} {emoji_outcome[1]} {emoji_outcome[2]} **\U0000003c**\n\n"
-                                              f"**It's a match!** You've won {CURRENCY}**{amount_after_multi:,}** robux.\n"
-                                              f"You got {PREMIUM_CURRENCY} **{tma:,}** as part of your `{new_multi}x` multiplier.\n"
-                                              f"<:linkit:1176970030961930281> **{serv_multi}**% Server Multiplier, **{emulti}**% via slots.\n"
-                                              f"Your new balance is {CURRENCY}**{new_amount_balance[0]:,}**.\n"
-                                              f"You've won {prcntw}% of all slots games.",
-                                  colour=discord.Color.brand_green())
+            updated = await self.update_bank_three_new(interaction.user, conn, "slotwa", amount_after_multi,
+                                                       "wallet", amount_after_multi, "slotw", 1)
+
+            prcntw = round((updated[2] / (id_lose_amount + updated[2])) * 100, 1)
+
+            embed = discord.Embed(
+                description=f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
+                            f"**It's a match!** You've won \U000023e3 **{amount_after_multi:,}** robux.\n"
+                            f"Your new balance is \U000023e3 **{updated[1]:,}**.\n"
+                            f"You've won {prcntw}% of all slots games.",
+                colour=discord.Color.brand_green())
+
+            embed.set_footer(text=f"Multiplier: {new_multi}%")
             embed.set_author(name=f"{interaction.user.name}'s winning slot machine",
                              icon_url=interaction.user.display_avatar.url)
-            await interaction.response.send_message(embed=embed) 
 
         else:
+            updated = await self.update_bank_three_new(interaction.user, conn, "slotla", amount,
+                                                       "wallet", -amount, "slotl", 1)
 
-            await self.update_bank_new(interaction.user, conn, amount, "slotla")
-            new_amount_balance = await self.update_bank_new(interaction.user, conn, -amount)
-            new_id_lose_amount = await self.update_bank_new(interaction.user, conn, 1, "slotl")
-            new_total = new_id_lose_amount[0] + id_won_amount
+            prcntl = round((updated[-1] / (updated[-1] + id_won_amount)) * 100, 1)
 
-            prcntl = round((new_id_lose_amount[0] / new_total) * 100, 1)
-
-            embed = discord.Embed(description=f"**\U0000003e** {emoji_outcome[0]} {emoji_outcome[1]} {emoji_outcome[2]} **\U0000003c**\n\n"
+            embed = discord.Embed(description=f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
                                               f"**No match!** You've lost {CURRENCY}**{amount:,}** robux.\n"
-                                              f"Your new balance is {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                                              f"Your new balance is {CURRENCY}**{updated[1]:,}**.\n"
                                               f"You've lost {prcntl}% of all slots games.",
                                   colour=discord.Color.brand_red())
+
             embed.set_author(name=f"{interaction.user.name}'s losing slot machine",
                              icon_url=interaction.user.display_avatar.url)
-            await interaction.response.send_message(embed=embed) 
+
+        await interaction.response.send_message(embed=embed) 
 
     @app_commands.command(name='inventory', description='view your currently owned items.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -2488,7 +2526,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=NOT_REGISTERED) 
 
             em = discord.Embed(color=0x2F3136)
-            length = 5
+            length = 3
             value, svalue = 0, 0
             total_items = 0
             owned_items = []
@@ -2690,16 +2728,16 @@ class Economy(commands.Cog):
 
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.followup.send(embed=self.not_registered)
-                
+
             job_val = await self.get_job_data_only(user=interaction.user, conn_input=conn)
-            
+
             if job_val == "None":
                 return await interaction.followup.send(embed=membed("You don't have a job, get one first."))
 
             possible_words: tuple = words.get(job_val)[0]
             selected_word = choice(possible_words)
 
-            letters_to_hide = max(1, len(selected_word) // 3)
+            letters_to_hide = max(1, len(selected_word) // 3)  # You can adjust this ratio
 
             indices_to_hide = [i for i, char in enumerate(selected_word) if char.isalpha()]
             indices_hidden = sample(indices_to_hide, min(letters_to_hide, len(indices_to_hide)))
@@ -2950,7 +2988,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=embed) 
             else:
                 wallet_new = await self.update_bank_new(user, conn, -amount_conv)
-                bank_new = await self.update_bank_new(user, conn, +amount_conv, "bank")
+                bank_new = await self.update_bank_new(user, conn, +amount_conv, "bank")  # \U000023e3
 
                 embed = discord.Embed(colour=0x2F3136)
                 embed.add_field(name="<:deposit:1195657772231036948> Deposited", value=f"\U000023e3 {amount_conv:,}", inline=False)
@@ -2976,6 +3014,8 @@ class Economy(commands.Cog):
             index = 1
 
             for member in data:
+                # if index > 10:
+                #     break
                 member_name = await self.client.fetch_user(member[0])
                 their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
                 member_amt = member[1]
@@ -3249,11 +3289,9 @@ class Economy(commands.Cog):
     @app_commands.describe(bet_amount='the amount of robux to bet on. Supports Shortcuts (max, all, exponents).')
     async def play_blackjack(self, interaction: discord.Interaction, bet_amount: str):
 
-        await interaction.response.defer(thinking=True) 
-
         # ------ Check the user is registered or already has an ongoing game ---------
         if len(self.client.games) >= 2: 
-            return await interaction.followup.send(
+            return await interaction.response.send_message( 
                 embed=membed(
                     "- The maximum consecutive blackjack games being held has been reached.\n"
                     "- To prevent server overload, you cannot start a game until the current games "
@@ -3263,14 +3301,12 @@ class Economy(commands.Cog):
             )
 
         if self.client.games.setdefault(interaction.user.id, None) is not None: 
-            return await interaction.followup.send("You already have an ongoing game taking place.")
+            return await interaction.response.send_message("You already have an ongoing game taking place.")
 
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.followup.send(embed=self.not_registered)
-
-        # --------------------------------------------------------------
+                return await interaction.response.send_message(embed=self.not_registered)
 
         # ----------------- Game setup ---------------------------------
 
@@ -3299,44 +3335,38 @@ class Economy(commands.Cog):
                 else:
                     namount = min(50_000_000, wallet_amt)
             else:
-                return await interaction.followup.send(embed=ERR_UNREASON)  
-
+                return await interaction.response.send_message(embed=ERR_UNREASON)  
 
         # -------------------- Check to see if user has sufficient balance --------------------------
 
         if has_keycard:
-            if (namount > 100_000_000) or (namount < 500_000):
-                err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the blackjack criteria:\n'
-                                                                 f'- You wanted to bet {CURRENCY}**{namount:,}**\n'
-                                                                 f' - A minimum bet of {CURRENCY}**500,000** must '
-                                                                 f'be made\n'
-                                                                 f' - A maximum bet of {CURRENCY}**100,000,000** '
-                                                                 f'can only be made.')
-                return await interaction.followup.send(embed=err)  
-            if namount > wallet_amt:
-                err = discord.Embed(colour=0x2F3136, description=f'Cannot perform this action, '
-                                                                 f'you only have {CURRENCY}**{wallet_amt:,}**.\n'
-                                                                 f'You\'ll need {CURRENCY}**{namount - wallet_amt:,}**'
-                                                                 f' more in your wallet first.')
-                return await interaction.followup.send(embed=err)  
+            if not (500_000 <= namount <= 100_000_000):
+                return await interaction.response.send_message(embed=discord.Embed(colour=0x2F3136, description=( 
+                    f'## You did not meet the blackjack criteria.\n'
+                    f'- You wanted to bet {CURRENCY}**{namount:,}**\n'
+                    f' - A minimum bet of {CURRENCY}**500,000** must be made\n'
+                    f' - A maximum bet of {CURRENCY}**100,000,000** can only be made.'
+                )))  
+            elif namount > wallet_amt:
+                return await interaction.response.send_message(embed=discord.Embed(colour=0x2F3136, description=( 
+                    f'Cannot perform this action.\n'
+                    f'You only have {CURRENCY}**{wallet_amt:,}**.\n'
+                    f'You\'ll need {CURRENCY}**{namount - wallet_amt:,}** more in your wallet first.'
+                )))  
         else:
-            if (namount > 50_000_000) or (namount < 1000000):
-                err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the blackjack criteria:\n'
-                                                                 f'- You wanted to bet {CURRENCY}**{namount:,}**\n'
-                                                                 f' - A minimum bet of {CURRENCY}**1,000,000** must '
-                                                                 f'be made (this can decrease when you acquire a'
-                                                                 f' <:lanyard:1165935243140796487> Keycard).\n'
-                                                                 f' - A maximum bet of {CURRENCY}**50,000,000** '
-                                                                 f'can only be made (this can increase when you '
-                                                                 f'acquire a <:lanyard:1165935243140796487> '
-                                                                 f'Keycard).')
-                return await interaction.followup.send(embed=err)  
-            if namount > wallet_amt:
-                err = discord.Embed(colour=0x2F3136, description=f'Cannot perform this action, '
-                                                                 f'you only have {CURRENCY}**{wallet_amt:,}**.\n'
-                                                                 f'You\'ll need {CURRENCY}**{namount - wallet_amt:,}**'
-                                                                 f' more in your wallet first.')
-                return await interaction.followup.send(embed=err)  
+            if not (1000000 <= namount <= 50_000_000):
+                return await interaction.response.send_message(embed=discord.Embed(colour=0x2F3136, description=( 
+                    f'## You did not meet the blackjack criteria.\n'
+                    f'- You wanted to bet {CURRENCY}**{namount:,}**\n'
+                    f' - A minimum bet of {CURRENCY}**1,000,000** must be made.\n'
+                    f' - A maximum bet of {CURRENCY}**50,000,000** can only be made.'
+                )))  
+            elif namount > wallet_amt:
+                return await interaction.response.send_message(embed=discord.Embed(colour=0x2F3136, description=( 
+                    f"## Cannot perform this action.\n"
+                    f"You only have {CURRENCY}**{wallet_amt:,}**.\n"
+                    f"You'll need {CURRENCY}**{namount - wallet_amt:,}** more in your wallet first."
+                )))  
 
         # ------------ In the case where the user already won --------------
         if self.calculate_hand(player_hand) == 21:
@@ -3361,11 +3391,13 @@ class Economy(commands.Cog):
                                       f"You won {CURRENCY}**{amount_after_multi:,}**. "
                                       f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
                                       f"You won {prctnw}% of the games."))
-            embed.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
-                                                                      f"**Total** - `{sum(player_hand)}`")
-            embed.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
-                                                                   f"**Total** - {sum(dealer_hand)}")
-            return await interaction.followup.send(embed=embed) 
+            embed.add_field(name=f"{interaction.user.name} (Player)",
+                            value=f"**Cards** - {' '.join(d_fver_p)}\n"
+                                  f"**Total** - `{sum(player_hand)}`")
+            embed.add_field(name=f"{interaction.guild.me.name} (Dealer)",
+                            value=f"**Cards** - {' '.join(d_fver_d)}\n"
+                                  f"**Total** - {sum(dealer_hand)}")
+            return await interaction.response.send_message(embed=embed) 
 
         shallow_pv = []
         shallow_dv = []
@@ -3385,14 +3417,16 @@ class Economy(commands.Cog):
                               description=f"The game has started. May the best win.\n"
                                           f"`\U000023e3 ~{format_number_short(namount)}` is up for grabs on the table.")
 
-        start.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(shallow_pv)}\n"
-                                                                  f"**Total** - `{sum(player_hand)}`")
-        start.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {shallow_dv[0]} `?`\n"
-                                                               f"**Total** - ` ? `")
+        start.add_field(name=f"{interaction.user.name} (Player)",
+                        value=f"**Cards** - {' '.join(shallow_pv)}\n"
+                              f"**Total** - `{sum(player_hand)}`")
+        start.add_field(name=f"{interaction.guild.me.name} (Dealer)",
+                        value=f"**Cards** - {shallow_dv[0]} `?`\n"
+                              f"**Total** - ` ? `")
         start.set_author(icon_url=interaction.user.display_avatar.url, name=f"{interaction.user.name}'s blackjack game")
         start.set_footer(text="K, Q, J = 10  |  A = 1 or 11")
         my_view = BlackjackUi(interaction, self.client)
-        await interaction.followup.send(
+        await interaction.response.send_message( 
             content="What do you want to do?\nPress **Hit** to to request an additional card, **Stand** to finalize "
                     "your deck or **Forfeit** to end your hand prematurely, sacrificing half of your original bet.",
             embed=start, view=my_view)
@@ -3414,10 +3448,12 @@ class Economy(commands.Cog):
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered) 
             conn: asqlite_Connection
-            wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
-            pmulti = await self.get_pmulti_data_only(interaction.user, conn)
+
+            data = await conn.execute(f"SELECT pmulti, wallet, betw, betl FROM `{BANK_TABLE_NAME}` WHERE userID = ?",
+                                      (interaction.user.id,))
+            data = await data.fetchone()
+            pmulti, wallet_amt = data[0], data[1]
             has_keycard = await self.get_one_inv_data_new(interaction.user, "Keycard", conn) >= 1
-            hyperion_qty = await self.get_one_inv_data_new(interaction.user, "Hyperion", conn)
             expo = determine_exponent(exponent_amount)
 
             try:
@@ -3430,7 +3466,7 @@ class Economy(commands.Cog):
                     else:
                         amount = min(50_000_000, wallet_amt)
                 else:
-                    return await interaction.followup.send(embed=ERR_UNREASON)
+                    return await interaction.response.send_message(embed=ERR_UNREASON)  
 
             if has_keycard:
                 if (amount > 100000000) or (amount < 100000):
@@ -3467,11 +3503,10 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(embed=err) 
 
             # --------------------------------------------------------
-            smulti = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
+            smulti = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti
             badges = set()
-            if hyperion_qty:
-                badges.add("<:bot:1195463351338283199>")
-            if pmulti[0] > 0:
+            id_won_amount, id_lose_amount = data[2], data[3]
+            if pmulti > 0:
                 badges.add(PREMIUM_CURRENCY)
             if has_keycard:
                 badges.add("<:lanyard:1165935243140796487>")
@@ -3483,20 +3518,17 @@ class Economy(commands.Cog):
                                      weights=[10, 10, 15, 27, 15, 23], k=1)
                 your_choice = choices([1, 2, 3, 4, 5, 6], weights=[55/3, 55/3, 55/3, 45/3, 45/3, 45/3], k=1)
 
-
             if your_choice[0] > bot_choice[0]:
 
-                bet_stuff = await self.get_bank_data_new(interaction.user, conn)
-                id_won_amount, id_lose_amount = bet_stuff[5], bet_stuff[6]
                 amount_after_multi = floor(((smulti / 100) * amount) + amount)
-                await self.update_bank_new(interaction.user, conn, amount_after_multi, "betwa")
-                new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
-                new_id_won_amount = await self.update_bank_new(interaction.user, conn, 1, "betw")
-                prcntw = round((new_id_won_amount[0]/(id_lose_amount + new_id_won_amount[0]))*100, 1)
+                updated = await self.update_bank_three_new(
+                    interaction.user, conn, "betwa", amount_after_multi,
+                    "betw", 1, "wallet", amount_after_multi)
 
+                prcntw = round((updated[1]/(id_lose_amount + updated[1]))*100, 1)
 
                 embed = discord.Embed(description=f"**You've rolled higher!** You won {CURRENCY}**{amount_after_multi:,}** robux.\n"
-                                                  f"Your new `wallet` balance is {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                                                  f"Your new `wallet` balance is {CURRENCY}**{updated[2]:,}**.\n"
                                                   f"You've won {prcntw}% of all games.",
                                       colour=discord.Color.brand_green())
                 embed.set_author(name=f"{interaction.user.name}'s winning gambling game",
@@ -3508,18 +3540,15 @@ class Economy(commands.Cog):
                                  icon_url=interaction.user.display_avatar.url)
             else:
 
-                bet_stuff = await self.get_bank_data_new(interaction.user, conn)
-                id_won_amount, id_lose_amount = bet_stuff[5], bet_stuff[6]
+                updated = await self.update_bank_three_new(
+                    interaction.user, conn, "betla", amount,
+                    "betl", 1, "wallet", -amount)
 
-                await self.update_bank_new(interaction.user, conn, amount, "betla")
-                new_amount_balance = await self.update_bank_new(interaction.user, conn, -amount)
-                new_id_lose_amount = await self.update_bank_new(interaction.user, conn, 1, "betl")
-                new_total = id_won_amount + new_id_lose_amount[0]
-
-                prcntl = round((new_id_lose_amount[0]/new_total)*100, 1)
+                new_total = id_won_amount + updated[1]
+                prcntl = round((updated[1]/new_total)*100, 1)
 
                 embed = discord.Embed(description=f"**You've rolled lower!** You lost {CURRENCY}**{amount:,}**.\n"
-                                                  f"Your new balance is {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                                                  f"Your new balance is {CURRENCY}**{updated[2]:,}**.\n"
                                                   f"You've lost {prcntl}% of all games.",
                                        colour=discord.Color.brand_red())
                 embed.set_author(name=f"{interaction.user.name}'s losing gambling game",
@@ -3529,7 +3558,7 @@ class Economy(commands.Cog):
             embed.add_field(name=self.client.user.name, value=f"Rolled `{bot_choice[0]}`")
             await interaction.response.send_message(embed=embed)  
 
-            await self.raise_pmulti_warning(interaction, pmulti[0])
+            await self.raise_pmulti_warning(interaction, pmulti)
 
     @play_blackjack.autocomplete('bet_amount')
     @bet.autocomplete('exponent_amount')
@@ -3544,7 +3573,7 @@ class Economy(commands.Cog):
             for the_chose in chosen if current.lower() in the_chose
         ]
 
-    @slots.autocomplete('keyword')
+    @slots.autocomplete('amount')
     @highlow.autocomplete('robux')
     async def callback_max_75(self, interaction: discord.Interaction, current: str) -> List[
         app_commands.Choice[str]]:
