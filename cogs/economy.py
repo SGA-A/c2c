@@ -413,7 +413,7 @@ class ConfirmDeny(discord.ui.View):
             await interaction.response.send_message(embed=emb, ephemeral=True) 
             return False
 
-    @discord.ui.button(label='Confirm', style=discord.ButtonStyle.danger)
+    @discord.ui.button(label='Confirm', style=discord.ButtonStyle.gray)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         self.timed_out = False
@@ -421,7 +421,6 @@ class ConfirmDeny(discord.ui.View):
             item.disabled = True
 
         tables_to_delete = [BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME]
-        # Execute DELETE queries using a loop
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             for table in tables_to_delete:
@@ -437,7 +436,7 @@ class ConfirmDeny(discord.ui.View):
                 embed=success,
                 view=None)
 
-    @discord.ui.button(label='Deny', style=discord.ButtonStyle.green)
+    @discord.ui.button(label='Deny', style=discord.ButtonStyle.gray)
     async def deny(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.timed_out = False
         for item in self.children:
