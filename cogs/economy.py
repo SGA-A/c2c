@@ -40,8 +40,6 @@ BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
 COOLDOWN_TABLE_NAME = "cooldowns"
 BANK_COLUMNS = ["bank", "pmulti", "bounty", "prestige"]
-invoker_ch = int()
-participants = set()
 DOWN = True
 UNIQUE_BADGES = {
             992152414566232139: "<:e1_stafff:1145039666916110356>",
@@ -54,7 +52,6 @@ SERVER_MULTIPLIERS = {
     780397076273954886: 160,
     1144923657064419398: 6969}
 INV_TABLE_NAME = "inventory"
-FEEDBACK_GLOBAL = 'Have complaints or suggestions? **Let us know:** </feedback:1172898645058785334>.'
 ARROW = "<:arrowe:1180428600625877054>"
 CURRENCY = '<:robux:1146394968882151434>'
 PREMIUM_CURRENCY = '<:robuxpremium:1174417815327998012>'
