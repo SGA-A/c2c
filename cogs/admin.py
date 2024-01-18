@@ -176,7 +176,7 @@ class Administrate(commands.Cog):
 
                 total = (their_bank + their_wallet) + int(real_amount)
                 embed2 = discord.Embed(title='Success',
-                                       description=f"\U0000279c added {CURRENCY}{int(real_amount):,} "
+                                       description=f"\U0000279c Added {CURRENCY}{int(real_amount):,} "
                                                    f"robux to **{member.display_name}**'s balance.\n"
                                                    f"\U0000279c **{member.display_name}**'s new "
                                                    f"**`{deposit_mode}`** balance is {CURRENCY}{new_amount:,}.\n"
@@ -202,7 +202,7 @@ class Administrate(commands.Cog):
 
                 total = (their_bank + their_wallet) - int(real_amount)
                 embed3 = discord.Embed(title='Success',
-                                       description=f"\U0000279c deducted {CURRENCY}{int(real_amount):,} "
+                                       description=f"\U0000279c Deducted {CURRENCY}{int(real_amount):,} "
                                                    f"robux from **{member.display_name}**'s balance.\n"
                                                    f"\U0000279c **{member.display_name}**'s new "
                                                    f"**`{deposit_mode}`** balance is {CURRENCY}{new_amount:,}.\n"
