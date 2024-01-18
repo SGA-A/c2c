@@ -400,7 +400,8 @@ class ConfirmDeny(discord.ui.View):
         for item in self.children:
             item.disabled = True
         if self.timed_out:
-            await self.msg.edit(content="Timed out waiting for a response. The operation was cancelled.", view=None) 
+            await self.msg.edit(embed=membed("Timed out waiting for a response.\n" 
+                                             "The operation was cancelled."), view=None)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Make sure the original user that called the interaction is only in control, no one else."""
@@ -420,14 +421,20 @@ class ConfirmDeny(discord.ui.View):
             item.disabled = True
 
         tables_to_delete = [BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME]
+        # Execute DELETE queries using a loop
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             for table in tables_to_delete:
                 await conn.execute(f"DELETE FROM `{table}` WHERE userID = ?", (self.member.id,))
 
+            success = discord.Embed(title="Action Confirmed",
+                                    description="You're now basically out of our database, "
+                                                "we no longer have any EUD from you (end user data).",
+                                    colour=discord.Colour.brand_green())
+
             await conn.commit()
             await interaction.message.edit(
-                content="You're now basically out of our database, we no longer have any EUD from you (end user data).",
+                embed=success,
                 view=None)
 
     @discord.ui.button(label='Deny', style=discord.ButtonStyle.green)
@@ -435,7 +442,12 @@ class ConfirmDeny(discord.ui.View):
         self.timed_out = False
         for item in self.children:
             item.disabled = True
-        await interaction.message.edit(content="The operation was cancelled, as per-request.", view=None)
+
+        success = discord.Embed(title="Action Cancelled",
+                                description="The operation has been cancelled.",
+                                colour=discord.Colour.brand_red())
+
+        await interaction.message.edit(embed=success, view=None)
 
 
 class BlackjackUi(discord.ui.View):
