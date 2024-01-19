@@ -1727,7 +1727,7 @@ class Economy(commands.Cog):
 
                 if item_qty == 0:
                     return await interaction.response.send_message( 
-                        embed=membed("You cannot flex on something you don't have."))
+                        embed=membed("You cannot flex on someone with something you don't even have."))
 
                 if item_name in showcase:
                     item_index = showcase.index(item_name)
