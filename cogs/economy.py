@@ -4,6 +4,7 @@ from string import ascii_letters, digits
 from shelve import open as open_shelve
 import datetime
 import discord
+from re import sub
 from other.pagination import Pagination
 from ImageCharts import ImageCharts
 from discord.ext import commands
@@ -1910,27 +1911,47 @@ class Economy(commands.Cog):
     profile = app_commands.Group(name='editprofile', description='custom-profile-orientated commands for use.',
                                  guild_only=True, guild_ids=APP_GUILDS_ID)
 
+    @profile.command(name='title', description='add a title to your profile.')
+    @app_commands.checks.cooldown(1, 30)
+    @app_commands.describe(text="maximum of 32 characters allowed")
+    async def update_bio_profile(self, interaction: discord.Interaction, text: str):
+        async with self.client.pool_connection.acquire() as conn:  
+            conn: asqlite_Connection
+
+            if await self.can_call_out(interaction.user, conn):
+                return await interaction.response.send_message(  
+                    embed=self.not_registered)
+
+            if len(text) > 32:
+                return await interaction.response.send_message( 
+                    embed=membed("Title cannot exceed 32 characters."))
+
+            text = sub(r'[\n\t]', '', text)
+            await self.change_bank_new(interaction.user, conn, text, "title")
+
+            await interaction.response.send_message( 
+                embed=membed(f"### {interaction.user.name}'s Profile - [{text}](https://www.dis.gd/support)\n"
+                             f"Your title has been changed. A preview is shown above."))
+
     @profile.command(name='bio', description='add a bio to your profile.')
-    @app_commands.checks.dynamic_cooldown(owners_nolimit)
+    @app_commands.checks.cooldown(1, 30)
     async def update_bio_profile(self, interaction: discord.Interaction):
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message( 
-                    embed=membed("<:warning_nr:1195732155544911882> You cannot use this command until you register."))
+                return await interaction.response.send_message(embed=self.not_registered) 
             await interaction.response.send_modal(UpdateInfo()) 
 
     @profile.command(name='avatar', description='change your profile avatar.')
     @app_commands.describe(url='the url of the new avatar. leave blank to remove.')
-    @app_commands.checks.dynamic_cooldown(owners_nolimit)
+    @app_commands.checks.cooldown(1, 30)
     async def update_avatar_profile(self, interaction: discord.Interaction, url: Optional[str]):
 
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message( 
-                    embed=membed('<:warning_nr:1195732155544911882> You cannot use this command until you register.'))
+                return await interaction.response.send_message(embed=self.not_registered) 
 
         if url is None:
             res = modify_profile("delete", f"{interaction.user.id} avatar_url", url)
@@ -1963,14 +1984,13 @@ class Economy(commands.Cog):
 
     @profile.command(name='visibility', description='hide your profile for privacy.')
     @app_commands.describe(mode='Toggle public or private profile')
-    @app_commands.checks.dynamic_cooldown(owners_nolimit)
+    @app_commands.checks.cooldown(1, 30)
     async def update_vis_profile(self, interaction: discord.Interaction,
                                  mode: Literal['public', 'private']):
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message( 
-                    embed=membed("You cannot use this command until you register."))
+                return await interaction.response.send_message(embed=self.not_registered) 
 
         modify_profile("update", f"{interaction.user.id} vis", mode)
         cemoji = {"private": "<:privatee:1195728566919385088>",
@@ -2386,12 +2406,15 @@ class Economy(commands.Cog):
             if await self.can_call_out(user, conn):
                 return await interaction.response.send_message(embed=NOT_REGISTERED) 
 
-            data = await conn.execute(f"SELECT * FROM `bank` WHERE userID = ?", (user.id,))
-            data = await data.fetchone()
-
             ephemerality = False
 
             if category == "Main Profile":
+
+                data = await conn.execute(
+                    f"SELECT wallet, bank, cmds_ran, showcase, title, bounty, prestige FROM `{BANK_TABLE_NAME}` WHERE userID = ?",
+                    (user.id,))
+                data = await data.fetchone()
+
                 if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id != user.id):
                     return await interaction.response.send_message(  
                         embed=membed(f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
@@ -2422,7 +2445,7 @@ class Economy(commands.Cog):
                     case _:
                         note = ""
 
-                showcase: str = data[16]
+                showcase: str = data[3]
                 showcase: list = showcase.split(" ")
 
                 nshowcase = []
@@ -2438,16 +2461,16 @@ class Economy(commands.Cog):
                     except IndexError:
                         continue
 
-                procfile.description = (f"### {user.name}'s Profile - [{tatsu.title or 'No title set'}](https://tatsu.gg/profile)\n"
+                procfile.description = (f"### {user.name}'s Profile - [{data[4]}](https://www.dis.gd/support)\n"
                                         f"{note}"
                                         f"{PRESTIGE_EMOTES.setdefault(data[-1], "")} Prestige Level **{data[-1]}**\n"
-                                        f"<:bountybag:1195653667135692800> Bounty: \U000023e3 **{data[-2]:,}**\n"
+                                        f"<:bountybag:1195653667135692800> Bounty: \U000023e3 **{data[5]:,}**\n"
                                         f"{get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"}")
 
                 procfile.add_field(name='Robux',
-                                   value=f"Wallet: `\U000023e3 {format_number_short(data[1])}`\n"
-                                         f"Bank: `\U000023e3 {format_number_short(data[2])}`\n"
-                                         f"Net: `\U000023e3 {format_number_short(data[1] + data[2])}`")
+                                   value=f"Wallet: `\U000023e3 {format_number_short(int(data[0]))}`\n"
+                                         f"Bank: `\U000023e3 {format_number_short(data[1])}`\n"
+                                         f"Net: `\U000023e3 {format_number_short(data[0] + data[1])}`")
 
                 procfile.add_field(name='Items',
                                    value=f"Unique: `{unique:,}`\n"
@@ -2460,7 +2483,7 @@ class Economy(commands.Cog):
                                          f"XP: `{format_number_short(tatsu.xp)}`")
 
                 procfile.add_field(name='Commands',
-                                   value=f"Total: `{format_number_short(data[15])}`")
+                                   value=f"Total: `{format_number_short(data[2])}`")
 
                 procfile.add_field(name="Drones",
                                    value="See [#32](https://github.com/SGA-A/c2c/issues/32)")
@@ -2481,20 +2504,26 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message( 
                     embed=procfile, silent=True, ephemeral=ephemerality)
             else:
-                total_slots = data[3] + data[4]
-                total_bets = data[5] + data[6]
-                total_blackjacks = data[7] + data[8]
+
+                data = await conn.execute(
+                    f"SELECT slotw, slotl, betw, betl, bjw, bjl, slotwa, slotla, betwa, betla, bjwa, bjla FROM `{BANK_TABLE_NAME}` WHERE userID = ?",
+                    (user.id,))
+                data = await data.fetchone()
+
+                total_slots = data[0] + data[1]
+                total_bets = data[2] + data[3]
+                total_blackjacks = data[4] + data[5]
 
                 try:
-                    winbe = round((data[5] / total_bets) * 100)
+                    winbe = round((data[2] / total_bets) * 100)
                 except ZeroDivisionError:
                     winbe = 0
                 try:
-                    winsl = round((data[3] / total_slots) * 100)
+                    winsl = round((data[0] / total_slots) * 100)
                 except ZeroDivisionError:
                     winsl = 0
                 try:
-                    winbl = round((data[7] / total_blackjacks) * 100)
+                    winbl = round((data[4] / total_blackjacks) * 100)
                 except ZeroDivisionError:
                     winbl = 0
 
@@ -2502,20 +2531,20 @@ class Economy(commands.Cog):
                                       colour=0x2B2D31)
                 stats.description = "**Reminder:** Games that have resulted in a tie are not tracked."
                 stats.add_field(name=f"BET ({total_bets:,})",
-                                value=f"Won: \U000023e3 {data[11]:,}\n"
-                                      f"Lost: \U000023e3 {data[12]:,}\n"
-                                      f"Net: \U000023e3 {data[11] - data[12]:,}\n"
-                                      f"Win: {winbe}% ({data[5]})")
+                                value=f"Won: \U000023e3 {data[8]:,}\n"
+                                      f"Lost: \U000023e3 {data[9]:,}\n"
+                                      f"Net: \U000023e3 {data[8] - data[9]:,}\n"
+                                      f"Win: {winbe}% ({data[2]})")
                 stats.add_field(name=f"SLOTS ({total_slots:,})",
-                                value=f"Won: \U000023e3 {data[9]:,}\n"
-                                      f"Lost: \U000023e3 {data[10]:,}\n"
-                                      f"Net: \U000023e3 {data[9] - data[10]:,}\n"
-                                      f"Win: {winsl}% ({data[3]})")
+                                value=f"Won: \U000023e3 {data[6]:,}\n"
+                                      f"Lost: \U000023e3 {data[7]:,}\n"
+                                      f"Net: \U000023e3 {data[6] - data[7]:,}\n"
+                                      f"Win: {winsl}% ({data[0]})")
                 stats.add_field(name=f"BLACKJACK ({total_blackjacks:,})",
-                                value=f"Won: \U000023e3 {data[13]:,}\n"
-                                      f"Lost: \U000023e3 {data[14]:,}\n"
-                                      f"Net: \U000023e3 {data[13] - data[14]:,}\n"
-                                      f"Win: {winbl}% ({data[7]})")
+                                value=f"Won: \U000023e3 {data[10]:,}\n"
+                                      f"Lost: \U000023e3 {data[11]:,}\n"
+                                      f"Net: \U000023e3 {data[10] - data[11]:,}\n"
+                                      f"Win: {winbl}% ({data[4]})")
                 stats.set_footer(text="The number next to the name is how many matches are recorded")
 
                 await interaction.response.send_message(embed=stats)  
