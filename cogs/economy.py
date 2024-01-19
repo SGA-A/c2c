@@ -2500,7 +2500,7 @@ class Economy(commands.Cog):
 
                 stats = discord.Embed(title=f"{user.name}'s gambling stats",
                                       colour=0x2B2D31)
-
+                stats.description = "**Reminder:** Games that have resulted in a tie are not tracked."
                 stats.add_field(name=f"BET ({total_bets:,})",
                                 value=f"Won: \U000023e3 {data[11]:,}\n"
                                       f"Lost: \U000023e3 {data[12]:,}\n"
