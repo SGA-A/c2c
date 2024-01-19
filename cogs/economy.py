@@ -4,6 +4,7 @@ from string import ascii_letters, digits
 from shelve import open as open_shelve
 import datetime
 import discord
+from re import sub
 from other.pagination import Pagination
 from ImageCharts import ImageCharts
 from discord.ext import commands
@@ -1910,27 +1911,47 @@ class Economy(commands.Cog):
     profile = app_commands.Group(name='editprofile', description='custom-profile-orientated commands for use.',
                                  guild_only=True, guild_ids=APP_GUILDS_ID)
 
+    @profile.command(name='title', description='add a title to your profile.')
+    @app_commands.checks.cooldown(1, 30)
+    @app_commands.describe(text="maximum of 32 characters allowed")
+    async def update_bio_profile(self, interaction: discord.Interaction, text: str):
+        async with self.client.pool_connection.acquire() as conn:  
+            conn: asqlite_Connection
+
+            if await self.can_call_out(interaction.user, conn):
+                return await interaction.response.send_message(  
+                    embed=self.not_registered)
+
+            if len(text) > 32:
+                return await interaction.response.send_message( 
+                    embed=membed("Title cannot exceed 32 characters."))
+
+            text = sub(r'[\n\t]', '', text)
+            await self.change_bank_new(interaction.user, conn, text)
+
+            await interaction.response.send_message( 
+                embed=membed(f"### {interaction.user.name}'s Profile - [{text}](https://www.dis.gd/support)\n"
+                             f"Your title has been changed. A preview is shown above."))
+
     @profile.command(name='bio', description='add a bio to your profile.')
-    @app_commands.checks.dynamic_cooldown(owners_nolimit)
+    @app_commands.checks.cooldown(1, 30)
     async def update_bio_profile(self, interaction: discord.Interaction):
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message( 
-                    embed=membed("<:warning_nr:1195732155544911882> You cannot use this command until you register."))
+                return await interaction.response.send_message(embed=self.not_registered) 
             await interaction.response.send_modal(UpdateInfo()) 
 
     @profile.command(name='avatar', description='change your profile avatar.')
     @app_commands.describe(url='the url of the new avatar. leave blank to remove.')
-    @app_commands.checks.dynamic_cooldown(owners_nolimit)
+    @app_commands.checks.cooldown(1, 30)
     async def update_avatar_profile(self, interaction: discord.Interaction, url: Optional[str]):
 
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message( 
-                    embed=membed('<:warning_nr:1195732155544911882> You cannot use this command until you register.'))
+                return await interaction.response.send_message(embed=self.not_registered) 
 
         if url is None:
             res = modify_profile("delete", f"{interaction.user.id} avatar_url", url)
@@ -1963,14 +1984,13 @@ class Economy(commands.Cog):
 
     @profile.command(name='visibility', description='hide your profile for privacy.')
     @app_commands.describe(mode='Toggle public or private profile')
-    @app_commands.checks.dynamic_cooldown(owners_nolimit)
+    @app_commands.checks.cooldown(1, 30)
     async def update_vis_profile(self, interaction: discord.Interaction,
                                  mode: Literal['public', 'private']):
         async with self.client.pool_connection.acquire() as conn: 
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message( 
-                    embed=membed("You cannot use this command until you register."))
+                return await interaction.response.send_message(embed=self.not_registered) 
 
         modify_profile("update", f"{interaction.user.id} vis", mode)
         cemoji = {"private": "<:privatee:1195728566919385088>",
@@ -2438,7 +2458,7 @@ class Economy(commands.Cog):
                     except IndexError:
                         continue
 
-                procfile.description = (f"### {user.name}'s Profile - [{tatsu.title or 'No title set'}](https://tatsu.gg/profile)\n"
+                procfile.description = (f"### {user.name}'s Profile - [{data[17]}](https://www.dis.gd/support)\n"
                                         f"{note}"
                                         f"{PRESTIGE_EMOTES.setdefault(data[-1], "")} Prestige Level **{data[-1]}**\n"
                                         f"<:bountybag:1195653667135692800> Bounty: \U000023e3 **{data[-2]:,}**\n"
