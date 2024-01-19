@@ -47,7 +47,8 @@ UNIQUE_BADGES = {
             546086191414509599: "<:in_power:1153754243220647997>",
             1134123734421217412: "<:e1_bughunterGold:1145053225414832199>",
             1154092136115994687: "<:e1_bughunterGreen:1145052762351095998>",
-            1047572530422108311: "<:cc:1146092310464049203>"}
+            1047572530422108311: "<:cc:1146092310464049203>",
+            1148206353647669298: "<:e1_stafff:1145039666916110356>"}
 SERVER_MULTIPLIERS = {
     829053898333225010: 120,
     780397076273954886: 160,
@@ -992,7 +993,7 @@ class DropdownLB(discord.ui.Select):
                         break
                     member_name = await self.client.fetch_user(member[0])
                     their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
-                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    msg1 = f"**{index}.** {member_name.display_name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
 
@@ -1028,7 +1029,7 @@ class DropdownLB(discord.ui.Select):
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
                     their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
-                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    msg1 = f"**{index}.** {member_name.display_name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
 
@@ -1063,7 +1064,7 @@ class DropdownLB(discord.ui.Select):
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
                     their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
-                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    msg1 = f"**{index}.** {member_name.display_name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
 
@@ -1099,7 +1100,7 @@ class DropdownLB(discord.ui.Select):
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
                     their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
-                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    msg1 = f"**{index}.** {member_name.display_name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
 
@@ -3262,7 +3263,7 @@ class Economy(commands.Cog):
                 member_name = await self.client.fetch_user(member[0])
                 their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
                 member_amt = member[1]
-                msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member_amt:,}"
+                msg1 = f"**{index}.** {member_name.display_name} {their_badge} \U00003022 {CURRENCY}{member_amt:,}"
                 not_database.append(msg1)
                 index += 1
 
