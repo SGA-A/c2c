@@ -16,16 +16,16 @@ from unicodedata import name
 ARROW = "<:arrowe:1180428600625877054>"
 found_spotify = False
 rmeaning = {
-                403: "Forbidden - Access was denied",
-                404: "Not Found",
-                420: "Invalid Record - The record could not be saved",
-                421: "User Throttled - User is throttled, try again later",
-                422: "Locked - The resource is locked and cannot be modified",
-                423: "Already Exists - The resource already exists",
-                424: "Invalid Parameters - The given parameters were invalid",
-                500: "Internal Server Error - Some unknown error occured on the konachan website's server",
-                503: "Service Unavailable - The konachan website currently cannot handle the request"
-            }
+    403: "Forbidden - Access was denied",
+    404: "Not Found",
+    420: "Invalid Record - The record could not be saved",
+    421: "User Throttled - User is throttled, try again later",
+    422: "Locked - The resource is locked and cannot be modified",
+    423: "Already Exists - The resource already exists",
+    424: "Invalid Parameters - The given parameters were invalid",
+    500: "Internal Server Error - Some unknown error occured on the konachan website's server",
+    503: "Service Unavailable - The konachan website currently cannot handle the request"
+}
 
 
 def was_called_in_a_nsfw_channel(interaction: discord.Interaction):
@@ -33,7 +33,6 @@ def was_called_in_a_nsfw_channel(interaction: discord.Interaction):
 
 
 def extract_attributes(post_element, mode: Literal["image", "tag"]):
-
     if mode == "image":
         author = post_element.get("author")
         created_at = post_element.get("created_at")
@@ -83,15 +82,13 @@ def parse_xml(xml_content, mode: Literal["image", "tag"]):
         root = fromstring(xml_content)
         result = root.findall(".//tag")
 
-
     extracted_data = [extract_attributes(res, mode=mode) for res in result]
     return extracted_data
 
 
 def membed(descriptioner: str) -> discord.Embed:
     """Quickly create an embed with a custom description using the preset."""
-    membedder = discord.Embed(colour=0x2F3136,
-                           description=descriptioner)
+    membedder = discord.Embed(colour=0x2F3136, description=descriptioner)
     return membedder
 
 
@@ -144,10 +141,11 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
                                             f"- From there, compensation will be decided upfront.\n\n"
                                             f"You may get a unique badge or other type of reward based on how "
                                             f"constructive and thoughtful your feedback is.")
-        await interaction.response.send_message(embed=success, ephemeral=True) 
+        await interaction.response.send_message(embed=success, ephemeral=True)  
 
     async def on_error(self, interaction: discord.Interaction, error):
-        return await interaction.response.send_message(f"<:warning_nr:1195732155544911882> Something went wrong.") 
+        return await interaction.response.send_message(  
+            f"<:warning_nr:1195732155544911882> Something went wrong.")
 
 
 class InviteButton(discord.ui.View):
@@ -161,9 +159,8 @@ class InviteButton(discord.ui.View):
         perms.send_messages = True
         perms.manage_roles = True
         perms.manage_channels = True
-        perms.ban_members = True
-        perms.kick_members = True
         perms.manage_messages = True
+        perms.manage_webhooks = True
         perms.embed_links = True
         perms.read_message_history = True
         perms.attach_files = True
@@ -204,23 +201,24 @@ class Miscellaneous(commands.Cog):
         async with self.client.session.get(base_url, params=params) as response:  
             if response.status == 200:
                 posts_xml = await response.text()
-                data = parse_xml(posts_xml, mode=mode) 
+                data = parse_xml(posts_xml, mode=mode)  
             else:
                 data = response.status
         return data
 
-
     @commands.command(name='invite', description='link to invite c2c to your server.')
     async def invite_bot(self, ctx):
         await ctx.send(embed=membed("The button component gives a direct link to invite me to your server.\n"
-                                    "Remember that only developers can invite the bot."), view=InviteButton(self.client))
+                                    "Remember that only developers can invite the bot."),
+                       view=InviteButton(self.client))
 
     @commands.command(name='calculate', aliases=('c', 'calc'), description='compute a string / math expression.')
     async def calculator(self, ctx: commands.Context, *, expression):
 
         try:
             result = eval(expression) or "Invalid"
-            await ctx.reply(f'<:resultce:1195746711495249931> **{ctx.author.name}**, the result is `{result}`', mention_author=False)
+            await ctx.reply(f'<:resultce:1195746711495249931> **{ctx.author.name}**, the result is `{result}`',
+                            mention_author=False)
         except Exception as e:
             await ctx.reply(f'<:warning_nr:1195732155544911882> **Error:** {str(e)}', mention_author=False)
 
@@ -237,24 +235,24 @@ class Miscellaneous(commands.Cog):
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(activity_type='the type of activity to think of')
     async def prompt_act(self, interaction: discord.Interaction,
-                         activity_type: Optional[Literal["education", "recreational", "social", "diy", "charity",
-                                                         "cooking", "relaxation", "music", "busywork"]]):
+                         activity_type: Optional[Literal[
+                             "education", "recreational", "social", "diy",
+                             "charity", "cooking", "relaxation", "music", "busywork"]]):
         if activity_type is None:
             activity_type = ""
         else:
             activity_type = f"?type={activity_type}"
-        async with self.client.session.get( 
+        async with self.client.session.get(  
                 f"http://www.boredapi.com/api/activity{activity_type}") as response:
             if response.status == 200:
                 resp = await response.json()
-                await interaction.response.send_message(f"{resp['activity']}.") 
+                await interaction.response.send_message(f"{resp['activity']}.")  
             else:
-                await interaction.response.send_message( 
+                await interaction.response.send_message(  
                     embed=membed("An unsuccessful request was made. Try again later."))
 
     @app_commands.command(name='kona', description='retrieve nsfw posts from konachan.', nsfw=True)
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
-    @app_commands.check(was_called_in_a_nsfw_channel)
     @app_commands.describe(tags='the tags to base searches upon', page='the page to look through under a tag')
     async def kona_fetch(self, interaction: discord.Interaction, tags: Optional[str], page: Optional[int]):
 
@@ -265,26 +263,26 @@ class Miscellaneous(commands.Cog):
 
         tagviewing = ', '.join(tags.split(' '))
 
-        posts_xml = await self.retrieve_via_kona(tags=tags, limit=3, page=page, mode="image", tag_pattern=None) 
+        posts_xml = await self.retrieve_via_kona(tags=tags, limit=3, page=page, mode="image",  
+                                                 tag_pattern=None)
 
         if isinstance(posts_xml, int):
-
             return await interaction.response.send_message(  
                 embed=membed(f"The [konachan website](https://konachan.net/help) returned an erroneous status code of "
                              f"`{posts_xml}`: {rmeaning.setdefault(posts_xml, "the cause of the error is not known")}."
                              f"\nYou should try again later to see if the service improves."))
 
         if len(posts_xml) == 0:
-            await interaction.response.defer(thinking=True, ephemeral=True) 
-            tagsearch = self.client.tree.get_app_command( 
+            await interaction.response.defer(thinking=True, ephemeral=True)  
+            tagsearch = self.client.tree.get_app_command(  
                 'tagsearch', guild=discord.Object(id=interaction.guild.id))
 
             """You can use the below code to make your commands mentionable, even if they are out of sync"""
             if tagsearch is None:
-                await self.client.tree._update_cache( 
+                await self.client.tree._update_cache(  
                     await self.client.tree.fetch_commands(
                         guild=discord.Object(id=interaction.guild.id)), guild=discord.Object(id=interaction.guild.id))
-                tagsearch = self.client.tree.get_app_command( 
+                tagsearch = self.client.tree.get_app_command(  
                     'tagsearch', guild=discord.Object(id=interaction.guild.id))
 
             return await interaction.followup.send(  
@@ -300,7 +298,7 @@ class Miscellaneous(commands.Cog):
         attachments = set()
         descriptionerfyrd = set()
         for result in posts_xml:
-            tindex = posts_xml.index(result)+1
+            tindex = posts_xml.index(result) + 1
             descriptionerfyrd.add(f'**[{tindex}]** *Post by {result['author']}*\n'
                                   f'- Created <t:{result['created_at']}:R>\n'
                                   f'- [File URL (source)]({result['file_url']})\n'
@@ -320,11 +318,10 @@ class Miscellaneous(commands.Cog):
         await interaction.channel.send(content=f"__Attachments "
                                                f"for {interaction.user.mention}__\n\n" + "\n".join(attachments),
                                        delete_after=30.0)
-        await interaction.response.send_message(embed=embed) 
+        await interaction.response.send_message(embed=embed)  
 
     @app_commands.command(name='tagsearch', description='retrieve tags from konachan.', nsfw=True)
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
-    @app_commands.check(was_called_in_a_nsfw_channel)
     @app_commands.describe(tag_pattern="the pattern to use to find match results")
     async def tag_fetch(self, interaction: discord.Interaction, tag_pattern: str):
 
@@ -332,17 +329,15 @@ class Miscellaneous(commands.Cog):
         embed.set_author(icon_url=interaction.user.display_avatar.url, name=interaction.user.name,
                          url=interaction.user.display_avatar.url)
 
-        tags_xml = await self.retrieve_via_kona(tag_pattern=tag_pattern, mode="tag", tags=None) 
+        tags_xml = await self.retrieve_via_kona(tag_pattern=tag_pattern, mode="tag", tags=None)  
 
         if isinstance(tags_xml, int):
-
             return await interaction.response.send_message(  
                 embed=membed(f"The [konachan website](https://konachan.net/help) returned an erroneous status code of "
                              f"`{tags_xml}`: {rmeaning.setdefault(tags_xml, "the cause of the error is not known")}."
                              f"\nYou should try again later to see if the service improves."), ephemeral=True)
 
         if len(tags_xml) == 0:
-
             return await interaction.response.send_message(  
                 embed=membed(f"## No tags found.\n"
                              f"- There is only one known cause:\n"
@@ -360,7 +355,8 @@ class Miscellaneous(commands.Cog):
         pos = 0
         for result in tags_xml:
             descriptionerfyrd.add(f'{pos}. '
-                                  f'{result['name']} ({type_of_tag.setdefault(int(result['tag_type']), "Unknown Tag Type")})')
+                                  f'{result['name']} '
+                                  f'({type_of_tag.setdefault(int(result['tag_type']), "Unknown Tag Type")})')
         embed.set_footer(text="Some tags here don't have any posts.")
         embed.description = "\n".join(descriptionerfyrd)
         await interaction.response.send_message(embed=embed)  
@@ -380,7 +376,8 @@ class Miscellaneous(commands.Cog):
 
         async def get_page_part(page: int):
             emb = discord.Embed(title="Emojis: c2c",
-                                description="> This is a command that fetches **all** of the emojis found in the client's internal cache and their associated atributes.\n",
+                                description="> This is a command that fetches **all** of the emojis found"
+                                            " in the client's internal cache and their associated atributes.\n",
                                 colour=0x2F3136)
             emb.set_thumbnail(url=self.client.user.avatar.url)
             offset = (page - 1) * length
@@ -418,10 +415,12 @@ class Miscellaneous(commands.Cog):
                             f'**Track URL**: [Click Here]({result['external_urls']['spotify']})\n'
                             f'**Popularity**: {result['popularity']} {rating}')
 
-            song_emb.description = (f"## Search Results\n"
-                                    f'> The **`popularity`** attribute may be difficult to understand. Type the command '
-                                    f'[`>aboutpop`](https://www.google.com) to learn more about this attribute.'
-                                    f"{f'\n{boarder*7}'.join(lisr)}")
+            # noinspection PyUnboundLocalVariable
+            song_emb.description = (f'## Search Results\n'
+                                    f'> The **`popularity`** attribute may be difficult to understand. '
+                                    f'Type the command [`>aboutpop`](https://www.google.com) to learn more '
+                                    f'about this attribute.'
+                                    f'{f'\n{boarder * 7}'.join(lisr)}')
             await ctx.send(embed=song_emb)
 
     @commands.command(name='aboutpop', description='explains how popularity is calculated.')
@@ -430,8 +429,9 @@ class Miscellaneous(commands.Cog):
             embed = membed(
                 "# How track popularity really is calculated\n"
                 "> If you have no idea what this is, learn more by calling [`>spsearch`](https://www.google.com)\n\n"
-                "- The popularity of a track is a value between **`0`** and **`100`**, with **`100`** being the most popular.\n"
-                " - The popularity is calculated by algorithm and is based, in the most part, on the total number of plays "
+                "- The popularity of a track is a value between **`0`** and **`100`**, with "
+                "**`100`** being the most popular.\n - The popularity is calculated by algorithm and is based, "
+                "in the most part, on the total number of plays "
                 "the track has had and how recent those plays are.\n"
                 " - Generally speaking, songs that are being played a lot now will have a higher popularity than songs "
                 "that were played a lot in the past. \n"
@@ -447,11 +447,11 @@ class Miscellaneous(commands.Cog):
                            maximum_uses='how many uses the invite could be used for. 0 for unlimited uses.')
     async def gen_new_invite(self, interaction: discord.Interaction, invite_lifespan: int, maximum_uses: int):
         if invite_lifespan <= 0:
-            return await interaction.response.send_message( 
+            return await interaction.response.send_message(  
                 embed=membed("The invite lifespan cannot be **less than or equal to 0**."))
 
         maximum_uses = abs(maximum_uses)
-        invite_lifespan = invite_lifespan * 86400
+        invite_lifespan *= 86400
 
         generated_invite = await interaction.channel.create_invite(
             reason=f'Creation requested by {interaction.user.name}',
@@ -464,14 +464,15 @@ class Miscellaneous(commands.Cog):
                 maxim_usage = f"Max usages set to {generated_invite.max_uses}"
         formatted_expiry = discord.utils.format_dt(generated_invite.expires_at, 'R')
         success = discord.Embed(title='Successfully generated new invite link',
-                                description=f'**A new invite link was created.**\n- Invite channel set to {generated_invite.channel}\n'
+                                description=f'**A new invite link was created.**\n'
+                                            f'- Invite channel set to {generated_invite.channel}\n'
                                             f'- {maxim_usage}\n'
                                             f'- Expires {formatted_expiry}\n'
                                             f'- Invite Link is: {generated_invite.url}',
                                 colour=0x2F3136)
         success.set_author(name=interaction.user.name,
                            icon_url=interaction.user.display_avatar.url)
-        await interaction.response.send_message(embed=success) 
+        await interaction.response.send_message(embed=success)  
 
     @app_commands.command(name='define', description='define any word of choice.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -487,7 +488,8 @@ class Miscellaneous(commands.Cog):
                     if isinstance(thing, list):
                         unique_colour = return_random_color()
                         the_result = discord.Embed(title=f'Define: {choicer.lower()}',
-                                                   description=f'<:dictionarye:1195748221994160220> This shows all the available definitions for the word {choicer}.',
+                                                   description=f'<:dictionarye:1195748221994160220> This shows '
+                                                               f'all the available definitions for the word {choicer}.',
                                                    colour=unique_colour)
                         for x in range(0, len(thing)):
                             if "(" in thing[x]:
@@ -496,11 +498,12 @@ class Miscellaneous(commands.Cog):
                         if len(the_result.fields) == 0:
                             the_result.add_field(name=f'Looks like no results were found.',
                                                  value=f'We couldn\'t find a definition for {choicer.lower()}.')
-                        await interaction.response.send_message(embed=the_result) 
+                        return await interaction.response.send_message(embed=the_result)  
                     else:
                         continue
         except AttributeError:
-            await interaction.response.send_message(content=f'try again, but this time input an actual word.') 
+            await interaction.response.send_message(  
+                content=f'try again, but this time input an actual word.')
 
     @app_commands.command(name='randomfact', description='generates a random fact.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -508,11 +511,11 @@ class Miscellaneous(commands.Cog):
     async def random_fact(self, interaction: Interaction):
         limit = 1
         api_url = 'https://api.api-ninjas.com/v1/facts?limit={}'.format(limit)
-        parameters = {'X-Api-Key': self.client.NINJAS_API_KEY} 
-        async with self.client.session.get(api_url, params=parameters) as resp: 
+        parameters = {'X-Api-Key': self.client.NINJAS_API_KEY}  
+        async with self.client.session.get(api_url, params=parameters) as resp:  
             text = await resp.json()
             the_fact = text[0].get('fact')
-            await interaction.response.send_message(f"{the_fact}.") 
+            await interaction.response.send_message(f"{the_fact}.")  
 
     @app_commands.command(name='com', description='finds most common letters in sentences.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -532,6 +535,7 @@ class Miscellaneous(commands.Cog):
 
         n = max(frequency)
 
+        # Look for most common letter(s) and add to commons list
         commons = []
         counter = 0
         for m in frequency:
@@ -539,14 +543,16 @@ class Miscellaneous(commands.Cog):
                 commons.append(letters[counter])
             counter += 1
 
+        # Format most common letters
         commons.sort()
         answer = ''
         for letter in commons:
             answer = answer + letter + ' '
-          
+
+        # Remove extra space at the end of the string
         answer = answer[:-1]
 
-        await interaction.response.send_message(embed=membed(f'The most common letter is {answer}.')) 
+        await interaction.response.send_message(embed=membed(f'The most common letter is {answer}.'))  
 
     @app_commands.command(name='charinfo', description='show info on characters (max 25).')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -560,15 +566,17 @@ class Miscellaneous(commands.Cog):
             digit = f'{ord(c):x}'
             the_name = name(c, 'Name not found.')
             c = '\\`' if c == '`' else c
-            return f'[`\\U{digit:>08}`](http://www.fileformat.info/info/unicode/char/{digit}): {the_name} **\N{EM DASH}** {c}'
+            return (f'[`\\U{digit:>08}`](http://www.fileformat.info/info/unicode/char/{digit}): {the_name} '
+                    f'**\N{EM DASH}** {c}')
 
         msg = '\n'.join(map(to_string, characters))
         if len(msg) > 2000:
-            return await interaction.response.send_message('Output too long to display.') 
-        await interaction.response.send_message(msg, suppress_embeds=True) 
+            return await interaction.response.send_message('Output too long to display.')  
+        await interaction.response.send_message(msg, suppress_embeds=True)  
 
     @commands.command(name='spotify', aliases=('sp', 'spot'), description="fetch spotify RP information.")
-    async def find_spotify_activity(self, ctx: commands.Context, *, username: Union[discord.Member, discord.User] = None):
+    async def find_spotify_activity(self, ctx: commands.Context, *,
+                                    username: Union[discord.Member, discord.User] = None):
         global found_spotify
         async with ctx.typing():
             if username is None:
@@ -598,18 +606,18 @@ class Miscellaneous(commands.Cog):
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     async def feedback(self, interaction: discord.Interaction):
         feedback_modal = FeedbackModal()
-        await interaction.response.send_modal(feedback_modal) 
+        await interaction.response.send_modal(feedback_modal)  
 
     @app_commands.command(name='about', description='shows stats related to the client.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.checks.cooldown(1, 10, key=lambda i: i.guild.id)
     async def about_the_bot(self, interaction: discord.Interaction):
 
-        await interaction.response.defer(thinking=True) 
+        await interaction.response.defer(thinking=True)  
         amount = 0
-        lenslash = len(await self.client.tree.fetch_commands(guild=Object(id=interaction.guild.id)))+1
+        lenslash = len(await self.client.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1
         lentxt = len(self.client.commands)
-        amount += (lenslash+lentxt)
+        amount += (lenslash + lentxt)
 
         username = 'SGA-A'
         token = 'youshallnotpass'
@@ -623,7 +631,9 @@ class Miscellaneous(commands.Cog):
         revision = list()
 
         for commit in commits:
-            revision.append(f"[`{commit.sha[:6]}`]({commit.html_url}) {commit.commit.message.splitlines()[0]} ({format_relative(commit.commit.author.date)})")
+            revision.append(
+                f"[`{commit.sha[:6]}`]({commit.html_url}) {commit.commit.message.splitlines()[0]} "
+                f"({format_relative(commit.commit.author.date)})")
 
         embed = discord.Embed(description=f'Latest Changes:\n'
                                           f'{"\n".join(revision)}')
@@ -662,9 +672,12 @@ class Miscellaneous(commands.Cog):
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
 
-        embed.add_field(name='<:membersb:1195752573555183666> Members', value=f'{total_members} total\n{total_unique} unique')
-        embed.add_field(name='<:channelb:1195752572116541590> Channels', value=f'{text + voice} total\n{text} text\n{voice} voice')
-        embed.add_field(name='<:processb:1195752570069713047> Process', value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU')
+        embed.add_field(name='<:membersb:1195752573555183666> Members',
+                        value=f'{total_members} total\n{total_unique} unique')
+        embed.add_field(name='<:channelb:1195752572116541590> Channels',
+                        value=f'{text + voice} total\n{text} text\n{voice} voice')
+        embed.add_field(name='<:processb:1195752570069713047> Process',
+                        value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU')
         embed.add_field(name='<:serversb:1195752568303927377> Guilds',
                         value=f'{guilds} total\n'
                               f'{ARROW}{len(self.client.emojis)} emojis\n'
@@ -688,9 +701,9 @@ class Miscellaneous(commands.Cog):
         if filter_by is None:
             filter_by = "neko"
 
-        async with self.client.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp: 
+        async with self.client.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp:  
             if resp.status != 200:
-                return await interaction.response.send_message( 
+                return await interaction.response.send_message(  
                     "The request failed, you should try again later.")
             data = await resp.json()
             await interaction.response.send_message(data["results"][0]["url"])  
@@ -722,7 +735,8 @@ class Miscellaneous(commands.Cog):
     async def alert_iph(self, ctx: commands.Context, *, custom_text: str):
         async with ctx.typing():
             custom_text = '+'.join(custom_text.split(' '))
-            async with self.client.session.get(f"https://api.popcat.xyz/alert?text={custom_text}") as resp:  
+            async with self.client.session.get(  
+                    f"https://api.popcat.xyz/alert?text={custom_text}") as resp:
                 if resp.status != 200:
                     return await ctx.send("The service is currently not available, try again later.")
                 await ctx.send(resp.url)
@@ -731,17 +745,20 @@ class Miscellaneous(commands.Cog):
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.rename(spec="mode")
     @app_commands.describe(spec='the mode of displaying the current time now')
-    async def tn(self, interaction: discord.Interaction, spec: Literal["t - returns short time (format HH:MM)",
-                 "T - return long time (format HH:MM:SS)", "d - returns short date (format DD/MM/YYYY)",
-                 "D - returns long date (format DD Month Year)", "F - returns long date and time (format Day, DD Month Year HH:MM)",
-                 "R - returns the relative time since now"] = None) -> None:
+    async def tn(self, interaction: discord.Interaction, spec: Optional[
+        Literal["t - returns short time (format HH:MM)", "T - return long time (format HH:MM:SS)",
+                "d - returns short date (format DD/MM/YYYY)",
+                "D - returns long date (format DD Month Year)",
+                "F - returns long date and time (format Day, DD Month Year HH:MM)",
+                "R - returns the relative time since now"]]) -> None:
+
         speca = spec[0] if spec else None
         format_dtime = discord.utils.format_dt(datetime.datetime.now(), style=speca)
         embed = discord.Embed(description=f'## <:watchb:1195754643209334906> Timestamp Conversion\n{format_dtime}\n'
                                           f'- The epoch time in this format is: `{format_dtime}`',
                               colour=return_random_color())
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
-        await interaction.response.send_message(embed=embed, ephemeral=True) 
+        await interaction.response.send_message(embed=embed, ephemeral=True)  
 
     @commands.command(name='avatar', description='display a user\'s enlarged avatar.')
     async def avatar(self, ctx, *, username: Union[discord.Member, discord.User] = None):
