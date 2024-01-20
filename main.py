@@ -17,7 +17,6 @@ from aiohttp import ClientSession
 from asqlite import create_pool
 from logging import INFO as LOGGING_INFO
 
-
 if TYPE_CHECKING:
     from discord.abc import Snowflake
 
@@ -217,7 +216,6 @@ class C2C(commands.Bot):
         return await super().get_context(message, cls=cls)
 
     async def setup_hook(self):
-
         print(f"we're in.")
 
         self.pool_connection = await create_pool('C:\\Users\\georg\\PycharmProjects\\c2c\\db-shit\\economy.db')
@@ -231,6 +229,7 @@ class C2C(commands.Bot):
         webhook_url = environ["SUPPORT_WEBHOOK"]
         return Webhook.from_url(webhook_url, session=self.session)
 
+
 client = C2C(command_prefix='>', intents=Intents.all(), case_insensitive=True,
              owner_ids={992152414566232139, 546086191414509599},
              activity=CustomActivity(name='Serving cc • /help'),
@@ -243,25 +242,30 @@ async def load_cogs():
         if filename.endswith(".py"):
             await client.load_extension(f"cogs.{filename[:-3]}")
 
+
 def return_txt_cmds_first(command_holder: dict,
                           category: Literal["Economy", "Moderation", "Miscellaneous", "Administrate", "Music"]) -> dict:
-    """Displays all the text-based commands that are defined within a cog as a dict. This should always be called first for consistency."""
+    """Displays all the text-based commands that are defined within a cog as a dict. This should always be called
+    first for consistency."""
     for cmd in client.get_cog(category).get_commands():
         command_holder.update({cmd.name: deque([f'{category}', f'{cmd.description}', 'txt'])})
     return command_holder
 
 
 def return_interaction_cmds_last(command_holder: dict,
-                                 category: Literal["Economy", "Moderation", "Miscellaneous", "Administrate", "Music"]) -> dict:
-    """Displays all the app commands and grouped app commands that are defined within a cog as a dict. This should always be called last for consistency."""
+                                 category: Literal[
+                                     "Economy", "Moderation", "Miscellaneous", "Administrate", "Music"]) -> dict:
+    """Displays all the app commands and grouped app commands that are defined within a cog as a dict. This should
+    always be called last for consistency."""
 
     for cmd in client.get_cog(category).get_app_commands():
         command_holder.update({cmd.name: deque([f'{category}', f'{cmd.description}', 'sla'])})
     return command_holder
 
+
 async def total_command_count(interaction: Interaction) -> int:
     """Return the total amount of commands detected within the client, including text and slash commands."""
-    amount = (len(await client.tree.fetch_commands(guild=Object(id=interaction.guild.id)))+1) + len(client.commands)
+    amount = (len(await client.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(client.commands)
     return amount
 
 
@@ -269,16 +273,16 @@ class SelectMenu(ui.Select):
     def __init__(self):
         optionss = [
             SelectOption(label='Owner', description='commands accessible by the bot owners.',
-                                 emoji='<a:e1_butterflyB:1124677894275338301>'),
+                         emoji='<a:e1_butterflyB:1124677894275338301>'),
             SelectOption(label='Moderation',
-                                 description='commands accessible by those with further permissions.',
-                                 emoji='<a:e1_starR:1124677520038567946>'),
+                         description='commands accessible by those with further permissions.',
+                         emoji='<a:e1_starR:1124677520038567946>'),
             SelectOption(label='Utility', description='generic commands that may serve useful.',
-                                 emoji='<a:e1_starG:1124677658500927488>'),
+                         emoji='<a:e1_starG:1124677658500927488>'),
             SelectOption(label='Economy', description='commands related to the virtual economy.',
-                                 emoji='<a:e1_starY:1124677741980176495>'),
+                         emoji='<a:e1_starY:1124677741980176495>'),
             SelectOption(label='Music', description='commands for listening to music on discord.',
-                                 emoji='<a:e1_starPur:1125040539943837738>')
+                         emoji='<a:e1_starPur:1125040539943837738>')
         ]
         super().__init__(placeholder="Name of category", options=optionss)
 
@@ -304,7 +308,8 @@ class SelectMenu(ui.Select):
             all_cmds: dict = return_interaction_cmds_last(new_dict, "Administrate")
 
             embed = Embed(title='Help: Owner', colour=Colour.from_rgb(91, 170, 239))
-            embed.set_thumbnail(url='https://cdn.discordapp.com/icons/592654230112698378/1a4fed4eca3d81da620a662a8b383c5b.png?size=512')
+            embed.set_thumbnail(
+                url='https://cdn.discordapp.com/icons/592654230112698378/1a4fed4eca3d81da620a662a8b383c5b.png?size=512')
 
             for cmd, cmd_details in all_cmds.items():
                 total_cmds_cata += 1
@@ -313,27 +318,30 @@ class SelectMenu(ui.Select):
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
 
-                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id)) 
+                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))  
                 cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
 
             embed.add_field(name='About: Owner',
-                            value=f'Contains commands that are only able to be utilized by the bot developers, and mostly '
-                                  f'contain commands related to debugging and testing new features into the client for later release.\n'
+                            value=f'Contains commands that are only able to be utilized by the bot developers, '
+                                  f'and mostly'
+                                  f'contain commands related to debugging and testing new features into the client '
+                                  f'for later release.\n'
                                   f'__Interesting Stats__\n'
                                   f'- There are **{total_cmds_cata}** commands in this category\n'
-                                  f'- Accounts for **{round((total_cmds_cata / total_cmds_rough)*100,ndigits=2)}%** of all commands\n'
+                                  f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%**'
+                                  f' of all commands\n'
                                   f'- Last modified: <t:1702722548:D> (**<t:1702722548:R>**)\n'
                                   f'- Status: **READY**')
 
             embed.description = "\n".join(cmd_formatter)
 
-            await interaction.response.edit_message(embed=embed, view=self.view) 
+            await interaction.response.edit_message(embed=embed, view=self.view)  
 
         elif their_choice == 'Moderation':
 
             the_dict = {}
-            new_dict = return_txt_cmds_first(the_dict, their_choice) 
-            all_cmdss: dict = return_interaction_cmds_last(new_dict, their_choice) 
+            new_dict = return_txt_cmds_first(the_dict, their_choice)  
+            all_cmdss: dict = return_interaction_cmds_last(new_dict, their_choice)  
 
             embed = Embed(title='Help: Moderation', colour=Colour.from_rgb(247, 14, 115))
             embed.set_thumbnail(url='https://emoji.discadia.com/emojis/74e65408-2adb-46dc-86a7-363f3096b6b2.PNG')
@@ -343,16 +351,17 @@ class SelectMenu(ui.Select):
                 total_cmds_cata += 1
 
             embed.add_field(name='About: Mod',
-                            value=f'Contains commands that are related to server management and moderation, hence these '
-                                  f'commands require invokers to have higher levels of permissions to utilize these.\n'
+                            value=f'Contains commands that are related to server management and moderation, hence these'
+                                  f' commands require invokers to have higher levels of permissions to utilize these.\n'
                                   f'__Interesting Stats__\n'
                                   f'- There are **{total_cmds_cata}** commands in this category\n'
-                                  f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%** of all commands\n'
+                                  f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%**'
+                                  f' of all commands\n'
                                   f'- Last modified: <t:1698856225:D> (**<t:1698856225:R>**)\n'
                                   f'- Status: **READY**')
             embed.description = "\n".join(cmd_formatter)
 
-            await interaction.response.edit_message(embed=embed, view=self.view) 
+            await interaction.response.edit_message(embed=embed, view=self.view)  
 
         elif their_choice == 'Utility':
 
@@ -368,19 +377,21 @@ class SelectMenu(ui.Select):
                 if cmd_details[-1] == 'txt':
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
-                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id)) 
+                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))  
                 cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
 
             embed.add_field(name='About: Utility',
-                            value=f'Contains commands that may serve useful to some users, especially to some of the geeks out there.\n'
+                            value=f'Contains commands that may serve useful to some users, '
+                                  f'especially to some of the geeks out there.\n'
                                   f'__Interesting Stats__\n'
                                   f'- There are **{total_cmds_cata}** commands in this category\n'
-                                  f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%** of all commands\n'
+                                  f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%**'
+                                  f' of all commands\n'
                                   f'- Last modified: <t:1702722548:D> (**<t:1702722548:R>**)\n'
                                   f'- Status: **READY**')
             embed.description = "\n".join(cmd_formatter)
 
-            await interaction.response.edit_message(embed=embed, view=self.view) 
+            await interaction.response.edit_message(embed=embed, view=self.view)  
 
         elif their_choice == 'Economy':
 
@@ -397,7 +408,8 @@ class SelectMenu(ui.Select):
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
 
-                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))   
+                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))  
+
                 try:
                     got_something = False
                     if command_manage.options:
@@ -413,14 +425,17 @@ class SelectMenu(ui.Select):
 
             embed.description = "\n".join(cmd_formatter)
             embed.add_field(name='About: Economy',
-                            value=f'Contains commands that can be used by anybody, and relate to the virtual economy system of the client.\n'
+                            value=f'Contains commands that can be used by anybody, and relate to the virtual economy '
+                                  f'system of the client.\n'
                                   f'__Interesting Stats__\n'
-                                  f'- There are **{total_cmds_cata}** commands in this category (excluding subcommands)\n'
-                                  f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%** of all commands\n'
+                                  f'- There are **{total_cmds_cata}** commands in this '
+                                  f'category (excluding subcommands)\n'
+                                  f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%**'
+                                  f' of all commands\n'
                                   f'- Last modified: <t:1702722548:D> (**<t:1702722548:R>**)\n'
                                   f'- Status: **LOCKED**')
 
-            await interaction.response.edit_message(embed=embed, view=self.view) 
+            await interaction.response.edit_message(embed=embed, view=self.view)  
 
         else:
 
@@ -440,10 +455,11 @@ class SelectMenu(ui.Select):
                                   f'and its functions. Use these commands to play music on Discord.\n'
                                   f'__Interesting Stats__\n'
                                   f'- There are **{total_cmds_cata}** commands in this category\n'
-                                  f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%** of all commands\n'
+                                  f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%**'
+                                  f' of all commands\n'
                                   f'- Last modified: <t:1703857689:D> (**<t:1703857689:R>**)\n'
                                   f'- Status: **READY**')
-            await interaction.response.edit_message(embed=embed, view=self.view) 
+            await interaction.response.edit_message(embed=embed, view=self.view)  
 
 
 class Select(ui.View):
@@ -454,7 +470,8 @@ class Select(ui.View):
     async def on_timeout(self) -> None:
         for item in self.children:
             item.disabled = True
-        await self.message.edit(view=self) 
+        await self.message.edit(view=self)  
+
 
 @client.command(name='confirm')
 async def confirm_panel(ctx: CustomContext):
@@ -471,26 +488,29 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
     embed = Embed(
         colour=Colour.from_rgb(3, 102, 214),
         title='Changes for 2024 Q1',
-    description="Changes that have taken place in the period between January 1 - March 31 are noted here.\n\n"
-                "- **Linked Roles**: Integrate your Github account to Discord and claim your linked role "
-                "in the 'Linked Roles' tab.\n"
-                " - Once claimed, you receive <@&1190772742409158667> and a badge next to your name in most channels.\n"
-                "- **Activity Roles**: earn roles by participating regularly in channels.\n"
-                " - <@&1190772029830471781> - earnt by sending 50 messages per week.\n"
-                " - <@&1190772182591209492> - earnt by sending 150 messages per week.\n"
-                "- **New Bots added**: <@491769129318088714> and <@770100332998295572>\n"
-                "- **Event Highlights**: A recurring event for New Years Day was added.\n"
-                " - Every year this event is created on the 1st Jan.\n"
-                "- **Slash Command Changes:** You now only see slash commands that are relevant to you.\n"
-                " - Server management related slash commands were removed completley for server members.\n"
-                " - More are regularly being detected and removed from the list.\n"
-                "- **XP Changes**: It recently became possible to earn XP in bot command channels\n"
-                " - Link to announcement: https://discord.com/channels/829053898333225010/1121094935802822768/1166397053329477642.\n"
-                "- **Channel Overhaul**: For a more simplistic look, <#1121445944576188517> and <#902138223571116052> were modified.")
+        description="Changes that have taken place in the period between January 1 - March 31 are noted here.\n\n"
+                    "- **Linked Roles**: Integrate your Github account to Discord and claim your linked role "
+                    "in the 'Linked Roles' tab.\n"
+                    " - Once claimed, you receive <@&1190772742409158667> and a badge next "
+                    "to your name in most channels.\n"
+                    "- **Activity Roles**: earn roles by participating regularly in channels.\n"
+                    " - <@&1190772029830471781> - earnt by sending 50 messages per week.\n"
+                    " - <@&1190772182591209492> - earnt by sending 150 messages per week.\n"
+                    "- **New Bots added**: <@491769129318088714> and <@770100332998295572>\n"
+                    "- **Event Highlights**: A recurring event for New Years Day was added.\n"
+                    " - Every year this event is created on the 1st Jan.\n"
+                    "- **Slash Command Changes:** You now only see slash commands that are relevant to you.\n"
+                    " - Server management related slash commands were removed completley for server members.\n"
+                    " - More are regularly being detected and removed from the list.\n"
+                    "- **XP Changes**: It recently became possible to earn XP in bot command channels\n"
+                    " - Link to announcement: https://discord.com/channels/829053898333225010/"
+                    "1121094935802822768/1166397053329477642.\n"
+                    "- **Channel Overhaul**: For a more simplistic look, <#1121445944576188517> and "
+                    "<#902138223571116052> were modified.")
 
     embed.set_footer(icon_url=ctx.guild.icon.url, text="That's all for Q1 2024. Next review due: 30 June 2024.")
 
-    urll = "https://discord.com/api/webhooks/1163132850699247746/dSp0XRiADRL31YLS20W9i66Nq-ePYb-fFqID9UjdgFTuNQIFTtpHvBwmdvt1PcE2j9UM"
+    urll = "youshallnotpass"
     webhook = Webhook.from_url(url=urll, session=client.session)
     thread = await ctx.guild.fetch_channel(1190736866308276394)
     rtype = "feature" or "bugfix"
@@ -502,7 +522,6 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
 @client.tree.command(name='help', description='help command for c2c, outlines all categories of commands.',
                      guilds=[Object(id=829053898333225010), Object(id=780397076273954886)])
 async def help_command(interaction: Interaction):
-
     epicker = choice(["<:githubB:1195500626382164119>",
                       "<:githubBF:1195498685296021535>", "<:githubW:1195499565508460634>",
                       "<:githubBlue:1195664427836506212>"])
@@ -519,14 +538,17 @@ async def help_command(interaction: Interaction):
                   colour=Colour.from_rgb(138, 175, 255))
     embed.add_field(name="Who are you?",
                     value=f"I'm a bot made by Splint#6019 and Geo#2181. I've been on Discord since <t:1669831154:f> "
-                          f"and joined {interaction.guild.name} on {format_dt(interaction.guild.me.joined_at, style="f")}.\n\n"
+                          f"and joined {interaction.guild.name} on "
+                          f"{format_dt(interaction.guild.me.joined_at, style="f")}.\n\n"
                           f"I have a variety of features such as an advanced economy system, moderation, debugging "
                           f"tools and some other random features that may aid you in this journey. "
                           f"You can get more information on my commands by using the dropdown below.\n\n"
-                          f"I'm also open source. You can see my code on {epicker} [Github](https://github.com/SGA-A/c2c).", inline=False)
+                          f"I'm also open source. "
+                          f"You can see my code on {epicker} [Github](https://github.com/SGA-A/c2c).",
+                    inline=False)
 
     my_view = Select()
-    await interaction.response.send_message(embed=embed, view=my_view, ephemeral=True) 
+    await interaction.response.send_message(embed=embed, view=my_view, ephemeral=True)  
     my_view.message = await interaction.original_response()
 
 
@@ -543,4 +565,6 @@ async def main():
         await client.start(token)
     finally:
         await client.close()
+
+
 run(main())
