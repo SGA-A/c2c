@@ -2,7 +2,6 @@ from discord.ext import commands
 from discord import Thread
 
 
-
 class Moderation(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
@@ -39,7 +38,6 @@ class Moderation(commands.Cog):
         if slowmode_in_seconds:
             return await ctx.send(f'<:slowed:1195739862100353114> Slowmode set to {slowmode_in_seconds} seconds.')
         await ctx.send("<:normale:1195740534703136921> Disabled slowmode.")
-
 
     @commands.command(name="purge", description="bulk-remove messages, excluding pins.")
     @commands.has_permissions(manage_messages=True)
