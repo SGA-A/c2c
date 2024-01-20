@@ -44,6 +44,7 @@ class Administrate(commands.Cog):
             break  # Exit the loop after retrieving the first message
 
         return dtls
+
     @staticmethod
     def cleanup_code(content: str) -> str:
         """Automatically removes code blocks from the code."""
@@ -114,16 +115,19 @@ class Administrate(commands.Cog):
 
                 dt_now = datetime.now()
                 payday = discord.Embed(colour=discord.Colour.dark_embed(),
-                                       description=f"## Weekly Rewards (for week {dt_now.isocalendar().week} of {dt_now.year})\n"
-                                                   f"These are the users who were eligible to claim this week's activity "
+                                       description=f"## Weekly Rewards (for week "
+                                                   f"{dt_now.isocalendar().week} of {dt_now.year})\n"
+                                                   f"These are the users who were eligible to claim this "
+                                                   f"week's activity "
                                                    f"rewards. Entries that contained users not registered as of "
                                                    f"{discord.utils.format_dt(dt_now, style="t")} today were "
                                                    f"ignored. Considering this, `{eligible}` user(s) were eligible,"
                                                    f" but `{actual}` user(s) were given these rewards.\n")
 
                 payday_notes = set()
-                for member, payout in payouts.items():  #  all members that got paid
-                    payday_notes.add(f"- {member} walked away with \U000023e3 **{payout[0]:,}** from being {payout[1]}.")
+                for member, payout in payouts.items():  # all members that got paid
+                    payday_notes.add(f"- {member} walked away with \U000023e3 "
+                                     f"**{payout[0]:,}** from being {payout[1]}.")
 
                 pinned_if_any = get_profile_key_value(f"weeklyr msg id")
                 if pinned_if_any is not None:
@@ -159,11 +163,11 @@ class Administrate(commands.Cog):
         """Generates or deducts a given amount of robux to the mentioned user."""
 
         real_amount = determine_exponent(amount)
-        async with self.client.pool_connection.acquire() as conn: # type: ignore
+        async with self.client.pool_connection.acquire() as conn:  
             conn: asqlite_Connection
             their_bank = await Economy.get_spec_bank_data(member, "bank", conn)
             their_wallet = await Economy.get_wallet_data_only(member, conn)
-            
+
             if configuration == "add":
 
                 match deposit_mode:
@@ -188,7 +192,7 @@ class Administrate(commands.Cog):
                                   icon_url=interaction.user.display_avatar.url)
                 embed2.set_footer(text=f"configuration type: ADD_TO")
 
-                await interaction.response.send_message(embed=embed2, ephemeral=ephemeral) # type: ignore
+                await interaction.response.send_message(embed=embed2, ephemeral=ephemeral)  
 
             elif configuration == "remove":
 
@@ -202,7 +206,7 @@ class Administrate(commands.Cog):
 
                 total = (their_bank + their_wallet) - int(real_amount)
                 embed3 = discord.Embed(title='Success',
-                                       description=f"\U0000279c Deducted {CURRENCY}{int(real_amount):,} "
+                                       description=f"\U0000279c deducted {CURRENCY}{int(real_amount):,} "
                                                    f"robux from **{member.display_name}**'s balance.\n"
                                                    f"\U0000279c **{member.display_name}**'s new "
                                                    f"**`{deposit_mode}`** balance is {CURRENCY}{new_amount:,}.\n"
@@ -214,7 +218,7 @@ class Administrate(commands.Cog):
                 embed3.set_thumbnail(url=member.display_avatar.url)
                 embed3.set_footer(text=f"configuration type: REMOVE_FROM")
 
-                await interaction.response.send_message(embed=embed3, ephemeral=ephemeral) # type: ignore
+                await interaction.response.send_message(embed=embed3, ephemeral=ephemeral)  
 
             else:
                 change = int(
@@ -229,7 +233,7 @@ class Administrate(commands.Cog):
                 embed4.set_thumbnail(url=member.display_avatar.url)
                 embed4.set_author(name=f"Requested by {interaction.user.name}",
                                   icon_url=interaction.user.avatar.url)
-                await interaction.response.send_message(embed=embed4, ephemeral=ephemeral) # type: ignore
+                await interaction.response.send_message(embed=embed4, ephemeral=ephemeral)  
 
     @app_commands.command(name='pin', description='pin a message in any channel.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -248,25 +252,25 @@ class Administrate(commands.Cog):
 
             await message.pin(reason=f'Requested by {interaction.user.name}.')
 
-            await interaction.response.send_message( 
+            await interaction.response.send_message(  
                 f"Successfully pinned the message of id {message_id} sent by {message.author.name}.\n\n",
                 ephemeral=True, delete_after=3.0)
 
         except discord.NotFound:
 
-            await interaction.response.send_message( 
+            await interaction.response.send_message(  
                 'Failed to pin the message, it was not found or was deleted.')
 
         except discord.HTTPException as http:
-
-            await interaction.response.send_message( 
+            await interaction.response.send_message(  
                 f'Failed to pin the message, with a return status code of `{http.status}`.',
                 ephemeral=True, delete_after=3.0)
 
     @commands.command(name='cthr', aliases=('ct', 'create_thread'), description='preset to create forum channels.')
     async def create_thread(self, ctx: commands.Context, thread_name: str):
         if isinstance(ctx.channel, discord.TextChannel):
-            thread = await ctx.channel.create_thread(name=thread_name, auto_archive_duration=10080, message=discord.Object(ctx.message.id))
+            thread = await ctx.channel.create_thread(name=thread_name, auto_archive_duration=10080,
+                                                     message=discord.Object(ctx.message.id))
             await thread.send("Your thread has been created, with name **{0}**".format(thread_name))
         else:
             await ctx.send("Invalid channel: you must be in a text channel to call this command.")
@@ -281,7 +285,7 @@ class Administrate(commands.Cog):
         c = await b.fetch_message(int(message_id))
         emoji = self.return_custom_emoji(emote)  # a function to return a custom emoji
         await c.add_reaction(emoji)
-        await interaction.response.send_message( 
+        await interaction.response.send_message(  
             content='the emoji has been added to the message', ephemeral=True, delete_after=3.0)
 
     @commands.command(name='sync', description='sync client tree for changes.', aliases=("sy",))
@@ -328,7 +332,7 @@ class Administrate(commands.Cog):
         try:
             with redirect_stdout(stdout):
                 ret = await func()
-        except Exception as e:
+        except Exception:
             value = stdout.getvalue()
             await ctx.send(f'```py\n{value}{format_exc()}\n```')
         else:
@@ -362,7 +366,35 @@ class Administrate(commands.Cog):
             "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
             "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
             "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
+            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
             "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n> Blanked out the channel.")
+
+    @commands.command(name='regex', description='load automod match_regex rules.')
+    async def automod_regex(self, ctx):
+        await ctx.guild.create_automod_rule(name='new rule by cxc',
+                                            event_type=discord.AutoModRuleEventType.message_send,
+                                            trigger=discord.AutoModTrigger(regex_patterns=["a", "b", "c", "d", "e"]),
+                                            actions=[
+                                                discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
+        await ctx.message.add_reaction('<:successful:1183089889269530764>')
+
+    @commands.command(name='mentions', description='load automod mass_mentions rules.')
+    async def automod_mentions(self, ctx):
+        await ctx.guild.create_automod_rule(name='new rule by cxc',
+                                            event_type=discord.AutoModRuleEventType.message_send,
+                                            trigger=discord.AutoModTrigger(mention_limit=5),
+                                            actions=[
+                                                discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
+        await ctx.message.add_reaction('<:successful:1183089889269530764>')
+
+    @commands.command(name='keyword', description='load automod by_keyword rules.')
+    async def automod_keyword(self, ctx, the_word):
+        await ctx.guild.create_automod_rule(name='new rule by cxc',
+                                            event_type=discord.AutoModRuleEventType.message_send,
+                                            trigger=discord.AutoModTrigger(keyword_filter=[f'{the_word}']),
+                                            actions=[
+                                                discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
+        await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
     @commands.command(name='update', description='preset to update channel info.')
     async def push_update(self, ctx):
@@ -372,9 +404,9 @@ class Administrate(commands.Cog):
         original = await channel.fetch_message(1142392804446830684)
 
         embed = discord.Embed(title='Update Schedule',
-                              description=f'This embed will post any **changes to the server** in the near future. This '
-                                          f'includes any feature updates within the server and any other optimization '
-                                          f'changes.\n',
+                              description=f'This embed will post any **changes to the server** '
+                                          f'in the near future. This includes any feature updates within the server'
+                                          f' and any other optimization changes.\n',
                               colour=discord.Colour.from_rgb(101, 242, 171))
         embed.add_field(name="There's nothing here yet.",
                         value="There are no planned changes for the server right now.")
@@ -404,7 +436,8 @@ class Administrate(commands.Cog):
                                       '# 4. <:Polarizer:1171491374756012152> Keep our server safe!\n'
                                       'Any form of content that suggests normalization or '
                                       'justification of NSFW content should not escape the '
-                                      'boundaries of <#1160547937420582942>, sanctions will be upheld for such cases.\n'
+                                      'boundaries of <#1160547937420582942> or through the use '
+                                      'of <@432610292342587392>, sanctions will be upheld for such cases.\n'
                                       '# 5. <:discordthinking:1173681144718446703> Adhere to the Terms of Service.\n'
                                       'Abide by Discord\'s terms of service and community guidelines at all times:\n'
                                       '[Discord Community Guidelines](https://discord.com/guidelines/)\n'
@@ -435,7 +468,7 @@ class Administrate(commands.Cog):
                                           "We hope you enjoy your stay, and we wish you a wonderful journey.\n"
                                           "And don't forget; you're here forever.",
                               colour=discord.Colour.from_rgb(70, 55, 230))
-        tbp = "<:e2_bluedot:1153776233499336764>"
+        tbp = "\U0000279c"
 
         roles = discord.Embed(description=f"# <:ismember:1180267726179143863> Server Roles Information.\n"
                                           f"- <@&893550756953735278>\n"
@@ -451,16 +484,14 @@ class Administrate(commands.Cog):
                                           f"- <@&1168204249096785980>\n"
                                           f" - People with access to new features on {self.client.user.mention}.\n\n"
                                           f"- **Other custom roles**\n"
-                                          f" - <@&1124762696110309579>, <@&1047576437177200770>, <@&1150354605000118352"
-                                          f">, <@&1150353118324871198>, <@&1150354158843596822>, <@&992155455067525140>"
-                                          f", <@&1144268897709723700>.\n"
+                                          f" - <@&1124762696110309579> and <@&1047576437177200770>.\n"
                                           f" - You can make your own custom role by reaching **Level 40**.",
                               colour=discord.Colour.from_rgb(101, 96, 243))
 
         ranks = discord.Embed(description=f'# <:extlink:1174417919581630526> Level Roles & Perks.\n'
-                                          f'Your activity in the server will not be left unrewarded! Level up by participating in '
-                                          f'text channels. The more active you are, the higher levels attained and the better perks'
-                                          f' you receive.\n\n'
+                                          f'Your activity in the server will not be left unrewarded! Level up '
+                                          f'by participating in text channels. The more active you are, the higher '
+                                          f'levels attained and the better perks you receive.\n\n'
                                           f'<@&923930948909797396>\n\n'
                                           f'<@&923931088613699584>\n'
                                           f'{tbp} \U000023e3 **335,000,000**\n\n'
@@ -490,11 +521,12 @@ class Administrate(commands.Cog):
         second_embed = discord.Embed(description='# The Appendix 1.'
                                                  '\nIf you somehow manage to reach **<@&923931862001414284>**, '
                                                  'out of 6 events, 1 will '
-                                                 'take place. A dice will be rolled and the outcome will ultimately depend '
-                                                 'on a dice roll.\n\n'
+                                                 'take place. A dice will be rolled and the outcome will '
+                                                 'ultimately depend on a dice roll.\n\n'
                                                  '## Event 1:\n'
-                                                 '\U0000279c Your level of experience and wisdom will prove you worthy of'
-                                                 ' receiving <@&912057500914843680>, a role only members of high authority '
+                                                 '\U0000279c Your level of experience and wisdom will prove you '
+                                                 'worthy of receiving <@&912057500914843680>, '
+                                                 'a role only members of high authority '
                                                  'can attain.\n'
                                                  '## Event 2:\n'
                                                  '\U0000279c Your familiarity with this server will allow you to get '
@@ -502,7 +534,8 @@ class Administrate(commands.Cog):
                                                  '## Event 3:\n'
                                                  '\U0000279c This is a karma roll. you will receive **nothing.**\n'
                                                  '## Event 4:\n'
-                                                 '\U0000279c For the sake of nonplus, **this event will not be disclosed'
+                                                 '\U0000279c For the sake of nonplus, '
+                                                 '**this event will not be disclosed'
                                                  ' until it is received.**\n'
                                                  '## Event 5:\n'
                                                  '\U0000279c This is a karma roll. you will receive **nothing.**\n'
@@ -531,27 +564,44 @@ class Administrate(commands.Cog):
         channel = await self.client.fetch_channel(1124782048041762867)
         original = await channel.fetch_message(1166793975466831894)
         temporary = discord.Embed(title="Temporary Removal of the Economy System",
-                                  description="as the title states, we have removed the Economy System in c2c (**for now**). <a:aaaaa:944505181150773288>\n\n"
-                                              "the reason being is the vast amount of bugs and inefficiencies in the system "
-                                              "which has been eating on the limited resources we have available to keep the bot running.\n\n"
-                                              "not to fret though! it will be back in a completley new state! we have many exciting plans in store over the "
-                                              "upcoming years for the bot, but right now <@992152414566232139> and <@546086191414509599> (but mostly <@992152414566232139>) are working on patching "
-                                              "all of the major issues that are in the Economy System. we hope to bring back this part of the system by **__late 2024__** but we cannot make any promises!\n\n"
-                                              "we plan to modify every single command currently available under this category and add more that are to come, hence this is a extensive programme that will **require a lot of time**. "
-                                              "This is made hindered by the current academic situation both the developers are in at this time, so please bear with us and we will not dissapoint (especially with <@992152414566232139> <a:ehe:928612599132749834>)!",
+                                  description="as the title states, we have removed the Economy System in c2c "
+                                              "(**for now**). <a:aaaaa:944505181150773288>\n\nthe reason being is "
+                                              "the vast amount of bugs and inefficiencies in the system which has "
+                                              "been eating on the limited resources we have available to keep the "
+                                              "bot running.\n\nnot to fret though! it will be back in a completley new"
+                                              " state! we have many exciting plans in store over the upcoming years for"
+                                              " the bot, but right now <@992152414566232139> and <@546086191414509599>"
+                                              " (but mostly <@992152414566232139>) are working on patching all of the "
+                                              "major issues that are in the Economy System. we hope to bring back this"
+                                              " part of the system by **__late 2024__** but we cannot make any promises"
+                                              "!\n\nwe plan to modify every single command currently available under "
+                                              "this category and add more that are to come, hence this is a extensive "
+                                              "programme that will **require a lot of time**. This is made hindered by"
+                                              " the current academic situation both the developers are in at this time,"
+                                              " so please bear with us and we will not dissapoint (especially with"
+                                              " <@992152414566232139> <a:ehe:928612599132749834>)!",
                                   colour=discord.Colour.from_rgb(102, 127, 163))
         temporary.add_field(name="Roadmap",
-                            value='to make it certain, here is an outline of what we will be doing over the next year. the arrows beneath these commitments will change indicating the progress of each section.\n'
+                            value='to make it certain, here is an outline of what we will be doing over the next year.'
+                                  ' the arrows beneath these commitments will change '
+                                  'indicating the progress of each section.\n'
                                   '<:redA:1166790106422722560> - **Not Started**\n'
                                   '<:yelA:1166790134801379378> - **In Progress**\n'
                                   '<:join:1163901334412611605> - **Completed**\n\n'
-                                  '<:join:1163901334412611605> **December 2023 (late)**: start of full rehaul of every command that currently exists.\n'
-                                  '<:yelA:1166790134801379378> **July 2024 (early)**: new commands/essential functions to the Economy system added.\n'
-                                  '<:redA:1166790106422722560> **August 2024 (late)**: economy system fully operational and ready for use.')
+                                  '<:join:1163901334412611605> **December 2023 (late)**: start of full rehaul of '
+                                  'every command that currently exists.\n<:yelA:1166790134801379378> **July 2024 '
+                                  '(early)**: new commands/essential functions to the Economy system added.\n<:red'
+                                  'A:1166790106422722560> **August 2024 (late)**: economy system '
+                                  'fully operational and ready for use.')
         temporary.add_field(name="Acknowledgement",
-                            value="<a:e1_imhappy:1144654614046724117> <@992152414566232139> (<@&1047576437177200770>) - contributing to **87.5**% of the full programme, making it possible in the first place (will write the code).\n"
-                                  "<a:catPat:1143936898449027082> <@546086191414509599> (<@&1124762696110309579>) - contributing to **12.5**% of the full programme (will make ideas for new commands)\n\n"
-                                  "we would not be able to recover the Economy System without <@992152414566232139>, she is the literal backbone of its revival! thank her for making it possible!")
+                            value="<a:e1_imhappy:1144654614046724117> <@992152414566232139> "
+                                  "(<@&1047576437177200770>) - contributing to **87.5**% of the full programme, "
+                                  "making it possible in the first place (will write the code).\n"
+                                  "<a:catPat:1143936898449027082> <@546086191414509599> (<@&1124762696110309579>)"
+                                  " - contributing to **12.5**% of the full programme (will make ideas for new "
+                                  "commands)\n\nwe would not be able to recover the Economy System without "
+                                  "<@992152414566232139>, she is the literal backbone of its revival! thank her for"
+                                  " making it possible!")
         await original.edit(embed=temporary)
 
     @commands.command(name='ccil', description='sends invite for cc.')
@@ -565,7 +615,7 @@ class Administrate(commands.Cog):
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(msg='The ID of the message to edit', new_content='The new content to replace it with')
     async def edit_msg(self, interaction: discord.Interaction, msg: str, new_content: str):
-        await interaction.response.defer(thinking=True) 
+        await interaction.response.defer(thinking=True)  
         a = await self.client.fetch_guild(interaction.guild.id)
         b = await a.fetch_channel(interaction.channel.id)
         c = await b.fetch_message(int(msg))
@@ -575,8 +625,8 @@ class Administrate(commands.Cog):
     @commands.command(name='quit', description='quits the bot gracefully.')
     async def quit_client(self, ctx):
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
-        await self.client.session.close() 
-        await self.client.pool_connection.close() 
+        await self.client.session.close()  
+        await self.client.pool_connection.close()  
         await self.client.http.close()
         await self.client.close()
 
@@ -595,15 +645,15 @@ class Administrate(commands.Cog):
             if channel.id != interaction.channel.id:
                 ch = await self.client.fetch_channel(channel.id)
                 await ch.send(message)
-                return await interaction.response.send_message( 
+                return await interaction.response.send_message(  
                     f"Done. Sent to <#{channel.id}>.", ephemeral=True)
             else:
-                return await interaction.response.send_message( 
+                return await interaction.response.send_message(  
                     "Point of giving a channel that is the same as the one you're in?", ephemeral=True)
         else:
             ch = await self.client.fetch_channel(interaction.channel.id)
             await ch.send(message)
-            return await interaction.response.send_message("Done.", ephemeral=True) 
+            return await interaction.response.send_message("Done.", ephemeral=True)  
 
 
 async def setup(client):
