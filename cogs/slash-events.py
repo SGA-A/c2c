@@ -20,26 +20,26 @@ class SlashExceptionHandler(commands.Cog):
     async def get_app_command_error(self, interaction: Interaction,
                                     error: AppCommandError):
 
-        if not interaction.response.is_done(): 
-            await interaction.response.defer(thinking=True) 
+        if not interaction.response.is_done():  # type: ignore
+            await interaction.response.defer(thinking=True)  # type: ignore
 
         if isinstance(error, CheckFailure):
             exception = Embed(title='Exception', colour=Colour.dark_embed())
             exception.set_thumbnail(url="https://i.imgur.com/zGtq4Dp.png")
-            if isinstance(error, MissingRole):
+            if isinstance(error, MissingRole):  # when a user has a missing role
 
                 exception.description = f'{interaction.user.name}, you are missing a role.'
 
                 exception.add_field(name='Required Role', value=f"<@&{error.missing_role}>", inline=False)
 
-            elif isinstance(error, MissingPermissions):
+            elif isinstance(error, MissingPermissions):  # when a user has missing permissions
 
                 exception.description = (f"{interaction.user.name}, you're missing "
                                          f"some permissions required to use this command.")
                 exception.add_field(name='Required permissions',
                                     value=', '.join(error.missing_permissions).title())
 
-            elif isinstance(error, CommandOnCooldown):
+            elif isinstance(error, CommandOnCooldown):  # when the command a user executes is on cooldown
                 exception.title = "Take a breather.."
                 exception.set_thumbnail(url=None)
                 exception.colour = 0x2B2D31
@@ -54,7 +54,7 @@ class SlashExceptionHandler(commands.Cog):
             content = Embed(
                 description=f"The commmand with name {error.name} was not found.\n"
                             f"It may have been recently removed or replaced with an alternative.",
-            colour=Colour.dark_embed())
+                colour=Colour.dark_embed())
             content.set_thumbnail(url="https://i.imgur.com/zGtq4Dp.png")
 
             return await interaction.followup.send(content)
@@ -64,7 +64,7 @@ class SlashExceptionHandler(commands.Cog):
             content = Embed(
                 description=f"{interaction.user.name}, this command is registered already?\n"
                             f"This is an issue with the bot, usually resolving itself within a few minutes.",
-            colour=Colour.dark_embed())
+                colour=Colour.dark_embed())
             content.set_thumbnail(url="https://i.imgur.com/zGtq4Dp.png")
             return await interaction.followup.send(content)
 
