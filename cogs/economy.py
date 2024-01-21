@@ -3068,10 +3068,9 @@ class Economy(commands.Cog):
             else:
                 salary = words.get(job_val)[-1]
                 rangeit = randint(10000000, salary)
-                await self.update_bank_new(interaction.user, conn, rangeit, "bank")
+                await self.update_bank_new(interaction.user, conn, rangeit)
                 await my_msg.edit(content=f"`BOSS`: Good work from you {interaction.user.display_name}, got the "
-                                          f"job done. You got **\U000023e3 {rangeit:,}** for your efforts. The "
-                                          f"money has been sent to your bank account.")
+                                          f"job done. You got **\U000023e3 {rangeit:,}** for your efforts.")
 
     @app_commands.command(name="balance", description="returns a user's current balance.")
     @app_commands.describe(user='the user to return the balance of')
