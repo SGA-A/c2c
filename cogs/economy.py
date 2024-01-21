@@ -1211,6 +1211,7 @@ class Economy(commands.Cog):
 
     async def send_custom_text(self, interaction: discord.Interaction,
                                custom_text: str):
+        """Send a custom text using the webhook provided."""
         hook_id = get_profile_key_value(f"{interaction.channel.id} webhook")
         if hook_id is None:
             async with self.client.session.get("https://i.imgur.com/3aMsyXI.jpg") as resp:  
@@ -1277,13 +1278,6 @@ class Economy(commands.Cog):
         return data[0] == 2
 
     @staticmethod
-    async def get_bank_data_new(user: discord.Member, conn_input: asqlite_Connection) -> Optional[Any]:
-        """Retrieves all data from a registered user."""
-        data = await conn_input.execute(f"SELECT * FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        data = await data.fetchone()
-        return data
-
-    @staticmethod
     async def get_wallet_data_only(user: discord.Member, conn_input: asqlite_Connection) -> Optional[Any]:
         """Retrieves the wallet amount only from a registered user's bank data."""
         data = await conn_input.execute(f"SELECT wallet FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
@@ -1347,7 +1341,7 @@ class Economy(commands.Cog):
                                     mode1: str, amount1: Union[float, int], mode2: str, amount2: Union[float, int],
                                     mode3: str, amount3: Union[float, int],
                                     table_name: Optional[str] = "bank") -> Optional[Any]:
-        """Modifies any two fields at once by their respective amounts. Returning the values of both fields.
+        """Modifies any three fields at once by their respective amounts. Returning the values of both fields.
         You are able to choose what table you wish to modify the contents of."""
         data = await conn_input.execute(
             f"""UPDATE `{table_name}` 
@@ -1370,13 +1364,6 @@ class Economy(commands.Cog):
             await conn_input.execute(f"UPDATE `{INV_TABLE_NAME}` SET `{item["name"]}` = ? WHERE userID = ?",
                                      (0, user.id,))
         await conn_input.commit()
-
-    @staticmethod
-    async def get_inv_data_new(user: discord.Member, conn_input: asqlite_Connection) -> Optional[Any]:
-        """Fetch all inventory data from a user."""
-        users = await conn_input.execute(f"SELECT * FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        users = await users.fetchone()
-        return users
 
     @staticmethod
     async def get_one_inv_data_new(user: discord.Member, item: str, conn_input: asqlite_Connection) -> Optional[Any]:
@@ -3128,8 +3115,9 @@ class Economy(commands.Cog):
                                f"</buy:1172898644287029334>")
                 return await interaction.followup.send(embed=norer)
             else:
-                new_data = await self.get_bank_data_new(user, conn)
-                bank = new_data[1] + new_data[2]
+                nd = await conn.execute("SELECT wallet, bank, bankspace FROM `bank` WHERE userID = ?", (user.id,))
+                nd = await nd.fetchone()
+                bank = nd[0] + nd[1]
                 inv = 0
 
                 for item in SHOP_ITEMS:
@@ -3138,16 +3126,17 @@ class Economy(commands.Cog):
                     data = await self.get_one_inv_data_new(user, name, conn)
                     inv += int(cost) * data
 
-                job_val = await self.get_job_data_only(user=user, conn_input=conn)
+                space = round((nd[1]/nd[2])*100, 2)
 
                 balance = discord.Embed(color=0x2F3136, timestamp=discord.utils.utcnow())
                 balance.set_author(name=f"{user.name}'s balance", icon_url=user.display_avatar.url)
 
-                balance.add_field(name="<:walleten:1195719280898097192> Wallet", value=f"\U000023e3 {new_data[1]:,}",
+                balance.add_field(name="<:walleten:1195719280898097192> Wallet", value=f"\U000023e3 {nd[0]:,}",
                                   inline=True)
-                balance.add_field(name="<:banken:1195708938734288967> Bank", value=f"\U000023e3 {new_data[2]:,}",
+                balance.add_field(name="<:banken:1195708938734288967> Bank", value=f"\U000023e3 {nd[1]:,}",
                                   inline=True)
-                balance.add_field(name="<:joben:1195709539853553664> Job", value=f"{job_val}", inline=True)
+                balance.add_field(name="<:bankspacen:1198635497107501147> Bankspace",
+                                  value=f"{nd[2]:,} ({space}% full)", inline=True)
                 balance.add_field(name="<:netben:1195710007233228850> Money Net", value=f"\U000023e3 {bank:,}",
                                   inline=True)
                 balance.add_field(name="<:netinven:1195711122343481364> Inventory Net", value=f"\U000023e3 {inv:,}",
@@ -3223,9 +3212,8 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
             if await self.can_call_out(interaction.user, conn):
                 await interaction.response.send_message(embed=self.not_registered)  
-            users = await self.get_bank_data_new(user, conn)
 
-            bank_amt = users[2]
+            bank_amt = await self.get_spec_bank_data(interaction.user, "bank", conn)
             if isinstance(actual_amount, str):
                 if actual_amount.lower() == "all" or actual_amount.lower() == "max":
                     wallet_new = await self.update_bank_new(user, conn, +bank_amt)
@@ -3242,14 +3230,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=ERR_UNREASON)  
 
             amount_conv = abs(int(actual_amount))
-            if amount_conv < 5000:
-                embed = discord.Embed(colour=0x2F3136,
-                                      description=f"- For performance reasons, a minimum of "
-                                                  f"\U000023e3 **5,000** must be withdrawn.\n"
-                                                  f" - You wanted to withdraw \U000023e3 **{amount_conv:,}**.\n")
-                return await interaction.response.send_message(embed=embed)  
-
-            elif amount_conv > bank_amt:
+            if amount_conv > bank_amt:
                 embed = discord.Embed(colour=0x2F3136,
                                       description=f"- You do not have that much money in your bank.\n"
                                                   f" - You wanted to withdraw \U000023e3 **{amount_conv:,}**.\n"
@@ -3281,15 +3262,26 @@ class Economy(commands.Cog):
 
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)  
-            users = await self.get_bank_data_new(user, conn)
-            wallet_amt = users[1]
+
+            details = await conn.execute("SELECT wallet, bank, bankspace FROM `bank` WHERE userID = ?",
+                                         (interaction.user.id,))
+            details = await details.fetchone()
+            wallet_amt = details[0]
             if isinstance(actual_amount, str):
                 if actual_amount.lower() == "all" or actual_amount.lower() == "max":
-                    wallet_new = await self.update_bank_new(user, conn, -wallet_amt)
-                    bank_new = await self.update_bank_new(user, conn, +wallet_amt, "bank")
+                    available_bankspace = details[2] - details[1]
+
+                    if not available_bankspace:
+                        return await interaction.response.send_message(
+                            embed=membed(f"You can only hold **\U000023e3 {details[2]:,}** in your bank right now.\n"
+                                         f"To hold more, use currency commands and level up more."))
+
+                    wallet_new = await self.update_bank_new(user, conn, -available_bankspace)
+                    bank_new = await self.update_bank_new(user, conn, +available_bankspace, "bank")
 
                     embed = discord.Embed(colour=0x2F3136)
-                    embed.add_field(name="<:deposit:1195657772231036948> Deposited", value=f"\U000023e3 {wallet_amt:,}",
+                    embed.add_field(name="<:deposit:1195657772231036948> Deposited",
+                                    value=f"\U000023e3 {available_bankspace:,}",
                                     inline=False)
                     embed.add_field(name="Current Wallet Balance", value=f"\U000023e3 {wallet_new[0]:,}")
                     embed.add_field(name="Current Bank Balance", value=f"\U000023e3 {bank_new[0]:,}")
@@ -3298,12 +3290,13 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=ERR_UNREASON)  
 
             amount_conv = abs(int(actual_amount))
-            if amount_conv < 5000:
-                embed = discord.Embed(colour=0x2F3136,
-                                      description=f"- For performance reasons, a minimum of "
-                                                  f"\U000023e3 **5,000** must be deposited.\n"
-                                                  f" - You wanted to deposit \U000023e3 **{amount_conv:,}**.\n")
-                return await interaction.response.send_message(embed=embed)  
+            available_bankspace = details[2] - details[1]
+            available_bankspace -= amount_conv
+
+            if available_bankspace < 0:
+                return await interaction.response.send_message(  
+                    embed=membed(f"You can only hold **\U000023e3 {details[2]:,}** in your bank right now.\n"
+                                 f"To hold more, use currency commands and level up more."))
 
             elif amount_conv > wallet_amt:
                 embed = discord.Embed(colour=0x2F3136,
