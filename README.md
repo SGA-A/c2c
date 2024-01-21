@@ -69,7 +69,9 @@ We are 2 teenagers in the UK studying A-Levels, and chose to make this Discord b
       -  Ability to modify any attribute of the economy system with ease of any user (credits to [DB Browser for SQlite](https://sqlitebrowser.org/) for this.)
 
 ## Developer's Favourite Feature
-The help command. It is an interactive menu sorting all the commands within cogs by category and assumes each cog fits into one category. A dropdown is displayed to list the available categories and clicking any given one provides an embed edited from the original response containing every single command that corresponds to the category. My thought process at the time of making it was robust. There has only been situation encountered in which it faltered, which was where it had trouble responding to tapping the Music category. This is because the image theme used for this category's help embed is a local file, not hosted online.
+The help command. 
+It is an interactive menu sorting all the commands within cogs by category and assumes each cog fits into one category. 
+A dropdown is displayed to list the available categories and clicking any given one provides an embed edited from the original response containing every single command that corresponds to the category. My thought process at the time of making it was robust. It can also list subcommands of a grouped slash command.  All of the embed images are now hosted on Imgur. 
 
 In the course of making this bot, I learnt a lot of things. I was just a beginner at first and had no idea how to read or even understand the discord.py documentation. I think it was my initiative one day to just completley absolve the documentation and of all of its contents one day that led me to where this project has come now. And also the programming tips I've gotten over the years. It is a passion project and We are not considering disbanding the project any time soon.
 
