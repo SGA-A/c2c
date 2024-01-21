@@ -3135,7 +3135,7 @@ class Economy(commands.Cog):
                 balance.add_field(name="<:banken:1195708938734288967> Bank", value=f"\U000023e3 {nd[1]:,}",
                                   inline=True)
                 balance.add_field(name="<:bankspacen:1198635497107501147> Bankspace",
-                                  value=f"{nd[2]:,} ({space}% full)", inline=True)
+                                  value=f"\U000023e3 {nd[2]:,} ({space}% full)", inline=True)
                 balance.add_field(name="<:netben:1195710007233228850> Money Net", value=f"\U000023e3 {bank:,}",
                                   inline=True)
                 balance.add_field(name="<:netinven:1195711122343481364> Inventory Net", value=f"\U000023e3 {inv:,}",
@@ -3143,7 +3143,7 @@ class Economy(commands.Cog):
                 balance.add_field(name="<:nettotalen:1195710560910725180> Total Net",
                                   value=f"\U000023e3 {inv + bank:,}", inline=True)
 
-                if user.id in {992152414566232139, 546086191414509599}:
+                if user.id in self.client.owner_ids:
                     balance.set_footer(icon_url='https://cdn.discordapp.com/emojis/1174417902980583435.webp?size=128&'
                                                 'quality=lossless',
                                        text='mallow is dazzled')
@@ -3280,8 +3280,7 @@ class Economy(commands.Cog):
 
                     embed = discord.Embed(colour=0x2F3136)
                     embed.add_field(name="<:deposit:1195657772231036948> Deposited",
-                                    value=f"\U000023e3 {available_bankspace:,}",
-                                    inline=False)
+                                    value=f"\U000023e3 {available_bankspace:,}", inline=False)
                     embed.add_field(name="Current Wallet Balance", value=f"\U000023e3 {wallet_new[0]:,}")
                     embed.add_field(name="Current Bank Balance", value=f"\U000023e3 {bank_new[0]:,}")
 
