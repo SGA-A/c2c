@@ -1112,16 +1112,17 @@ class DropdownLB(discord.ui.Select):
             async with self.client.pool_connection.acquire() as conn:  
                 conn: asqlite_Connection = conn
 
+                item_costs = [item["cost"] for item in SHOP_ITEMS]
+                total_net_sql = " + ".join([f"`{item['name']}` * ?" for item in SHOP_ITEMS])
+
                 data = await conn.execute(
                     f"""
                     SELECT `userID`, 
-                    SUM(`Keycard` * ? + `Trophy` * ? + `Dynamic_Item` * ? + `Resistor` * ? + `Clan_License` * ? 
-                    + `Hyperion` * ? + `Crisis` * ? + `Odd_Eye` * ? + `Amulet` * ?) as total_net 
+                    SUM({total_net_sql}) as total_net 
                     FROM `{INV_TABLE_NAME}` GROUP BY `userID` ORDER BY total_net DESC
                     """,
-                    (SHOP_ITEMS[0]["cost"], SHOP_ITEMS[1]["cost"], SHOP_ITEMS[2]["cost"], SHOP_ITEMS[3]["cost"],
-                     SHOP_ITEMS[4]["cost"], SHOP_ITEMS[5]["cost"], SHOP_ITEMS[6]["cost"], SHOP_ITEMS[7]["cost"],
-                     SHOP_ITEMS[8]["cost"]))
+                    tuple(item_costs)
+                )
 
                 data = await data.fetchall()
 
@@ -3300,10 +3301,11 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(  
                     embed=membed(f"You can only hold **\U000023e3 {details[2]:,}** in your bank right now.\n"
                                  f"To hold more, use currency commands and level up more."))
-                
+
             elif not amount_conv:
                 return await interaction.response.send_message(  
-                    embed=membed("The amount to deposit needs to be more than 0."))
+                    embed=membed("The amount to deposit needs to be more than 0.")
+                )
 
             elif amount_conv > wallet_amt:
                 embed = discord.Embed(colour=0x2F3136,
