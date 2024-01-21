@@ -49,7 +49,7 @@ We are 2 teenagers in the UK studying A-Levels, and chose to make this Discord b
 > We are not responsible for any errors that may occur when running this bot.
 
 ## Features
-- Advanced economy system (no json, using databases):
+- Advanced economy system (no json, only using a database):
   - Running these databases using connection pools via [@Rapptz](https://www.github.com/Rapptz)'s `asqlite` repo.
   - The connection pool makes it fast and reliable, data loss is near impossible.
   - Rob, Bankrob, Slots, Bets, Highlow, Blackjack and Building robberies.
