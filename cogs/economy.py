@@ -3293,12 +3293,6 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=ERR_UNREASON)  
 
             amount_conv = abs(int(actual_amount))
-
-            if not amount_conv:
-                return await interaction.response.send_message(  
-                    embed=membed("The amount to deposit needs to be more than 0.")
-                )
-
             available_bankspace = details[2] - details[1]
             available_bankspace -= amount_conv
 
@@ -3306,6 +3300,10 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(  
                     embed=membed(f"You can only hold **\U000023e3 {details[2]:,}** in your bank right now.\n"
                                  f"To hold more, use currency commands and level up more."))
+                
+            elif not amount_conv:
+                return await interaction.response.send_message(  
+                    embed=membed("The amount to deposit needs to be more than 0."))
 
             elif amount_conv > wallet_amt:
                 embed = discord.Embed(colour=0x2F3136,
