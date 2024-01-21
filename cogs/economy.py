@@ -3229,7 +3229,12 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=ERR_UNREASON)  
 
             amount_conv = abs(int(actual_amount))
-            if amount_conv > bank_amt:
+
+            if not amount_conv:
+                return await interaction.response.send_message(  
+                    embed=membed("The amount to withdraw needs to be more than 0."))
+
+            elif amount_conv > bank_amt:
                 embed = discord.Embed(colour=0x2F3136,
                                       description=f"- You do not have that much money in your bank.\n"
                                                   f" - You wanted to withdraw \U000023e3 **{amount_conv:,}**.\n"
@@ -3271,7 +3276,7 @@ class Economy(commands.Cog):
                     available_bankspace = details[2] - details[1]
 
                     if not available_bankspace:
-                        return await interaction.response.send_message(
+                        return await interaction.response.send_message(  
                             embed=membed(f"You can only hold **\U000023e3 {details[2]:,}** in your bank right now.\n"
                                          f"To hold more, use currency commands and level up more."))
 
@@ -3288,10 +3293,16 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=ERR_UNREASON)  
 
             amount_conv = abs(int(actual_amount))
+
+            if not amount_conv:
+                return await interaction.response.send_message(  
+                    embed=membed("The amount to deposit needs to be more than 0.")
+                )
+
             available_bankspace = details[2] - details[1]
             available_bankspace -= amount_conv
 
-            if available_bankspace < 0:
+            if available_bankspace <= 0:
                 return await interaction.response.send_message(  
                     embed=membed(f"You can only hold **\U000023e3 {details[2]:,}** in your bank right now.\n"
                                  f"To hold more, use currency commands and level up more."))
