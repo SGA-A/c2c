@@ -53,6 +53,8 @@ We are 2 teenagers in the UK studying A-Levels, and chose to make this Discord b
   - Running these databases using connection pools via [@Rapptz](https://www.github.com/Rapptz)'s `asqlite` repo.
   - The connection pool makes it fast and reliable, data loss is near impossible.
   - Rob, Bankrob, Slots, Bets, Highlow, Blackjack and Building robberies.
+  - Advanced profile customization:
+    - Set a custom profile title, profile avatar, profile bio and profile showcase.
   - More is being added regularly.
 - Miscellaneous Features
   -  Get the time now in Discord's timestamp formatting using any style.
