@@ -2451,6 +2451,7 @@ class Economy(commands.Cog):
         category = category or "Main Profile"
 
         async with self.client.pool_connection.acquire() as conn:  
+            conn: asqlite_Connection
 
             if await self.can_call_out(user, conn):
                 return await interaction.response.send_message(embed=NOT_REGISTERED)  
@@ -3432,16 +3433,22 @@ class Economy(commands.Cog):
                                f' - </balance:1179817617435926686> to register.')
                 return await interaction.response.send_message(embed=embed)  
             else:
-                prim_bal = await self.get_bank_data_new(interaction.user, conn)
-                host_bal = await self.get_bank_data_new(other, conn)
+                prim_d = await conn.execute(f"SELECT wallet, job from `bank` WHERE userID = ?", (interaction.user.id,))
+                prim_d = await prim_d.fetchone()
+                host_d = await conn.execute(f"SELECT wallet, job from `bank` WHERE userID = ?", (other.id,))
+                host_d = await host_d.fetchone()
 
-                caught = [0, 1]
-                result = choices(caught, weights=(49, 51), k=1)
+                result = choices([0, 1], weights=(49, 51), k=1)
+
+                if (prim_d[-1] == "Police") or (host_d[-1] == "Police"):
+                    return await interaction.response.send_message(  
+                        embed=membed("Either the host is a police officer or you are working as one.\n"
+                                     "You risk losing your bounty if the former case is true."))
 
                 if not result[0]:
-                    fine = randint(1, prim_bal[1])
+                    fine = randint(1, prim_d[0])
 
-                    prcf = round((fine / prim_bal[1]) * 100, ndigits=1)
+                    prcf = round((fine / prim_d[0]) * 100, ndigits=1)
 
                     await self.update_bank_new(interaction.user, conn, -fine)
                     await self.update_bank_new(other, conn, +fine)
@@ -3449,15 +3456,15 @@ class Economy(commands.Cog):
                              f'- **{prcf}**% of your money was handed over to the victim.')
                     return await interaction.response.send_message(embed=membed(conte))  
                 else:
-                    steal_amount = randint(1, host_bal[1])
+                    steal_amount = randint(1, host_d[1])
                     await self.update_bank_new(interaction.user, conn, +steal_amount)
                     await self.update_bank_new(other, conn, -steal_amount)
 
-                    prcf = round((steal_amount / host_bal[1]) * 100, ndigits=1)
+                    prcf = round((steal_amount / host_d[1]) * 100, ndigits=1)
 
                     return await interaction.response.send_message(  
-                        embed=membed(f"- You managed to steal \U000023e3 **{steal_amount:,}** from {other.name}.\n"
-                                     f"- You took a dandy **{prcf}**% of {other.name}'s `wallet` balance."),
+                        embed=membed(f"You managed to steal \U000023e3 **{steal_amount:,}** from {other.name}.\n"
+                                     f"You took a dandy **{prcf}**% of {other.name}."),
                         delete_after=10.0)
 
     @rob.command(name='casino', description='rob a casino vault.')
@@ -3472,6 +3479,11 @@ class Economy(commands.Cog):
                 return await interaction.followup.send(embed=self.not_registered)
 
             cooldown = await self.fetch_cooldown(conn, user=interaction.user, cooldown_type="casino")
+
+            if await self.get_job_data_only(interaction.user, conn) == "Police":
+                return await interaction.response.send_message(  
+                    embed=membed("You cannot rob the casino as a police officer.")
+                )
 
             if cooldown is not None:
                 if cooldown[0] in {"0", 0}:
