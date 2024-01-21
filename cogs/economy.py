@@ -3481,7 +3481,7 @@ class Economy(commands.Cog):
             cooldown = await self.fetch_cooldown(conn, user=interaction.user, cooldown_type="casino")
 
             if await self.get_job_data_only(interaction.user, conn) == "Police":
-                return await interaction.response.send_message(  
+                return await interaction.followup.send(  
                     embed=membed("You cannot rob the casino as a police officer.")
                 )
 
