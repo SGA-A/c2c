@@ -15,7 +15,6 @@ from discord import app_commands, SelectOption
 import json
 from asqlite import Connection as asqlite_Connection
 from typing import Optional, Literal, Any, Union, List
-from tatsu.wrapper import ApiWrapper
 
 
 def membed(custom_description: str) -> discord.Embed:
@@ -40,6 +39,7 @@ def number_to_ordinal(n):
 BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
 COOLDOWN_TABLE_NAME = "cooldowns"
+GLOBAL_MULTIPLIER = 5
 APP_GUILDS_ID = [829053898333225010, 780397076273954886]
 DOWN = True
 UNIQUE_BADGES = {
@@ -62,7 +62,7 @@ ERR_UNREASON = membed('You are unqualified to use this command. Possible reasons
                       'insufficient balance and/or unreasonable input.')
 DOWNM = membed('This command is currently outdated and will be made available at a later date.')
 NOT_REGISTERED = membed('Could not find account associated with the user provided.')
-
+active_sessions = dict()
 BONUS_MULTIPLIERS = {
     "🍕🍕": 55,
     "🤡🤡": 56.5,
@@ -269,47 +269,35 @@ def generate_slot_combination():
     return slot_combination
 
 
-def fmt_timestamp(year_inp: int, month_inp: int, day_inp: int, hour_inp: int, min_inp: Optional[int],
-                  fmt_style: Literal['f', 'F', 'd', 'D', 't', 'T', 'R']):
-    """A helper function to format a :class:`datetime.datetime` for presentation within Discord.
+def generate_progress_bar(percentage):
 
-        This allows for a locale-independent way of presenting data using Discord specific Markdown.
+    percentage = round(percentage, -1)
 
-        +-------------+----------------------------+-----------------+
-        |    Style    |       Example Output       |   Description   |
-        +=============+============================+=================+
-        | t           | 22:57                      | Short Time      |
-        +-------------+----------------------------+-----------------+
-        | T           | 22:57:58                   | Long Time       |
-        +-------------+----------------------------+-----------------+
-        | d           | 17/05/2016                 | Short Date      |
-        +-------------+----------------------------+-----------------+
-        | D           | 17 May 2016                | Long Date       |
-        +-------------+----------------------------+-----------------+
-        | f (default) | 17 May 2016 22:57          | Short Date Time |
-        +-------------+----------------------------+-----------------+
-        | F           | Tuesday, 17 May 2016 22:57 | Long Date Time  |
-        +-------------+----------------------------+-----------------+
-        | R           | 5 years ago                | Relative Time   |
-        +-------------+----------------------------+-----------------+
+    progress_bar = {
+        10: "<:pb1hf:1199058030768181368><:pb2e:1199056978908037180>"
+            "<:pb2e:1199056978908037180><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
+        20: "<:pb1f:1199056982670315621><:pb2e:1199056978908037180>"
+            "<:pb2e:1199056978908037180><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
+        30: "<:pb1f:1199056982670315621><:pb2hf:1199056986571022428>"
+            "<:pb2e:1199056978908037180><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
+        40: "<:pb1f:1199056982670315621><:pb2f:1199062626408337549>"
+            "<:pb2e:1199056978908037180><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
+        50: "<:pb1f:1199056982670315621><:pb2f:1199062626408337549>"
+            "<:pb2hf:1199056986571022428><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
+        60: "<:pb1f:1199056982670315621><:pb2f:1199062626408337549>"
+            "<:pb2f:1199062626408337549><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
+        70: "<:pb1f:1199056982670315621><:pb2f:1199062626408337549>"
+            "<:pb2f:1199062626408337549><:pb2hf:1199056986571022428><:pb3e:1199056983966367785>",
+        80: "<:pb1f:1199056982670315621><:pb2f:1199062626408337549>"
+            "<:pb2f:1199062626408337549><:pb2f:1199062626408337549><:pb3e:1199056983966367785>",
+        90: "<:pb1f:1199056982670315621><:pb2f:1199062626408337549>"
+            "<:pb2f:1199062626408337549><:pb2f:1199062626408337549><:pb3hf:1199063922779623565>",
+        100: "<:pb1f:1199056982670315621><:pb2f:1199062626408337549>"
+             "<:pb2f:1199062626408337549><:pb2f:1199062626408337549><:pb3f:1199059438456291510>"
 
-        Note that the exact output depends on the user's locale setting in the client. The example output
-        presented is using the ``en-GB`` locale.
+    }.get(percentage)
 
-        -----------
-
-        Returns
-        --------
-        :class:`str`
-            The formatted string.
-        """
-
-    if min_inp is None:
-        min_inp = 0
-    period = datetime.datetime(year=year_inp, month=month_inp, day=day_inp, hour=hour_inp, minute=min_inp)
-
-    period_fmt = discord.utils.format_dt(period, fmt_style)
-    return period_fmt
+    return progress_bar
 
 
 def get_profile_key_value(key: str) -> Any:
@@ -971,14 +959,21 @@ class UpdateInfo(discord.ui.Modal, title='Update your Profile'):
 
 
 class DropdownLB(discord.ui.Select):
-    def __init__(self, client: commands.Bot):
+    def __init__(self, client: commands.Bot, their_choice: str):
         optionss = [
-            SelectOption(label='Bank + Wallet', description='Sort by the sum of bank and wallet.', default=True),
+            SelectOption(label='Bank + Wallet', description='Sort by the sum of bank and wallet.'),
             SelectOption(label='Wallet', description='Sort by the wallet amount only.'),
             SelectOption(label='Bank', description='Sort by the bank amount only.'),
-            SelectOption(label='Inventory Net', description='Sort by the net value of your inventory.')
+            SelectOption(label='Inventory Net', description='Sort by the net value of your inventory.'),
+            SelectOption(label='Bounty', description="Sort by the sum paid for capturing a player."),
+            SelectOption(label='Level', description="Sort by player level.")
         ]
-        super().__init__(placeholder="Leaderboard Filter", options=optionss)
+
+        for option in optionss:
+            if option.value == their_choice:
+                option.default = True
+
+        super().__init__(options=optionss)
         self.client: commands.Bot = client
 
     async def callback(self, interaction: discord.Interaction):
@@ -991,173 +986,19 @@ class DropdownLB(discord.ui.Select):
                 continue
             option.default = False
 
-        if chosen_choice == 'Bank + Wallet':
+        lb = await Economy.create_leaderboard_preset(Economy(self.client), chosen_choice=chosen_choice)
 
-            async with self.client.pool_connection.acquire() as conn:  
-                conn: asqlite_Connection = conn
-
-                data = await conn.execute(
-                    f"""
-                    SELECT `userID`, SUM(`wallet` + `bank`) as 
-                    total_balance FROM `{BANK_TABLE_NAME}` GROUP BY `userID` ORDER BY total_balance DESC
-                    """,
-                    ())
-                data = await data.fetchall()
-
-                not_database = []
-                index = 1
-
-                for member in data:
-                    if index > 10:
-                        break
-                    member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
-                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
-                    not_database.append(msg1)
-                    index += 1
-
-                msg = "\n".join(not_database)
-
-                lb = discord.Embed(
-                    title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{index - 1}` users.\n\n"
-                                f"{msg}",
-                    color=0x2F3136,
-                    timestamp=discord.utils.utcnow()
-                )
-                lb.set_footer(
-                    text=f"Ranked globally",
-                    icon_url=self.client.user.avatar.url)
-
-            await interaction.response.edit_message(content=None, embed=lb, view=self.view)  
-
-        elif chosen_choice == 'Wallet':
-
-            async with self.client.pool_connection.acquire() as conn:  
-                conn: asqlite_Connection = conn
-
-                data = await conn.execute(
-                    f"""
-                    SELECT `userID`, `wallet` as total_balance FROM `{BANK_TABLE_NAME}` 
-                    GROUP BY `userID` ORDER BY total_balance DESC
-                    """,
-                    ())
-
-                data = await data.fetchall()
-
-                not_database = []
-                index = 1
-
-                for member in data:
-                    member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
-                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
-                    not_database.append(msg1)
-                    index += 1
-
-                msg = "\n".join(not_database)
-
-                lb = discord.Embed(
-                    title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{index - 1}` users.\n\n"
-                                f"{msg}",
-                    color=0x2F3136,
-                    timestamp=discord.utils.utcnow()
-                )
-                lb.set_footer(
-                    text=f"Ranked globally",
-                    icon_url=self.client.user.avatar.url)
-
-            await interaction.response.edit_message(content=None, embed=lb, view=self.view)  
-
-        elif chosen_choice == 'Bank':
-            async with self.client.pool_connection.acquire() as conn:  
-                conn: asqlite_Connection = conn
-
-                data = await conn.execute(
-                    f"""
-                    SELECT `userID`, `bank` as total_balance 
-                    FROM `{BANK_TABLE_NAME}` GROUP BY `userID` ORDER BY total_balance DESC
-                    """,
-                    ())
-
-                data = await data.fetchall()
-
-                not_database = []
-                index = 1
-
-                for member in data:
-                    member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
-                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
-                    not_database.append(msg1)
-                    index += 1
-
-                msg = "\n".join(not_database)
-
-                lb = discord.Embed(
-                    title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{index - 1}` users.\n\n"
-                                f"{msg}",
-                    color=0x2F3136,
-                    timestamp=discord.utils.utcnow()
-                )
-                lb.set_footer(
-                    text=f"Ranked globally",
-                    icon_url=self.client.user.avatar.url)
-
-            await interaction.response.edit_message(content=None, embed=lb, view=self.view)  
-
-        else:
-            async with self.client.pool_connection.acquire() as conn:  
-                conn: asqlite_Connection = conn
-
-                item_costs = [item["cost"] for item in SHOP_ITEMS]
-                total_net_sql = " + ".join([f"`{item['name']}` * ?" for item in SHOP_ITEMS])
-
-                data = await conn.execute(
-                    f"""
-                    SELECT `userID`, 
-                    SUM({total_net_sql}) as total_net 
-                    FROM `{INV_TABLE_NAME}` GROUP BY `userID` ORDER BY total_net DESC
-                    """,
-                    tuple(item_costs)
-                )
-
-                data = await data.fetchall()
-
-                not_database = []
-                index = 1
-
-                for member in data:
-                    member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
-                    msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
-                    not_database.append(msg1)
-                    index += 1
-
-                msg = "\n".join(not_database)
-
-                lb = discord.Embed(
-                    title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{index - 1}` users.\n\n"
-                                f"{msg}",
-                    color=0x2F3136,
-                    timestamp=discord.utils.utcnow()
-                )
-                lb.set_footer(
-                    text=f"Ranked globally",
-                    icon_url=self.client.user.avatar.url)
-
-            await interaction.response.edit_message(content=None, embed=lb, view=self.view)  
+        await interaction.response.edit_message(content=None, embed=lb, view=self.view)  
 
 
 class Leaderboard(discord.ui.View):
-    def __init__(self, client: commands.Bot):
+    def __init__(self, client: commands.Bot, their_choice, channel_id):
         super().__init__(timeout=40.0)
-        self.add_item(DropdownLB(client))
+        self.channel_id = channel_id
+        self.add_item(DropdownLB(client, their_choice))
 
     async def on_timeout(self) -> None:
+        del active_sessions[self.channel_id]
         for item in self.children:
             item.disabled = True
 
@@ -1190,11 +1031,235 @@ class Economy(commands.Cog):
             return True
         return False
 
-    async def fetch_tatsu_profile(self, user_id: int):
-        """Get tatsu data associated with a given user."""
-        repeat = ApiWrapper(key=self.client.TATSU_API_KEY)  
-        repeat = await repeat.get_profile(user_id)
-        return repeat
+    async def create_leaderboard_preset(self, chosen_choice: str):
+        async with self.client.pool_connection.acquire() as conn:  
+            conn: asqlite_Connection = conn
+            if chosen_choice == 'Bank + Wallet':
+
+                data = await conn.execute(
+                    f"""
+                    SELECT `userID`, SUM(`wallet` + `bank`) as 
+                    total_balance FROM `{BANK_TABLE_NAME}` GROUP BY `userID` ORDER BY total_balance DESC
+                    """,
+                    ())
+                data = await data.fetchall()
+
+                not_database = []
+                index = 0
+
+                for member in data:
+                    member_name = await self.client.fetch_user(member[0])
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    msg1 = f"**{index+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    not_database.append(msg1)
+                    index += 1
+
+                msg = "\n".join(not_database)
+
+                lb = discord.Embed(
+                    title=f"Leaderboard: {chosen_choice}",
+                    description=f"Displaying the top `{index}` users.\n\n"
+                                f"{msg}",
+                    color=0x2F3136,
+                    timestamp=discord.utils.utcnow()
+                )
+                lb.set_footer(
+                    text=f"Ranked globally",
+                    icon_url=self.client.user.avatar.url)
+
+                return lb
+            elif chosen_choice == 'Wallet':
+
+                data = await conn.execute(
+                    f"""
+                    SELECT `userID`, `wallet` as total_balance FROM `{BANK_TABLE_NAME}` 
+                    GROUP BY `userID` ORDER BY total_balance DESC
+                    """,
+                    ())
+
+                data = await data.fetchall()
+
+                not_database = []
+                index = 0
+
+                for member in data:
+                    member_name = await self.client.fetch_user(member[0])
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    msg1 = f"**{index+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    not_database.append(msg1)
+                    index += 1
+
+                msg = "\n".join(not_database)
+
+                lb = discord.Embed(
+                    title=f"Leaderboard: {chosen_choice}",
+                    description=f"Displaying the top `{index}` users.\n\n"
+                                f"{msg}",
+                    color=0x2F3136,
+                    timestamp=discord.utils.utcnow()
+                )
+                lb.set_footer(
+                    text=f"Ranked globally",
+                    icon_url=self.client.user.avatar.url)
+
+                return lb
+            elif chosen_choice == 'Bank':
+                data = await conn.execute(
+                    f"""
+                    SELECT `userID`, `bank` as total_balance 
+                    FROM `{BANK_TABLE_NAME}` GROUP BY `userID` ORDER BY total_balance DESC
+                    """,
+                    ())
+
+                data = await data.fetchall()
+
+                not_database = []
+                index = 0
+
+                for member in data:
+                    member_name = await self.client.fetch_user(member[0])
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    msg1 = f"**{index+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    not_database.append(msg1)
+                    index += 1
+
+                msg = "\n".join(not_database)
+
+                lb = discord.Embed(
+                    title=f"Leaderboard: {chosen_choice}",
+                    description=f"Displaying the top `{index}` users.\n\n"
+                                f"{msg}",
+                    color=0x2F3136,
+                    timestamp=discord.utils.utcnow()
+                )
+                lb.set_footer(
+                    text=f"Ranked globally",
+                    icon_url=self.client.user.avatar.url)
+
+                return lb
+            elif chosen_choice == 'Inventory Net':
+
+                item_costs = [item["cost"] for item in SHOP_ITEMS]
+                total_net_sql = " + ".join([f"`{item['name']}` * ?" for item in SHOP_ITEMS])
+
+                data = await conn.execute(
+                    f"""
+                    SELECT `userID`, 
+                    SUM({total_net_sql}) as total_net 
+                    FROM `{INV_TABLE_NAME}` GROUP BY `userID` ORDER BY total_net DESC
+                    """,
+                    tuple(item_costs)
+                )
+
+                data = await data.fetchall()
+
+                not_database = []
+                index = 0
+
+                for member in data:
+                    member_name = await self.client.fetch_user(member[0])
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    msg1 = f"**{index+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    not_database.append(msg1)
+                    index += 1
+
+                msg = "\n".join(not_database)
+
+                lb = discord.Embed(
+                    title=f"Leaderboard: {chosen_choice}",
+                    description=f"Displaying the top `{index}` users.\n\n"
+                                f"{msg}",
+                    color=0x2F3136,
+                    timestamp=discord.utils.utcnow()
+                )
+                lb.set_footer(
+                    text=f"Ranked globally",
+                    icon_url=self.client.user.avatar.url)
+                return lb
+
+            elif chosen_choice == 'Bounty':
+
+                data = await conn.execute(
+                    f"""
+                    SELECT `userID`, `bounty` as total_bounty 
+                    FROM `{BANK_TABLE_NAME}` 
+                    GROUP BY `userID` 
+                    HAVING total_bounty > 0
+                    ORDER BY total_bounty DESC
+                    """,
+                    ())
+
+                data = await data.fetchall()
+
+                not_database = []
+                index = 0
+
+                for member in data:
+                    member_name = await self.client.fetch_user(member[0])
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    not_database.append(msg1)
+                    index += 1
+
+                if index:
+                    msg = "\n".join(not_database)
+                else:
+                    msg = "No data."
+
+                lb = discord.Embed(
+                    title=f"Leaderboard: {chosen_choice}",
+                    description=f"Displaying the top `{index}` users.\n"
+                                f"Users without a bounty aren't displayed.\n\n"
+                                f"{msg}",
+                    color=0x2F3136,
+                    timestamp=discord.utils.utcnow()
+                )
+                lb.set_footer(
+                    text=f"Ranked globally",
+                    icon_url=self.client.user.avatar.url)
+
+                return lb
+
+            data = await conn.execute(
+                f"""
+                SELECT `userID`, `level` as lvl 
+                FROM `{BANK_TABLE_NAME}` 
+                GROUP BY `userID` 
+                HAVING lvl > 0
+                ORDER BY lvl DESC
+                """,
+                ())
+
+            data = await data.fetchall()
+
+            not_database = []
+            index = 0
+
+            for member in data:
+                member_name = await self.client.fetch_user(member[0])
+                their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
+                not_database.append(msg1)
+                index += 1
+
+            if index:
+                msg = "\n".join(not_database)
+            else:
+                msg = "No data."
+
+            lb = discord.Embed(
+                title=f"Leaderboard: {chosen_choice}",
+                description=f"Displaying the top `{index}` users.\n"
+                            f"Users without a level aren't displayed.\n\n"
+                            f"{msg}",
+                color=0x2F3136,
+                timestamp=discord.utils.utcnow()
+            )
+            lb.set_footer(
+                text=f"Ranked globally",
+                icon_url=self.client.user.avatar.url)
+
+            return lb
 
     async def raise_pmulti_warning(self, interaction: discord.Interaction, their_pmulti: int | str):
         if their_pmulti in {"0", 0}:
@@ -1525,11 +1590,33 @@ class Economy(commands.Cog):
 
     @commands.Cog.listener()
     async def on_app_command_completion(self, interaction: discord.Interaction, command):
-        async with self.client.pool_connection.acquire() as conn:  
-            conn: asqlite_Connection
-            if await self.can_call_out(interaction.user, conn):
+        async with self.client.pool_connection.acquire() as connection:  
+            connection: asqlite_Connection
+            if await self.can_call_out(interaction.user, connection):
                 return
-            await self.update_bank_new(interaction.user, conn, 1, "cmds_ran")
+            await self.update_bank_new(interaction.user, connection, 1, "cmds_ran")
+            async with connection.transaction():
+                record = await connection.fetchone(
+                    'INSERT INTO `bank` (userID, exp, level) VALUES ($1, 0, 0) '
+                    'ON CONFLICT (userID) DO UPDATE SET exp = exp + 1 RETURNING exp, level',
+                    interaction.user.id
+                )
+
+                if record:
+                    xp, level = record
+
+                    # Calculate EXP needed for the next level
+                    exp_needed = int(level * GLOBAL_MULTIPLIER)
+
+                    # Check if the user leveled up
+                    if xp >= exp_needed:
+                        await connection.execute(
+                            'UPDATE `bank` SET level = level + 1 WHERE userID = $1',
+                            interaction.user.id
+                        )
+
+                        await interaction.channel.send(
+                            f'Congratulations {interaction.user.mention}! You leveled up to level {level + 1}.')
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
@@ -2448,12 +2535,11 @@ class Economy(commands.Cog):
 
             if category == "Main Profile":
 
-                data = await conn.execute(
+                data = await conn.fetchone(
                     f"""SELECT wallet, bank, cmds_ran, showcase, title, 
-                    bounty, prestige FROM `{BANK_TABLE_NAME}` WHERE userID = ?
+                    bounty, prestige, level, exp FROM `{BANK_TABLE_NAME}` WHERE userID = ?
                     """,
                     (user.id,))
-                data = await data.fetchone()
 
                 if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id != user.id):
                     return await interaction.response.send_message(  
@@ -2464,7 +2550,6 @@ class Economy(commands.Cog):
                     ephemerality = True
 
                 procfile = discord.Embed(colour=user.colour, timestamp=discord.utils.utcnow())
-                tatsu = await self.fetch_tatsu_profile(user.id)
                 inv = 0
                 unique = 0
                 total = 0
@@ -2511,6 +2596,12 @@ class Economy(commands.Cog):
                                         f"<:bountybag:1195653667135692800> Bounty: \U000023e3 **{data[5]:,}**\n"
                                         f"{get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"}")
 
+                boundary = int(data[7] * GLOBAL_MULTIPLIER)
+                procfile.add_field(name='Level',
+                                   value=f"Level: `{data[7]:,}`\n"
+                                         f"Experience: `{data[8]}/{boundary}`\n"
+                                         f"{generate_progress_bar((data[8]/boundary)*100)}")
+
                 procfile.add_field(name='Robux',
                                    value=f"Wallet: `\U000023e3 {format_number_short(int(data[0]))}`\n"
                                          f"Bank: `\U000023e3 {format_number_short(data[1])}`\n"
@@ -2520,11 +2611,6 @@ class Economy(commands.Cog):
                                    value=f"Unique: `{unique:,}`\n"
                                          f"Total: `{format_number_short(total)}`\n"
                                          f"Worth: `\U000023e3 {format_number_short(inv)}`")
-
-                procfile.add_field(name='Tatsu',
-                                   value=f"Credits: `{format_number_short(tatsu.credits)}`\n"
-                                         f"Tokens: `{format_number_short(tatsu.tokens)}`\n"
-                                         f"XP: `{format_number_short(tatsu.xp)}`")
 
                 procfile.add_field(name='Commands',
                                    value=f"Total: `{format_number_short(data[2])}`")
@@ -2549,13 +2635,12 @@ class Economy(commands.Cog):
                     embed=procfile, silent=True, ephemeral=ephemerality)
             else:
 
-                data = await conn.execute(
+                data = await conn.fetchone(
                     f"""
                     SELECT slotw, slotl, betw, betl, bjw, bjl, slotwa, slotla,
                     betwa, betla, bjwa, bjla FROM `{BANK_TABLE_NAME}` WHERE userID = ?
                     """,
                     (user.id,))
-                data = await data.fetchone()
 
                 total_slots = data[0] + data[1]
                 total_bets = data[2] + data[3]
@@ -3328,48 +3413,24 @@ class Economy(commands.Cog):
     @app_commands.command(name='leaderboard', description='rank users based on various stats.')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    async def get_leaderboard(self, interaction: discord.Interaction):
+    @app_commands.describe(stat="the stat you want to see")
+    async def get_leaderboard(self, interaction: discord.Interaction,
+                              stat: Literal[
+                                  "Bank + Wallet", "Wallet", "Bank", "Inventory Net", "Bounty", "Level"]):
 
-        async with self.client.pool_connection.acquire() as conn:  
-            conn: asqlite_Connection = conn
+        await interaction.response.send_message("Crunching the data just for you, give us a mo'..")  
 
-            data = await conn.execute(
-                f"""
-                SELECT `userID`, SUM(`wallet` + `bank`) as total_balance 
-                FROM `{BANK_TABLE_NAME}` GROUP BY `userID` ORDER BY total_balance DESC
-                """,
-                ())
-            data = await data.fetchall()
-
-            not_database = []
-            index = 1
-
-            for member in data:
-                # if index > 10:
-                #     break
-                member_name = await self.client.fetch_user(member[0])
-                their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
-                member_amt = member[1]
-                msg1 = f"**{index}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member_amt:,}"
-                not_database.append(msg1)
-                index += 1
-
-            msg = "\n".join(not_database)
-
-            lb = discord.Embed(
-                title=f"Leaderboard: Bank + Wallet",
-                description=f"Displaying the top `{index - 1}` users.\n\n"
-                            f"{msg}",
-                color=0x2F3136,
-                timestamp=discord.utils.utcnow()
-            )
-            lb.set_footer(
-                text=f"Ranked globally",
-                icon_url=self.client.user.avatar.url)
-
-        lb_view = Leaderboard(self.client)
-        await interaction.response.send_message(embed=lb, view=lb_view)  
+        lb_view = Leaderboard(self.client, stat, channel_id=interaction.channel.id)
         lb_view.message = await interaction.original_response()
+
+        if not active_sessions.setdefault(interaction.channel.id, None):
+            active_sessions.update({interaction.channel.id: 1})
+        else:
+            return await lb_view.message.edit(  
+                content=None, embed=membed("This command is still active in this channel."))
+
+        lb = await self.create_leaderboard_preset(chosen_choice=stat)
+        await lb_view.message.edit(content=None, embed=lb, view=lb_view)  
 
     @commands.guild_only()
     @commands.cooldown(1, 5)
