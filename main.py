@@ -1,10 +1,10 @@
 from __future__ import annotations
-from functools import cached_property
 from dotenv import load_dotenv
 from datetime import datetime
 from os import listdir, environ
 from sys import version
 from discord.ext import commands
+from re import compile
 from random import choice
 from typing import Literal, Any
 from collections import deque
@@ -223,11 +223,6 @@ class C2C(commands.Bot):
         self.time_launch = datetime.now()
 
         self.session = ClientSession()
-
-    @cached_property
-    def support_webhook(self) -> Webhook:
-        webhook_url = environ["SUPPORT_WEBHOOK"]
-        return Webhook.from_url(webhook_url, session=self.session)
 
 
 client = C2C(command_prefix='>', intents=Intents.all(), case_insensitive=True,
@@ -481,6 +476,28 @@ async def confirm_panel(ctx: CustomContext):
     else:
         await ctx.send("Cancelled operation.")
 
+
+class TimeConverter(commands.Converter):
+    time_regex = compile(r"(\d{1,5}(?:[.,]?\d{1,5})?)([smhd])")
+    time_dict = {"h": 3600, "s": 1, "m": 60, "d": 86400}
+
+    async def convert(self, ctx, argument):
+        matches = self.time_regex.findall(argument.lower())
+        time = 0
+        for v, k in matches:
+            try:
+                time += self.time_dict[k]*float(v)
+            except KeyError:
+                raise commands.BadArgument("{} is an invalid time-key! h/m/s/d are valid!".format(k))
+            except ValueError:
+                raise commands.BadArgument("{} is not a number!".format(v))
+        return time
+
+
+@client.command(name='convert')
+async def convert_time(ctx, time: TimeConverter):
+    await ctx.send(f"Converted time: {time} seconds")
+    
 
 @client.command(name='dispatch-webhook', aliases=("dww",))
 async def dispatch_the_webhook_when(ctx: commands.Context):
