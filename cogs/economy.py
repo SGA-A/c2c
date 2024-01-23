@@ -1286,7 +1286,7 @@ class Economy(commands.Cog):
         else:
             hook = await self.client.fetch_webhook(hook_id)
 
-        await hook.send(custom_text)
+        await hook.send(embed=membed(custom_text))
 
     @staticmethod
     def calculate_hand(hand):
@@ -1597,16 +1597,12 @@ class Economy(commands.Cog):
             await sleep(2)
             async with connection.transaction():
                 await connection.execute(
-                    f"""
-                    UPDATE `{BANK_TABLE_NAME}` SET `cmds_ran` = `cmds_ran` + ? WHERE userID = ?
-                    """,
+                    f"UPDATE `{BANK_TABLE_NAME}` SET `cmds_ran` = `cmds_ran` + ? WHERE userID = ?",
                     (1, interaction.user.id))
 
                 record = await connection.fetchone(
                     'INSERT INTO `bank` (userID, exp, level) VALUES ($1, 0, 0) '
-                    'ON CONFLICT (userID) DO UPDATE SET exp = exp + 1 RETURNING exp, level',
-                    interaction.user.id
-                )
+                    'ON CONFLICT (userID) DO UPDATE SET exp = exp + 1 RETURNING exp, level', interaction.user.id)
 
                 if record:
                     xp, level = record
@@ -1617,12 +1613,11 @@ class Economy(commands.Cog):
                     # Check if the user leveled up
                     if xp >= exp_needed:
                         await connection.execute(
-                            'UPDATE `bank` SET level = level + 1, exp = 0 WHERE userID = $1',
-                            interaction.user.id
-                        )
+                            'UPDATE `bank` SET level = level + 1, exp = 0 WHERE userID = $1', interaction.user.id)
 
-                        await interaction.channel.send(
-                            f'Congratulations {interaction.user.mention}! You leveled up to level {level + 1}.')
+                        await self.send_custom_text(interaction,
+                                                    custom_text=f'{interaction.user.mention} has just leveled '
+                                                                f'up to Level **{level+1}**.')
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
