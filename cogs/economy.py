@@ -3198,7 +3198,8 @@ class Economy(commands.Cog):
                            with_force='whether to register this user if not already')
     @app_commands.guild_only()
     @app_commands.checks.cooldown(1, 6)
-    async def find_balance(self, interaction: discord.Interaction, user: Optional[discord.Member], with_force: bool):
+    async def find_balance(self, interaction: discord.Interaction, user: Optional[discord.Member], 
+                           with_force: Optional[bool]):
         """Returns a user's balance."""
 
         await interaction.response.defer(thinking=True)  
