@@ -3227,8 +3227,8 @@ class Economy(commands.Cog):
                     await self.open_bank_new(user, conn)
                     await self.open_inv_new(user, conn)
                     await self.open_cooldowns(user, conn)
-                    return await msg.edit(embed=membed(f"Force registered {user.name}."))
-                await msg.edit(embed=membed(f"{user.name} isn't registered."))
+                    return await msg.edit(content=None, embed=membed(f"Force registered {user.name}."))
+                await msg.edit(content=None, embed=membed(f"{user.name} isn't registered."))
 
             elif await self.can_call_out(user, conn) and (user.id == interaction.user.id):
 
@@ -3253,7 +3253,7 @@ class Economy(commands.Cog):
                                f"</withdraw:1172898644622585876>, </deposit:1172898644622585877>, "
                                f"</inventory:1172898644287029333>, </shop view:1172898645532749946>, "
                                f"</buy:1172898644287029334>")
-                return await msg.edit(embed=norer)
+                return await msg.edit(content=None, embed=norer)
             else:
                 nd = await conn.execute("SELECT wallet, bank, bankspace FROM `bank` WHERE userID = ?", (user.id,))
                 nd = await nd.fetchone()
@@ -3289,7 +3289,7 @@ class Economy(commands.Cog):
                                                 'quality=lossless',
                                        text='mallow is dazzled')
 
-                await msg.edit(embed=balance)
+                await msg.edit(content=None, embed=balance)
 
     @app_commands.command(name="resetmydata", description="opt out of the virtual economy.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
