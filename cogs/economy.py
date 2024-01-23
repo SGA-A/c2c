@@ -39,7 +39,6 @@ def number_to_ordinal(n):
 BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
 COOLDOWN_TABLE_NAME = "cooldowns"
-GLOBAL_MULTIPLIER = 5
 APP_GUILDS_ID = [829053898333225010, 780397076273954886]
 DOWN = True
 UNIQUE_BADGES = {
@@ -274,6 +273,8 @@ def generate_progress_bar(percentage):
     percentage = round(percentage, -1)
 
     progress_bar = {
+        0: "<:pb1e:1199056980195676201><:pb2e:1199056978908037180>"
+           "<:pb2e:1199056978908037180><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
         10: "<:pb1hf:1199058030768181368><:pb2e:1199056978908037180>"
             "<:pb2e:1199056978908037180><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
         20: "<:pb1f:1199056982670315621><:pb2e:1199056978908037180>"
@@ -1031,6 +1032,10 @@ class Economy(commands.Cog):
             return True
         return False
 
+    @staticmethod
+    def calculate_exp_for(*, level: int):
+        return int((level / 0.07) * 2)
+
     async def create_leaderboard_preset(self, chosen_choice: str):
         async with self.client.pool_connection.acquire() as conn:  
             conn: asqlite_Connection = conn
@@ -1242,19 +1247,13 @@ class Economy(commands.Cog):
                 not_database.append(msg1)
                 index += 1
 
-            if index:
-                msg = "\n".join(not_database)
-            else:
-                msg = "No data."
-
             lb = discord.Embed(
                 title=f"Leaderboard: {chosen_choice}",
-                description=f"Displaying the top `{index}` users.\n"
-                            f"Users without a level aren't displayed.\n\n"
-                            f"{msg}",
+                description=f"Displaying the top `{index}` users.\n\n"
+                            f"{'\n'.join(not_database) or 'No data.'}",
                 color=0x2F3136,
-                timestamp=discord.utils.utcnow()
-            )
+                timestamp=discord.utils.utcnow())
+
             lb.set_footer(
                 text=f"Ranked globally",
                 icon_url=self.client.user.avatar.url)
@@ -1606,7 +1605,7 @@ class Economy(commands.Cog):
                     xp, level = record
 
                     # Calculate EXP needed for the next level
-                    exp_needed = int(level * GLOBAL_MULTIPLIER)
+                    exp_needed = self.calculate_exp_for(level=level)
 
                     # Check if the user leveled up
                     if xp >= exp_needed:
@@ -2560,13 +2559,6 @@ class Economy(commands.Cog):
                     total += item_quantity
                     unique += 1 if item_quantity else 0
 
-                if user.id == 992152414566232139:
-                    procfile.set_image(
-                        url="https://media.discordapp.net/attachments/1124672402413072446/"
-                            "1164912661004292136/20231010000451.png"
-                            "?ex=6544f075&is=65327b75&hm=dfef49bfcab2ca0f8f2d50db7733c5e3ba6cf691f5350ddf8fb8350fc2bb"
-                            "38d8&=&width=1246&height=701")
-
                 match user.id:
                     case 546086191414509599 | 992152414566232139 | 1148206353647669298:
                         note = "> <:e1_stafff:1145039666916110356> *This user is a developer of this bot.*\n\n"
@@ -2591,15 +2583,16 @@ class Economy(commands.Cog):
 
                 procfile.description = (f"### {user.name}'s Profile - [{data[4]}](https://www.dis.gd/support)\n"
                                         f"{note}"
-                                        f"{PRESTIGE_EMOTES.setdefault(data[-1], "")} Prestige Level **{data[-1]}**"
+                                        f"{PRESTIGE_EMOTES.setdefault(data[6], "")} Prestige Level **{data[6]}**"
                                         f"{UNIQUE_BADGES.setdefault(data[-1], "")}\n"
                                         f"<:bountybag:1195653667135692800> Bounty: \U000023e3 **{data[5]:,}**\n"
                                         f"{get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"}")
 
-                boundary = int(data[7] * GLOBAL_MULTIPLIER)
+                boundary = self.calculate_exp_for(level=data[7])
+
                 procfile.add_field(name='Level',
-                                   value=f"Level: `{data[7]:,}`\n"
-                                         f"Experience: `{data[8]}/{boundary}`\n"
+                                   value=f"Level: `{data[7]:,}`\n" 
+                                         f"Experience: `{data[8]}/{boundary}`\n" 
                                          f"{generate_progress_bar((data[8]/boundary)*100)}")
 
                 procfile.add_field(name='Robux',
