@@ -1034,7 +1034,7 @@ class Economy(commands.Cog):
 
     @staticmethod
     def calculate_exp_for(*, level: int):
-        return int((level / 0.07) * 2)
+        return int((level / 10.5)**2)
 
     async def create_leaderboard_preset(self, chosen_choice: str):
         async with self.client.pool_connection.acquire() as conn:  
@@ -1589,8 +1589,9 @@ class Economy(commands.Cog):
 
     @commands.Cog.listener()
     async def on_app_command_completion(self, interaction: discord.Interaction, command):
-        async with self.client.pool_connection.acquire() as connection:
+        async with self.client.pool_connection.acquire() as connection:  
             connection: asqlite_Connection
+
             if await self.can_call_out(interaction.user, connection):
                 return
             await sleep(2)
@@ -1616,7 +1617,7 @@ class Economy(commands.Cog):
                     # Check if the user leveled up
                     if xp >= exp_needed:
                         await connection.execute(
-                            'UPDATE `bank` SET level = level + 1 WHERE userID = $1',
+                            'UPDATE `bank` SET level = level + 1, exp = 0 WHERE userID = $1',
                             interaction.user.id
                         )
 
@@ -2729,10 +2730,12 @@ class Economy(commands.Cog):
 
             if isinstance(real_amount, str):
                 if real_amount in {'all', 'max'}:
-                    if 50000000 > wallet_amt:
+                    if 75000000 > wallet_amt:
                         real_amount = wallet_amt
                     else:
-                        real_amount = 50000000
+                        real_amount = 75000000
+                else:
+                    return await interaction.response.send_message(embed=ERR_UNREASON)  
 
             if not (is_valid(int(real_amount), wallet_amt)):
                 return await interaction.response.send_message(embed=ERR_UNREASON)  
