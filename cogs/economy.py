@@ -3297,12 +3297,12 @@ class Economy(commands.Cog):
     async def discontinue_bot(self, interaction: discord.Interaction, member: Optional[discord.Member]):
 
         member = member or interaction.user
-        if interaction.user.id not in {992152414566232139, 546086191414509599}:
+        if interaction.user.id not in self.client.owner_ids:
             if (member is not None) and (member != interaction.user):
-                return await interaction.response.send_message(embed=ERR_UNREASON)  
-        else:
-            if member.bot:
-                return await interaction.response.send_message(embed=ERR_UNREASON)  
+                return await interaction.response.send_message(
+                    embed=membed(f"You are not allowed to delete other user's data.\n"
+                                 f"{member.mention} should call this command themselves"
+                                 f" to reset their data."))
 
         async with self.client.pool_connection.acquire() as conn:  
             conn: asqlite_Connection
