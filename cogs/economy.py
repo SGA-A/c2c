@@ -1589,12 +1589,18 @@ class Economy(commands.Cog):
 
     @commands.Cog.listener()
     async def on_app_command_completion(self, interaction: discord.Interaction, command):
-        async with self.client.pool_connection.acquire() as connection:  
+        async with self.client.pool_connection.acquire() as connection:  # type: ignore
             connection: asqlite_Connection
             if await self.can_call_out(interaction.user, connection):
                 return
-            await self.update_bank_new(interaction.user, connection, 1, "cmds_ran")
+            await sleep(2)
             async with connection.transaction():
+                await connection.execute(
+                    f"""
+                    UPDATE `{BANK_TABLE_NAME}` SET `cmds_ran` = `cmds_ran` + ? WHERE userID = ?
+                    """,
+                    (1, interaction.user.id))
+
                 record = await connection.fetchone(
                     'INSERT INTO `bank` (userID, exp, level) VALUES ($1, 0, 0) '
                     'ON CONFLICT (userID) DO UPDATE SET exp = exp + 1 RETURNING exp, level',
