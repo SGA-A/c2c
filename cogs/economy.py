@@ -3137,7 +3137,8 @@ class Economy(commands.Cog):
                                 embed=membed(f"You just sold {sell_quantity} {ie} **{proper_name.title()}** and got "
                                              f"<:robux:1146394968882151434> **{cost:,}** in return."))
 
-    @app_commands.command(name="work", description="work and earn an income, if you have a job.", extras={"exp_gained": 3})
+    @app_commands.command(name="work", description="work and earn an income, if you have a job.", 
+                          extras={"exp_gained": 3})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     async def work(self, interaction: discord.Interaction):
 
