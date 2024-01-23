@@ -346,7 +346,7 @@ class Miscellaneous(commands.Cog):
         type_of_tag = {
             0: "`general`",
             1: "`artist`",
-            2: "`uer`",
+            2: "`N/A`",
             3: "`copyright`",
             4: "`character`"
         }
@@ -620,7 +620,7 @@ class Miscellaneous(commands.Cog):
         amount += (lenslash + lentxt)
 
         username = 'SGA-A'
-        token = 'youshallnotpass'
+        token = self.client.gitoken  
         repository_name = 'c2c'
 
         g = Github(username, token)
