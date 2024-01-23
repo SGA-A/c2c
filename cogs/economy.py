@@ -1589,7 +1589,7 @@ class Economy(commands.Cog):
 
     @commands.Cog.listener()
     async def on_app_command_completion(self, interaction: discord.Interaction, command):
-        async with self.client.pool_connection.acquire() as connection:  # type: ignore
+        async with self.client.pool_connection.acquire() as connection:
             connection: asqlite_Connection
             if await self.can_call_out(interaction.user, connection):
                 return
