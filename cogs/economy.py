@@ -3549,12 +3549,13 @@ class Economy(commands.Cog):
                                f' - </balance:1179817617435926686> to register.')
                 return await interaction.response.send_message(embed=embed)  
             else:
-                prim_d = await conn.execute(f"SELECT wallet, job from `bank` WHERE userID = ?", (interaction.user.id,))
+                prim_d = await conn.execute(f"SELECT wallet, job, bounty from `bank` WHERE userID = ?",
+                                            (interaction.user.id,))
                 prim_d = await prim_d.fetchone()
                 host_d = await conn.execute(f"SELECT wallet, job from `bank` WHERE userID = ?", (other.id,))
                 host_d = await host_d.fetchone()
 
-                result = choices([0, 1], weights=(49, 51), k=1)
+                result = choices([0, 1], weights=(29, 71), k=1)
 
                 if (prim_d[-1] == "Police") or (host_d[-1] == "Police"):
                     return await interaction.response.send_message(  
@@ -3563,13 +3564,18 @@ class Economy(commands.Cog):
 
                 if not result[0]:
                     fine = randint(1, prim_d[0])
-
                     prcf = round((fine / prim_d[0]) * 100, ndigits=1)
+                    conte = (f'- You were caught stealing now you paid {other.name} \U000023e3 **{fine:,}**.\n'
+                             f'- **{prcf}**% of your money was handed over to the victim.')
+
+                    b = prim_d[-1]
+                    if b:
+                        fine += b
+                        conte += (f"\n- **You're on the bounty board!** {other.mention} handed you over to the police "
+                                  f"and your bounty of **\U000023e3 {b:,}** was given to them.")
 
                     await self.update_bank_new(interaction.user, conn, -fine)
                     await self.update_bank_new(other, conn, +fine)
-                    conte = (f'- You were caught stealing now you paid {other.name} \U000023e3 **{fine:,}**.\n'
-                             f'- **{prcf}**% of your money was handed over to the victim.')
                     return await interaction.response.send_message(embed=membed(conte))  
                 else:
                     steal_amount = randint(1, host_d[1])
