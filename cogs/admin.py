@@ -291,7 +291,7 @@ class Administrate(commands.Cog):
     @commands.command(name='sync', description='sync client tree for changes.', aliases=("sy",))
     async def sync_tree(self, ctx: commands.Context) -> None:
         print("syncing")
-        # Application command synchronization
+        # Application command synchronization - uncomment stmts when syncing globally
         # ctx.bot.tree.copy_global_to(guild=discord.Object(id=780397076273954886))
         # ctx.bot.tree.copy_global_to(guild=discord.Object(id=829053898333225010))
         await ctx.bot.tree.sync(guild=discord.Object(id=780397076273954886))
@@ -622,7 +622,7 @@ class Administrate(commands.Cog):
         await c.edit(content=new_content)
         await interaction.followup.send(content="The edits have been made", ephemeral=True, delete_after=3.0)
 
-    @commands.command(name='quit', description='quits the bot gracefully.')
+    @commands.command(name='quit', description='quits the bot gracefully.', aliases=('q',))
     async def quit_client(self, ctx):
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
         await self.client.session.close()  
