@@ -1034,6 +1034,18 @@ class Economy(commands.Cog):
         return False
 
     @staticmethod
+    async def send_return_interaction_orginal_response(interaction: discord.Interaction):
+        """Pass the interaction to the function, sends a response and returns it, allowing you to make edits.
+
+        This is good for commands that have a lot of background processing or overhead, for commands that
+        cannot neccesarily meet the 3 second limit threshold to respond.
+        """
+
+        await interaction.response.send_message(  
+            content="Crunching the data just for you, give us a mo'..")
+        return await interaction.original_response()
+
+    @staticmethod
     def calculate_exp_for(*, level: int):
         return int((level / 10.5)**2)
 
@@ -2167,24 +2179,25 @@ class Economy(commands.Cog):
                            investment="how much robux your willing to spend on this slay (no shortcuts)")
     async def hire_slv(self, interaction: discord.Interaction, user: Optional[discord.Member],
                        new_slay_name: Optional[str], gender: Literal["male", "female"], investment: int):
-        await interaction.response.defer(thinking=True)  
+        msg = await self.send_return_interaction_orginal_response(interaction)
+
         async with self.client.pool_connection.acquire() as conn:  
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.followup.send(embed=self.not_registered)
+                return await msg.edit(content=None, embed=self.not_registered)
 
             if user and (interaction.user.id == user.id):
-                return await interaction.followup.send("Why would you make yourself a slay?")
+                return await msg.edit(content="Why would you make yourself a slay?")
             elif (user is None) and (new_slay_name is None):
-                return await interaction.followup.send("You did not input any slay.")
+                return await msg.edit(content="You did not input any slay.")
             elif (new_slay_name is not None) and (user is not None):
-                return await interaction.followup.send("You cannot name your slay if the user has also "
-                                                       "been inputted. Remove this argument if needed.")
+                return await msg.edit(content="You cannot name your slay if the user has also "
+                                              "been inputted. Remove this argument if needed.")
             elif abs(investment) > await self.get_wallet_data_only(interaction.user, conn):
-                return await interaction.followup.send(
-                    embed=membed("Your slay will not obey your orders if you do not "
-                                 "guarantee your investment.\n"
+                return await msg.edit(
+                    content=None,
+                    embed=membed("Your slay will not obey your orders if you do not guarantee your investment.\n"
                                  "Hook up some more robux in your investment to increase your slay's productivity."))
             else:
 
@@ -2205,19 +2218,19 @@ class Economy(commands.Cog):
                                                       f"of `{prod}`.",
                                           colour=discord.Colour.from_rgb(0, 0, 0))
                     slayy.set_footer(text="1/6 slots consumed")
-                    await interaction.followup.send(embed=slayy)
+                    await msg.edit(content=None, embed=slayy)
 
                 else:
                     if len(slays) >= 6:
-                        return await interaction.followup.send(
+                        return await msg.edit(
+                            content=None,
                             embed=membed("## You have reached the maximum slay quota for now.\n"
                                          "You must abandon a current slay before hiring a new one."))
 
                     for slay in slays:
                         if new_slay_name == slay[0]:
-                            return await interaction.followup.send(
-                                "You already own a slay with that name."
-                            )
+                            return await msg.edit(
+                                content="You already own a slay with that name.")
 
                     await self.open_slay(conn, interaction.user, new_slay_name, gender, prod, 100, 1)
 
@@ -2229,7 +2242,7 @@ class Economy(commands.Cog):
                                           color=discord.Color.from_rgb(0, 0, 0))
                     slaye.set_footer(text=f"{len(slays) + 1}/6 slay slots consumed")
 
-                    await interaction.followup.send(embed=slaye)
+                    await msg.edit(content=None, embed=slaye)
 
     @slay.command(name='abandon', description='abandon your slay.')
     @app_commands.rename(slay_purge='slay')
@@ -2299,18 +2312,18 @@ class Economy(commands.Cog):
     @slay.command(name='work', description="assign your slays to do tasks for you.", extras={"exp_gained": 5})
     @app_commands.describe(duration="the time spent working (e.g, 18h or 1d 3h)")
     async def make_slay_work_pay(self, interaction: discord.Interaction, duration: str):
-        await interaction.response.defer(thinking=True)  
+        msg = await self.send_return_interaction_orginal_response(interaction)
 
         try:
             async with self.client.pool_connection.acquire() as conn:  
                 conn: asqlite_Connection
 
                 if await self.can_call_out(interaction.user, conn):
-                    return await interaction.followup.send(embed=NOT_REGISTERED)
+                    return await msg.edit(content=None, embed=NOT_REGISTERED)
 
                 if len(await self.get_slays(conn, interaction.user)) == 0:
-                    return await interaction.followup.send(
-                        embed=membed("You got no slays to send to work.")
+                    return await msg.edit(
+                        content=None, embed=membed("You got no slays to send to work.")
                     )
 
                 res_duration = parse_duration(duration)
@@ -2325,8 +2338,9 @@ class Economy(commands.Cog):
                         res_duration = datetime_to_string(res_duration)
                         await self.update_cooldown(conn, user=interaction.user, cooldown_type="slaywork",
                                                    new_cd=res_duration)
-                        await interaction.followup.send(f"## Your slay(s) have been sent off.\n"
-                                                        f"{ARROW}As commanded, they will work until {shallow} (UTC).")
+                        await msg.edit(
+                            content=f"## Your slay(s) have been sent off.\n"
+                                    f"{ARROW}As commanded, they will work until {shallow} (UTC).")
                     else:
                         cooldown = string_to_datetime(cooldown[0])
                         diff = cooldown - datetime.datetime.now()
@@ -2401,24 +2415,24 @@ class Economy(commands.Cog):
                                                 f"\n\nHere is a summary:\n"
                                                 f"{'\n'.join(content)}\n")
 
-                            return await interaction.followup.send(embed=summ)
+                            return await msg.edit(content=None, embed=summ)
                         else:
                             minutes, seconds = divmod(diff.total_seconds(), 60)
                             hours, minutes = divmod(minutes, 60)
                             days, hours = divmod(hours, 24)
-                            await interaction.followup.send(f"Your slays are still working.\n"
-                                                            f"They will finish working in **{int(days)}** days, "
-                                                            f"**{int(hours)}** hours, **{int(minutes)}** minutes "
-                                                            f"and **{int(seconds)}** seconds. ")
+                            await msg.edit(content=f"Your slays are still working.\n"
+                                                   f"They will finish working in **{int(days)}** days, "
+                                                   f"**{int(hours)}** hours, **{int(minutes)}** minutes "
+                                                   f"and **{int(seconds)}** seconds. ")
                 else:
-                    return await interaction.followup.send("## No data has been found under your name.\n"
-                                                           "- This is because you've registered after the "
-                                                           "cooldown system was implemented.\n"
-                                                           "- A quick fix is to use the /discontinue command "
-                                                           "and re-register (you can request a developer to "
-                                                           "add your original items back).")
+                    return await msg.edit(content="## No data has been found under your name.\n"
+                                                  "- This is because you've registered after the "
+                                                  "cooldown system was implemented.\n"
+                                                  "- A quick fix is to use the /discontinue command "
+                                                  "and re-register (you can request a developer to "
+                                                  "add your original items back).")
         except ValueError as veer:
-            await interaction.followup.send(f"{veer}")
+            await msg.edit(content=f"{veer}")
 
     @commands.command(name='reasons', description='identify causes of registration errors.')
     @commands.cooldown(1, 6)
@@ -3198,11 +3212,10 @@ class Economy(commands.Cog):
                            with_force='whether to register this user if not already')
     @app_commands.guild_only()
     @app_commands.checks.cooldown(1, 6)
-    async def find_balance(self, interaction: discord.Interaction, user: Optional[discord.Member], 
+    async def find_balance(self, interaction: discord.Interaction, user: Optional[discord.Member],
                            with_force: Optional[bool]):
         """Returns a user's balance."""
-
-        await interaction.response.defer(thinking=True)  
+        msg = await self.send_return_interaction_orginal_response(interaction)
 
         user = user or interaction.user
 
@@ -3214,8 +3227,8 @@ class Economy(commands.Cog):
                     await self.open_bank_new(user, conn)
                     await self.open_inv_new(user, conn)
                     await self.open_cooldowns(user, conn)
-                    return await interaction.followup.send(embed=membed(f"Force registered {user.name}."))
-                await interaction.followup.send(embed=membed(f"{user.name} isn't registered."))
+                    return await msg.edit(embed=membed(f"Force registered {user.name}."))
+                await msg.edit(embed=membed(f"{user.name} isn't registered."))
 
             elif await self.can_call_out(user, conn) and (user.id == interaction.user.id):
 
@@ -3240,7 +3253,7 @@ class Economy(commands.Cog):
                                f"</withdraw:1172898644622585876>, </deposit:1172898644622585877>, "
                                f"</inventory:1172898644287029333>, </shop view:1172898645532749946>, "
                                f"</buy:1172898644287029334>")
-                return await interaction.followup.send(embed=norer)
+                return await msg.edit(embed=norer)
             else:
                 nd = await conn.execute("SELECT wallet, bank, bankspace FROM `bank` WHERE userID = ?", (user.id,))
                 nd = await nd.fetchone()
@@ -3276,7 +3289,7 @@ class Economy(commands.Cog):
                                                 'quality=lossless',
                                        text='mallow is dazzled')
 
-                await interaction.followup.send(embed=balance)
+                await msg.edit(embed=balance)
 
     @app_commands.command(name="resetmydata", description="opt out of the virtual economy.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -3424,7 +3437,7 @@ class Economy(commands.Cog):
             available_bankspace = details[2] - details[1]
             available_bankspace -= amount_conv
 
-            if available_bankspace <= 0:
+            if available_bankspace < 0:
                 return await interaction.response.send_message(  
                     embed=membed(f"You can only hold **\U000023e3 {details[2]:,}** in your bank right now.\n"
                                  f"To hold more, use currency commands and level up more."))
@@ -3460,10 +3473,8 @@ class Economy(commands.Cog):
                               stat: Literal[
                                   "Bank + Wallet", "Wallet", "Bank", "Inventory Net", "Bounty", "Commands", "Level"]):
 
-        await interaction.response.send_message("Crunching the data just for you, give us a mo'..")  
-
         lb_view = Leaderboard(self.client, stat, channel_id=interaction.channel.id)
-        lb_view.message = await interaction.original_response()
+        lb_view.message = await self.send_return_interaction_orginal_response(interaction)
 
         if not active_sessions.setdefault(interaction.channel.id, None):
             active_sessions.update({interaction.channel.id: 1})
