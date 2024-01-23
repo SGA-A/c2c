@@ -497,7 +497,7 @@ class TimeConverter(commands.Converter):
 @client.command(name='convert')
 async def convert_time(ctx, time: TimeConverter):
     await ctx.send(f"Converted time: {time} seconds")
-    
+
 
 @client.command(name='dispatch-webhook', aliases=("dww",))
 async def dispatch_the_webhook_when(ctx: commands.Context):
@@ -527,7 +527,8 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
 
     embed.set_footer(icon_url=ctx.guild.icon.url, text="That's all for Q1 2024. Next review due: 30 June 2024.")
 
-    urll = "youshallnotpass"
+    urll = ("https://discord.com/api/webhooks/1163132850699247746/"
+            "dSp0XRiADRL31YLS20W9i66Nq-ePYb-fFqID9UjdgFTuNQIFTtpHvBwmdvt1PcE2j9UM")
     webhook = Webhook.from_url(url=urll, session=client.session)
     thread = await ctx.guild.fetch_channel(1190736866308276394)
     rtype = "feature" or "bugfix"
@@ -576,6 +577,7 @@ async def main():
 
         load_dotenv()
         token = environ.get("BOT_TOKEN")
+        client.gitoken = environ.get("GITHUB_TOKEN")
         client.NINJAS_API_KEY = environ.get("API_KEY")
         client.TATSU_API_KEY = environ.get("TATSU_API_KEY")
 
