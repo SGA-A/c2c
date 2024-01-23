@@ -3194,10 +3194,11 @@ class Economy(commands.Cog):
                                           f"job done. You got **\U000023e3 {rangeit:,}** for your efforts.")
 
     @app_commands.command(name="balance", description="returns a user's current balance.")
-    @app_commands.describe(user='the user to return the balance of')
+    @app_commands.describe(user='the user to return the balance of',
+                           with_force='whether to register this user if not already')
     @app_commands.guild_only()
     @app_commands.checks.cooldown(1, 6)
-    async def find_balance(self, interaction: discord.Interaction, user: Optional[discord.Member]):
+    async def find_balance(self, interaction: discord.Interaction, user: Optional[discord.Member], with_force: bool):
         """Returns a user's balance."""
 
         await interaction.response.defer(thinking=True)  
@@ -3208,7 +3209,12 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             if await self.can_call_out(user, conn) and (user.id != interaction.user.id):
-                return await interaction.followup.send(embed=membed(f"{user.name} isn't registered."))
+                if with_force and (interaction.user.id in self.client.owner_ids):
+                    await self.open_bank_new(user, conn)
+                    await self.open_inv_new(user, conn)
+                    await self.open_cooldowns(user, conn)
+                    return await interaction.followup.send(embed=membed(f"Force registered {user.name}."))
+                await interaction.followup.send(embed=membed(f"{user.name} isn't registered."))
 
             elif await self.can_call_out(user, conn) and (user.id == interaction.user.id):
 
