@@ -3,10 +3,11 @@ import io
 from cogs.economy import CURRENCY, determine_exponent, Economy, get_profile_key_value, modify_profile
 from random import randint
 from datetime import timedelta, datetime
+from re import findall
 from textwrap import indent
 from contextlib import redirect_stdout
 from traceback import format_exc
-from typing import Optional, Any, Literal
+from typing import Optional, Any, Literal, Union
 import discord
 from discord import Object
 from asqlite import Connection as asqlite_Connection
@@ -631,29 +632,46 @@ class Administrate(commands.Cog):
         await self.client.close()
 
     @commands.command(name='say', description='repeat what you typed.')
-    async def say(self, ctx, *, text_to_say):
+    async def say(self, ctx, *, message):
         """Makes the bot say what you want it to say."""
         await ctx.message.delete()
-        await ctx.send(f"{text_to_say}")
+
+        pattern = r'<(.*?)>'
+
+        matches = findall(pattern, message)
+
+        for match in matches:
+            emoji = discord.utils.get(self.client.emojis, name=match)
+            if emoji:
+                message = message.replace(f'<{match}>', f"{emoji}")
+                continue
+            return
+        await ctx.send(message)
 
     @app_commands.command(name='repeat', description='repeat what you typed (slash ver).')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
-    @app_commands.describe(message='what should i say?', channel='what channel should i say it in?')
-    async def repeat(self, interaction: discord.Interaction, message: str, channel: discord.TextChannel):
+    @app_commands.describe(message='what you want me to say', channel='what channel i should send in')
+    async def repeat(self, interaction: discord.Interaction, message: str,
+                     channel: Optional[
+                         Union[discord.TextChannel, discord.VoiceChannel, discord.ForumChannel, discord.Thread]]):
 
-        if channel:
-            if channel.id != interaction.channel.id:
-                ch = await self.client.fetch_channel(channel.id)
-                await ch.send(message)
-                return await interaction.response.send_message(  
-                    f"Done. Sent to <#{channel.id}>.", ephemeral=True)
-            else:
-                return await interaction.response.send_message(  
-                    "Point of giving a channel that is the same as the one you're in?", ephemeral=True)
-        else:
-            ch = await self.client.fetch_channel(interaction.channel.id)
-            await ch.send(message)
-            return await interaction.response.send_message("Done.", ephemeral=True)  
+        pattern = r'<(.*?)>'
+
+        matches = findall(pattern, message)
+
+        for match in matches:
+            emoji = discord.utils.get(self.client.emojis, name=match)
+            if emoji:
+                message = message.replace(f'<{match}>', f"{emoji}")
+                continue
+            return await interaction.response.send_message("I could not format your emoji, because that does not "
+                                                           "exist within my internal cache!\n"
+                                                           "As such, your message was not sent.", ephemeral=True)
+
+        channel = channel or interaction.channel
+        await channel.send(message)
+        return await interaction.response.send_message(  
+            f"Done. Sent this message to {channel.mention}.", ephemeral=True)
 
 
 async def setup(client):
