@@ -3,10 +3,12 @@ from PyDictionary import PyDictionary
 import discord
 from xml.etree.ElementTree import fromstring
 from other.pagination import Pagination
+from io import BytesIO
 import datetime
 from random import choice
 from github import Github
 from psutil import Process, cpu_count
+from time import time
 from typing import Literal, Union, Optional
 from discord.ext import commands
 from other.spshit import get_song_attributes
@@ -516,6 +518,91 @@ class Miscellaneous(commands.Cog):
             text = await resp.json()
             the_fact = text[0].get('fact')
             await interaction.response.send_message(f"{the_fact}.")  
+
+    @app_commands.command(name="image", description="manipulate a user's avatar.")
+    @app_commands.describe(user="the user to apply the manipulation to",
+                           endpoint="what kind of manipulation sorcery to use")
+    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    async def image_manip(self, interaction: discord.Interaction,
+                          user: Optional[discord.User],
+                          endpoint: Optional[
+                              Literal[
+                                  "abstract", "balls", "billboard", "bonks", "bubble", "canny", "clock",
+                                  "cloth", "contour", "cow", "cube", "dilate", "fall", "fan", "flush", "gallery",
+                                  "globe", "half-invert", "hearts", "infinity", "laundry", "lsd", "optics", "parapazzi"
+                              ]]):
+        start = time()
+        await interaction.response.send_message("Loading..")  
+        msg = await interaction.original_response()
+        user = user or interaction.user
+        endpoint = endpoint or "abstract"
+
+        params = {'image_url': user.display_avatar.url}
+        headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}  
+        api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
+
+        async with self.client.session.get(api_url, params=params, headers=headers) as response:  
+            if response.status == 200:
+                buffer = BytesIO(await response.read())
+                end = time()
+                diff = round(end - start, ndigits=2)
+                return await msg.edit(content=f"Done. Took `{diff}s`.",
+                                      attachments=[discord.File(buffer, f'{endpoint}.gif')])
+            await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
+
+    @app_commands.command(name="image2", description="manipulate a user's avatar (continued).")
+    @app_commands.describe(user="the user to apply the manipulation to",
+                           endpoint="what kind of manipulation sorcery to use")
+    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    async def image2_manip(self, interaction: discord.Interaction,
+                           user: Optional[discord.User],
+                           endpoint: Optional[
+                              Literal[
+                                  "minecraft", "patpat", "plates", "pyramid", "radiate", "rain", "ripped", "ripple",
+                                  "shred", "wiggle", "warp", "wave"]]):
+        start = time()
+        await interaction.response.send_message("Loading..")  
+        msg = await interaction.original_response()
+        user = user or interaction.user
+        endpoint = endpoint or "wave"
+
+        params = {'image_url': user.display_avatar.url}
+        headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}  
+        api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
+
+        async with self.client.session.get(api_url, params=params, headers=headers) as response:  
+            if response.status == 200:
+                buffer = BytesIO(await response.read())
+                end = time()
+                diff = round(end - start, ndigits=2)
+                return await msg.edit(content=f"Done. Took `{diff}s`.",
+                                      attachments=[discord.File(buffer, f'{endpoint}.gif')])
+            await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
+
+    @app_commands.command(name="locket", description="insert photos into a heart-shaped locket.")
+    @app_commands.describe(user="the user to add to the locket", user2="the second user to add to the locket")
+    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    async def locket_manip(self, interaction: discord.Interaction,
+                           user: Optional[discord.User], user2: discord.User):
+        start = time()
+
+        await interaction.response.send_message("Loading..")  
+        msg = await interaction.original_response()
+
+        user = user or interaction.user
+
+        params = {'image_url': user.display_avatar.url, 'image_url_2': user2.display_avatar.url}
+        headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}  
+        api_url = f"https://api.jeyy.xyz/v2/image/heart_locket"
+
+        async with self.client.session.get(api_url, params=params, headers=headers) as response:  
+            if response.status == 200:
+                buffer = BytesIO(await response.read())
+                end = time()
+                diff = round(end - start, ndigits=2)
+                return await msg.edit(content=f"Done. Took `{diff}s`.",
+                                      attachments=[discord.File(buffer, f'heart_locket.gif')])
+            await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
 
     @app_commands.command(name='com', description='finds most common letters in sentences.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
