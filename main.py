@@ -226,7 +226,7 @@ class C2C(commands.Bot):
 
 
 client = C2C(command_prefix='>', intents=Intents.all(), case_insensitive=True,
-             owner_ids={992152414566232139, 546086191414509599},
+             owner_ids={992152414566232139, 546086191414509599, 1148206353647669298},
              activity=CustomActivity(name='Serving cc • /help'),
              status=Status.idle, tree_cls=MyCommandTree)
 print(version)
@@ -543,10 +543,10 @@ async def help_command(interaction: Interaction):
                       "<:githubBlue:1195664427836506212>"])
 
     embed = Embed(title='Help Menu for c2c',
-                  description=f'```fix\n[Patch #26]\n'
-                              f'- More commands interacting with API Interfaces\n'
+                  description=f'```fix\n[Patch #30]\n'
+                              f'- Leaderboard now has numerous filters to sort by\n'
                               f'- Major performance improvements\n'
-                              f'- Databases have fully replaced json```\n'
+                              f'- Leveling system has been implemented```\n'
                               f'A few things to note:\n'
                               f'- This help command does not display uncategorized commands.\n'
                               f'- The prefix for this bot is `>` (for text commands)\n'
@@ -577,8 +577,8 @@ async def main():
         token = environ.get("BOT_TOKEN")
         client.webhook_url = environ.get("WEBHOOK_URL")
         client.gitoken = environ.get("GITHUB_TOKEN")
+        client.JEYY_API_KEY = environ.get("JEYY_API_KEY")
         client.NINJAS_API_KEY = environ.get("API_KEY")
-        client.TATSU_API_KEY = environ.get("TATSU_API_KEY")
 
         await client.start(token)
     finally:
