@@ -4,11 +4,11 @@ from string import ascii_letters, digits
 from shelve import open as open_shelve
 import datetime
 import discord
-from re import sub
+from re import sub, search
 from other.pagination import Pagination
 from ImageCharts import ImageCharts
 from discord.ext import commands
-from math import floor
+from math import floor, ceil
 from random import randint, choices, choice, sample, shuffle
 from pluralizer import Pluralizer
 from discord import app_commands, SelectOption
@@ -271,6 +271,8 @@ def generate_slot_combination():
 def generate_progress_bar(percentage):
 
     percentage = round(percentage, -1)
+    if percentage > 100:
+        percentage = 100
 
     progress_bar = {
         0: "<:pb1e:1199056980195676201><:pb2e:1199056978908037180>"
@@ -1042,12 +1044,12 @@ class Economy(commands.Cog):
         """
 
         await interaction.response.send_message(  
-            content="Crunching the data just for you, give us a mo'..")
+            content="Crunching the latest data just for you, give us a mo'..")
         return await interaction.original_response()
 
     @staticmethod
     def calculate_exp_for(*, level: int):
-        return int((level / 10.5)**2)
+        return ceil((level / 0.9)**0.8)
 
     async def create_leaderboard_preset(self, chosen_choice: str):
         async with self.client.pool_connection.acquire() as conn:  
@@ -1459,6 +1461,7 @@ class Economy(commands.Cog):
             RETURNING `{mode1}`, `{mode2}`, `{mode3}`
             """,
             (amount1, amount2, amount3, user.id))
+        await conn_input.commit()
         data = await data.fetchone()
         return data
 
@@ -1652,7 +1655,7 @@ class Economy(commands.Cog):
                     return
 
                 record = await connection.fetchone(
-                    'INSERT INTO `bank` (userID, exp, level) VALUES (?, 0, 1) '
+                    'INSERT INTO `bank` (userID, exp, level) VALUES (?, 1, 1) '
                     'ON CONFLICT (userID) DO UPDATE SET exp = exp + ? RETURNING exp, level',
                     (interaction.user.id, exp_gainable))
 
@@ -1660,9 +1663,11 @@ class Economy(commands.Cog):
                     xp, level = record
                     exp_needed = self.calculate_exp_for(level=level)
 
-                    if xp >= exp_needed:
+                    if (xp >= exp_needed) and (level <= 5000):
                         await connection.execute(
-                            'UPDATE `bank` SET level = level + 1, exp = 0 WHERE userID = $1', interaction.user.id)
+                            """UPDATE `bank` SET level = level + 1, exp = 0, 
+                            bankspace = bankspace + ? WHERE userID = ?""",
+                            (randint(300_000, 20_000_000), interaction.user.id))
 
                         await self.send_custom_text(interaction,
                                                     custom_text=f'{interaction.user.mention} has just leveled '
@@ -2495,6 +2500,122 @@ class Economy(commands.Cog):
                                      "comment on [this issue on our Github.](https://github.com/SGA-A/c2c/issues/12)")
                     )
 
+    @app_commands.command(name="prestige", description="sacrifice currency stats in exchange for incremental perks.")
+    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.checks.cooldown(1, 6)
+    async def prestige(self, interaction: discord.Interaction):
+        async with self.client.pool_connection.acquire() as conn:  
+            conn: asqlite_Connection
+            if await self.can_call_out(interaction.user, conn):
+                return await interaction.response.send_message(embed=self.not_registered)  
+
+            data = await conn.fetchone(
+                f"""
+                SELECT prestige, level, wallet, bank FROM `bank` WHERE userID = ?
+                """, (interaction.user.id,)
+            )
+
+            prestige = data[0]
+            actual_level = data[1]
+            actual_robux = data[2] + data[3]
+
+            if prestige == 10:
+                return await interaction.response.send_message(  
+                    embed=membed("You've reached the highest prestige!\n"
+                                 "No more perks can be obtained from this command.")
+                )
+
+            req_robux = (prestige + 1) * 24_000_000
+            req_level = (prestige + 1) * 35
+
+            if (actual_robux >= req_robux) and (actual_level >= req_level):
+                if active_sessions.setdefault(interaction.user.id, None):
+                    return await interaction.response.send_message(  
+                        embed=membed("I am already waiting for your input."))
+                active_sessions.update({interaction.user.id: 1})
+
+                embed = discord.Embed(
+                    title="Are you sure?",
+                    description=(
+                        "Prestiging means losing nearly everything you've ever earned in the currency "
+                        "system in exchange for increasing your 'Prestige Level' "
+                        "and upgrading your status.\n\n"
+                        "**Things you will lose**:\n"
+                        "- All of your items/showcase\n"
+                        "- All of your robux\n"
+                        "- Your drone(s)\n"
+                        "- Your levels and XP\n"
+                        "Anything not mentioned in this list will not be lost.\n"
+                        "Are you sure you want to prestige?\n"
+                        "Type `yes` to confirm or `no` to cancel."
+                    ),
+                    colour=0x2B2D31
+                )
+                embed.set_footer(text="This is final and cannot be undone.")
+
+                await interaction.response.send_message(embed=embed)  
+                msg = await interaction.original_response()
+
+                def check(m):
+                    return ((("n" in m.content.lower()) or ("y" in m.content.lower()))
+                            and m.channel == interaction.channel and m.author == interaction.user)
+
+                try:
+                    their_message = await self.client.wait_for('message', check=check, timeout=15.0)
+                except asyncTE:
+                    del active_sessions[interaction.user.id]
+                    embed.colour = discord.Colour.brand_red()
+                    embed.title = "Action Cancelled"
+                    await msg.edit(embed=embed)
+                else:
+                    del active_sessions[interaction.user.id]
+                    if "y" in their_message.content.lower():
+
+                        for item in SHOP_ITEMS:
+                            await conn.execute(
+                                f"UPDATE `{INV_TABLE_NAME}` SET `{item["name"]}` = ? WHERE userID = ?",
+                                (0, interaction.user.id,))
+                        await conn.execute(
+                            f"""
+                            UPDATE `{BANK_TABLE_NAME}` SET wallet = ?, bank = ?, showcase = ?, level = ?, exp = ?, 
+                            prestige = prestige + 1, bankspace = bankspace + ? 
+                            WHERE userID = ?
+                            """, (0, 0, '0 0 0', 1, 0, randint(100_000_000, 500_000_000), interaction.user.id))
+                        await conn.commit()
+                        embed.colour = discord.Colour.brand_green()
+                        embed.title = "Action Confirmed"
+                        return await msg.edit(embed=embed)
+
+                    embed.colour = discord.Colour.brand_red()
+                    embed.title = "Action Cancelled"
+                    await msg.edit(embed=embed)
+            else:
+                emoji = PRESTIGE_EMOTES.get(prestige+1)
+                emoji = search(r':(\d+)>', emoji)
+                emoji = self.client.get_emoji(int(emoji.group(1)))
+
+                actual_robux_progress = (actual_robux/req_robux)*100
+                actual_level_progress = (actual_level/req_level)*100
+
+                embed = discord.Embed(
+                    title=f"Prestige {prestige+1} Requirements",
+                    description=(
+                        f"**Total Balance**\n"
+                        f"<:replyconti:1199688910649954335> \U000023e3 {actual_robux:,}/{req_robux:,}\n"
+                        f"<:replyi:1199688912646455416> {generate_progress_bar(actual_robux_progress)} "
+                        f"` {int(actual_robux_progress):,}% `\n"
+                        f"\n"
+                        f"**Level Required**\n"
+                        f"<:replyconti:1199688910649954335> {actual_level:,}/{req_level:,}\n"
+                        f"<:replyi:1199688912646455416> {generate_progress_bar(actual_level_progress)} "
+                        f"` {int(actual_level_progress):,}% `"
+                    ),
+                    colour=0x2B2D31
+                )
+                embed.set_thumbnail(url=emoji.url)
+                embed.set_footer(text="Imagine thinking you can prestige already.")
+                return await interaction.response.send_message(embed=embed)  
+
     @app_commands.command(name="getjob", description="earn a salary becoming employed.", extras={"exp_gained": 5})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(job_name='the name of the job')
@@ -2587,7 +2708,7 @@ class Economy(commands.Cog):
             ephemerality = True
 
         await interaction.response.send_message(  
-            "Crunching the data just for you, give us a mo'..", ephemeral=ephemerality, silent=True)
+            "Crunching the latest data just for you, give us a mo'..", ephemeral=ephemerality, silent=True)
         msg = await interaction.original_response()
 
         async with self.client.pool_connection.acquire() as conn:  
@@ -2645,7 +2766,6 @@ class Economy(commands.Cog):
                                         f"{get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"}")
 
                 boundary = self.calculate_exp_for(level=data[7])
-
                 procfile.add_field(name='Level',
                                    value=f"Level: `{data[7]:,}`\n" 
                                          f"Experience: `{data[8]}/{boundary}`\n" 
@@ -3137,7 +3257,7 @@ class Economy(commands.Cog):
                                 embed=membed(f"You just sold {sell_quantity} {ie} **{proper_name.title()}** and got "
                                              f"<:robux:1146394968882151434> **{cost:,}** in return."))
 
-    @app_commands.command(name="work", description="work and earn an income, if you have a job.", 
+    @app_commands.command(name="work", description="work and earn an income, if you have a job.",
                           extras={"exp_gained": 3})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     async def work(self, interaction: discord.Interaction):
@@ -3300,7 +3420,7 @@ class Economy(commands.Cog):
         member = member or interaction.user
         if interaction.user.id not in self.client.owner_ids:
             if (member is not None) and (member != interaction.user):
-                return await interaction.response.send_message(
+                return await interaction.response.send_message(  
                     embed=membed(f"You are not allowed to delete other user's data.\n"
                                  f"{member.mention} should call this command themselves"
                                  f" to reset their data."))
@@ -3473,9 +3593,10 @@ class Economy(commands.Cog):
     async def get_leaderboard(self, interaction: discord.Interaction,
                               stat: Literal[
                                   "Bank + Wallet", "Wallet", "Bank", "Inventory Net", "Bounty", "Commands", "Level"]):
-
+        await interaction.response.send_message(  
+            content="Crunching the latest data just for you, give us a mo'..")
         lb_view = Leaderboard(self.client, stat, channel_id=interaction.channel.id)
-        lb_view.message = await self.send_return_interaction_orginal_response(interaction)
+        lb_view.message = await interaction.original_response()
 
         if not active_sessions.setdefault(interaction.channel.id, None):
             active_sessions.update({interaction.channel.id: 1})
@@ -3558,10 +3679,10 @@ class Economy(commands.Cog):
 
                 result = choices([0, 1], weights=(29, 71), k=1)
 
-                if (prim_d[-1] == "Police") or (host_d[-1] == "Police"):
+                if (prim_d[1] == "Police") or (host_d[1] == "Police"):
                     return await interaction.response.send_message(  
-                        embed=membed("Either the host is a police officer or you are working as one.\n"
-                                     "You risk losing your bounty if the former case is true."))
+                        embed=membed("Either the host is a police officer and/or you are working as one.\n"
+                                     "In any case, you would risk losing your bounty and your job."))
 
                 if not result[0]:
                     fine = randint(1, prim_d[0])
@@ -3579,11 +3700,11 @@ class Economy(commands.Cog):
                     await self.update_bank_new(other, conn, +fine)
                     return await interaction.response.send_message(embed=membed(conte))  
                 else:
-                    steal_amount = randint(1, host_d[1])
+                    steal_amount = randint(1, host_d[0])
                     await self.update_bank_new(interaction.user, conn, +steal_amount)
                     await self.update_bank_new(other, conn, -steal_amount)
 
-                    prcf = round((steal_amount / host_d[1]) * 100, ndigits=1)
+                    prcf = round((steal_amount / host_d[0]) * 100, ndigits=1)
 
                     return await interaction.response.send_message(  
                         embed=membed(f"You managed to steal \U000023e3 **{steal_amount:,}** from {other.name}.\n"
