@@ -7,6 +7,7 @@ from io import BytesIO
 import datetime
 from random import choice
 from github import Github
+from re import compile as compile_it
 from psutil import Process, cpu_count
 from time import time
 from typing import Literal, Union, Optional
@@ -86,6 +87,12 @@ def parse_xml(xml_content, mode: Literal["image", "tag"]):
 
     extracted_data = [extract_attributes(res, mode=mode) for res in result]
     return extracted_data
+
+
+def extract_domain(website):
+    dp = compile_it(r'https://(nekos\.pro|nekos\.best)')
+    match = dp.match(website)
+    return match.group(1)
 
 
 def membed(descriptioner: str) -> discord.Embed:
@@ -779,21 +786,67 @@ class Miscellaneous(commands.Cog):
         embed.set_footer(text=f'Made with discord.py v{discord.__version__}', icon_url='http://i.imgur.com/5BFecvA.png')
         await interaction.followup.send(embed=embed)
 
-    @app_commands.command(name='char', description="retrieve sfw anime images.")
+    @app_commands.command(name='char', description="retrieve sfw or nsfw anime images.")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(filter_by='what type of image to retrieve')
     async def get_via_nekos(self, interaction: discord.Interaction,
-                            filter_by: Optional[Literal["neko", "kitsune", "waifu", "husbando"]]):
+                            filter_by: Optional[
+                                Literal[
+                                    "neko", "kitsune", "waifu", "husbando", "ai", "ass", "boobs", "creampie",
+                                    "paizuri", "pussy", "random", "ecchi", "fucking"]]):
+
+        await interaction.response.send_message("Loading..")  
+        msg = await interaction.original_response()
+
+        api_urls = {
+            "neko": ("https://nekos.best/api/v2/neko", 'https://nekos.pro/api/neko'),
+            "kitsune": ("https://nekos.best/api/v2/kitsune",),
+            "waifu": ("https://nekos.best/api/v2/waifu",),
+            "husbando": ("https://nekos.best/api/v2/husbando",),
+            "ai": "https://nekos.pro/api/ai",
+            "ass": "https://nekos.pro/api/ass",
+            "boobs": "https://nekos.pro/api/boobs",
+            "creampie": "https://nekos.pro/api/creampie",
+            "paizuri": "https://nekos.pro/api/paizuri",
+            "pussy": "https://nekos.pro/api/pussy",
+            "random": "https://nekos.pro/api/random",
+            "ecchi": "https://nekos.pro/api/ecchi",
+            "fucking": "https://nekos.pro/api/fucking"
+        }
 
         if filter_by is None:
             filter_by = "neko"
+        api_urls = api_urls.get(filter_by)
 
-        async with self.client.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp:  
+        if (isinstance(api_urls, str)) and (not interaction.channel.is_nsfw()):
+            return await msg.edit(
+                content=None,
+                embed=membed("This API endpoint **must** be used within an NSFW channel."))
+        elif isinstance(api_urls, tuple):
+            api_urls = choice(api_urls)
+        else:
+            pass
+
+        async with self.client.session.get(api_urls) as resp:  
             if resp.status != 200:
-                return await interaction.response.send_message(  
-                    "The request failed, you should try again later.")
+                return await msg.edit(
+                    content=None, embed=membed("The request failed, you should try again later."))
+            embed = discord.Embed(colour=discord.Colour.from_rgb(243, 157, 30))
+
             data = await resp.json()
-            await interaction.response.send_message(data["results"][0]["url"])  
+            if (extract_domain(api_urls) == "nekos.pro") and (not api_urls.endswith("ai")):  # ai doesnt have any params
+                embed.set_author(name=f"{data.setdefault('character_name', 'Unknown Source')}")
+                embed.set_image(url=data["url"])
+                embed.set_footer(text=f"ID: {data['id']}")
+            elif extract_domain(api_urls) == "nekos.best":
+                fm = data["results"][0]
+                embed.set_author(name=f"{fm['artist_name']}")
+                embed.set_image(url=fm["url"])
+            else:
+                embed.set_image(url=data["url"])
+                embed.set_footer(text=f"ID: {data['id']}")
+
+            await msg.edit(content=None, embed=embed)  
 
     @commands.command(name="pickupline", description="get pick up lines to use.", aliases=('pul',))
     @commands.guild_only()
