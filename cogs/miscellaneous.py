@@ -143,10 +143,10 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
                                             f"- From there, compensation will be decided upfront.\n\n"
                                             f"You may get a unique badge or other type of reward based on how "
                                             f"constructive and thoughtful your feedback is.")
-        await interaction.response.send_message(embed=success, ephemeral=True)  # type: ignore
+        await interaction.response.send_message(embed=success, ephemeral=True)  
 
     async def on_error(self, interaction: discord.Interaction, error):
-        return await interaction.response.send_message(  # type: ignore
+        return await interaction.response.send_message(  
             f"<:warning_nr:1195732155544911882> Something went wrong.")
 
 
@@ -187,7 +187,7 @@ class Miscellaneous(commands.Cog):
 
     async def get_word_info(self, word):
         url = f"https://api.dictionaryapi.dev/api/v2/entries/en/{word}"
-        async with self.client.session.get(url) as response:  # type: ignore
+        async with self.client.session.get(url) as response:  
             return await response.json()
 
     async def retrieve_via_kona(self, tag_pattern: Optional[str], tags: Optional[str],
@@ -200,10 +200,10 @@ class Miscellaneous(commands.Cog):
             base_url = "https://konachan.net/tag.xml"
             params = {"name": tag_pattern, "page": page, "order": "count", "limit": 20}
 
-        async with self.client.session.get(base_url, params=params) as response:  # type: ignore
+        async with self.client.session.get(base_url, params=params) as response:  
             if response.status == 200:
                 posts_xml = await response.text()
-                data = parse_xml(posts_xml, mode=mode)  # type: ignore
+                data = parse_xml(posts_xml, mode=mode)  
             else:
                 data = response.status
         return data
@@ -244,13 +244,13 @@ class Miscellaneous(commands.Cog):
             activity_type = ""
         else:
             activity_type = f"?type={activity_type}"
-        async with self.client.session.get(  # type: ignore
+        async with self.client.session.get(  
                 f"http://www.boredapi.com/api/activity{activity_type}") as response:
             if response.status == 200:
                 resp = await response.json()
-                await interaction.response.send_message(f"{resp['activity']}.")  # type: ignore
+                await interaction.response.send_message(f"{resp['activity']}.")  
             else:
-                await interaction.response.send_message(  # type: ignore
+                await interaction.response.send_message(  
                     embed=membed("An unsuccessful request was made. Try again later."))
 
     @app_commands.command(name='kona', description='retrieve nsfw posts from konachan.', nsfw=True)
@@ -265,29 +265,29 @@ class Miscellaneous(commands.Cog):
 
         tagviewing = ', '.join(tags.split(' '))
 
-        posts_xml = await self.retrieve_via_kona(tags=tags, limit=3, page=page, mode="image",  # type: ignore
+        posts_xml = await self.retrieve_via_kona(tags=tags, limit=3, page=page, mode="image",  
                                                  tag_pattern=None)
 
         if isinstance(posts_xml, int):
-            return await interaction.response.send_message(  # type: ignore
+            return await interaction.response.send_message(  
                 embed=membed(f"The [konachan website](https://konachan.net/help) returned an erroneous status code of "
                              f"`{posts_xml}`: {rmeaning.setdefault(posts_xml, "the cause of the error is not known")}."
                              f"\nYou should try again later to see if the service improves."))
 
         if len(posts_xml) == 0:
-            await interaction.response.defer(thinking=True, ephemeral=True)  # type: ignore
-            tagsearch = self.client.tree.get_app_command(  # type: ignore
+            await interaction.response.defer(thinking=True, ephemeral=True)  
+            tagsearch = self.client.tree.get_app_command(  
                 'tagsearch', guild=discord.Object(id=interaction.guild.id))
 
             """You can use the below code to make your commands mentionable, even if they are out of sync"""
             if tagsearch is None:
-                await self.client.tree._update_cache(  # type: ignore
+                await self.client.tree._update_cache(  
                     await self.client.tree.fetch_commands(
                         guild=discord.Object(id=interaction.guild.id)), guild=discord.Object(id=interaction.guild.id))
-                tagsearch = self.client.tree.get_app_command(  # type: ignore
+                tagsearch = self.client.tree.get_app_command(  
                     'tagsearch', guild=discord.Object(id=interaction.guild.id))
 
-            return await interaction.followup.send(  # type: ignore
+            return await interaction.followup.send(  
                 embed=membed(f"## No posts found.\n"
                              f"- There are a few known causes:\n"
                              f" - Entering an invalid tag name.\n"
@@ -320,7 +320,7 @@ class Miscellaneous(commands.Cog):
         await interaction.channel.send(content=f"__Attachments "
                                                f"for {interaction.user.mention}__\n\n" + "\n".join(attachments),
                                        delete_after=30.0)
-        await interaction.response.send_message(embed=embed)  # type: ignore
+        await interaction.response.send_message(embed=embed)  
 
     @app_commands.command(name='tagsearch', description='retrieve tags from konachan.', nsfw=True)
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -331,16 +331,16 @@ class Miscellaneous(commands.Cog):
         embed.set_author(icon_url=interaction.user.display_avatar.url, name=interaction.user.name,
                          url=interaction.user.display_avatar.url)
 
-        tags_xml = await self.retrieve_via_kona(tag_pattern=tag_pattern, mode="tag", tags=None)  # type: ignore
+        tags_xml = await self.retrieve_via_kona(tag_pattern=tag_pattern, mode="tag", tags=None)  
 
         if isinstance(tags_xml, int):
-            return await interaction.response.send_message(  # type: ignore
+            return await interaction.response.send_message(  
                 embed=membed(f"The [konachan website](https://konachan.net/help) returned an erroneous status code of "
                              f"`{tags_xml}`: {rmeaning.setdefault(tags_xml, "the cause of the error is not known")}."
                              f"\nYou should try again later to see if the service improves."), ephemeral=True)
 
         if len(tags_xml) == 0:
-            return await interaction.response.send_message(  # type: ignore
+            return await interaction.response.send_message(  
                 embed=membed(f"## No tags found.\n"
                              f"- There is only one known cause:\n"
                              f" - No matching tags exist yet under the given tag pattern."), ephemeral=True)
@@ -361,7 +361,7 @@ class Miscellaneous(commands.Cog):
                                   f'({type_of_tag.setdefault(int(result['tag_type']), "Unknown Tag Type")})')
         embed.set_footer(text="Some tags here don't have any posts.")
         embed.description = "\n".join(descriptionerfyrd)
-        await interaction.response.send_message(embed=embed)  # type: ignore
+        await interaction.response.send_message(embed=embed)  
 
     @app_commands.command(name='emojis', description='fetch all the emojis c2c can access.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -449,7 +449,7 @@ class Miscellaneous(commands.Cog):
                            maximum_uses='how many uses the invite could be used for. 0 for unlimited uses.')
     async def gen_new_invite(self, interaction: discord.Interaction, invite_lifespan: int, maximum_uses: int):
         if invite_lifespan <= 0:
-            return await interaction.response.send_message(  # type: ignore
+            return await interaction.response.send_message(  
                 embed=membed("The invite lifespan cannot be **less than or equal to 0**."))
 
         maximum_uses = abs(maximum_uses)
@@ -474,7 +474,7 @@ class Miscellaneous(commands.Cog):
                                 colour=0x2F3136)
         success.set_author(name=interaction.user.name,
                            icon_url=interaction.user.display_avatar.url)
-        await interaction.response.send_message(embed=success)  # type: ignore
+        await interaction.response.send_message(embed=success)  
 
     @app_commands.command(name='define', description='define any word of choice.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -500,11 +500,11 @@ class Miscellaneous(commands.Cog):
                         if len(the_result.fields) == 0:
                             the_result.add_field(name=f'Looks like no results were found.',
                                                  value=f'We couldn\'t find a definition for {choicer.lower()}.')
-                        return await interaction.response.send_message(embed=the_result)  # type: ignore
+                        return await interaction.response.send_message(embed=the_result)  
                     else:
                         continue
         except AttributeError:
-            await interaction.response.send_message(  # type: ignore
+            await interaction.response.send_message(  
                 content=f'try again, but this time input an actual word.')
 
     @app_commands.command(name='randomfact', description='generates a random fact.')
@@ -513,11 +513,11 @@ class Miscellaneous(commands.Cog):
     async def random_fact(self, interaction: Interaction):
         limit = 1
         api_url = 'https://api.api-ninjas.com/v1/facts?limit={}'.format(limit)
-        parameters = {'X-Api-Key': self.client.NINJAS_API_KEY}  # type: ignore
-        async with self.client.session.get(api_url, params=parameters) as resp:  # type: ignore
+        parameters = {'X-Api-Key': self.client.NINJAS_API_KEY}  
+        async with self.client.session.get(api_url, params=parameters) as resp:  
             text = await resp.json()
             the_fact = text[0].get('fact')
-            await interaction.response.send_message(f"{the_fact}.")  # type: ignore
+            await interaction.response.send_message(f"{the_fact}.")  
 
     @app_commands.command(name="image", description="manipulate a user's avatar.")
     @app_commands.describe(user="the user to apply the manipulation to",
@@ -532,16 +532,16 @@ class Miscellaneous(commands.Cog):
                                   "globe", "half-invert", "hearts", "infinity", "laundry", "lsd", "optics", "parapazzi"
                               ]]):
         start = time()
-        await interaction.response.send_message("Loading..")  # type: ignore
+        await interaction.response.send_message("Loading..")  
         msg = await interaction.original_response()
         user = user or interaction.user
         endpoint = endpoint or "abstract"
 
         params = {'image_url': user.display_avatar.url}
-        headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}  # type: ignore
+        headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}  
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
-        async with self.client.session.get(api_url, params=params, headers=headers) as response:  # type: ignore
+        async with self.client.session.get(api_url, params=params, headers=headers) as response:  
             if response.status == 200:
                 buffer = BytesIO(await response.read())
                 end = time()
@@ -561,16 +561,16 @@ class Miscellaneous(commands.Cog):
                                   "minecraft", "patpat", "plates", "pyramid", "radiate", "rain", "ripped", "ripple",
                                   "shred", "wiggle", "warp", "wave"]]):
         start = time()
-        await interaction.response.send_message("Loading..")  # type: ignore
+        await interaction.response.send_message("Loading..")  
         msg = await interaction.original_response()
         user = user or interaction.user
         endpoint = endpoint or "wave"
 
         params = {'image_url': user.display_avatar.url}
-        headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}  # type: ignore
+        headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}  
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
-        async with self.client.session.get(api_url, params=params, headers=headers) as response:  # type: ignore
+        async with self.client.session.get(api_url, params=params, headers=headers) as response:  
             if response.status == 200:
                 buffer = BytesIO(await response.read())
                 end = time()
@@ -586,16 +586,16 @@ class Miscellaneous(commands.Cog):
                            user: Optional[discord.User], user2: discord.User):
         start = time()
 
-        await interaction.response.send_message("Loading..")  # type: ignore
+        await interaction.response.send_message("Loading..")  
         msg = await interaction.original_response()
 
         user = user or interaction.user
 
         params = {'image_url': user.display_avatar.url, 'image_url_2': user2.display_avatar.url}
-        headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}  # type: ignore
+        headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}  
         api_url = f"https://api.jeyy.xyz/v2/image/heart_locket"
 
-        async with self.client.session.get(api_url, params=params, headers=headers) as response:  # type: ignore
+        async with self.client.session.get(api_url, params=params, headers=headers) as response:  
             if response.status == 200:
                 buffer = BytesIO(await response.read())
                 end = time()
@@ -639,7 +639,7 @@ class Miscellaneous(commands.Cog):
         # Remove extra space at the end of the string
         answer = answer[:-1]
 
-        await interaction.response.send_message(embed=membed(f'The most common letter is {answer}.'))  # type: ignore
+        await interaction.response.send_message(embed=membed(f'The most common letter is {answer}.'))  
 
     @app_commands.command(name='charinfo', description='show info on characters (max 25).')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -658,8 +658,8 @@ class Miscellaneous(commands.Cog):
 
         msg = '\n'.join(map(to_string, characters))
         if len(msg) > 2000:
-            return await interaction.response.send_message('Output too long to display.')  # type: ignore
-        await interaction.response.send_message(msg, suppress_embeds=True)  # type: ignore
+            return await interaction.response.send_message('Output too long to display.')  
+        await interaction.response.send_message(msg, suppress_embeds=True)  
 
     @commands.command(name='spotify', aliases=('sp', 'spot'), description="fetch spotify RP information.")
     async def find_spotify_activity(self, ctx: commands.Context, *,
@@ -693,21 +693,21 @@ class Miscellaneous(commands.Cog):
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     async def feedback(self, interaction: discord.Interaction):
         feedback_modal = FeedbackModal()
-        await interaction.response.send_modal(feedback_modal)  # type: ignore
+        await interaction.response.send_modal(feedback_modal)  
 
     @app_commands.command(name='about', description='shows stats related to the client.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.checks.cooldown(1, 10, key=lambda i: i.guild.id)
     async def about_the_bot(self, interaction: discord.Interaction):
 
-        await interaction.response.defer(thinking=True)  # type: ignore
+        await interaction.response.defer(thinking=True)  
         amount = 0
         lenslash = len(await self.client.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1
         lentxt = len(self.client.commands)
         amount += (lenslash + lentxt)
 
         username = 'SGA-A'
-        token = self.client.gitoken  # type: ignore
+        token = self.client.gitoken  
         repository_name = 'c2c'
 
         g = Github(username, token)
@@ -754,7 +754,7 @@ class Miscellaneous(commands.Cog):
         cpu_usage = self.process.cpu_percent() / cpu_count()
         embed.timestamp = discord.utils.utcnow()
 
-        diff = datetime.datetime.now() - self.client.time_launch  # type: ignore
+        diff = datetime.datetime.now() - self.client.time_launch  
         minutes, seconds = divmod(diff.total_seconds(), 60)
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
@@ -788,28 +788,28 @@ class Miscellaneous(commands.Cog):
         if filter_by is None:
             filter_by = "neko"
 
-        async with self.client.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp:  # type: ignore
+        async with self.client.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp:  
             if resp.status != 200:
-                return await interaction.response.send_message(  # type: ignore
+                return await interaction.response.send_message(  
                     "The request failed, you should try again later.")
             data = await resp.json()
-            await interaction.response.send_message(data["results"][0]["url"])  # type: ignore
+            await interaction.response.send_message(data["results"][0]["url"])  
 
     @commands.command(name="pickupline", description="get pick up lines to use.", aliases=('pul',))
     @commands.guild_only()
     async def pick_up_lines(self, ctx: commands.Context):
         async with ctx.typing():
-            async with self.client.session.get(f"https://api.popcat.xyz/pickuplines") as resp:  # type: ignore
+            async with self.client.session.get(f"https://api.popcat.xyz/pickuplines") as resp:  
                 if resp.status != 200:
                     return await ctx.send("The request failed, you should try again later.")
                 data = await resp.json()
-                await ctx.reply(data["pickupline"])  # type: ignore
+                await ctx.reply(data["pickupline"])  
 
     @commands.command(name="wyr", description="get 'would you rather' questions.")
     @commands.guild_only()
     async def would_yr(self, ctx: commands.Context):
         async with ctx.typing():
-            async with self.client.session.get(f"https://api.popcat.xyz/wyr") as resp:  # type: ignore
+            async with self.client.session.get(f"https://api.popcat.xyz/wyr") as resp:  
                 if resp.status != 200:
                     return await ctx.send("The request failed, you should try again later.")
                 data = await resp.json()
@@ -822,7 +822,7 @@ class Miscellaneous(commands.Cog):
     async def alert_iph(self, ctx: commands.Context, *, custom_text: str):
         async with ctx.typing():
             custom_text = '+'.join(custom_text.split(' '))
-            async with self.client.session.get(  # type: ignore
+            async with self.client.session.get(  
                     f"https://api.popcat.xyz/alert?text={custom_text}") as resp:
                 if resp.status != 200:
                     return await ctx.send("The service is currently not available, try again later.")
@@ -845,7 +845,7 @@ class Miscellaneous(commands.Cog):
                                           f'- The epoch time in this format is: `{format_dtime}`',
                               colour=return_random_color())
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
-        await interaction.response.send_message(embed=embed, ephemeral=True)  # type: ignore
+        await interaction.response.send_message(embed=embed, ephemeral=True)  
 
     @commands.command(name='avatar', description='display a user\'s enlarged avatar.')
     async def avatar(self, ctx, *, username: Union[discord.Member, discord.User] = None):
