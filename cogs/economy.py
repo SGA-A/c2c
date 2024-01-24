@@ -1663,7 +1663,7 @@ class Economy(commands.Cog):
                     xp, level = record
                     exp_needed = self.calculate_exp_for(level=level)
 
-                    if (xp >= exp_needed) and (level <= 5000):
+                    if xp >= exp_needed:
                         await connection.execute(
                             """UPDATE `bank` SET level = level + 1, exp = 0, 
                             bankspace = bankspace + ? WHERE userID = ?""",
