@@ -242,7 +242,7 @@ class Administrate(commands.Cog):
                 embed3.set_author(name=f"Requested by {interaction.user.name}",
                                   icon_url=interaction.user.avatar.url)
                 embed3.set_thumbnail(url=member.display_avatar.url)
-                embed3.set_footer(text=f"configuration type: REMOVE_FROM")
+                embed3.set_footer(text="configuration type: REMOVE_FROM")
 
                 await interaction.response.send_message(  # type: ignore
                     embed=embed3, ephemeral=ephemeral)
