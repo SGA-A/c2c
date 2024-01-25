@@ -27,8 +27,8 @@
     <img alt="Windows" src="https://img.shields.io/badge/os-windows-yellow"></a>
   <a href="https://img.shields.io/badge/os-linux-yellow">
     <img alt="Linux" src="https://img.shields.io/badge/os-linux-yellow"></a>
-  <a href="https://pypi.python.org/pypi/discord.py">
-    <img alt="PyPI supported Python versions" src="https://img.shields.io/pypi/pyversions/discord.py.svg"></a>
+  <a href="https://www.python.org/downloads/release">
+    <img alt="Python Compatible Versions" src="https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue"></a>
   <br/>
 </p>
 <div align="center">
