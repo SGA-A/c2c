@@ -575,10 +575,9 @@ async def help_command(interaction: Interaction):
 
 async def main():
     await load_cogs()
+    keep_alive()
     try:
         setup_logging(level=LOGGING_INFO)
-
-        load_dotenv()
         token = environ.get("BOT_TOKEN")
         client.webhook_url = environ.get("WEBHOOK_URL")
         client.gitoken = environ.get("GITHUB_TOKEN")
