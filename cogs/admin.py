@@ -22,6 +22,7 @@ import discord
 
 
 class Administrate(commands.Cog):
+    """Cog containing commands only executable by the bot owners. Contains debugging tools."""
     def __init__(self, client: commands.Bot):
         self.client = client
         self._last_result: Optional[Any] = None
@@ -89,8 +90,7 @@ class Administrate(commands.Cog):
         await ctx.send(content=f"**Uptime**: {int(days)} days, {int(hours)} hours, "
                                f"{int(minutes)} minutes and {int(seconds)} seconds.")
 
-    @commands.command(name="payout-now", description="send payouts to eligible members.",
-                      aliases=('p_n', 'p-n'))
+    @commands.command(name="p_n", description="send payouts to eligible members.")
     async def rewards_user_roles(self, ctx: commands.Context):
         """Send a weekly payout to users that are eligible."""
         await ctx.message.delete()
@@ -110,13 +110,11 @@ class Administrate(commands.Cog):
                                               f"I have cancelled the payout operation.")
 
         if ctx.guild.id == 829053898333225010:
-            active_role = ctx.guild.get_role(1190772029830471781)
-            activated_role = ctx.guild.get_role(1190772182591209492)
 
-            active_members = active_role.members
-            activated_members = activated_role.members
+            active_members = ctx.guild.get_role(1190772029830471781).members
+            activated_members = ctx.guild.get_role(1190772182591209492).members
 
-            eligible = len(active_members) + len(activated_members)  # i.e total users
+            eligible = len(active_members) + len(activated_members)
             actual = 0
 
             async with self.client.pool_connection.acquire() as conn:  # type: ignore
@@ -128,7 +126,9 @@ class Administrate(commands.Cog):
                         continue
                     amt_activated = randint(1_100_000_000, 2_100_000_000)
                     await Economy.update_bank_new(member, conn, amt_activated)
-                    payouts.update({f"{member.mention}": (amt_activated, activated_role.mention)})
+                    payouts.update(
+                        {f"{member.mention}": (amt_activated,
+                                               ctx.guild.get_role(1190772182591209492).mention)})
                     actual += 1
 
                 for member in active_members:  # active member rewards
@@ -136,7 +136,9 @@ class Administrate(commands.Cog):
                         continue
                     amt_active = randint(200000000, 1100000000)
                     await Economy.update_bank_new(member, conn, amt_active)
-                    payouts.update({f"{member.mention}": (amt_active, active_role.mention)})
+                    payouts.update(
+                        {f"{member.mention}": (amt_active,
+                                               ctx.guild.get_role(1190772029830471781).mention)})
                     actual += 1
 
                 dt_now = datetime.now()
@@ -163,8 +165,7 @@ class Administrate(commands.Cog):
         else:
             await ctx.send("This command is to be only in **cc**.")
 
-    @app_commands.command(name="config",
-                          description="adjust a user's robux directly.")
+    @app_commands.command(name="config", description="adjust a user's robux directly.")
     @app_commands.guilds(discord.Object(id=829053898333225010),
                          discord.Object(id=780397076273954886))
     @app_commands.describe(configuration='the type of mode used for modifying robux',
