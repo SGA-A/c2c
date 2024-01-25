@@ -142,12 +142,12 @@ class MyCommandTree(app_commands.CommandTree):
                 options: List[Union[app_commands.AppCommand, app_commands.AppCommandGroup, app_commands.Argument]]):
             for option in options:
                 if isinstance(option, app_commands.AppCommandGroup):
-                    ret[option.qualified_name] = option  # type: ignore
-                    unpack_options(option.options)  # type: ignore
+                    ret[option.qualified_name] = option  
+                    unpack_options(option.options)  
 
         for command in commandsr:
             ret[command.name] = command
-            unpack_options(command.options)  # type: ignore
+            unpack_options(command.options)  
 
         return ret
 
@@ -318,7 +318,7 @@ class SelectMenu(ui.Select):
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
 
-                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))  # type: ignore
+                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))  
                 cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
 
             embed.add_field(name='About: Owner',
@@ -335,13 +335,13 @@ class SelectMenu(ui.Select):
 
             embed.description = "\n".join(cmd_formatter)
 
-            await interaction.response.edit_message(embed=embed, view=self.view)  # type: ignore
+            await interaction.response.edit_message(embed=embed, view=self.view)  
 
         elif their_choice == 'Moderation':
 
             the_dict = {}
-            new_dict = return_txt_cmds_first(the_dict, their_choice)  # type: ignore
-            all_cmdss: dict = return_interaction_cmds_last(new_dict, their_choice)  # type: ignore
+            new_dict = return_txt_cmds_first(the_dict, their_choice)  
+            all_cmdss: dict = return_interaction_cmds_last(new_dict, their_choice)  
 
             embed = Embed(title='Help: Moderation', colour=Colour.from_rgb(247, 14, 115))
             embed.set_thumbnail(url='https://emoji.discadia.com/emojis/74e65408-2adb-46dc-86a7-363f3096b6b2.PNG')
@@ -361,7 +361,7 @@ class SelectMenu(ui.Select):
                                   f'- Status: **READY**')
             embed.description = "\n".join(cmd_formatter)
 
-            await interaction.response.edit_message(embed=embed, view=self.view)  # type: ignore
+            await interaction.response.edit_message(embed=embed, view=self.view)  
 
         elif their_choice == 'Utility':
 
@@ -377,7 +377,7 @@ class SelectMenu(ui.Select):
                 if cmd_details[-1] == 'txt':
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
-                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))  # type: ignore
+                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))  
                 cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
 
             embed.add_field(name='About: Utility',
@@ -391,7 +391,7 @@ class SelectMenu(ui.Select):
                                   f'- Status: **READY**')
             embed.description = "\n".join(cmd_formatter)
 
-            await interaction.response.edit_message(embed=embed, view=self.view)  # type: ignore
+            await interaction.response.edit_message(embed=embed, view=self.view)  
 
         elif their_choice == 'Economy':
 
@@ -408,7 +408,7 @@ class SelectMenu(ui.Select):
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
 
-                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))  # type: ignore
+                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))  
 
                 try:
                     got_something = False
@@ -435,7 +435,7 @@ class SelectMenu(ui.Select):
                                   f'- Last modified: <t:1702722548:D> (**<t:1702722548:R>**)\n'
                                   f'- Status: **LOCKED**')
 
-            await interaction.response.edit_message(embed=embed, view=self.view)  # type: ignore
+            await interaction.response.edit_message(embed=embed, view=self.view)  
 
         else:
 
@@ -459,7 +459,7 @@ class SelectMenu(ui.Select):
                                   f' of all commands\n'
                                   f'- Last modified: <t:1703857689:D> (**<t:1703857689:R>**)\n'
                                   f'- Status: **READY**')
-            await interaction.response.edit_message(embed=embed, view=self.view)  # type: ignore
+            await interaction.response.edit_message(embed=embed, view=self.view)  
 
 
 class Select(ui.View):
@@ -470,7 +470,7 @@ class Select(ui.View):
     async def on_timeout(self) -> None:
         for item in self.children:
             item.disabled = True
-        await self.message.edit(view=self)  # type: ignore
+        await self.message.edit(view=self)  
 
 
 @client.command(name='confirm')
@@ -532,7 +532,7 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
 
     embed.set_footer(icon_url=ctx.guild.icon.url, text="That's all for Q1 2024. Next review due: 30 June 2024.")
 
-    webhook = Webhook.from_url(url=client.webhook_url, session=client.session)  # type: ignore
+    webhook = Webhook.from_url(url=client.webhook_url, session=client.session)  
     thread = await ctx.guild.fetch_channel(1190736866308276394)
     rtype = "feature" or "bugfix"
     await webhook.send(f'Patch notes for Q1 2024 / This is mostly a `{rtype}` release', embed=embed,
@@ -569,7 +569,7 @@ async def help_command(interaction: Interaction):
                     inline=False)
 
     my_view = Select()
-    await interaction.response.send_message(embed=embed, view=my_view, ephemeral=True)  # type: ignore
+    await interaction.response.send_message(embed=embed, view=my_view, ephemeral=True)  
     my_view.message = await interaction.original_response()
 
 
