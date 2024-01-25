@@ -1,8 +1,10 @@
 from time import perf_counter
 from PyDictionary import PyDictionary
+import discord
 from xml.etree.ElementTree import fromstring
 from other.pagination import Pagination
 from io import BytesIO
+import datetime
 from random import choice
 from github import Github
 from re import compile as compile_it
@@ -13,9 +15,6 @@ from discord.ext import commands
 from other.spshit import get_song_attributes
 from discord import app_commands, Interaction, Object
 from unicodedata import name
-
-import discord
-import datetime
 
 ARROW = "<:arrowe:1180428600625877054>"
 found_spotify = False
@@ -252,7 +251,7 @@ class Miscellaneous(commands.Cog):
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     async def extract_source(self, interaction: discord.Interaction, message: discord.Message):
 
-        await interaction.response.send_message("Looking into it..")  
+        await interaction.response.send_message("Looking into it..")
         msg = await interaction.original_response()
         images = set()
         counter = 0
@@ -821,7 +820,6 @@ class Miscellaneous(commands.Cog):
 
     @app_commands.command(name='char', description="retrieve sfw or nsfw anime images.")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
-    @app_commands.checks.cooldown(1, 4)
     @app_commands.describe(filter_by='what type of image to retrieve')
     async def get_via_nekos(self, interaction: discord.Interaction,
                             filter_by: Optional[
