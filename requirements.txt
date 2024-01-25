@@ -31,7 +31,7 @@ msgspec==0.18.4
 multidict==6.0.4
 numpy==1.26.2
 packaging==23.2
-Pillow==10.1.0
+Pillow==10.2.0
 pluralizer==1.2.0
 psutil==5.9.6
 pycparser==2.21
