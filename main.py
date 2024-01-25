@@ -232,6 +232,11 @@ client = C2C(command_prefix='>', intents=Intents.all(), case_insensitive=True,
 print(version)
 
 
+@client.check
+async def globally_block_dms(ctx):
+    return ctx.guild is not None
+
+
 async def load_cogs():
     for filename in listdir('./cogs'):
         if filename.endswith(".py"):
