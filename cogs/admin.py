@@ -1,5 +1,4 @@
 from discord.ext import commands
-import io
 from cogs.economy import CURRENCY, determine_exponent, Economy, get_profile_key_value, modify_profile
 from random import randint
 from datetime import timedelta, datetime
@@ -8,14 +7,13 @@ from textwrap import indent
 from contextlib import redirect_stdout
 from traceback import format_exc
 from typing import Optional, Any, Literal, Union
-import discord
 from discord import Object
 from asqlite import Connection as asqlite_Connection
-import asyncio
 from discord import app_commands
 
-
-BANK_TABLE_NAME = 'bank'
+import asyncio
+import io
+import discord
 
 
 class Administrate(commands.Cog):
@@ -85,6 +83,19 @@ class Administrate(commands.Cog):
     async def rewards_user_roles(self, ctx: commands.Context):
         await ctx.message.delete()
 
+        pinned_if_any = get_profile_key_value(f"weeklyr msg id")
+        if pinned_if_any is not None:
+            try:
+                already_pinned = await ctx.fetch_message(pinned_if_any)
+                await already_pinned.unpin(reason="Outdated weekly reward announcement")  # unpin if stored
+            except discord.HTTPException:
+                msg = await ctx.send(
+                    content="**[WARNING]:** Previous weekly reward announcement was detected, but"
+                            " could not be found in the invoker channel. Make sure you are calling "
+                            "this command in the same channel it was sent in.", mention_author=True)
+                return await msg.edit(content=f"{msg.content}\n"
+                                              f"I have cancelled the payout operation.")
+
         if ctx.guild.id == 829053898333225010:
             active_role = ctx.guild.get_role(1190772029830471781)
             activated_role = ctx.guild.get_role(1190772182591209492)
@@ -98,13 +109,6 @@ class Administrate(commands.Cog):
             async with self.client.pool_connection.acquire() as conn:  
                 conn: asqlite_Connection
                 payouts = dict()
-                for member in active_members:  # active member rewards
-                    if await Economy.can_call_out(member, conn):
-                        continue
-                    amt_active = randint(200000000, 1100000000)
-                    await Economy.update_bank_new(member, conn, amt_active)
-                    payouts.update({f"{member.mention}": (amt_active, active_role.mention)})
-                    actual += 1
 
                 for member in activated_members:  # activated member rewards
                     if await Economy.can_call_out(member, conn):
@@ -112,6 +116,14 @@ class Administrate(commands.Cog):
                     amt_activated = randint(1_100_000_000, 2_100_000_000)
                     await Economy.update_bank_new(member, conn, amt_activated)
                     payouts.update({f"{member.mention}": (amt_activated, activated_role.mention)})
+                    actual += 1
+
+                for member in active_members:  # active member rewards
+                    if await Economy.can_call_out(member, conn):
+                        continue
+                    amt_active = randint(200000000, 1100000000)
+                    await Economy.update_bank_new(member, conn, amt_active)
+                    payouts.update({f"{member.mention}": (amt_active, active_role.mention)})
                     actual += 1
 
                 dt_now = datetime.now()
@@ -125,21 +137,10 @@ class Administrate(commands.Cog):
                                                    f"ignored. Considering this, `{eligible}` user(s) were eligible,"
                                                    f" but `{actual}` user(s) were given these rewards.\n")
 
-                payday_notes = set()
+                payday_notes = list()
                 for member, payout in payouts.items():  # all members that got paid
-                    payday_notes.add(f"- {member} walked away with \U000023e3 "
-                                     f"**{payout[0]:,}** from being {payout[1]}.")
-
-                pinned_if_any = get_profile_key_value(f"weeklyr msg id")
-                if pinned_if_any is not None:
-                    try:
-                        already_pinned = await ctx.fetch_message(pinned_if_any)
-                        await already_pinned.unpin(reason="Outdated weekly reward announcement")  # unpin if stored
-                    except Exception:
-                        await ctx.reply(content="**[WARNING]:** Previous weekly reward announcement was detected, but"
-                                                " could not be found in the invoker channel. Make sure you are "
-                                                "calling this command in the same channel it was sent in.",
-                                        mention_author=True)
+                    payday_notes.append(f"- {member} walked away with \U000023e3 "
+                                        f"**{payout[0]:,}** from being {payout[1]}.")
 
                 payday.description += '\n'.join(payday_notes)
                 unpinned = await ctx.send(embed=payday)
@@ -631,47 +632,33 @@ class Administrate(commands.Cog):
         await self.client.http.close()
         await self.client.close()
 
-    @commands.command(name='say', description='repeat what you typed.')
-    async def say(self, ctx, *, message):
-        """Makes the bot say what you want it to say."""
-        await ctx.message.delete()
-
-        pattern = r'<(.*?)>'
-
-        matches = findall(pattern, message)
-
-        for match in matches:
-            emoji = discord.utils.get(self.client.emojis, name=match)
-            if emoji:
-                message = message.replace(f'<{match}>', f"{emoji}")
-                continue
-            return
-        await ctx.send(message)
-
-    @app_commands.command(name='repeat', description='repeat what you typed (slash ver).')
+    @commands.hybrid_command(name='repeat', description='repeat what you typed.', aliases=('say',))
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(message='what you want me to say', channel='what channel i should send in')
-    async def repeat(self, interaction: discord.Interaction, message: str,
+    async def repeat(self, ctx: commands.Context,
                      channel: Optional[
-                         Union[discord.TextChannel, discord.VoiceChannel, discord.ForumChannel, discord.Thread]]):
+                         Union[discord.TextChannel, discord.VoiceChannel, discord.ForumChannel, discord.Thread]], *,
+                     message: str):
+        if not ctx.interaction:
+            await ctx.message.delete()
 
-        pattern = r'<(.*?)>'
-
-        matches = findall(pattern, message)
+        matches = findall(r'<(.*?)>', message)
 
         for match in matches:
             emoji = discord.utils.get(self.client.emojis, name=match)
             if emoji:
                 message = message.replace(f'<{match}>', f"{emoji}")
                 continue
-            return await interaction.response.send_message("I could not format your emoji, because that does not "
-                                                           "exist within my internal cache!\n"
-                                                           "As such, your message was not sent.", ephemeral=True)
+            if ctx.interaction:
+                return await ctx.send("I could not format your emoji, because "  
+                                      "that does not exist within my internal cache!\n"
+                                      "As such, your message was not sent.", ephemeral=True)
+            return
 
-        channel = channel or interaction.channel
+        channel = channel or ctx.channel
         await channel.send(message)
-        return await interaction.response.send_message(  
-            f"Done. Sent this message to {channel.mention}.", ephemeral=True)
+        if ctx.interaction:
+            await ctx.send(f"Done. Sent this message to {channel.mention}.", ephemeral=True)
 
 
 async def setup(client):
