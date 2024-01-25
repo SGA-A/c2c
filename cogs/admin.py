@@ -96,7 +96,7 @@ class Administrate(commands.Cog):
         """Send a weekly payout to users that are eligible."""
         await ctx.message.delete()
 
-        pinned_if_any = get_profile_key_value(f"weeklyr msg id")
+        pinned_if_any = get_profile_key_value("weeklyr msg id")
         if pinned_if_any is not None:
             try:
                 already_pinned = await ctx.fetch_message(pinned_if_any)
@@ -120,7 +120,7 @@ class Administrate(commands.Cog):
 
             async with self.client.pool_connection.acquire() as conn:  # type: ignore
                 conn: asqlite_Connection
-                payouts = dict()
+                payouts = {}
 
                 for member in activated_members:  # activated member rewards
                     if await Economy.can_call_out(member, conn):
@@ -154,7 +154,7 @@ class Administrate(commands.Cog):
                         f"ignored. Considering this, `{eligible}` user(s) were eligible,"
                         f" but `{actual}` user(s) were given these rewards.\n"))
 
-                payday_notes = list()
+                payday_notes = []
                 for member, payout in payouts.items():  # all members that got paid
                     payday_notes.append(f"- {member} walked away with \U000023e3 "
                                         f"**{payout[0]:,}** from being {payout[1]}.")
@@ -162,7 +162,7 @@ class Administrate(commands.Cog):
                 payday.description += '\n'.join(payday_notes)
                 unpinned = await ctx.send(embed=payday)
                 await unpinned.pin(reason="Latest weekly rewards announcement")
-                modify_profile("update", f"weeklyr msg id", unpinned.id)  # store to unpin later
+                modify_profile("update", "weeklyr msg id", unpinned.id)  # store to unpin later
         else:
             await ctx.send("This command is to be only in **cc**.")
 
@@ -213,7 +213,7 @@ class Administrate(commands.Cog):
                 embed2.set_thumbnail(url=member.display_avatar.url)
                 embed2.set_author(name=f"Requested by {interaction.user.name}",
                                   icon_url=interaction.user.display_avatar.url)
-                embed2.set_footer(text=f"configuration type: ADD_TO")
+                embed2.set_footer(text="configuration type: ADD_TO")
 
                 await interaction.response.send_message(embed=embed2,  # type: ignore
                                                         ephemeral=ephemeral)
@@ -257,7 +257,7 @@ class Administrate(commands.Cog):
                                 f"changed to {CURRENCY}{abs(their_wallet + change):,}.",
                     colour=discord.Colour.dark_purple(),
                     timestamp=datetime.now())
-                embed4.set_footer(text=f"configuration type: ALTER_TO")
+                embed4.set_footer(text="configuration type: ALTER_TO")
                 embed4.set_thumbnail(url=member.display_avatar.url)
                 embed4.set_author(name=f"Requested by {interaction.user.name}",
                                   icon_url=interaction.user.avatar.url)
@@ -305,9 +305,11 @@ class Administrate(commands.Cog):
         if isinstance(ctx.channel, discord.TextChannel):
             thread = await ctx.channel.create_thread(name=thread_name, auto_archive_duration=10080,
                                                      message=discord.Object(ctx.message.id))
-            await thread.send("Your thread has been created, with name **{0}**".format(thread_name))
+            await thread.send(f"Your thread has been created, with name **{thread_name}**.",
+                              delete_after=5.0)
         else:
-            await ctx.send("Invalid channel: you must be in a text channel to call this command.")
+            await ctx.send("Invalid channel: you must be in a text channel to call this command.",
+                           delete_after=5.0)
 
     @app_commands.command(name='react',
                           description='force-react to messages with any reaction.')
