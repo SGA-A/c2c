@@ -53,7 +53,7 @@ class ContextCommandHandler(commands.Cog):
                     description=f"## Missing Permissions\n"
                                 f"You're missing some permissions required to use this command.",
                     colour=0x2F3136)
-                errorc.add_field(name='Required permissions', 
+                errorc.add_field(name='Required permissions',
                                  value=', '.join(err.missing_permissions), inline=False)
                 await ctx.reply(embed=errorc, mention_author=False)
 
@@ -62,19 +62,11 @@ class ContextCommandHandler(commands.Cog):
                 exception = Embed(description=f'## You need a required role', colour=0x2F3136)
                 exception.add_field(name='Required Role', value=f"<@&{err.missing_role}>", inline=False)
                 await ctx.reply(embed=exception, mention_author=False)
-
-            elif isinstance(err, errors.NoPrivateMessage):
-                embed = membed(
-                    f"## Do not send private messages.\n"
-                    f"Use my commands in a server, for example in {ctx.author.mutual_guilds[0].name}.")
-                msg = await ctx.send(embed=embed)
-                await msg.delete(delay=15.0)
-                return
             else:
-                
+
                 await ctx.reply(
                     embed=membed(f"## Checks Failed\n"
-                                 f"You have not met a prerequisite before executing this command."), 
+                                 f"You have not met a prerequisite before executing this command."),
                     mention_author=False)
 
         elif isinstance(err, errors.CommandOnCooldown):
