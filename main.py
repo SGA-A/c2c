@@ -4,6 +4,7 @@ from datetime import datetime
 from os import listdir, environ
 from sys import version
 from discord.ext import commands
+from keep_alive import keep_alive
 from re import compile
 from random import choice
 from typing import Literal, Any
