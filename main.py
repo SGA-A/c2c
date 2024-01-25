@@ -4,7 +4,6 @@ from datetime import datetime
 from os import listdir, environ
 from sys import version
 from discord.ext import commands
-from keep_alive import keep_alive
 from re import compile
 from random import choice
 from typing import Literal, Any
@@ -571,7 +570,6 @@ async def help_command(interaction: Interaction):
 
 async def main():
     await load_cogs()
-    keep_alive()
     try:
         setup_logging(level=LOGGING_INFO)
         token = environ.get("BOT_TOKEN")
