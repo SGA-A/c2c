@@ -259,7 +259,7 @@ class Administrate(commands.Cog):
                 embed4.set_thumbnail(url=member.display_avatar.url)
                 embed4.set_author(name=f"Requested by {interaction.user.name}",
                                   icon_url=interaction.user.avatar.url)
-                await interaction.response.send_message(embed=embed4,  # type: ignore 
+                await interaction.response.send_message(embed=embed4,  # type: ignore
                                                         ephemeral=ephemeral)
 
     @app_commands.command(name='pin', description='pin a message in any channel.')
