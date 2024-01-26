@@ -18,7 +18,6 @@ import discord
 import datetime
 
 ARROW = "<:arrowe:1180428600625877054>"
-found_spotify = False
 rmeaning = {
     403: "Forbidden - Access was denied",
     404: "Not Found",
@@ -146,16 +145,16 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
 
         await channel.send(embed=embed)
         success = discord.Embed(colour=0x2F3136,
-                                description=f"## <:dispatche:1195745709463441429> Your response has been submitted.\n"
-                                            f"- Developers will consider your feedback accordingly within a few days.\n"
-                                            f"- From there, compensation will be decided upfront.\n\n"
-                                            f"You may get a unique badge or other type of reward based on how "
-                                            f"constructive and thoughtful your feedback is.")
+                                description="## <:dispatche:1195745709463441429> Your response has been submitted.\n"
+                                            "- Developers will consider your feedback accordingly within a few days.\n"
+                                            "- From there, compensation will be decided upfront.\n\n"
+                                            "You may get a unique badge or other type of reward based on how "
+                                            "constructive and thoughtful your feedback is.")
         await interaction.response.send_message(embed=success, ephemeral=True)  
 
     async def on_error(self, interaction: discord.Interaction, error):
         return await interaction.response.send_message(  
-            f"<:warning_nr:1195732155544911882> Something went wrong.")
+            "<:warning_nr:1195732155544911882> Something went wrong.")
 
 
 class InviteButton(discord.ui.View):
@@ -381,9 +380,9 @@ class Miscellaneous(commands.Cog):
 
         if len(tags_xml) == 0:
             return await interaction.response.send_message(  
-                embed=membed(f"## No tags found.\n"
-                             f"- There is only one known cause:\n"
-                             f" - No matching tags exist yet under the given tag pattern."), ephemeral=True)
+                embed=membed("## No tags found.\n"
+                             "- There is only one known cause:\n"
+                             " - No matching tags exist yet under the given tag pattern."), ephemeral=True)
 
         type_of_tag = {
             0: "`general`",
@@ -538,14 +537,14 @@ class Miscellaneous(commands.Cog):
                                 thing[x] += ")"
                             the_result.add_field(name=f'Definition {x + 1}', value=f'{thing[x]}')
                         if len(the_result.fields) == 0:
-                            the_result.add_field(name=f'Looks like no results were found.',
-                                                 value=f'We couldn\'t find a definition for {choicer.lower()}.')
+                            the_result.add_field(name="Looks like no results were found.",
+                                                 value=f"We couldn't find a definition for {choicer.lower()}.")
                         return await interaction.response.send_message(embed=the_result)  
                     else:
                         continue
         except AttributeError:
             await interaction.response.send_message(  
-                content=f'try again, but this time input an actual word.')
+                content='Try again, but this time input an actual word.')
 
     @app_commands.command(name='randomfact', description='generates a random fact.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -633,7 +632,7 @@ class Miscellaneous(commands.Cog):
 
         params = {'image_url': user.display_avatar.url, 'image_url_2': user2.display_avatar.url}
         headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}  
-        api_url = f"https://api.jeyy.xyz/v2/image/heart_locket"
+        api_url = "https://api.jeyy.xyz/v2/image/heart_locket"
 
         async with self.client.session.get(api_url, params=params, headers=headers) as response:  
             if response.status == 200:
@@ -641,7 +640,7 @@ class Miscellaneous(commands.Cog):
                 end = time()
                 diff = round(end - start, ndigits=2)
                 return await msg.edit(content=f"Done. Took `{diff}s`.",
-                                      attachments=[discord.File(buffer, f'heart_locket.gif')])
+                                      attachments=[discord.File(buffer, 'heart_locket.gif')])
             await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
 
     @app_commands.command(name='com', description='finds most common letters in sentences.')
@@ -701,32 +700,44 @@ class Miscellaneous(commands.Cog):
             return await interaction.response.send_message('Output too long to display.')  
         await interaction.response.send_message(msg, suppress_embeds=True)  
 
-    @commands.command(name='spotify', aliases=('sp', 'spot'), description="fetch spotify RP information.")
+    @commands.command(name='spotify', aliases=('sp',), description="fetch spotify RP information.")
     async def find_spotify_activity(self, ctx: commands.Context, *,
                                     username: Union[discord.Member, discord.User] = None):
-        global found_spotify
+        """Fetch a given user's spotify rich prescence, return as a simple formatted card."""
+
         async with ctx.typing():
-            if username is None:
-                username = ctx.author
+            username = username or ctx.author
             if username.activities:
-                found_spotify = False
-                for activity in username.activities:
-                    if str(activity).lower() == "spotify":
-                        found_spotify = True
-                        embed = discord.Embed(
-                            title=f"{username.name}'s on Spotify <:spotifya:1195655823834230875>",
-                            description=f"Listening to {activity.title}",
-                            color=activity.colour)
-                        embed.set_thumbnail(url=activity.album_cover_url)
-                        embed.set_author(name=username.name, icon_url=username.display_avatar.url)
-                        embed.add_field(name="Artist", value=activity.artist)
-                        embed.add_field(name="Album", value=activity.album)
-                        embed.add_field(name="Song Duration", value=str(activity.duration)[3:7])
-                        embed.set_footer(text="Song started at {}".format(activity.created_at.strftime("%H:%M %p")))
-                        embed.url = f"https://open.spotify.com/embed/track/{activity.track_id}"
-                        return await ctx.send(embed=embed)
-                if not found_spotify:
-                    return await ctx.send(f"{username.display_name} is not listening to Spotify.")
+                spotify = discord.utils.find(lambda a: isinstance(a, discord.Spotify),
+                                             username.activities)
+
+                if spotify is not None:
+
+                    params = {'title': spotify.title,
+                              'cover_url': spotify.album_cover_url,
+                              'start_timestamp': spotify.start.timestamp(),
+                              'duration_seconds': int(spotify.duration.total_seconds()),
+                              'artists': spotify.artists}
+
+                    headers = {
+                        'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}  
+                    api_url = "https://api.jeyy.xyz/v2/discord/spotify"
+
+                    async with self.client.session.get(  
+                            api_url, params=params, headers=headers) as response:
+                        if response.status == 200:
+                            buffer = BytesIO(await response.read())
+                            return await ctx.send(
+                                content=f"{username.display_name} is listening to "
+                                        f"[{params['title']}]({spotify.track_url}) on Spotify.",
+                                file=discord.File(buffer, 'sp.png'),
+                                suppress_embeds=True)
+                        else:
+                            return await ctx.send(
+                                content=(
+                                    "The API we are using could not handle your"
+                                    f" request right now. Try again later.\n"
+                                    f"Return code: `{response.status}`."))
             await ctx.send(f"{username.display_name} has no activity.")
 
     @app_commands.command(name='feedback', description='send feedback to the c2c developers.')
@@ -886,7 +897,7 @@ class Miscellaneous(commands.Cog):
     @commands.guild_only()
     async def pick_up_lines(self, ctx: commands.Context):
         async with ctx.typing():
-            async with self.client.session.get(f"https://api.popcat.xyz/pickuplines") as resp:  
+            async with self.client.session.get("https://api.popcat.xyz/pickuplines") as resp:  
                 if resp.status != 200:
                     return await ctx.send("The request failed, you should try again later.")
                 data = await resp.json()
@@ -896,7 +907,7 @@ class Miscellaneous(commands.Cog):
     @commands.guild_only()
     async def would_yr(self, ctx: commands.Context):
         async with ctx.typing():
-            async with self.client.session.get(f"https://api.popcat.xyz/wyr") as resp:  
+            async with self.client.session.get("https://api.popcat.xyz/wyr") as resp:  
                 if resp.status != 200:
                     return await ctx.send("The request failed, you should try again later.")
                 data = await resp.json()
