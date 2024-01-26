@@ -22,8 +22,8 @@ class SlashExceptionHandler(commands.Cog):
     async def get_app_command_error(self, interaction: Interaction,
                                     error: AppCommandError):
 
-        if not interaction.response.is_done():  
-            await interaction.response.defer(thinking=True)  
+        if not interaction.response.is_done():  # type: ignore
+            await interaction.response.defer(thinking=True)  # type: ignore
 
         if isinstance(error, CheckFailure):
             exception = Embed(title='Exception', colour=0x2B2D31)
@@ -75,6 +75,7 @@ class SlashExceptionHandler(commands.Cog):
 
             print_exception(type(error), error, error.__traceback__)
 
+            await interaction.channel.send(content=f"If you're interested, here is the traceback:\n{error.__cause__}")
             return await interaction.followup.send(
                 embed=Embed(description="An invalid process took place for this command.\n"
                                         "50% chance its a issue on your end, 50% chance on our end.\n"
