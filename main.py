@@ -216,7 +216,7 @@ class C2C(commands.Bot):
         return await super().get_context(message, cls=cls)
 
     async def setup_hook(self):
-        print(f"we're in.")
+        print("we're in.")
 
         self.pool_connection = await create_pool('C:\\Users\\georg\\PycharmProjects\\c2c\\db-shit\\economy.db')
 
@@ -475,7 +475,7 @@ class Select(ui.View):
 
 @client.command(name='confirm')
 async def confirm_panel(ctx: CustomContext):
-    prompt = await ctx.prompt(f"Are you sure you want to do this?")
+    prompt = await ctx.prompt("Are you sure you want to do this?")
     if prompt:
         await ctx.send("You accepted.")
     else:
@@ -548,24 +548,24 @@ async def help_command(interaction: Interaction):
                       "<:githubBlue:1195664427836506212>"])
 
     embed = Embed(title='Help Menu for c2c',
-                  description=f'```fix\n[Patch #30]\n'
-                              f'- Leaderboard now has numerous filters to sort by\n'
-                              f'- Major performance improvements\n'
-                              f'- Leveling system has been implemented```\n'
-                              f'A few things to note:\n'
-                              f'- This help command does not display uncategorized commands.\n'
-                              f'- The prefix for this bot is `>` (for text commands)\n'
-                              f'- Not all categories are accessible to everyone, check the details prior.',
+                  description='```fix\n[Patch #30]\n'
+                              '- Leaderboard now has numerous filters to sort by\n'
+                              '- Major performance improvements\n'
+                              '- Leveling system has been implemented```\n'
+                              'A few things to note:\n'
+                              '- This help command does not display uncategorized commands.\n'
+                              '- The prefix for this bot is `>` (for text commands)\n'
+                              '- Not all categories are accessible to everyone, check the details prior.',
                   colour=Colour.from_rgb(138, 175, 255))
     embed.add_field(name="Who are you?",
-                    value=f"I'm a bot made by Splint#6019 and Geo#2181. I've been on Discord since <t:1669831154:f> "
+                    value="I'm a bot made by Splint#6019 and Geo#2181. I've been on Discord since <t:1669831154:f> "
                           f"and joined {interaction.guild.name} on "
                           f"{format_dt(interaction.guild.me.joined_at, style="f")}.\n\n"
-                          f"I have a variety of features such as an advanced economy system, moderation, debugging "
-                          f"tools and some other random features that may aid you in this journey. "
-                          f"You can get more information on my commands by using the dropdown below.\n\n"
-                          f"I'm also open source. "
-                          f"You can see my code on {epicker} [Github](https://github.com/SGA-A/c2c).",
+                          "I have a variety of features such as an advanced economy system, moderation, debugging "
+                          "tools and some other random features that may aid you in this journey. "
+                          "You can get more information on my commands by using the dropdown below.\n\n"
+                          f"I'm also open source. You can see my code on {epicker} "
+                          "[Github](https://github.com/SGA-A/c2c).",
                     inline=False)
 
     my_view = Select()
