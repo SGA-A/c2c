@@ -1149,7 +1149,7 @@ class Economy(commands.Cog):
 
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
                     msg1 = f"**{index+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
@@ -1184,7 +1184,7 @@ class Economy(commands.Cog):
 
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
                     msg1 = f"**{index+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
@@ -1218,7 +1218,7 @@ class Economy(commands.Cog):
 
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
                     msg1 = f"**{index+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
@@ -1258,7 +1258,7 @@ class Economy(commands.Cog):
 
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
                     msg1 = f"**{index+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
@@ -1296,7 +1296,7 @@ class Economy(commands.Cog):
 
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
                     msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
@@ -1334,7 +1334,7 @@ class Economy(commands.Cog):
 
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
                     msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
                     not_database.append(msg1)
                     index += 1
@@ -1369,7 +1369,7 @@ class Economy(commands.Cog):
 
             for member in data:
                 member_name = await self.client.fetch_user(member[0])
-                their_badge = UNIQUE_BADGES.setdefault(member_name.id, f"")
+                their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
                 msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
                 not_database.append(msg1)
                 index += 1
@@ -2192,7 +2192,7 @@ class Economy(commands.Cog):
         item_stock = get_stock(item_name)
         match item_stock:
             case 0:
-                stock_resp = f"The item is currently out of stock."
+                stock_resp = "The item is currently out of stock."
             case 1 | 2 | 3:
                 stock_resp = f"There are shortage in stocks, only **{item_stock}** remain."
             case _:
@@ -2249,7 +2249,7 @@ class Economy(commands.Cog):
     @profile.command(name='title', description='add a title to your profile.')
     @app_commands.checks.cooldown(1, 30)
     @app_commands.describe(text="maximum of 32 characters allowed")
-    async def update_bio_profile(self, interaction: discord.Interaction, text: str):
+    async def update_title_profile(self, interaction: discord.Interaction, text: str):
         """This is a subcommand. Change your current title, which is displayed on your profile."""
 
         async with self.client.pool_connection.acquire() as conn:  
@@ -2303,9 +2303,9 @@ class Economy(commands.Cog):
             return await interaction.response.send_message(embed=membed(res))  
 
         successful = discord.Embed(colour=0x2B2D31,
-                                   description=f"## <:overwrite:1195729262729240666> Your custom has been added.\n"
-                                               f"- If valid, it will look like this ----->\n"
-                                               f"- If you can't see it, change it!")
+                                   description="## <:overwrite:1195729262729240666> Your custom has been added.\n"
+                                               "- If valid, it will look like this ----->\n"
+                                               "- If you can't see it, change it!")
         successful.set_thumbnail(url=url)
         modify_profile("update", f"{interaction.user.id} avatar_url", url)
         await interaction.response.send_message(embed=successful)  
@@ -2317,11 +2317,10 @@ class Economy(commands.Cog):
         modify_profile("delete", f"{interaction.user.id} avatar_url", "who cares")
         return await interaction.response.send_message(  
             embed=membed(
-                f"<:warning_nr:1195732155544911882> The avatar url requested for could not be added:\n"
-                f"- The URL provided was not well formed.\n"
-                f"- Discord embed thumbnails have specific image requirements to "
-                f"ensure proper display.\n"
-                f" - **The recommended size for a thumbnail is 80x80 pixels.**"
+                "<:warning_nr:1195732155544911882> The avatar url requested for could not be added:\n"
+                "- The URL provided was not well formed.\n"
+                "- Discord embed thumbnails have specific image requirements to ensure proper display.\n"
+                " - **The recommended size for a thumbnail is 80x80 pixels.**"
             ))
 
     @profile.command(name='visibility', description='hide your profile for privacy.')
@@ -2662,7 +2661,7 @@ class Economy(commands.Cog):
 
             if not quantity:
                 return await interaction.response.send_message(  
-                    embed=membed(f"You don't have this item in your inventory."))
+                    embed=membed("You don't have this item in your inventory."))
 
             match item:
                 case 'Keycard' | 'Resistor' | 'Hyperion' | 'Crisis':
@@ -2695,7 +2694,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=self.not_registered)  
 
             data = await conn.fetchone(
-                f"""
+                """
                 SELECT prestige, level, wallet, bank FROM `bank` WHERE userID = ?
                 """, (interaction.user.id,)
             )
@@ -2833,8 +2832,8 @@ class Economy(commands.Cog):
 
                                 await self.change_job_new(interaction.user, conn, job_name='None')
                                 return await interaction.response.send_message(  
-                                    embed=membed(f"Alright, I've removed you from your job.\n"
-                                                 f"You cannot apply to another job for the next **48 hours**."))
+                                    embed=membed("Alright, I've removed you from your job.\n"
+                                                 "You cannot apply to another job for the next **48 hours**."))
                             return await interaction.response.send_message(  
                                 embed=membed("You're already unemployed!?"))
 
@@ -3299,7 +3298,7 @@ class Economy(commands.Cog):
                                   f"**Sell Value:** <:robux:1146394968882151434> 0")
 
                 em.add_field(
-                    name=f"Nothingness.", value=f"No items were found from this user.", inline=False)
+                    name="Nothingness.", value="No items were found from this user.", inline=False)
                 return await interaction.response.send_message(embed=em)  
 
             async def get_page_part(page: int):
@@ -3434,7 +3433,7 @@ class Economy(commands.Cog):
                     new_quantity = quantity[0] - sell_quantity
                     if new_quantity < 0:
                         return await interaction.response.send_message(  
-                            f"You are requesting to sell more than what you currently own. Not possible.")
+                            "You are requesting to sell more than what you currently own. Not possible.")
 
                     await self.change_inv_new(interaction.user, new_quantity, item["name"], conn)
                     modify_stock(item_name, "+", sell_quantity)
@@ -3519,8 +3518,8 @@ class Economy(commands.Cog):
                 await self.client.wait_for('message', check=check, timeout=15.0)
             except asyncTE:
                 await my_msg.edit(content="Your boss is considering cutting your salary!")
-                await interaction.followup.send(f"`BOSS`: Too slow, you get nothing for the attitude. I expect better "
-                                                f"of you next time.")
+                await interaction.followup.send("`BOSS`: Too slow, you get nothing for the attitude. I expect better "
+                                                "of you next time.")
             else:
                 salary = words.get(job_val)[-1]
                 rangeit = randint(10000000, salary)
@@ -3684,10 +3683,10 @@ class Economy(commands.Cog):
 
                     embed = discord.Embed(colour=0x2F3136)
 
-                    embed.add_field(name=f"<:withdraw:1195657655134470155> Withdrawn", value=f"\U000023e3 {bank_amt:,}",
+                    embed.add_field(name="<:withdraw:1195657655134470155> Withdrawn", value=f"\U000023e3 {bank_amt:,}",
                                     inline=False)
-                    embed.add_field(name=f"Current Wallet Balance", value=f"\U000023e3 {wallet_new[0]:,}")
-                    embed.add_field(name=f"Current Bank Balance", value=f"\U000023e3 {bank_new[0]:,}")
+                    embed.add_field(name="Current Wallet Balance", value=f"\U000023e3 {wallet_new[0]:,}")
+                    embed.add_field(name="Current Bank Balance", value=f"\U000023e3 {bank_new[0]:,}")
 
                     return await interaction.response.send_message(embed=embed)  
                 return await interaction.response.send_message(embed=ERR_UNREASON)  
@@ -3700,7 +3699,7 @@ class Economy(commands.Cog):
 
             elif amount_conv > bank_amt:
                 embed = discord.Embed(colour=0x2F3136,
-                                      description=f"- You do not have that much money in your bank.\n"
+                                      description="- You do not have that much money in your bank.\n"
                                                   f" - You wanted to withdraw \U000023e3 **{amount_conv:,}**.\n"
                                                   f" - Currently, you only have \U000023e3 **{bank_amt:,}**.")
                 return await interaction.response.send_message(embed=embed)  
@@ -3710,10 +3709,10 @@ class Economy(commands.Cog):
                 bank_new = await self.update_bank_new(user, conn, -amount_conv, "bank")
 
                 embed = discord.Embed(colour=0x2F3136)
-                embed.add_field(name=f"<:withdraw:1195657655134470155> Withdrawn", value=f"\U000023e3 {amount_conv:,}",
+                embed.add_field(name="<:withdraw:1195657655134470155> Withdrawn", value=f"\U000023e3 {amount_conv:,}",
                                 inline=False)
-                embed.add_field(name=f"Current Wallet Balance", value=f"\U000023e3 {wallet_new[0]:,}")
-                embed.add_field(name=f"Current Bank Balance", value=f"\U000023e3 {bank_new[0]:,}")
+                embed.add_field(name="Current Wallet Balance", value=f"\U000023e3 {wallet_new[0]:,}")
+                embed.add_field(name="Current Bank Balance", value=f"\U000023e3 {bank_new[0]:,}")
 
                 return await interaction.response.send_message(embed=embed)  
 
@@ -3879,10 +3878,10 @@ class Economy(commands.Cog):
                                f' - </balance:1179817617435926686> to register.')
                 return await interaction.response.send_message(embed=embed)  
             else:
-                prim_d = await conn.execute(f"SELECT wallet, job, bounty from `bank` WHERE userID = ?",
+                prim_d = await conn.execute("SELECT wallet, job, bounty from `bank` WHERE userID = ?",
                                             (interaction.user.id,))
                 prim_d = await prim_d.fetchone()
-                host_d = await conn.execute(f"SELECT wallet, job from `bank` WHERE userID = ?", (other.id,))
+                host_d = await conn.execute("SELECT wallet, job from `bank` WHERE userID = ?", (other.id,))
                 host_d = await host_d.fetchone()
 
                 result = choices([0, 1], weights=(29, 71), k=1)
@@ -3957,7 +3956,7 @@ class Economy(commands.Cog):
                             embed=membed(f"Too many seconds passed. Access denied. (The code was {ranint})"))
                     else:
                         msg = await interaction.followup.send(
-                            embed=membed(f'You cracked the code and got access. Good luck escaping unscathed.'),
+                            embed=membed('You cracked the code and got access. Good luck escaping unscathed.'),
                             wait=True)
                         hp = 100
                         messages = await channel.send(
@@ -4337,7 +4336,7 @@ class Economy(commands.Cog):
                 embed.set_author(name=f"{interaction.user.name}'s winning gambling game",
                                  icon_url=interaction.user.display_avatar.url)
             elif your_choice[0] == bot_choice[0]:
-                embed = discord.Embed(description=f"**Tie.** You lost nothing nor gained anything!",
+                embed = discord.Embed(description="**Tie.** You lost nothing nor gained anything!",
                                       colour=discord.Color.yellow())
                 embed.set_author(name=f"{interaction.user.name}'s gambling game",
                                  icon_url=interaction.user.display_avatar.url)
