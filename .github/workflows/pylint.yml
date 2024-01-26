@@ -1,24 +1,11 @@
-name: Pylint
-
 on: [push]
 
 jobs:
-  build:
+  ruff:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.12"]
+    name: "ruff"
     steps:
-      - uses: actions/checkout@v3
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+      - uses: davidslusser/actions_python_ruff@v1.0.0
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pylint
-      - name: Analysing the code with pylint
-        run: |
-          pylint --disable=W0122,W0718,W0702,W0236,W0221,R0914 $(git ls-files '*.py')
+          pip_install_command: "pip install -r requirements.txt"
+          python_version: "3.12"
