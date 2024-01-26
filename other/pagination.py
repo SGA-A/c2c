@@ -21,7 +21,7 @@ class Pagination(discord.ui.View):
         """Make sure only original user that invoked interaction can interact"""
         if interaction.user == self.interaction.user:
             return True
-        emb = membed(f"You have not created this interaction.")
+        emb = membed("You have not created this interaction.")
         await interaction.response.send_message(embed=emb, ephemeral=True)
         return False
 
@@ -67,6 +67,7 @@ class Pagination(discord.ui.View):
         await self.edit_page(interaction)
 
     async def on_timeout(self):
+        # remove buttons on timeout
         try:
             message = await self.interaction.original_response()
             await message.edit(view=None)
