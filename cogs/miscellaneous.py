@@ -862,7 +862,7 @@ class Miscellaneous(commands.Cog):
 
                     headers = {
                         'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}  # type: ignore
-                    api_url = f"https://api.jeyy.xyz/v2/discord/spotify"
+                    api_url = "https://api.jeyy.xyz/v2/discord/spotify"
 
                     async with self.client.session.get(  # type: ignore
                             api_url, params=params, headers=headers) as response:
@@ -871,7 +871,7 @@ class Miscellaneous(commands.Cog):
                             return await ctx.send(
                                 content=f"{username.display_name} is listening to "
                                         f"[{params['title']}]({spotify.track_url}) on Spotify.",
-                                file=discord.File(buffer, f'sp.png'),
+                                file=discord.File(buffer, 'sp.png'),
                                 suppress_embeds=True)
                         else:
                             return await ctx.send(
