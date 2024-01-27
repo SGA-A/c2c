@@ -226,7 +226,6 @@ class C2C(commands.Bot):
         self.session = ClientSession()
 
 
-
 client = C2C(command_prefix='>', intents=Intents.all(), case_insensitive=True,
              owner_ids={992152414566232139, 546086191414509599, 1148206353647669298},
              activity=CustomActivity(name='Serving cc • /help'),
@@ -369,18 +368,31 @@ class SelectMenu(ui.Select):
 
             the_dict = {}
             new_dict = return_txt_cmds_first(the_dict, "Miscellaneous")
-            all_cmdsss: dict = return_interaction_cmds_last(new_dict, "Miscellaneous")
+            all_cmdssss: dict = return_interaction_cmds_last(new_dict, "Miscellaneous")
 
             embed = Embed(title='Help: Utility', colour=Colour.from_rgb(15, 255, 135))
             embed.set_thumbnail(url='https://i.imgur.com/YHBLgVx.png')
 
-            for cmd, cmd_details in all_cmdsss.items():
+            for cmd, cmd_details in all_cmdssss.items():
                 total_cmds_cata += 1
                 if cmd_details[-1] == 'txt':
                     cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
+
                 command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))  # type: ignore
-                cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
+
+                try:
+                    got_something = False
+                    if command_manage.options:
+                        for option in command_manage.options:
+                            if isinstance(option, app_commands.AppCommandGroup):
+                                got_something = True
+                                cmd_formatter.add(
+                                    f"\U0000279c {option.mention} - {option.description}")
+                    if not got_something:
+                        cmd_formatter.add(f"\U0000279c {command_manage.mention} - {cmd_details[1]}")
+                except AttributeError:
+                    continue
 
             embed.add_field(name='About: Utility',
                             value=f'Contains commands that may serve useful to some users, '
