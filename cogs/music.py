@@ -68,7 +68,7 @@ class Music(commands.Cog):
             msg = await self.client.wait_for('message', check=check, timeout=15.0)
 
         except asyncTE:
-            await my_msg.edit(content=f"Timed out waiting for a response.", embed=None)
+            await my_msg.edit(content="Timed out waiting for a response.", embed=None)
 
         else:
 
