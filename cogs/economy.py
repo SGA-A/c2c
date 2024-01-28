@@ -1048,8 +1048,8 @@ class DropdownLB(discord.ui.Select):
             SelectOption(label='Bank', description='Sort by the bank amount only.'),
             SelectOption(label='Inventory Net', description='Sort by the net value of your inventory.'),
             SelectOption(label='Bounty', description="Sort by the sum paid for capturing a player."),
-            SelectOption(label='Level', description="Sort by player level."),
-            SelectOption(label='Commands', description="Sort by total commands ran.")
+            SelectOption(label='Commands', description="Sort by total commands ran."),
+            SelectOption(label='Level', description="Sort by player level.")
         ]
 
         for option in optionss:
@@ -1084,8 +1084,10 @@ class Leaderboard(discord.ui.View):
         del active_sessions[self.channel_id]
         for item in self.children:
             item.disabled = True
-
-        await self.message.edit(view=self)  # type: ignore
+        try:
+            await self.message.edit(view=self)  # type: ignore
+        except discord.NotFound:
+            pass
 
 
 class Economy(commands.Cog):
@@ -2180,6 +2182,7 @@ class Economy(commands.Cog):
                 return emb, n
 
             await Pagination(interaction, get_page_part).navigate()
+
 
     @shop.command(name='lookup', description='get info about a particular item.')
     @app_commands.describe(item_name='the name of the item you want to sell.')
@@ -3845,7 +3848,7 @@ class Economy(commands.Cog):
                                      f"\U0000279c Desktop Status: {user_stats['desktop']}\n"
                                      f"\U0000279c Web Status: {user_stats['web']}\n"
                                      f"\U0000279c Is on Mobile: {user_stats['is_on_mobile']}\n"
-                                     f"\U0000279c Voice State: {user_stats['voice_status']}", )
+                                     f"\U0000279c Voice State: {user_stats['voice_status'] or 'No voice'}", )
             procfile.set_thumbnail(url=username.display_avatar.url)
             procfile.set_footer(text=f"{discord.utils.utcnow().strftime('%A %d %b %Y, %I:%M%p')}")
             await ctx.send(embed=procfile)
