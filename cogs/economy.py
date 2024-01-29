@@ -3463,8 +3463,6 @@ class Economy(commands.Cog):
     async def work(self, interaction: discord.Interaction):
         """Work at your current job. You must have one for this to work."""
 
-        await interaction.response.defer(thinking=True, ephemeral=True)  # type: ignore
-
         words = {
             "Plumber": [("TOILET", "SINK", "SEWAGE", "SANITATION", "DRAINAGE", "PIPES"), 400000000],
             "Cashier": [("ROBUX", "TILL", "ITEMS", "WORKER", "REGISTER", "CHECKOUT", "TRANSACTIONS", "RECEIPTS"),
@@ -3485,13 +3483,12 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.followup.send(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered)
 
             job_val = await self.get_job_data_only(user=interaction.user, conn_input=conn)
 
             if job_val == "None":
-                msg = await interaction.followup.send(embed=membed("You don't have a job, get one first."))
-                return await msg.delete(delay=15.0)
+                await interaction.response.send_message(embed=membed("You don't have a job, get one first."))
 
             possible_words: tuple = words.get(job_val)[0]
             selected_word = choice(possible_words)
@@ -3509,26 +3506,34 @@ class Economy(commands.Cog):
                 return (m.content.lower() == selected_word.lower()
                         and m.channel == interaction.channel and m.author == interaction.user)
 
-            msg: discord.WebhookMessage = await interaction.followup.send(
+            await interaction.response.send_message(
                 embed=membed(
                     f"## <:worke:1195716983384191076> What is the word?\n"
-                    f"Replace the blanks \U0000279c [`{hidden_word}`](https://www.sss.com)."))
-            await msg.delete(delay=15.0)
+                    f"- Write out the word, filling out the blanks: \U0000279c "
+                    f"[`{hidden_word}`](https://www.sss.com)."))
+            my_msg = await interaction.original_response()
 
-            my_msg = await interaction.channel.send("Waiting for correct input..")
+            salary = words.get(job_val)[-1]
+            rangeit = randint(10000000, salary)
 
+            embed = discord.Embed()
             try:
                 await self.client.wait_for('message', check=check, timeout=15.0)
             except asyncTE:
-                await my_msg.edit(content="Your boss is considering cutting your salary!")
-                await interaction.followup.send("`BOSS`: Too slow, you get nothing for the attitude. I expect better "
-                                                "of you next time.")
-            else:
-                salary = words.get(job_val)[-1]
-                rangeit = randint(10000000, salary)
+                rangeit *= (25 / 100)
                 await self.update_bank_new(interaction.user, conn, rangeit)
-                await my_msg.edit(content=f"`BOSS`: Good work from you {interaction.user.display_name}, got the "
-                                          f"job done. You got **\U000023e3 {rangeit:,}** for your efforts.")
+                embed.title = "Terrible work!"
+                embed.description = f"**You were given:**\n- \U000023e3 {rangeit:,} for a sub-par shift"
+                embed.colour = discord.Colour.brand_red()
+                embed.set_footer(text=f"Working as a {job_val}.")
+                await my_msg.edit(content=None, embed=embed)
+            else:
+                await self.update_bank_new(interaction.user, conn, rangeit)
+                embed.title = "Great work!"
+                embed.description = f"**You were given:**\n- \U000023e3 {rangeit:,} for your shift"
+                embed.colour = discord.Colour.brand_green()
+                embed.set_footer(text=f"Working as a {job_val}")
+                await my_msg.edit(content=None, embed=embed)
 
     @app_commands.command(name="balance", description="returns a user's current balance.")
     @app_commands.describe(user='the user to return the balance of',
