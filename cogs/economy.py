@@ -466,67 +466,6 @@ def modify_stock(item: str, modify_type: Literal["+", "-"], amount: int) -> int:
                 return new_count
 
 
-class ConfirmDeny(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction, client: commands.Bot, member: discord.Member):
-        self.interaction = interaction
-        self.client: commands.Bot = client
-        self.member = member
-        self.timed_out: bool = True
-        super().__init__(timeout=30)
-
-    async def on_timeout(self) -> None:
-        for item in self.children:
-            item.disabled = True
-        if self.timed_out:
-            await self.msg.edit(embed=membed("Timed out waiting for a response.\n"  # type: ignore
-                                             "The operation was cancelled."), view=None)
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Make sure the original user that called the interaction is only in control, no one else."""
-        if interaction.user == self.interaction.user:
-            return True
-        else:
-            emb = membed(
-                f"{self.interaction.user.mention} can only give consent to perform this action.")
-            await interaction.response.send_message(embed=emb, ephemeral=True)  # type: ignore
-            return False
-
-    @discord.ui.button(label='Confirm', style=discord.ButtonStyle.gray)
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Confirmation button."""
-
-        self.timed_out = False
-        for item in self.children:
-            item.disabled = True
-
-        tables_to_delete = [BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME]
-        async with self.client.pool_connection.acquire() as conn:  # type: ignore
-            conn: asqlite_Connection
-            for table in tables_to_delete:
-                await conn.execute(f"DELETE FROM `{table}` WHERE userID = ?", (self.member.id,))
-
-            success = discord.Embed(title="Action Confirmed",
-                                    description="You're now basically out of our database, "
-                                                "we no longer have any EUD from you (end user data).",
-                                    colour=discord.Colour.brand_green())
-
-            await conn.commit()
-            await interaction.message.edit(embed=success, view=None)
-
-    @discord.ui.button(label='Deny', style=discord.ButtonStyle.gray)
-    async def deny(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Deny button."""
-        self.timed_out = False
-        for item in self.children:
-            item.disabled = True
-
-        success = discord.Embed(title="Action Cancelled",
-                                description="The operation has been cancelled.",
-                                colour=discord.Colour.brand_red())
-
-        await interaction.message.edit(embed=success, view=None)
-
-
 class BlackjackUi(discord.ui.View):
     """View for the blackjack command and its associated functions."""
 
@@ -1130,7 +1069,7 @@ class Economy(commands.Cog):
     @staticmethod
     def calculate_exp_for(*, level: int):
         """Calculate the experience points required for a given level."""
-        return ceil((level / 0.9)**0.8)
+        return ceil((level / 0.9) ** 0.8)
 
     async def create_leaderboard_preset(self, chosen_choice: str):
         """A single reused function used to map the chosen leaderboard made by the user to the associated query."""
@@ -1152,7 +1091,7 @@ class Economy(commands.Cog):
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
                     their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
-                    msg1 = f"**{index+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
 
@@ -1187,7 +1126,7 @@ class Economy(commands.Cog):
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
                     their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
-                    msg1 = f"**{index+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
 
@@ -1221,7 +1160,7 @@ class Economy(commands.Cog):
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
                     their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
-                    msg1 = f"**{index+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
 
@@ -1261,7 +1200,7 @@ class Economy(commands.Cog):
                 for member in data:
                     member_name = await self.client.fetch_user(member[0])
                     their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
-                    msg1 = f"**{index+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
                     index += 1
 
@@ -1820,7 +1759,7 @@ class Economy(commands.Cog):
 
                         await self.send_custom_text(interaction,
                                                     custom_text=f'{interaction.user.mention} has just leveled '
-                                                                f'up to Level **{level+1}**.')
+                                                                f'up to Level **{level + 1}**.')
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
@@ -2183,7 +2122,6 @@ class Economy(commands.Cog):
 
             await Pagination(interaction, get_page_part).navigate()
 
-
     @shop.command(name='lookup', description='get info about a particular item.')
     @app_commands.describe(item_name='the name of the item you want to sell.')
     async def lookup_item(self, interaction: discord.Interaction,
@@ -2441,7 +2379,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message("You did not input any slay.")  # type: ignore
             elif (slay_purge is not None) and (user is not None):
                 return await interaction.response.send_message(  # type: ignore
-                    "You cannot name your slay if the user has also " 
+                    "You cannot name your slay if the user has also "
                     "been inputted. Remove this argument if needed.")
             else:
                 slays = await self.get_slays(conn, interaction.user)
@@ -2778,15 +2716,15 @@ class Economy(commands.Cog):
                     embed.title = "Action Cancelled"
                     await msg.edit(embed=embed)
             else:
-                emoji = PRESTIGE_EMOTES.get(prestige+1)
+                emoji = PRESTIGE_EMOTES.get(prestige + 1)
                 emoji = search(r':(\d+)>', emoji)
                 emoji = self.client.get_emoji(int(emoji.group(1)))
 
-                actual_robux_progress = (actual_robux/req_robux)*100
-                actual_level_progress = (actual_level/req_level)*100
+                actual_robux_progress = (actual_robux / req_robux) * 100
+                actual_level_progress = (actual_level / req_level) * 100
 
                 embed = discord.Embed(
-                    title=f"Prestige {prestige+1} Requirements",
+                    title=f"Prestige {prestige + 1} Requirements",
                     description=(
                         f"**Total Balance**\n"
                         f"<:replyconti:1199688910649954335> \U000023e3 {actual_robux:,}/{req_robux:,}\n"
@@ -2957,9 +2895,9 @@ class Economy(commands.Cog):
 
                 boundary = self.calculate_exp_for(level=data[7])
                 procfile.add_field(name='Level',
-                                   value=f"Level: `{data[7]:,}`\n" 
-                                         f"Experience: `{data[8]}/{boundary}`\n" 
-                                         f"{generate_progress_bar((data[8]/boundary)*100)}")
+                                   value=f"Level: `{data[7]:,}`\n"
+                                         f"Experience: `{data[8]}/{boundary}`\n"
+                                         f"{generate_progress_bar((data[8] / boundary) * 100)}")
 
                 procfile.add_field(name='Robux',
                                    value=f"Wallet: `\U000023e3 {format_number_short(int(data[0]))}`\n"
@@ -3594,7 +3532,7 @@ class Economy(commands.Cog):
                     data = await self.get_one_inv_data_new(user, name, conn)
                     inv += int(cost) * data
 
-                space = round((nd[1]/nd[2])*100, 2)
+                space = round((nd[1] / nd[2]) * 100, 2)
 
                 balance = discord.Embed(color=0x2F3136, timestamp=discord.utils.utcnow())
                 balance.set_author(name=f"{user.name}'s balance", icon_url=user.display_avatar.url)
@@ -3625,13 +3563,15 @@ class Economy(commands.Cog):
     async def discontinue_bot(self, interaction: discord.Interaction, member: Optional[discord.Member]):
         """Opt out of the virtual economy and delete all of the user data associated."""
 
+        if active_sessions.setdefault(interaction.user.id, None):
+            return await interaction.response.send_message(  # type: ignore
+                "You're already in another interactive menu.\nFinish the previous confirmation first.")
+
         member = member or interaction.user
         if interaction.user.id not in self.client.owner_ids:
             if (member is not None) and (member != interaction.user):
                 return await interaction.response.send_message(  # type: ignore
-                    embed=membed(f"You are not allowed to delete other user's data.\n"
-                                 f"{member.mention} should call this command themselves"
-                                 f" to reset their data."))
+                    embed=membed(f"Cannot perform this action."))
 
         async with self.client.pool_connection.acquire() as conn:  # type: ignore
             conn: asqlite_Connection
@@ -3641,32 +3581,45 @@ class Economy(commands.Cog):
                     embed=membed(f"Could not find {member.name} in the database."))
             else:
 
-                if member.id == interaction.user.id:
-                    view = ConfirmDeny(interaction, self.client, member)
+                active_sessions.update({interaction.user.id: 1})
+                embed = discord.Embed(
+                    title="Are you sure you want to do this?",
+                    description=f"Remember, you are about to erase **all** of {member.mention}'s data.\n"
+                                "There's no going back, please be certain.\n"
+                                "Type `y` to confirm this action or `n` to cancel it.", colour=0x2B2D31)
 
-                    embed = discord.Embed(title="Are you sure you want to do this?",
-                                          description="Remember, you are about to erase **all** your data.\n"
-                                                      "This process is irreversible, you "
-                                                      "cannot recover this data again.",
-                                          colour=0x2B2D31)
+                await interaction.response.send_message(embed=embed)  # type: ignore
+                msg = await interaction.original_response()
 
-                    await interaction.response.send_message(embed=embed, view=view)  # type: ignore
-                    view.msg = await interaction.original_response()
-                    return
+                def check(m):
+                    """Requirements that the client has to wait for."""
+                    return ((("n" in m.content.lower()) or ("y" in m.content.lower()))
+                            and m.channel == interaction.channel and m.author == interaction.user)
 
-                tables_to_delete = {BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME}
+                try:
+                    their_message = await self.client.wait_for('message', check=check, timeout=15.0)
+                except asyncTE:
+                    del active_sessions[interaction.user.id]
+                    embed.colour = discord.Colour.brand_red()
+                    embed.title = "Action Cancelled"
+                    await msg.edit(embed=embed)
+                else:
+                    del active_sessions[interaction.user.id]
+                    if "y" in their_message.content.lower():
 
-                for table in tables_to_delete:
-                    await conn.execute(f"DELETE FROM `{table}` WHERE userID = ?", (member.id,))
+                        tables_to_delete = [BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME]
 
-                await conn.commit()
-                success = discord.Embed(title="Action Confirmed",
-                                        description=f"{member.name} is now basically out of our database, "
-                                                    f"we no longer have any EUD from {member.name} (end user data).",
-                                        colour=discord.Colour.brand_green())
-                success.set_footer(text="Some requirements were bypassed.", icon_url=self.client.user.avatar.url)
+                        for table in tables_to_delete:
+                            await conn.execute(f"DELETE FROM `{table}` WHERE userID = ?", (interaction.user.id,))
 
-                await interaction.response.send_message(embed=success)  # type: ignore
+                        await conn.commit()
+                        embed.colour = discord.Colour.brand_green()
+                        embed.title = "Action Confirmed"
+                        return await msg.edit(embed=embed)
+
+                    embed.colour = discord.Colour.brand_red()
+                    embed.title = "Action Cancelled"
+                    await msg.edit(embed=embed)
 
     @app_commands.command(name="withdraw", description="withdraw robux from your account.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -4072,7 +4025,7 @@ class Economy(commands.Cog):
             if wallet_amt < amount:
                 return await interaction.response.send_message(embed=ERR_UNREASON)  # type: ignore
 
-            coin = ["heads", "tails"]
+            coin = ("heads", "tails")
             result = choice(coin)
 
             if result != bet_on:
@@ -4082,7 +4035,7 @@ class Economy(commands.Cog):
 
             await self.update_bank_new(user, conn, +amount)
             return await interaction.response.send_message(  # type: ignore
-                embed=membed(f"You got {result}, meaning you won \U000023e3 " 
+                embed=membed(f"You got {result}, meaning you won \U000023e3 "
                              f"**{amount:,}**."))
 
     @app_commands.command(name="blackjack",
