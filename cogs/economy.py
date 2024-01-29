@@ -3458,7 +3458,7 @@ class Economy(commands.Cog):
             try:
                 await self.client.wait_for('message', check=check, timeout=15.0)
             except asyncTE:
-                rangeit *= (25 / 100)
+                rangeit = floor((25 / 100) * rangeit)
                 await self.update_bank_new(interaction.user, conn, rangeit)
                 embed.title = "Terrible work!"
                 embed.description = f"**You were given:**\n- \U000023e3 {rangeit:,} for a sub-par shift"
@@ -4325,8 +4325,6 @@ class Economy(commands.Cog):
 
     @play_blackjack.autocomplete('bet_amount')
     @bet.autocomplete('exponent_amount')
-    @deposit.autocomplete('robux')
-    @withdraw.autocomplete('robux')
     async def callback_max_100(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         """Autocomplete callback for when the maximum accepted bet value is 100 million."""
 
