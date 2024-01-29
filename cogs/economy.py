@@ -3463,7 +3463,7 @@ class Economy(commands.Cog):
                 embed.title = "Terrible work!"
                 embed.description = f"**You were given:**\n- \U000023e3 {rangeit:,} for a sub-par shift"
                 embed.colour = discord.Colour.brand_red()
-                embed.set_footer(text=f"Working as a {job_val}.")
+                embed.set_footer(text=f"Working as a {job_val}")
                 await my_msg.edit(content=None, embed=embed)
             else:
                 await self.update_bank_new(interaction.user, conn, rangeit)
