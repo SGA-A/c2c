@@ -3571,7 +3571,7 @@ class Economy(commands.Cog):
         if interaction.user.id not in self.client.owner_ids:
             if (member is not None) and (member != interaction.user):
                 return await interaction.response.send_message(  # type: ignore
-                    embed=membed(f"Cannot perform this action."))
+                    embed=membed("Cannot perform this action."))
 
         async with self.client.pool_connection.acquire() as conn:  # type: ignore
             conn: asqlite_Connection
