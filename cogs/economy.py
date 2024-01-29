@@ -3700,12 +3700,12 @@ class Economy(commands.Cog):
             if isinstance(actual_amount, str):
                 if actual_amount.lower() == "all" or actual_amount.lower() == "max":
                     available_bankspace = details[2] - details[1]
-
                     if not available_bankspace:
                         return await interaction.response.send_message(  # type: ignore
                             embed=membed(f"You can only hold **\U000023e3 {details[2]:,}** in your bank right now.\n"
                                          f"To hold more, use currency commands and level up more."))
 
+                    available_bankspace = min(wallet_amt, available_bankspace)
                     wallet_new = await self.update_bank_new(user, conn, -available_bankspace)
                     bank_new = await self.update_bank_new(user, conn, +available_bankspace, "bank")
 
