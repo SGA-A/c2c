@@ -44,6 +44,7 @@ SLAY_TABLE_NAME = "slay"
 COOLDOWN_TABLE_NAME = "cooldowns"
 APP_GUILDS_ID = [829053898333225010, 780397076273954886]
 DOWN = True
+gender_emotes = {"Male": "<:male:1201993062885380097>", "Female": "<:female:1201992742574755891>"}
 UNIQUE_BADGES = {
     992152414566232139: "<:e1_stafff:1145039666916110356>",
     546086191414509599: "<:in_power:1153754243220647997>",
@@ -1031,8 +1032,7 @@ class Leaderboard(discord.ui.View):
 
 
 class Servants(discord.ui.Select):
-    def __init__(self, client: commands.Bot, their_slays: tuple, their_choice: str, owner_id: int):
-        gender_emotes = {"male": "<:male:1201993062885380097>", "female": "<:female:1201992742574755891>"}
+    def __init__(self, client: commands.Bot, their_slays: tuple, their_choice: str, owner_id: int, conn):
 
         options = []
 
@@ -1041,6 +1041,7 @@ class Servants(discord.ui.Select):
 
         self.client: commands.Bot = client
         self.owner_id = owner_id
+        self.conn = conn
 
         for option in options:
             if option.value == their_choice:
@@ -1058,13 +1059,15 @@ class Servants(discord.ui.Select):
                 continue
             option.default = False
 
-        await Economy.servant_preset(Economy(self.client), chosen_servant, self.owner_id)
+        dtls = await self.conn.fetchone("SELECT * FROM `slay` WHERE userID = ? AND slay_name = ?",
+                                        (self.owner_id, chosen_servant))
+        sembed = await Economy.servant_preset(Economy(self.client), self.owner_id, dtls)  # servant embed
 
-        await interaction.response.edit_message(content=None, embed=lb, view=self.view)  # type: ignore
+        await interaction.response.edit_message(content=None, embed=sembed, view=self.view)  # type: ignore
 
 
 class ServantsManager(discord.ui.View):
-    def __init__(self, client: commands.Bot, their_choice, invoker_id: int, owner_id: int, owner_slays: tuple):
+    def __init__(self, client: commands.Bot, their_choice, invoker_id: int, owner_id: int, owner_slays, conn):
         """invoker is who is calling the command, owner_id is what the owner of these servants we're looking at are.
 
         their_choice is the default value thats been picked (i.e. the default servant chosen specified from the
@@ -1072,8 +1075,8 @@ class ServantsManager(discord.ui.View):
 
         super().__init__(timeout=40.0)
 
-        child = Servants(client, owner_slays, their_choice, owner_id)
-        item = self.add_item(child)
+        child = Servants(client, owner_slays, their_choice, owner_id, conn)
+        self.add_item(child)
 
         if invoker_id != owner_id:
             for item in self.children:
@@ -1087,10 +1090,9 @@ class ServantsManager(discord.ui.View):
         except discord.NotFound:
             pass
 
-    @discord.ui.button(label='Feed', style=discord.ButtonStyle.blurple)
+    @discord.ui.button(label='Feed', style=discord.ButtonStyle.blurple, row=2)
     async def feed_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_message(f"{self.children}", view=self)
-
+        await interaction.response.edit_message(content=f"{self.children}", view=self)
 
 
 class Economy(commands.Cog):
@@ -1392,51 +1394,31 @@ class Economy(commands.Cog):
 
             return lb
 
-    async def servant_preset(self, servant_name: str, owner_id: int):
-        async with self.client.pool_connection.acquire() as conn:  # type: ignore
-            conn: asqlite_Connection = conn
+    async def servant_preset(self, owner_id: int, dtls):
+        """Get servant details from the given owner ID, return it in a unique servant card."""
+        owner_name = self.client.get_user(owner_id)
 
-            dtls = await conn.fetchone("SELECT * FROM `slay` WHERE slay_name = ? AND userID = ?",
-                                       (servant_name, owner_id))
+        slay_name, gender, productivity, love, sleeping, energy, status, investment, hunger, claimed = (
+            dtls[0], dtls[2], dtls[3], dtls[5], dtls[6], dtls[7], dtls[-4], dtls[-3], dtls[-2], dtls[-1])
 
-            if dtls == 'Bank + Wallet':
+        claimed = string_to_datetime(claimed)
 
-                data = await conn.execute(
-                    f"""
-                    SELECT `userID`, SUM(`wallet` + `bank`) as 
-                    total_balance FROM `{BANK_TABLE_NAME}` GROUP BY `userID` ORDER BY total_balance DESC
-                    """,
-                    ())
-                data = await data.fetchall()
+        sleeping = "__s__leeping" if sleeping else "__a__vailable"
+        status = "working" if status else "free"
+        sdetails = discord.Embed(
+            title=f"{slay_name} {gender_emotes.get(gender)}",
+            description=f"Belongs to {owner_name.mention}.\n"
+                        f"Currently {sleeping} and is {status}", color=0x2F3136)
 
-                not_database = []
-                index = 0
+        sdetails.add_field(name="Hunger", value=f"{generate_progress_bar(hunger)} ({hunger}%)")
+        sdetails.add_field(name="Energy", value=f"{generate_progress_bar(energy)} ({energy}%)")
+        sdetails.add_field(name="Love", value=f"{generate_progress_bar(love)} ({love}%)")
+        sdetails.add_field(name="Claimed", value=discord.utils.format_dt(claimed, style="R"))
+        sdetails.add_field(name="Productivity", value=f"{generate_progress_bar(productivity)} ({100 + productivity}%)")
+        sdetails.add_field(name="Investment", value=f"\U000023e3 {investment:,}")
 
-                for member in data:
-                    member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
-                    msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
-                    not_database.append(msg1)
-                    index += 1
-
-                msg = "\n".join(not_database)
-
-                lb = discord.Embed(
-                    title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{index}` users.\n\n"
-                                f"{msg}",
-                    color=0x2F3136,
-                    timestamp=discord.utils.utcnow()
-                )
-                lb.set_footer(
-                    text="Ranked globally",
-                    icon_url=self.client.user.avatar.url)
-
-                return lb
-            elif dtls == 'Wallet':
-
-                pass
-            pass
+        sdetails.set_footer(text="Value is thy.")
+        return sdetails
 
     async def raise_pmulti_warning(self, interaction: discord.Interaction, their_pmulti: int | str):
         """Warn users if they have not set up a personal multiplier yet using a webhook."""
@@ -2432,7 +2414,7 @@ class Economy(commands.Cog):
                     "Lack of care may also lead to your servant fleeing away."),
                 color=0x00FF7F)
 
-            slaye.set_footer(text=f"{size+1}/6 slay slots consumed")
+            slaye.set_footer(text=f"{size + 1}/6 slay slots consumed")
             await self.open_slay(conn, interaction.user, name, gender, datetime_to_string(datetime.datetime.now()))
             await interaction.response.send_message(content=None, embed=slaye)
 
@@ -2457,7 +2439,7 @@ class Economy(commands.Cog):
                 since_arrival = string_to_datetime(servant[-1])
 
                 if (datetime.datetime.now() - since_arrival).total_seconds() < 172_800:
-                    time_required = since_arrival+datetime.timedelta(days=2)
+                    time_required = since_arrival + datetime.timedelta(days=2)
                     return await interaction.response.send_message(
                         embed=membed(
                             "You cannot get rid of them just yet!\n"
@@ -2471,41 +2453,32 @@ class Economy(commands.Cog):
             return await interaction.response.send_message(  # type: ignore
                 embed=membed("We couldn't find a servant that you own with that name."))
 
-    @servant.command(name='viewall', description="see a user's owned servents.")
-    @app_commands.describe(user='the user to view the slays of')
-    async def view_servents(self, interaction: discord.Interaction, user: Optional[discord.Member]):
+    @servant.command(name='view', description="see all user's servants.")
+    @app_commands.describe(user='the user to view the servants of', chosen_choice="the name of the servant")
+    @app_commands.rename(chosen_choice="servant_name")
+    async def view_servents(self, interaction: discord.Interaction, user: Optional[discord.Member], chosen_choice: str):
         """This is a subcommand. View all current slays owned by the author or optionally another user."""
 
+        if user is None:
+            user = interaction.user
         async with self.client.pool_connection.acquire() as conn:  # type: ignore
             conn: asqlite_Connection
 
-            if user is None:
-                user = interaction.user
+            dtls = await conn.fetchone("SELECT * FROM `slay` WHERE slay_name = ? AND userID = ?",
+                                       (chosen_choice, user.id))
+            if dtls is None:
+                sembed = discord.Embed(description="This joker has got no servants!")
+                return await interaction.response.send_message(embed=sembed)  # type: ignore
 
-            if await self.can_call_out(user, conn):
-                return await interaction.followup.send(embed=NOT_REGISTERED)
+            sep = await conn.fetchall("SELECT slay_name FROM `slay` WHERE userID = ?", (user.id,))
 
-            stats = {1: "Free", 0: "Working"}
-            slays = await self.get_servants(conn, user)
-            embed = discord.Embed(colour=0x2F3136)
-            embed.set_author(name=f'{user.name}\'s Slays', icon_url=user.display_avatar.url)
+            sembed = await self.servant_preset(user.id, dtls)  # servant embed
+            view = ServantsManager(client=self.client, their_choice=chosen_choice,
+                                   invoker_id=interaction.user.id, owner_id=user.id,
+                                   owner_slays=[slay for slay in sep], conn=conn)
 
-            if len(slays) == 0:
-                embed.add_field(name="Nothingness.", value="This user has no servents!", inline=False)
-                return await interaction.response.send_message(embed=embed)  # type: ignore
-
-            for slay in slays:
-                if 66 <= slay[4] <= 100:
-                    state = "\U0001f603 "
-                elif 33 <= slay[4] < 66:
-                    state = "\U0001f610 "
-                else:
-                    state = "\U0001f641 "
-                embed.add_field(name=f'{state}{slay[0]}', value=f'{ARROW}{slay[2]}\n{ARROW}{slay[3]}'
-                                                                f'\n{ARROW}{stats.get(slay[5])}')
-
-            embed.set_footer(text=f"{len(slays)}/6 servents claimed")
-            await interaction.response.send_message(embed=embed)  # type: ignore
+            await interaction.response.send_message(embed=sembed, view=view)  # type: ignore
+            view.message = await interaction.original_response()
 
     @servant.command(name='work', description="assign your slays to do tasks for you.", extras={"exp_gained": 5})
     @app_commands.describe(duration="the time spent working (e.g, 18h or 1d 3h)")
