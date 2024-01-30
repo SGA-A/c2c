@@ -1030,6 +1030,69 @@ class Leaderboard(discord.ui.View):
             pass
 
 
+class Servants(discord.ui.Select):
+    def __init__(self, client: commands.Bot, their_slays: tuple, their_choice: str, owner_id: int):
+        gender_emotes = {"male": "<:male:1201993062885380097>", "female": "<:female:1201992742574755891>"}
+
+        options = []
+
+        for slay in their_slays:
+            options.append(SelectOption(emoji=gender_emotes.get(slay[-1]), label=slay[0]))
+
+        self.client: commands.Bot = client
+        self.owner_id = owner_id
+
+        for option in options:
+            if option.value == their_choice:
+                option.default = True
+
+        super().__init__(options=options, placeholder="Servant Name")
+
+    async def callback(self, interaction: discord.Interaction):
+
+        chosen_servant = self.values[0]
+
+        for option in self.options:
+            if option.value == chosen_servant:
+                option.default = True
+                continue
+            option.default = False
+
+        await Economy.servant_preset(Economy(self.client), chosen_servant, self.owner_id)
+
+        await interaction.response.edit_message(content=None, embed=lb, view=self.view)  # type: ignore
+
+
+class ServantsManager(discord.ui.View):
+    def __init__(self, client: commands.Bot, their_choice, invoker_id: int, owner_id: int, owner_slays: tuple):
+        """invoker is who is calling the command, owner_id is what the owner of these servants we're looking at are.
+
+        their_choice is the default value thats been picked (i.e. the default servant chosen specified from the
+        command."""
+
+        super().__init__(timeout=40.0)
+
+        child = Servants(client, owner_slays, their_choice, owner_id)
+        item = self.add_item(child)
+
+        if invoker_id != owner_id:
+            for item in self.children:
+                item.disabled = True
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+        try:
+            await self.message.edit(view=self)  # type: ignore
+        except discord.NotFound:
+            pass
+
+    @discord.ui.button(label='Feed', style=discord.ButtonStyle.blurple)
+    async def feed_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_message(f"{self.children}", view=self)
+
+
+
 class Economy(commands.Cog):
 
     def __init__(self, client: commands.Bot):
@@ -1328,6 +1391,52 @@ class Economy(commands.Cog):
                 icon_url=self.client.user.avatar.url)
 
             return lb
+
+    async def servant_preset(self, servant_name: str, owner_id: int):
+        async with self.client.pool_connection.acquire() as conn:  # type: ignore
+            conn: asqlite_Connection = conn
+
+            dtls = await conn.fetchone("SELECT * FROM `slay` WHERE slay_name = ? AND userID = ?",
+                                       (servant_name, owner_id))
+
+            if dtls == 'Bank + Wallet':
+
+                data = await conn.execute(
+                    f"""
+                    SELECT `userID`, SUM(`wallet` + `bank`) as 
+                    total_balance FROM `{BANK_TABLE_NAME}` GROUP BY `userID` ORDER BY total_balance DESC
+                    """,
+                    ())
+                data = await data.fetchall()
+
+                not_database = []
+                index = 0
+
+                for member in data:
+                    member_name = await self.client.fetch_user(member[0])
+                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
+                    msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    not_database.append(msg1)
+                    index += 1
+
+                msg = "\n".join(not_database)
+
+                lb = discord.Embed(
+                    title=f"Leaderboard: {chosen_choice}",
+                    description=f"Displaying the top `{index}` users.\n\n"
+                                f"{msg}",
+                    color=0x2F3136,
+                    timestamp=discord.utils.utcnow()
+                )
+                lb.set_footer(
+                    text="Ranked globally",
+                    icon_url=self.client.user.avatar.url)
+
+                return lb
+            elif dtls == 'Wallet':
+
+                pass
+            pass
 
     async def raise_pmulti_warning(self, interaction: discord.Interaction, their_pmulti: int | str):
         """Warn users if they have not set up a personal multiplier yet using a webhook."""
