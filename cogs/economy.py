@@ -2530,7 +2530,7 @@ class Economy(commands.Cog):
 
             await Pagination(interaction, get_page_part).navigate()
 
-    @shop.command(name='lookup', description='get info about a particular item.')
+    @shop.command(name='lookup', description='fetch details about an item.')
     @app_commands.describe(item_name='the name of the item you want to sell.')
     async def lookup_item(self, interaction: discord.Interaction,
                           item_name: Literal[
@@ -2777,7 +2777,7 @@ class Economy(commands.Cog):
             return await interaction.response.send_message(  # type: ignore
                 embed=membed("We couldn't find a servant that you own with that name."))
 
-    @servant.command(name='view', description="lookup a servant by their name.")
+    @servant.command(name='lookup', description="fetch a servant by their name.")
     @app_commands.describe(servant_name="the name of the servant you want to view")
     async def view_servents(self, interaction: discord.Interaction, servant_name: str):
         """This is a subcommand. View all current slays owned by the author or optionally another user."""
