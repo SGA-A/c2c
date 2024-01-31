@@ -946,6 +946,78 @@ class HighLow(discord.ui.View):
                 await interaction.response.edit_message(embed=lose, view=self)  # type: ignore
 
 
+class ImageModal(discord.ui.Modal):
+
+    def __init__(self, conn, client, their_choice, the_view):
+        self.conn = conn
+        self.client = client
+        self.choice: str = their_choice
+        self.the_view = the_view
+        super().__init__(title=f"Change Photo of {self.choice.title()}", timeout=40.0)
+
+    image = discord.ui.TextInput(
+        style=discord.TextStyle.paragraph,
+        label='Image URL',
+        required=True,
+        placeholder="Drop a photo url of what you want your servant to look like."
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+
+        await self.conn.execute(
+            f"UPDATE `{SLAY_TABLE_NAME}` SET url = ? WHERE userID = ? AND slay_name = ?",
+            (self.image.value, interaction.user.id, self.choice)
+        )
+        await self.conn.commit()
+
+        embed = interaction.message.embeds[0]
+        embed.set_image(url=self.image.value)
+
+        await interaction.response.edit_message(
+            content=interaction.message.content, embeds=interaction.message.embeds, view=self.the_view)
+
+    async def on_error(self, interaction: discord.Interaction, error):
+        return await interaction.response.send_message(  # type: ignore
+            embed=membed(f"The url of the photo you provided was not valid, try a different one."))
+
+
+class HexModal(discord.ui.Modal):
+
+    def __init__(self, conn, client, their_choice, the_view):
+        self.conn = conn
+        self.client = client
+        self.choice: str = their_choice
+        self.the_view = the_view
+        super().__init__(title=f"Change Embed Hex Colour for {self.choice.title()}", timeout=40.0)
+
+    hexinput = discord.ui.TextInput(
+        style=discord.TextStyle.short,
+        label='Hex Colour',
+        required=True,
+        placeholder="Type the hex colour for this servant's embed e.g, #1A2B3C or FFFFFF."
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+
+        await self.conn.commit()
+        stripped_color_string = self.hexinput.value.replace("#", "")
+        embed = interaction.message.embeds[0]
+        stored_hex_repr = int(stripped_color_string, 16)
+        embed.colour = stored_hex_repr
+
+        await self.conn.execute(
+            f"UPDATE `{SLAY_TABLE_NAME}` SET hex = ? WHERE userID = ? AND slay_name = ?",
+            (stored_hex_repr, interaction.user.id, self.choice)
+        )
+
+        await interaction.response.edit_message(
+            content=interaction.message.content, embeds=interaction.message.embeds, view=self.the_view)
+
+    async def on_error(self, interaction: discord.Interaction, error):
+        return await interaction.response.send_message(  # type: ignore
+            embed=membed(f"The url of the photo you provided was not valid, try a different one."))
+
+
 class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
 
     def __init__(self, conn, client, their_choice, the_view):
@@ -1135,8 +1207,9 @@ class ServantsManager(discord.ui.View):
 
         if invoker_id != owner_id:
             for item in self.children:
+                if isinstance(item, Servants):
+                    continue
                 item.disabled = True
-            self.stop()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.id != self.child.owner_id:
@@ -1249,6 +1322,14 @@ class ServantsManager(discord.ui.View):
              f"A gentle peck on the nose became a cherished routine, a simple act that spoke volumes.")
         )
         await interaction.response.send_message(embed=membed(selection))
+
+    @discord.ui.button(emoji="\U00002728", label="Add Photo", style=discord.ButtonStyle.green, row=4)
+    async def photo_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(ImageModal(self.child.conn, self.child.client, self.child.choice, self))
+
+    @discord.ui.button(emoji="\U00002728", label="Add Colour", style=discord.ButtonStyle.green, row=4)
+    async def hex_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(HexModal(self.child.conn, self.child.client, self.child.choice, self))
 
 
 class Economy(commands.Cog):
@@ -1576,10 +1657,10 @@ class Economy(commands.Cog):
         """Get servant details from the given owner ID, return it in a unique servant card."""
         owner_name = self.client.get_user(owner_id)
 
-        (slay_name, gender, productivity, love, energy, lvl, xp, hygiene, status, investment, hunger,
-         claimed) = (
-            dtls[0], dtls[2], dtls[3], dtls[4], dtls[5], dtls[-7], dtls[-6], dtls[-5], dtls[-4], dtls[-3],
-            dtls[-2], dtls[-1])
+        (slay_name, gender, productivity, love, energy, hexx, lvl, xp, hygiene, status, investment, hunger,
+         claimed, img) = (
+            dtls[0], dtls[2], dtls[3], dtls[4], dtls[5], dtls[8], dtls[9], dtls[10], dtls[11], dtls[12], dtls[13],
+            dtls[14], dtls[-2], dtls[-1])
 
         gend = {"Female": 0xF3AAE0, "Male": 0x737ECF}
 
@@ -1590,7 +1671,8 @@ class Economy(commands.Cog):
         sdetails = discord.Embed(
             title=f"{slay_name} {gender_emotes.get(gender)}",
             description=f"**Status**: {status}\n"
-                        f"**Investment**: \U000023e3 {investment:,}", color=gend.setdefault(gender, 0x2B2D31))
+                        f"**Investment**: \U000023e3 {investment:,}",
+            color=hexx or gend.setdefault(gender, 0x2B2D31))
 
         sdetails.add_field(name="Hunger", value=f"{generate_progress_bar(hunger)} ({hunger}%)")
         sdetails.add_field(name="Energy", value=f"{generate_progress_bar(energy)} ({energy}%)")
@@ -1600,6 +1682,7 @@ class Economy(commands.Cog):
         sdetails.add_field(name='Experience', value=f"{generate_progress_bar((xp / boundary) * 100)}\n`Level {lvl}`")
 
         sdetails.set_footer(text=f"Belongs to {owner_name.name}", icon_url=owner_name.display_avatar.url)
+        sdetails.set_image(url=img)
         return sdetails
 
     async def raise_pmulti_warning(self, interaction: discord.Interaction, their_pmulti: int | str):
