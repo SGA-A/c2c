@@ -1037,11 +1037,12 @@ class Servants(discord.ui.Select):
         options = []
 
         for slay in their_slays:
-            options.append(SelectOption(emoji=gender_emotes.get(slay[-1]), label=slay[0]))
+            options.append(SelectOption(emoji=gender_emotes.setdefault(slay[1]), label=slay[0]))
 
         self.client: commands.Bot = client
         self.owner_id = owner_id
         self.conn = conn
+        self.choice = their_choice
 
         for option in options:
             if option.value == their_choice:
@@ -1051,16 +1052,17 @@ class Servants(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
 
-        chosen_servant = self.values[0]
+        self.choice = self.values[0]
 
         for option in self.options:
-            if option.value == chosen_servant:
+            if option.value == self.choice:
                 option.default = True
                 continue
             option.default = False
 
         dtls = await self.conn.fetchone("SELECT * FROM `slay` WHERE userID = ? AND slay_name = ?",
-                                        (self.owner_id, chosen_servant))
+                                        (self.owner_id, self.choice))
+
         sembed = await Economy.servant_preset(Economy(self.client), self.owner_id, dtls)  # servant embed
 
         await interaction.response.edit_message(content=None, embed=sembed, view=self.view)  # type: ignore
@@ -1075,8 +1077,8 @@ class ServantsManager(discord.ui.View):
 
         super().__init__(timeout=40.0)
 
-        child = Servants(client, owner_slays, their_choice, owner_id, conn)
-        self.add_item(child)
+        self.child = Servants(client, owner_slays, their_choice, owner_id, conn)
+        self.add_item(self.child)
 
         if invoker_id != owner_id:
             for item in self.children:
@@ -1092,7 +1094,7 @@ class ServantsManager(discord.ui.View):
 
     @discord.ui.button(label='Feed', style=discord.ButtonStyle.blurple, row=2)
     async def feed_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(content=f"{self.children}", view=self)
+        await interaction.response.edit_message(content=f"{self.child.choice}", view=self)
 
 
 class Economy(commands.Cog):
@@ -1404,7 +1406,7 @@ class Economy(commands.Cog):
         claimed = string_to_datetime(claimed)
 
         sleeping = "__s__leeping" if sleeping else "__a__vailable"
-        status = "working" if status else "free"
+        status = "free" if status else "working"
         sdetails = discord.Embed(
             title=f"{slay_name} {gender_emotes.get(gender)}",
             description=f"Belongs to {owner_name.mention}.\n"
@@ -2456,7 +2458,8 @@ class Economy(commands.Cog):
     @servant.command(name='view', description="see all user's servants.")
     @app_commands.describe(user='the user to view the servants of', chosen_choice="the name of the servant")
     @app_commands.rename(chosen_choice="servant_name")
-    async def view_servents(self, interaction: discord.Interaction, user: Optional[discord.Member], chosen_choice: str):
+    async def view_servents(self, interaction: discord.Interaction, user: Optional[discord.Member],
+                            chosen_choice: Optional[str]):
         """This is a subcommand. View all current slays owned by the author or optionally another user."""
 
         if user is None:
@@ -2467,15 +2470,17 @@ class Economy(commands.Cog):
             dtls = await conn.fetchone("SELECT * FROM `slay` WHERE slay_name = ? AND userID = ?",
                                        (chosen_choice, user.id))
             if dtls is None:
-                sembed = discord.Embed(description="This joker has got no servants!")
-                return await interaction.response.send_message(embed=sembed)  # type: ignore
 
-            sep = await conn.fetchall("SELECT slay_name FROM `slay` WHERE userID = ?", (user.id,))
+                return await interaction.response.send_message(
+                    embed=membed("I did not find that name!\n"
+                                 "Servant names are case-sensitive."))  # type: ignore
+
+            sep = await conn.fetchall("SELECT slay_name, gender FROM `slay` WHERE userID = ?", (user.id,))
 
             sembed = await self.servant_preset(user.id, dtls)  # servant embed
             view = ServantsManager(client=self.client, their_choice=chosen_choice,
                                    invoker_id=interaction.user.id, owner_id=user.id,
-                                   owner_slays=[slay for slay in sep], conn=conn)
+                                   owner_slays=[(slay[0], slay[1]) for slay in sep], conn=conn)
 
             await interaction.response.send_message(embed=sembed, view=view)  # type: ignore
             view.message = await interaction.original_response()
@@ -4394,6 +4399,21 @@ class Economy(commands.Cog):
             app_commands.Choice(name=str(the_chose), value=str(the_chose))
             for the_chose in chosen if current.lower() in the_chose
         ]
+
+    @view_servents.autocomplete('chosen_choice')
+    async def callback_thing(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        """Autocomplete callback for the servant menu."""
+        try:
+            user = interaction.namespace["user"]
+        except KeyError:
+            user = interaction.user
+
+        async with self.client.pool_connection.acquire() as conn:
+            chosen = await conn.fetchall("SELECT slay_name FROM slay WHERE userID = ?", (user.id,))
+
+        return [
+            app_commands.Choice(name=str(the_chose[0]), value=str(the_chose[0]))
+            for the_chose in chosen if current.lower() in the_chose[0].lower()]
 
 
 async def setup(client: commands.Bot):
