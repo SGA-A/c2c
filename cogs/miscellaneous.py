@@ -300,11 +300,6 @@ class Miscellaneous(commands.Cog):
     @app_commands.describe(tags='the tags to base searches upon', page='the page to look through under a tag')
     async def kona_fetch(self, interaction: discord.Interaction, tags: Optional[str], page: Optional[int]):
 
-        if not interaction.channel.is_nsfw():
-            return await interaction.response.send_message(
-                embed=membed("This command is restricted to usage in NSFW channels.")
-            )
-
         if tags is None:
             tags = "original"
         if page is None:
@@ -328,21 +323,16 @@ class Miscellaneous(commands.Cog):
 
             """You can use the below code to make your commands mentionable, even if they are out of sync"""
             if tagsearch is None:
-                await self.client.tree._update_cache(  # type: ignore
-                    await self.client.tree.fetch_commands(
-                        guild=discord.Object(id=interaction.guild.id)), guild=discord.Object(id=interaction.guild.id))
-                tagsearch = self.client.tree.get_app_command(  # type: ignore
-                    'tagsearch', guild=discord.Object(id=interaction.guild.id))
 
-            return await interaction.followup.send(  # type: ignore
-                embed=membed(f"## No posts found.\n"
-                             f"- There are a few known causes:\n"
-                             f" - Entering an invalid tag name.\n"
-                             f" - Accessing some posts under the `copyright` tag.\n"
-                             f" - There are no posts found under this tag.\n"
-                             f" - The page requested exceeds the max length.\n"
-                             f"- You can find a tag by using {tagsearch.mention} "
-                             f"or [the website.](https://konachan.net/tag)"))
+                return await interaction.followup.send(  # type: ignore
+                    embed=membed(f"## No posts found.\n"
+                                 f"- There are a few known causes:\n"
+                                 f" - Entering an invalid tag name.\n"
+                                 f" - Accessing some posts under the `copyright` tag.\n"
+                                 f" - There are no posts found under this tag.\n"
+                                 f" - The page requested exceeds the max length.\n"
+                                 f"- You can find a tag by using /tagsearch "
+                                 f"or [the website.](https://konachan.net/tag)"))
 
         attachments = set()
         descriptionerfyrd = set()
@@ -372,11 +362,6 @@ class Miscellaneous(commands.Cog):
     @anime.command(name='tagsearch', description='retrieve anime tags from konachan.')
     @app_commands.describe(tag_pattern="the pattern to use to find match results")
     async def tag_fetch(self, interaction: discord.Interaction, tag_pattern: str):
-
-        if not interaction.channel.is_nsfw():
-            return await interaction.response.send_message(
-                embed=membed("This command is restricted to usage in NSFW channels.")
-            )
 
         embed = discord.Embed(title='Results', colour=discord.Colour.dark_embed())
         embed.set_author(icon_url=interaction.user.display_avatar.url, name=interaction.user.name,
