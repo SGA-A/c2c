@@ -953,7 +953,7 @@ class ImageModal(discord.ui.Modal):
         self.client = client
         self.choice: str = their_choice
         self.the_view = the_view
-        super().__init__(title=f"Change Photo of {self.choice.title()}", timeout=40.0)
+        super().__init__(title=f"Change Photo of {self.choice.title()}", timeout=60.0)
 
     image = discord.ui.TextInput(
         style=discord.TextStyle.paragraph,
@@ -988,7 +988,7 @@ class HexModal(discord.ui.Modal):
         self.client = client
         self.choice: str = their_choice
         self.the_view = the_view
-        super().__init__(title=f"Change Embed Hex Colour for {self.choice.title()}", timeout=40.0)
+        super().__init__(title=f"Change Embed Hex Colour for {self.choice.title()}", timeout=60.0)
 
     hexinput = discord.ui.TextInput(
         style=discord.TextStyle.short,
@@ -1015,7 +1015,9 @@ class HexModal(discord.ui.Modal):
 
     async def on_error(self, interaction: discord.Interaction, error):
         return await interaction.response.send_message(  # type: ignore
-            embed=membed(f"The url of the photo you provided was not valid, try a different one."))
+            embed=membed(f"The hex colour provided was not valid.\n"
+                         f"It needs to be in this format: `#FFFFFF`.\n"
+                         f"Note that you do not need to include the hashtag."))
 
 
 class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
@@ -1174,7 +1176,7 @@ class Servants(discord.ui.Select):
             if option.value == their_choice:
                 option.default = True
 
-        super().__init__(options=options, placeholder="Servant Name")
+        super().__init__(options=options, placeholder="Servant Name", row=0)
 
     async def callback(self, interaction: discord.Interaction):
 
@@ -1195,27 +1197,29 @@ class Servants(discord.ui.Select):
 
 
 class ServantsManager(discord.ui.View):
+    pronouns = {"Female": ("her", "she"), "Male": ("his", "he")}
+
     def __init__(self, client: commands.Bot, their_choice, invoker_id: int, owner_id: int, owner_slays, conn):
         """invoker is who is calling the command, owner_id is what the owner of these servants we're looking at are.
 
         their_choice is the default value thats been picked (i.e. the default servant chosen specified from the
         command."""
 
-        super().__init__(timeout=40.0)
+        super().__init__(timeout=60.0)
+        self.removed_items = []
+        self.manage_button = None
         self.child = Servants(client, owner_slays, their_choice, owner_id, conn)
-        self.add_item(self.child)
+        self.add_item(self.child)  # this is he dropdown
 
-        if invoker_id != owner_id:
-            for item in self.children:
-                if isinstance(item, Servants):
-                    continue
-                item.disabled = True
+        for item in self.children:
+            if isinstance(item, Servants):
+                continue
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.child.owner_id:
-            await interaction.response.send_message("You do not own this servant.", ephemeral=True)
-            return False
-        return True
+            if item.label == "Manage":  # assuming item will always be a button
+                self.manage_button = item
+                continue
+            self.removed_items.append(item)
+            self.remove_item(item)
 
     async def on_timeout(self) -> None:
         for item in self.children:
@@ -1225,7 +1229,18 @@ class ServantsManager(discord.ui.View):
         except discord.NotFound:
             pass
 
-    @discord.ui.button(label='Feed', style=discord.ButtonStyle.blurple, row=2)
+    @discord.ui.button(label="Manage", style=discord.ButtonStyle.blurple, row=1)
+    async def manage_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.child.owner_id:
+            return await interaction.response.send_message(
+                f"{interaction.user.mention}, you do not own this servant.")
+
+        self.remove_item(button)
+        for item in self.removed_items:
+            self.add_item(item)
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(label='Feed', style=discord.ButtonStyle.blurple, row=1)
     async def feed_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         current_hunger = await self.child.conn.fetchone("SELECT hunger from `slay` WHERE userID = ? AND slay_name = ?",
@@ -1243,14 +1258,14 @@ class ServantsManager(discord.ui.View):
 
         await interaction.response.edit_message(content=None, embed=sembed, view=self)  # type: ignore
 
-    @discord.ui.button(label='Wash', style=discord.ButtonStyle.blurple, row=2)
+    @discord.ui.button(label='Wash', style=discord.ButtonStyle.blurple, row=1)
     async def wash_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         current_hygiene = await self.child.conn.fetchone(
             "SELECT hygiene from `slay` WHERE userID = ? AND slay_name = ?", (self.child.owner_id, self.child.choice))
         if current_hygiene[0] >= 90:
             return await interaction.response.send_message(
-                content="You can't wash your servant, they are looking pretty already!", ephemeral=True)
+                content="You can't wash them just yet, they are looking pretty clean already!", ephemeral=True)
 
         dtls = await self.child.conn.execute(
             "UPDATE `slay` SET hygiene = 100 WHERE slay_name = ? AND userID = ? RETURNING *",
@@ -1273,25 +1288,24 @@ class ServantsManager(discord.ui.View):
 
         await interaction.channel.send(embed=membed(possible))
 
-    @discord.ui.button(label='Invest', style=discord.ButtonStyle.blurple, row=2)
+    @discord.ui.button(label='Invest', style=discord.ButtonStyle.blurple, row=1)
     async def invest_in_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(
             InvestmentModal(self.child.conn, self.child.client, self.child.choice, self))
 
-    @discord.ui.button(label="\u200b", emoji="\U0001fac2", style=discord.ButtonStyle.gray, row=3)
+    @discord.ui.button(label="\u200b", emoji="\U0001fac2", style=discord.ButtonStyle.gray, row=2)
     async def hug(self, interaction: discord.Interaction, button: discord.ui.Button):
-        pronouns = {"Female": ("her", "she"), "Male": ("his", "he")}
 
         data = await self.child.conn.fetchone(
             "SELECT gender from `slay` WHERE userID = ? AND slay_name = ?", (self.child.owner_id, self.child.choice))
-        her_his, she_he = pronouns.get(data[0])[0], pronouns.get(data[0])[1]
+        her_his, she_he = self.pronouns.get(data[0])[0], self.pronouns.get(data[0])[1]
 
         selection = choice(
             ("Your servant is greatful for your affection and embraces you tightly.",
              f"You are enveloped in a warm, tight hug, savoring the moment with {her_his} body.",
              f"Wrapped in each other's arms, you shared a tender hug with {her_his}, finding solace in the silent "
              "connection.",
-             f"{she_he} held your body close, feeling a sense of security in the embrace of "
+             f"{she_he.title()} held your body close, feeling a sense of security in the embrace of "
              f"someone truly special to {her_his} heart.",
              "As you hugged them, you whispered words of comfort, "
              f"letting them know {she_he} was cherished and valued.",
@@ -1303,7 +1317,7 @@ class ServantsManager(discord.ui.View):
         )
         await interaction.response.send_message(embed=membed(selection))
 
-    @discord.ui.button(label="\u200b", emoji="\U0001f48b", style=discord.ButtonStyle.gray, row=3)
+    @discord.ui.button(label="\u200b", emoji="\U0001f48b", style=discord.ButtonStyle.gray, row=2)
     async def kiss(self, interaction: discord.Interaction, button: discord.ui.Button):
         pronouns = {"Female": ("her", "she"), "Male": ("his", "he")}
 
@@ -1318,18 +1332,28 @@ class ServantsManager(discord.ui.View):
              f"You closed {her_his} eyes slowly and gently kissed {her_his} on the cheek.",
              f"In a tender moment, you leaned in and placed a soft kiss on {her_his} lips, expressing your affection.",
              "You placed a passionate kiss speaking of desire and an unspoken connection that went beyond just words. "
-             f"{she_he} embraced it albeit awkwardly and held her captive in the state she was enthralled in.",
+             f"{she_he.title()} embraced it albeit awkwardly and held her captive in the state she was enthralled in.",
              f"A gentle peck on the nose became a cherished routine, a simple act that spoke volumes.")
         )
         await interaction.response.send_message(embed=membed(selection))
 
-    @discord.ui.button(emoji="\U00002728", label="Add Photo", style=discord.ButtonStyle.green, row=4)
+    @discord.ui.button(emoji="\U00002728", label="Add Photo", style=discord.ButtonStyle.green, row=3)
     async def photo_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ImageModal(self.child.conn, self.child.client, self.child.choice, self))
 
-    @discord.ui.button(emoji="\U00002728", label="Add Colour", style=discord.ButtonStyle.green, row=4)
+    @discord.ui.button(emoji="\U00002728", label="Add Colour", style=discord.ButtonStyle.green, row=3)
     async def hex_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(HexModal(self.child.conn, self.child.client, self.child.choice, self))
+
+    @discord.ui.button(label="Go back", style=discord.ButtonStyle.blurple, row=4)
+    async def go_back(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user.id != self.child.owner_id:
+            return await interaction.response.send_message("You do not own this servant.")
+
+        for item in self.removed_items:
+            self.remove_item(item)
+        self.add_item(self.manage_button)
+        await interaction.response.edit_message(view=self)
 
 
 class Economy(commands.Cog):
@@ -2745,10 +2769,12 @@ class Economy(commands.Cog):
         async with self.client.pool_connection.acquire() as conn:  # type: ignore
             conn: asqlite_Connection
 
+            if await self.can_call_out(user, conn):
+                return await interaction.response.send_message(embed=NOT_REGISTERED)
+
             dtls = await conn.fetchone("SELECT * FROM `slay` WHERE LOWER(slay_name) = LOWER(?) AND userID = ?",
                                        (chosen_choice, user.id))
             if dtls is None:
-
                 return await interaction.response.send_message(
                     embed=membed("I could not find a servant with that name."))
 
