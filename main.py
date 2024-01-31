@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from dotenv import load_dotenv
 from datetime import datetime
 from os import listdir, environ
@@ -226,7 +227,18 @@ class C2C(commands.Bot):
         self.session = ClientSession()
 
 
-client = C2C(command_prefix='>', intents=Intents.all(), case_insensitive=True,
+intents = Intents.none()
+intents.members = True
+intents.presences = True
+intents.messages = True
+intents.message_content = True
+intents.emojis_and_stickers = True
+intents.guild_reactions = True
+intents.guilds = True
+intents.voice_states = True
+
+
+client = C2C(command_prefix='>', intents=intents, case_insensitive=True,
              owner_ids={992152414566232139, 546086191414509599, 1148206353647669298},
              activity=CustomActivity(name='Serving cc • /help'),
              status=Status.idle, tree_cls=MyCommandTree)
