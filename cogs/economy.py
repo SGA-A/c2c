@@ -959,7 +959,9 @@ class ImageModal(discord.ui.Modal):
         style=discord.TextStyle.paragraph,
         label='Image URL',
         required=True,
-        placeholder="Drop a photo url of what you want your servant to look like."
+        placeholder="Drop a photo url of what you want your servant to look like.",
+        min_length=5,
+        max_length=500
     )
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -973,7 +975,7 @@ class ImageModal(discord.ui.Modal):
         embed = interaction.message.embeds[0]
         embed.set_image(url=self.image.value)
 
-        await interaction.response.edit_message(
+        await interaction.response.edit_message(  # type: ignore
             content=interaction.message.content, embeds=interaction.message.embeds, view=self.the_view)
 
     async def on_error(self, interaction: discord.Interaction, error):
@@ -994,7 +996,9 @@ class HexModal(discord.ui.Modal):
         style=discord.TextStyle.short,
         label='Hex Colour',
         required=True,
-        placeholder="Type the hex colour for this servant's embed e.g, #1A2B3C or FFFFFF."
+        placeholder="A hexadecimal value like #1A2B3C or FFFFFF.",
+        min_length=6,
+        max_length=7
     )
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -1010,7 +1014,7 @@ class HexModal(discord.ui.Modal):
             (stored_hex_repr, interaction.user.id, self.choice)
         )
 
-        await interaction.response.edit_message(
+        await interaction.response.edit_message(  # type: ignore
             content=interaction.message.content, embeds=interaction.message.embeds, view=self.the_view)
 
     async def on_error(self, interaction: discord.Interaction, error):
@@ -1029,16 +1033,18 @@ class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
         self.choice = their_choice
         self.the_view = the_view
 
-    bio = discord.ui.TextInput(
-        style=discord.TextStyle.paragraph,
+    investa = discord.ui.TextInput(
+        style=discord.TextStyle.short,
         label='Increment Value',
         required=True,
-        placeholder="Investment amount e.g., 5e6 or 10000000"
+        placeholder="A shorthand (max, all, 5e6) or a constant.",
+        min_length=1,
+        max_length=100
     )
 
     async def on_submit(self, interaction: discord.Interaction):
 
-        expo = determine_exponent(self.bio.value)
+        expo = determine_exponent(self.investa.value)
         wallet_amt = await Economy.get_wallet_data_only(interaction.user, self.conn)
 
         try:
@@ -1050,7 +1056,7 @@ class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
             else:
                 return await interaction.response.send_message(embed=ERR_UNREASON)  # type: ignore
 
-        if amount >= wallet_amt:
+        if amount > wallet_amt:
             return await interaction.response.send_message(  # type: ignore
                 embed=membed("You don't have that much money in your wallet."), delete_after=3.0, ephemeral=True)
 
@@ -1060,12 +1066,14 @@ class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
             "UPDATE `slay` SET investment = investment + ?, productivity = productivity + ? WHERE slay_name = ? AND "
             "userID = ? RETURNING *",
             (amount, productivity, self.choice, interaction.user.id))
+        await self.conn.execute(f"UPDATE `{BANK_TABLE_NAME}` SET `wallet` = ? WHERE userID = ?",
+                                (wallet_amt - amount, interaction.user.id))
 
         await self.conn.commit()
         dtls = await dtls.fetchone()
 
         sembed = await Economy.servant_preset(Economy(self.client), interaction.user.id, dtls)  # servant embed
-        await interaction.response.edit_message(content=None, embed=sembed, view=self.the_view)
+        await interaction.response.edit_message(content=None, embed=sembed, view=self.the_view)  # type: ignore
 
     async def on_error(self, interaction: discord.Interaction, error):
         print_exception(type(error), error, error.__traceback__)
@@ -1079,7 +1087,9 @@ class UpdateInfo(discord.ui.Modal, title="Update Bio"):
         style=discord.TextStyle.paragraph,
         label='Bio',
         required=False,
-        placeholder="Insert your bio here.. (type 'delete' to remove your existent bio)."
+        placeholder="Insert your bio here.. (type 'delete' to remove your existent bio).",
+        min_length=1,
+        max_length=250
     )
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -1215,7 +1225,7 @@ class ServantsManager(discord.ui.View):
             if isinstance(item, Servants):
                 continue
 
-            if item.label == "Manage":  # assuming item will always be a button
+            if item.label == "Manage":  # type: ignore
                 self.manage_button = item
                 continue
             self.removed_items.append(item)
@@ -1232,13 +1242,13 @@ class ServantsManager(discord.ui.View):
     @discord.ui.button(label="Manage", style=discord.ButtonStyle.blurple, row=1)
     async def manage_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.child.owner_id:
-            return await interaction.response.send_message(
+            return await interaction.response.send_message(  # type: ignore
                 f"{interaction.user.mention}, you do not own this servant.")
 
         self.remove_item(button)
         for item in self.removed_items:
             self.add_item(item)
-        await interaction.response.edit_message(view=self)
+        await interaction.response.edit_message(view=self)  # type: ignore
 
     @discord.ui.button(label='Feed', style=discord.ButtonStyle.blurple, row=1)
     async def feed_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1246,7 +1256,8 @@ class ServantsManager(discord.ui.View):
         current_hunger = await self.child.conn.fetchone("SELECT hunger from `slay` WHERE userID = ? AND slay_name = ?",
                                                         (self.child.owner_id, self.child.choice))
         if current_hunger[0] >= 90:
-            return await interaction.response.send_message(content="Your servant is not hungry!", ephemeral=True)
+            return await interaction.response.send_message(  # type: ignore
+                content="Your servant is not hungry!", ephemeral=True)
 
         dtls = await self.child.conn.execute(
             "UPDATE `slay` SET hunger = hunger + ? WHERE slay_name = ? AND userID = ? RETURNING *",
@@ -1264,7 +1275,7 @@ class ServantsManager(discord.ui.View):
         current_hygiene = await self.child.conn.fetchone(
             "SELECT hygiene from `slay` WHERE userID = ? AND slay_name = ?", (self.child.owner_id, self.child.choice))
         if current_hygiene[0] >= 90:
-            return await interaction.response.send_message(
+            return await interaction.response.send_message(  # type: ignore
                 content="You can't wash them just yet, they are looking pretty clean already!", ephemeral=True)
 
         dtls = await self.child.conn.execute(
@@ -1290,7 +1301,7 @@ class ServantsManager(discord.ui.View):
 
     @discord.ui.button(label='Invest', style=discord.ButtonStyle.blurple, row=1)
     async def invest_in_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(
+        await interaction.response.send_modal(  # type: ignore
             InvestmentModal(self.child.conn, self.child.client, self.child.choice, self))
 
     @discord.ui.button(label="\u200b", emoji="\U0001fac2", style=discord.ButtonStyle.gray, row=2)
@@ -1315,7 +1326,7 @@ class ServantsManager(discord.ui.View):
              "The hug was a blend of familiarity and excitement, as if rediscovering the "
              "joy of being close to someone dear.")
         )
-        await interaction.response.send_message(embed=membed(selection))
+        await interaction.response.send_message(embed=membed(selection))  # type: ignore
 
     @discord.ui.button(label="\u200b", emoji="\U0001f48b", style=discord.ButtonStyle.gray, row=2)
     async def kiss(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1335,25 +1346,28 @@ class ServantsManager(discord.ui.View):
              f"{she_he.title()} embraced it albeit awkwardly and held her captive in the state she was enthralled in.",
              f"A gentle peck on the nose became a cherished routine, a simple act that spoke volumes.")
         )
-        await interaction.response.send_message(embed=membed(selection))
+        await interaction.response.send_message(embed=membed(selection))  # type: ignore
 
     @discord.ui.button(emoji="\U00002728", label="Add Photo", style=discord.ButtonStyle.green, row=3)
     async def photo_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(ImageModal(self.child.conn, self.child.client, self.child.choice, self))
+        await interaction.response.send_modal(  # type: ignore
+            ImageModal(self.child.conn, self.child.client, self.child.choice, self))
 
     @discord.ui.button(emoji="\U00002728", label="Add Colour", style=discord.ButtonStyle.green, row=3)
     async def hex_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(HexModal(self.child.conn, self.child.client, self.child.choice, self))
+        await interaction.response.send_modal(  # type: ignore
+            HexModal(self.child.conn, self.child.client, self.child.choice, self))
 
     @discord.ui.button(label="Go back", style=discord.ButtonStyle.blurple, row=4)
     async def go_back(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.child.owner_id:
-            return await interaction.response.send_message("You do not own this servant.")
+            return await interaction.response.send_message(  # type: ignore
+                "You do not own this servant.")
 
         for item in self.removed_items:
             self.remove_item(item)
         self.add_item(self.manage_button)
-        await interaction.response.edit_message(view=self)
+        await interaction.response.edit_message(view=self)  # type: ignore
 
 
 class Economy(commands.Cog):
@@ -2689,20 +2703,24 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered)  # type: ignore
 
             servants = await conn.execute("SELECT slay_name FROM slay WHERE userID = ?", (interaction.user.id,))
             servants = await servants.fetchall()
             size = len(servants)
 
             if size >= 6:
-                return await interaction.response.send_message(
+                return await interaction.response.send_message(  # type: ignore
                     embed=membed("You cannot have more than 6 servants."))
 
-            for servant in servants:
-                if name.lower() == servant[0].lower():
+            allserv = await conn.fetchall("SELECT LOWER(slay_name) FROM slay")
+            for servant in allserv:
+                if name.lower() == servant[0]:
                     return await interaction.response.send_message(  # type: ignore
-                        content="Hey, you already own a servant with that name!")
+                        embed=membed("Someone already owns a servant with that name.\n"
+                                     "As of 31st Jan 2024, it's a requirement to specify a unique name.\n"
+                                     "Think of it the way Discord usernames are right now.")
+                    )
 
             intro = choice(("Your servant has come fourth.", "And here they come.",
                             "Your servant is feeling nervous upfront.", "Here come's the charm."))
@@ -2721,7 +2739,7 @@ class Economy(commands.Cog):
 
             slaye.set_footer(text=f"{size + 1}/6 slay slots consumed")
             await self.open_slay(conn, interaction.user, name, gender, datetime_to_string(datetime.datetime.now()))
-            await interaction.response.send_message(content=None, embed=slaye)
+            await interaction.response.send_message(content=None, embed=slaye)  # type: ignore
 
     @servant.command(name='abandon', description='abandon your servant.')
     @app_commands.describe(servant_name='the name of your servant.')
@@ -2732,7 +2750,8 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(  # type: ignore
+                    embed=self.not_registered)
 
             servants = await conn.execute("SELECT slay_name, claimed FROM slay WHERE userID = ?",
                                           (interaction.user.id,))
@@ -2745,44 +2764,39 @@ class Economy(commands.Cog):
 
                 if (datetime.datetime.now() - since_arrival).total_seconds() < 172_800:
                     time_required = since_arrival + datetime.timedelta(days=2)
-                    return await interaction.response.send_message(
+                    return await interaction.response.send_message(  # type: ignore
                         embed=membed(
                             "You cannot get rid of them just yet!\n"
                             f"Come back {discord.utils.format_dt(time_required, style='R')} if you're convinced"
                             f" {servant_name.title()} is not for you."))
                 await self.delete_slay(conn, interaction.user, servant_name)
-                return await interaction.response.send_message(
+                return await interaction.response.send_message(  # type: ignore
                     embed=membed(f"Alright, {servant_name.title()} was told to leave.\n"
                                  f"They politely left without question."))
 
             return await interaction.response.send_message(  # type: ignore
                 embed=membed("We couldn't find a servant that you own with that name."))
 
-    @servant.command(name='view', description="see all user's servants.")
-    @app_commands.describe(user='the user to view the servants of', chosen_choice="the name of the servant")
-    @app_commands.rename(chosen_choice="servant_name")
-    async def view_servents(self, interaction: discord.Interaction, user: Optional[discord.Member], chosen_choice: str):
+    @servant.command(name='view', description="lookup a servant by their name.")
+    @app_commands.describe(servant_name="the name of the servant you want to view")
+    async def view_servents(self, interaction: discord.Interaction, servant_name: str):
         """This is a subcommand. View all current slays owned by the author or optionally another user."""
 
-        if user is None:
-            user = interaction.user
         async with self.client.pool_connection.acquire() as conn:  # type: ignore
             conn: asqlite_Connection
 
-            if await self.can_call_out(user, conn):
-                return await interaction.response.send_message(embed=NOT_REGISTERED)
-
-            dtls = await conn.fetchone("SELECT * FROM `slay` WHERE LOWER(slay_name) = LOWER(?) AND userID = ?",
-                                       (chosen_choice, user.id))
+            dtls = await conn.fetchone("SELECT * FROM `slay` WHERE LOWER(slay_name) = LOWER(?)",
+                                       (servant_name,))
             if dtls is None:
-                return await interaction.response.send_message(
-                    embed=membed("I could not find a servant with that name."))
+                return await interaction.response.send_message(  # type: ignore
+                    embed=membed("Nobody owns a servant with the name provided."))
 
-            sep = await conn.fetchall("SELECT slay_name, gender FROM `slay` WHERE userID = ?", (user.id,))
+            user_id = dtls[1]
+            sep = await conn.fetchall("SELECT slay_name, gender FROM `slay` WHERE userID = $0", user_id)
 
-            sembed = await self.servant_preset(user.id, dtls)  # servant embed
-            view = ServantsManager(client=self.client, their_choice=chosen_choice,
-                                   invoker_id=interaction.user.id, owner_id=user.id,
+            sembed = await self.servant_preset(user_id, dtls)  # servant embed
+            view = ServantsManager(client=self.client, their_choice=servant_name,
+                                   invoker_id=interaction.user.id, owner_id=user_id,
                                    owner_slays=[(slay[0], slay[1]) for slay in sep], conn=conn)
 
             await interaction.response.send_message(embed=sembed, view=view)  # type: ignore
@@ -2796,7 +2810,7 @@ class Economy(commands.Cog):
         The command has to be called again to receive the money gained from this action.
         """
         if DOWN:
-            return await interaction.response.send_message(embed=DOWNM)
+            return await interaction.response.send_message(embed=DOWNM)  # type: ignore
 
         msg = await self.send_return_interaction_orginal_response(interaction)
 
@@ -3782,12 +3796,13 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered)  # type: ignore
 
             job_val = await self.get_job_data_only(user=interaction.user, conn_input=conn)
 
             if job_val == "None":
-                await interaction.response.send_message(embed=membed("You don't have a job, get one first."))
+                await interaction.response.send_message(  # type: ignore
+                    embed=membed("You don't have a job, get one first."))
 
             possible_words: tuple = words.get(job_val)[0]
             selected_word = choice(possible_words)
@@ -3805,7 +3820,7 @@ class Economy(commands.Cog):
                 return (m.content.lower() == selected_word.lower()
                         and m.channel == interaction.channel and m.author == interaction.user)
 
-            await interaction.response.send_message(
+            await interaction.response.send_message(  # type: ignore
                 embed=membed(
                     f"## <:worke:1195716983384191076> What is the word?\n"
                     f"- Write out the word, filling out the blanks: \U0000279c "
@@ -4705,20 +4720,16 @@ class Economy(commands.Cog):
             for the_chose in chosen if current.lower() in the_chose
         ]
 
-    @view_servents.autocomplete('chosen_choice')
+    @view_servents.autocomplete('servant_name')
     async def callback_thing(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         """Autocomplete callback for the servant menu."""
-        try:
-            user = interaction.namespace["user"]
-        except KeyError:
-            user = interaction.user
 
-        async with self.client.pool_connection.acquire() as conn:
-            chosen = await conn.fetchall("SELECT slay_name FROM slay WHERE userID = ?", (user.id,))
+        async with self.client.pool_connection.acquire() as conn:  # type: ignore
+            chosen = await conn.fetchall("SELECT slay_name FROM slay")
 
-        return [
-            app_commands.Choice(name=str(the_chose[0]), value=str(the_chose[0]))
-            for the_chose in chosen if current.lower() in the_chose[0].lower()]
+            return [
+                app_commands.Choice(name=str(the_chose[0]), value=str(the_chose[0]))
+                for the_chose in chosen if current.lower() in the_chose[0].lower()]
 
 
 async def setup(client: commands.Bot):
