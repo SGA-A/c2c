@@ -321,7 +321,6 @@ class Miscellaneous(commands.Cog):
             tagsearch = self.client.tree.get_app_command(  # type: ignore
                 'tagsearch', guild=discord.Object(id=interaction.guild.id))
 
-            """You can use the below code to make your commands mentionable, even if they are out of sync"""
             if tagsearch is None:
 
                 return await interaction.followup.send(  # type: ignore
