@@ -1138,6 +1138,12 @@ class ServantsManager(discord.ui.View):
                 item.disabled = True
             self.stop()
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.child.owner_id:
+            await interaction.response.send_message("You do not own this servant.", ephemeral=True)
+            return False
+        return True
+
     async def on_timeout(self) -> None:
         for item in self.children:
             item.disabled = True
@@ -1198,6 +1204,51 @@ class ServantsManager(discord.ui.View):
     async def invest_in_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(
             InvestmentModal(self.child.conn, self.child.client, self.child.choice, self))
+
+    @discord.ui.button(label="\u200b", emoji="\U0001fac2", style=discord.ButtonStyle.gray, row=3)
+    async def hug(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pronouns = {"Female": ("her", "she"), "Male": ("his", "he")}
+
+        data = await self.child.conn.fetchone(
+            "SELECT gender from `slay` WHERE userID = ? AND slay_name = ?", (self.child.owner_id, self.child.choice))
+        her_his, she_he = pronouns.get(data[0])[0], pronouns.get(data[0])[1]
+
+        selection = choice(
+            ("Your servant is greatful for your affection and embraces you tightly.",
+             f"You are enveloped in a warm, tight hug, savoring the moment with {her_his} body.",
+             f"Wrapped in each other's arms, you shared a tender hug with {her_his}, finding solace in the silent "
+             "connection.",
+             f"{she_he} held your body close, feeling a sense of security in the embrace of "
+             f"someone truly special to {her_his} heart.",
+             "As you hugged them, you whispered words of comfort, "
+             f"letting them know {she_he} was cherished and valued.",
+             f"The embrace was more than physical; it was celebrating the mutual connection {she_he} shared with you.",
+             f"With a smile, you embraced {her_his} lascivious body, feeling a sense of completeness as if both of "
+             "your hearts were synchronized in that moment.",
+             "The hug was a blend of familiarity and excitement, as if rediscovering the "
+             "joy of being close to someone dear.")
+        )
+        await interaction.response.send_message(embed=membed(selection))
+
+    @discord.ui.button(label="\u200b", emoji="\U0001f48b", style=discord.ButtonStyle.gray, row=3)
+    async def kiss(self, interaction: discord.Interaction, button: discord.ui.Button):
+        pronouns = {"Female": ("her", "she"), "Male": ("his", "he")}
+
+        data = await self.child.conn.fetchone(
+            "SELECT gender from `slay` WHERE userID = ? AND slay_name = ?", (self.child.owner_id, self.child.choice))
+        her_his, she_he = pronouns.get(data[0])[0], pronouns.get(data[0])[1]
+
+        selection = choice(
+            (f"Your came into contact with {her_his} lips, planting a lingering kiss that conveyed both passion and "
+             f"tenderness. {she_he.title()} was forever grateful.",
+             f"With a playful grin, you sealed {her_his} lips with a light, affectionate kiss.",
+             f"You closed {her_his} eyes slowly and gently kissed {her_his} on the cheek.",
+             f"In a tender moment, you leaned in and placed a soft kiss on {her_his} lips, expressing your affection.",
+             "You placed a passionate kiss speaking of desire and an unspoken connection that went beyond just words. "
+             f"{she_he} embraced it albeit awkwardly and held her captive in the state she was enthralled in.",
+             f"A gentle peck on the nose became a cherished routine, a simple act that spoke volumes.")
+        )
+        await interaction.response.send_message(embed=membed(selection))
 
 
 class Economy(commands.Cog):
@@ -1262,7 +1313,7 @@ class Economy(commands.Cog):
     @staticmethod
     def calculate_exp_for(*, level: int):
         """Calculate the experience points required for a given level."""
-        return ceil((level / 4.9) ** 3)
+        return ceil((level / 0.9) ** 2)
 
     async def create_leaderboard_preset(self, chosen_choice: str):
         """A single reused function used to map the chosen leaderboard made by the user to the associated query."""
@@ -1530,15 +1581,16 @@ class Economy(commands.Cog):
             dtls[0], dtls[2], dtls[3], dtls[4], dtls[5], dtls[-7], dtls[-6], dtls[-5], dtls[-4], dtls[-3],
             dtls[-2], dtls[-1])
 
+        gend = {"Female": 0xF3AAE0, "Male": 0x737ECF}
+
         boundary = self.calculate_exp_for(level=lvl)
         claimed = string_to_datetime(claimed)
 
-        status = "available" if status else "working"
+        status = "Awaiting orders" if status else "Busy with work"
         sdetails = discord.Embed(
             title=f"{slay_name} {gender_emotes.get(gender)}",
-            description=f"You can't increase a stat if it is already above 90%.\n"
-                        f"**Status** Currently is {status}\n"
-                        f"**Investment**: \U000023e3 {investment:,}", color=0x2F3136)
+            description=f"**Status**: {status}\n"
+                        f"**Investment**: \U000023e3 {investment:,}", color=gend.setdefault(gender, 0x2B2D31))
 
         sdetails.add_field(name="Hunger", value=f"{generate_progress_bar(hunger)} ({hunger}%)")
         sdetails.add_field(name="Energy", value=f"{generate_progress_bar(energy)} ({energy}%)")
@@ -1966,6 +2018,22 @@ class Economy(commands.Cog):
                     'ON CONFLICT (userID) DO UPDATE SET exp = exp + ? RETURNING exp, level',
                     (interaction.user.id, exp_gainable))
 
+                # val = await connection.fetchone(
+                #     f'UPDATE `{SLAY_TABLE_NAME}` SET exp = exp + ? WHERE userID = ? '
+                #     f'AND EXISTS (SELECT 1 FROM `{SLAY_TABLE_NAME}` WHERE userID = ?) RETURNING exp, level',
+                #     (exp_gainable, interaction.user.id, interaction.user.id))
+                # if val:
+                #     xp, level = val
+                #     exp_needed = self.calculate_exp_for(level=level)
+                #
+                #     if xp >= exp_needed:
+                #         await connection.execute(
+                #             """UPDATE `slay` SET level = level + 1, exp = 0 WHERE userID = ?""",
+                #             (interaction.user.id,))
+                #
+                #         await self.send_custom_text(interaction,
+                #                                     custom_text=f'{interaction.user.mention} has just leveled '
+                #                                                 f'up to Level **{level + 1}**.')
                 if record:
                     xp, level = record
                     exp_needed = self.calculate_exp_for(level=level)
@@ -2586,8 +2654,7 @@ class Economy(commands.Cog):
     @servant.command(name='view', description="see all user's servants.")
     @app_commands.describe(user='the user to view the servants of', chosen_choice="the name of the servant")
     @app_commands.rename(chosen_choice="servant_name")
-    async def view_servents(self, interaction: discord.Interaction, user: Optional[discord.Member],
-                            chosen_choice: Optional[str]):
+    async def view_servents(self, interaction: discord.Interaction, user: Optional[discord.Member], chosen_choice: str):
         """This is a subcommand. View all current slays owned by the author or optionally another user."""
 
         if user is None:
@@ -2619,6 +2686,8 @@ class Economy(commands.Cog):
         This is a subcommand. Dispatch your slays to work.
         The command has to be called again to receive the money gained from this action.
         """
+        if DOWN:
+            return await interaction.response.send_message(embed=DOWNM)
 
         msg = await self.send_return_interaction_orginal_response(interaction)
 
