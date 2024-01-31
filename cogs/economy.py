@@ -6,14 +6,14 @@ from shelve import open as open_shelve
 from re import sub, search
 from other.pagination import Pagination
 from ImageCharts import ImageCharts
-from discord.ext import commands
+from discord.ext import commands, tasks
 from math import floor, ceil
 from random import randint, choices, choice, sample, shuffle
 from pluralizer import Pluralizer
 from discord import app_commands, SelectOption
 from asqlite import Connection as asqlite_Connection
-import asqlite
 from typing import Optional, Literal, Any, Union, List
+from traceback import print_exception
 
 import discord
 import datetime
@@ -946,7 +946,61 @@ class HighLow(discord.ui.View):
                 await interaction.response.edit_message(embed=lose, view=self)  # type: ignore
 
 
-class UpdateInfo(discord.ui.Modal, title='Update your Profile'):
+class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
+
+    def __init__(self, conn, client, their_choice, the_view):
+        super().__init__()
+        self.conn = conn
+        self.client = client
+        self.choice = their_choice
+        self.the_view = the_view
+
+    bio = discord.ui.TextInput(
+        style=discord.TextStyle.paragraph,
+        label='Increment Value',
+        required=True,
+        placeholder="Investment amount e.g., 5e6 or 10000000"
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+
+        expo = determine_exponent(self.bio.value)
+        wallet_amt = await Economy.get_wallet_data_only(interaction.user, self.conn)
+
+        try:
+            assert isinstance(expo, int)
+            amount = expo
+        except AssertionError:
+            if expo.lower() in {'max', 'all'}:
+                amount = wallet_amt
+            else:
+                return await interaction.response.send_message(embed=ERR_UNREASON)  # type: ignore
+
+        if amount >= wallet_amt:
+            return await interaction.response.send_message(  # type: ignore
+                embed=membed("You don't have that much money in your wallet."), delete_after=3.0, ephemeral=True)
+
+        productivity = labour_productivity_via(investment=amount)
+
+        dtls = await self.conn.execute(
+            "UPDATE `slay` SET investment = investment + ?, productivity = productivity + ? WHERE slay_name = ? AND "
+            "userID = ? RETURNING *",
+            (amount, productivity, self.choice, interaction.user.id))
+
+        await self.conn.commit()
+        dtls = await dtls.fetchone()
+
+        sembed = await Economy.servant_preset(Economy(self.client), interaction.user.id, dtls)  # servant embed
+        await interaction.response.edit_message(content=None, embed=sembed, view=self.the_view)
+
+    async def on_error(self, interaction: discord.Interaction, error):
+        print_exception(type(error), error, error.__traceback__)
+        return await interaction.response.send_message(  # type: ignore
+            embed=membed(f"Something went wrong."))
+
+
+class UpdateInfo(discord.ui.Modal, title="Update Bio"):
+
     bio = discord.ui.TextInput(
         style=discord.TextStyle.paragraph,
         label='Bio',
@@ -1076,13 +1130,13 @@ class ServantsManager(discord.ui.View):
         command."""
 
         super().__init__(timeout=40.0)
-
         self.child = Servants(client, owner_slays, their_choice, owner_id, conn)
         self.add_item(self.child)
 
         if invoker_id != owner_id:
             for item in self.children:
                 item.disabled = True
+            self.stop()
 
     async def on_timeout(self) -> None:
         for item in self.children:
@@ -1094,7 +1148,56 @@ class ServantsManager(discord.ui.View):
 
     @discord.ui.button(label='Feed', style=discord.ButtonStyle.blurple, row=2)
     async def feed_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.edit_message(content=f"{self.child.choice}", view=self)
+
+        current_hunger = await self.child.conn.fetchone("SELECT hunger from `slay` WHERE userID = ? AND slay_name = ?",
+                                                        (self.child.owner_id, self.child.choice))
+        if current_hunger[0] >= 90:
+            return await interaction.response.send_message(content="Your servant is not hungry!", ephemeral=True)
+
+        dtls = await self.child.conn.execute(
+            "UPDATE `slay` SET hunger = hunger + ? WHERE slay_name = ? AND userID = ? RETURNING *",
+            (randint(10, 20), self.child.choice, self.child.owner_id))
+        await self.child.conn.commit()
+        dtls = await dtls.fetchone()
+
+        sembed = await Economy.servant_preset(Economy(self.child.client), self.child.owner_id, dtls)  # servant embed
+
+        await interaction.response.edit_message(content=None, embed=sembed, view=self)  # type: ignore
+
+    @discord.ui.button(label='Wash', style=discord.ButtonStyle.blurple, row=2)
+    async def wash_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        current_hygiene = await self.child.conn.fetchone(
+            "SELECT hygiene from `slay` WHERE userID = ? AND slay_name = ?", (self.child.owner_id, self.child.choice))
+        if current_hygiene[0] >= 90:
+            return await interaction.response.send_message(
+                content="You can't wash your servant, they are looking pretty already!", ephemeral=True)
+
+        dtls = await self.child.conn.execute(
+            "UPDATE `slay` SET hygiene = 100 WHERE slay_name = ? AND userID = ? RETURNING *",
+            (self.child.choice, self.child.owner_id))
+        await self.child.conn.commit()
+        dtls = await dtls.fetchone()
+
+        sembed = await Economy.servant_preset(Economy(self.child.client), self.child.owner_id, dtls)  # servant embed
+        await interaction.response.edit_message(content=None, embed=sembed, view=self)  # type: ignore
+
+        possible = choice(
+            ("You wet your servant's hair with warm water before applying a gentle tear-free shampoo.\n"
+             "They enjoyed every second of it.",
+             "You lathered the soap and massaged it onto their back to ensure a thorough cleaning.",
+             "Your servant is comforted being around you..",
+             "You rubbed a damp cloth around their entire body, inconsiderate of where you were touching.\n"
+             "Maybe this needed an extra cleanse?"
+             )
+        )
+
+        await interaction.channel.send(embed=membed(possible))
+
+    @discord.ui.button(label='Invest', style=discord.ButtonStyle.blurple, row=2)
+    async def invest_in_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.send_modal(
+            InvestmentModal(self.child.conn, self.child.client, self.child.choice, self))
 
 
 class Economy(commands.Cog):
@@ -1109,6 +1212,7 @@ class Economy(commands.Cog):
                                                         "Find out what could've happened by calling the command "
                                                         "[`>reasons`](https://www.google.com/).", colour=0x2F3136,
                                             timestamp=datetime.datetime.now(datetime.UTC))
+        self.batch_update.start()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         role = interaction.guild.get_role(1168204249096785980)
@@ -1121,6 +1225,27 @@ class Economy(commands.Cog):
         if (role in ctx.author.roles) or (role is None):
             return True
         return False
+
+    def cog_unload(self):
+        self.batch_update.cancel()
+
+    @tasks.loop(hours=1.0)
+    async def batch_update(self):
+        async with self.client.pool_connection.acquire() as conn:  # type: ignore
+            conn: asqlite_Connection
+
+            await conn.execute(
+                f"""
+                UPDATE `{SLAY_TABLE_NAME}` 
+                SET love = CASE WHEN love - $0 < 0 THEN 0 ELSE love - $0 END, 
+                hunger = CASE WHEN hunger - $1 < 0 THEN 0 ELSE hunger - $1 END
+                """,
+                randint(1, 5), randint(1, 8)
+            )
+
+    @batch_update.before_loop
+    async def before_update(self):
+        await self.client.wait_until_ready()
 
     @staticmethod
     async def send_return_interaction_orginal_response(interaction: discord.Interaction):
@@ -1137,7 +1262,7 @@ class Economy(commands.Cog):
     @staticmethod
     def calculate_exp_for(*, level: int):
         """Calculate the experience points required for a given level."""
-        return ceil((level / 0.9) ** 0.8)
+        return ceil((level / 4.9) ** 3)
 
     async def create_leaderboard_preset(self, chosen_choice: str):
         """A single reused function used to map the chosen leaderboard made by the user to the associated query."""
@@ -1400,26 +1525,29 @@ class Economy(commands.Cog):
         """Get servant details from the given owner ID, return it in a unique servant card."""
         owner_name = self.client.get_user(owner_id)
 
-        slay_name, gender, productivity, love, sleeping, energy, status, investment, hunger, claimed = (
-            dtls[0], dtls[2], dtls[3], dtls[5], dtls[6], dtls[7], dtls[-4], dtls[-3], dtls[-2], dtls[-1])
+        (slay_name, gender, productivity, love, energy, lvl, xp, hygiene, status, investment, hunger,
+         claimed) = (
+            dtls[0], dtls[2], dtls[3], dtls[4], dtls[5], dtls[-7], dtls[-6], dtls[-5], dtls[-4], dtls[-3],
+            dtls[-2], dtls[-1])
 
+        boundary = self.calculate_exp_for(level=lvl)
         claimed = string_to_datetime(claimed)
 
-        sleeping = "__s__leeping" if sleeping else "__a__vailable"
-        status = "free" if status else "working"
+        status = "available" if status else "working"
         sdetails = discord.Embed(
             title=f"{slay_name} {gender_emotes.get(gender)}",
-            description=f"Belongs to {owner_name.mention}.\n"
-                        f"Currently {sleeping} and is {status}", color=0x2F3136)
+            description=f"You can't increase a stat if it is already above 90%.\n"
+                        f"**Status** Currently is {status}\n"
+                        f"**Investment**: \U000023e3 {investment:,}", color=0x2F3136)
 
         sdetails.add_field(name="Hunger", value=f"{generate_progress_bar(hunger)} ({hunger}%)")
         sdetails.add_field(name="Energy", value=f"{generate_progress_bar(energy)} ({energy}%)")
         sdetails.add_field(name="Love", value=f"{generate_progress_bar(love)} ({love}%)")
-        sdetails.add_field(name="Claimed", value=discord.utils.format_dt(claimed, style="R"))
-        sdetails.add_field(name="Productivity", value=f"{generate_progress_bar(productivity)} ({100 + productivity}%)")
-        sdetails.add_field(name="Investment", value=f"\U000023e3 {investment:,}")
+        sdetails.add_field(name="Claimed", value=discord.utils.format_dt(claimed, style="D"))
+        sdetails.add_field(name="Hygiene", value=f"{generate_progress_bar(hygiene)} ({hygiene}%)")
+        sdetails.add_field(name='Experience', value=f"{generate_progress_bar((xp / boundary) * 100)}\n`Level {lvl}`")
 
-        sdetails.set_footer(text="Value is thy.")
+        sdetails.set_footer(text=f"Belongs to {owner_name.name}", icon_url=owner_name.display_avatar.url)
         return sdetails
 
     async def raise_pmulti_warning(self, interaction: discord.Interaction, their_pmulti: int | str):
@@ -2374,7 +2502,7 @@ class Economy(commands.Cog):
         await interaction.response.send_message(f"{cemoji} Your profile is now {mode}.",  # type: ignore
                                                 ephemeral=True, delete_after=7.5)
 
-    servant = app_commands.Group(name='servant', description='manage your slay.', guild_only=True,
+    servant = app_commands.Group(name='servant', description='manage your servant.', guild_only=True,
                                  guild_ids=APP_GUILDS_ID)
 
     @servant.command(name='hire', description='hire your own servant.')
@@ -2467,13 +2595,12 @@ class Economy(commands.Cog):
         async with self.client.pool_connection.acquire() as conn:  # type: ignore
             conn: asqlite_Connection
 
-            dtls = await conn.fetchone("SELECT * FROM `slay` WHERE slay_name = ? AND userID = ?",
+            dtls = await conn.fetchone("SELECT * FROM `slay` WHERE LOWER(slay_name) = LOWER(?) AND userID = ?",
                                        (chosen_choice, user.id))
             if dtls is None:
 
                 return await interaction.response.send_message(
-                    embed=membed("I did not find that name!\n"
-                                 "Servant names are case-sensitive."))  # type: ignore
+                    embed=membed("I could not find a servant with that name."))
 
             sep = await conn.fetchall("SELECT slay_name, gender FROM `slay` WHERE userID = ?", (user.id,))
 
