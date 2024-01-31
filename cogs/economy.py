@@ -6,14 +6,13 @@ from shelve import open as open_shelve
 from re import sub, search
 from other.pagination import Pagination
 from ImageCharts import ImageCharts
-from discord.ext import commands, tasks
+from discord.ext import commands
 from math import floor, ceil
 from random import randint, choices, choice, sample, shuffle
 from pluralizer import Pluralizer
 from discord import app_commands, SelectOption
 from asqlite import Connection as asqlite_Connection
 from typing import Optional, Literal, Any, Union, List
-from traceback import print_exception
 
 import discord
 import datetime
@@ -44,7 +43,6 @@ SLAY_TABLE_NAME = "slay"
 COOLDOWN_TABLE_NAME = "cooldowns"
 APP_GUILDS_ID = [829053898333225010, 780397076273954886]
 DOWN = True
-gender_emotes = {"Male": "<:male:1201993062885380097>", "Female": "<:female:1201992742574755891>"}
 UNIQUE_BADGES = {
     992152414566232139: "<:e1_stafff:1145039666916110356>",
     546086191414509599: "<:in_power:1153754243220647997>",
@@ -514,7 +512,7 @@ class BlackjackUi(discord.ui.View):
             return True
         else:
             emb = discord.Embed(
-                description=f"This game is not held under your name.",
+                description=f"This game is being held under {self.interaction.user.name}'s name. Not yours.",
                 color=0x2F3136
             )
             await interaction.response.send_message(embed=emb, ephemeral=True)  # type: ignore
@@ -946,133 +944,7 @@ class HighLow(discord.ui.View):
                 await interaction.response.edit_message(embed=lose, view=self)  # type: ignore
 
 
-class ImageModal(discord.ui.Modal):
-
-    def __init__(self, conn, client, their_choice, the_view):
-        self.conn = conn
-        self.client = client
-        self.choice: str = their_choice
-        self.the_view = the_view
-        super().__init__(title=f"Change Photo of {self.choice.title()}", timeout=40.0)
-
-    image = discord.ui.TextInput(
-        style=discord.TextStyle.paragraph,
-        label='Image URL',
-        required=True,
-        placeholder="Drop a photo url of what you want your servant to look like."
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-
-        await self.conn.execute(
-            f"UPDATE `{SLAY_TABLE_NAME}` SET url = ? WHERE userID = ? AND slay_name = ?",
-            (self.image.value, interaction.user.id, self.choice)
-        )
-        await self.conn.commit()
-
-        embed = interaction.message.embeds[0]
-        embed.set_image(url=self.image.value)
-
-        await interaction.response.edit_message(
-            content=interaction.message.content, embeds=interaction.message.embeds, view=self.the_view)
-
-    async def on_error(self, interaction: discord.Interaction, error):
-        return await interaction.response.send_message(  # type: ignore
-            embed=membed(f"The url of the photo you provided was not valid, try a different one."))
-
-
-class HexModal(discord.ui.Modal):
-
-    def __init__(self, conn, client, their_choice, the_view):
-        self.conn = conn
-        self.client = client
-        self.choice: str = their_choice
-        self.the_view = the_view
-        super().__init__(title=f"Change Embed Hex Colour for {self.choice.title()}", timeout=40.0)
-
-    hexinput = discord.ui.TextInput(
-        style=discord.TextStyle.short,
-        label='Hex Colour',
-        required=True,
-        placeholder="Type the hex colour for this servant's embed e.g, #1A2B3C or FFFFFF."
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-
-        await self.conn.commit()
-        stripped_color_string = self.hexinput.value.replace("#", "")
-        embed = interaction.message.embeds[0]
-        stored_hex_repr = int(stripped_color_string, 16)
-        embed.colour = stored_hex_repr
-
-        await self.conn.execute(
-            f"UPDATE `{SLAY_TABLE_NAME}` SET hex = ? WHERE userID = ? AND slay_name = ?",
-            (stored_hex_repr, interaction.user.id, self.choice)
-        )
-
-        await interaction.response.edit_message(
-            content=interaction.message.content, embeds=interaction.message.embeds, view=self.the_view)
-
-    async def on_error(self, interaction: discord.Interaction, error):
-        return await interaction.response.send_message(  # type: ignore
-            embed=membed(f"The url of the photo you provided was not valid, try a different one."))
-
-
-class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
-
-    def __init__(self, conn, client, their_choice, the_view):
-        super().__init__()
-        self.conn = conn
-        self.client = client
-        self.choice = their_choice
-        self.the_view = the_view
-
-    bio = discord.ui.TextInput(
-        style=discord.TextStyle.paragraph,
-        label='Increment Value',
-        required=True,
-        placeholder="Investment amount e.g., 5e6 or 10000000"
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-
-        expo = determine_exponent(self.bio.value)
-        wallet_amt = await Economy.get_wallet_data_only(interaction.user, self.conn)
-
-        try:
-            assert isinstance(expo, int)
-            amount = expo
-        except AssertionError:
-            if expo.lower() in {'max', 'all'}:
-                amount = wallet_amt
-            else:
-                return await interaction.response.send_message(embed=ERR_UNREASON)  # type: ignore
-
-        if amount >= wallet_amt:
-            return await interaction.response.send_message(  # type: ignore
-                embed=membed("You don't have that much money in your wallet."), delete_after=3.0, ephemeral=True)
-
-        productivity = labour_productivity_via(investment=amount)
-
-        dtls = await self.conn.execute(
-            "UPDATE `slay` SET investment = investment + ?, productivity = productivity + ? WHERE slay_name = ? AND "
-            "userID = ? RETURNING *",
-            (amount, productivity, self.choice, interaction.user.id))
-
-        await self.conn.commit()
-        dtls = await dtls.fetchone()
-
-        sembed = await Economy.servant_preset(Economy(self.client), interaction.user.id, dtls)  # servant embed
-        await interaction.response.edit_message(content=None, embed=sembed, view=self.the_view)
-
-    async def on_error(self, interaction: discord.Interaction, error):
-        print_exception(type(error), error, error.__traceback__)
-        return await interaction.response.send_message(  # type: ignore
-            embed=membed(f"Something went wrong."))
-
-
-class UpdateInfo(discord.ui.Modal, title="Update Bio"):
-
+class UpdateInfo(discord.ui.Modal, title='Update your Profile'):
     bio = discord.ui.TextInput(
         style=discord.TextStyle.paragraph,
         label='Bio',
@@ -1157,181 +1029,6 @@ class Leaderboard(discord.ui.View):
             pass
 
 
-class Servants(discord.ui.Select):
-    def __init__(self, client: commands.Bot, their_slays: tuple, their_choice: str, owner_id: int, conn):
-
-        options = []
-
-        for slay in their_slays:
-            options.append(SelectOption(emoji=gender_emotes.setdefault(slay[1]), label=slay[0]))
-
-        self.client: commands.Bot = client
-        self.owner_id = owner_id
-        self.conn = conn
-        self.choice = their_choice
-
-        for option in options:
-            if option.value == their_choice:
-                option.default = True
-
-        super().__init__(options=options, placeholder="Servant Name")
-
-    async def callback(self, interaction: discord.Interaction):
-
-        self.choice = self.values[0]
-
-        for option in self.options:
-            if option.value == self.choice:
-                option.default = True
-                continue
-            option.default = False
-
-        dtls = await self.conn.fetchone("SELECT * FROM `slay` WHERE userID = ? AND slay_name = ?",
-                                        (self.owner_id, self.choice))
-
-        sembed = await Economy.servant_preset(Economy(self.client), self.owner_id, dtls)  # servant embed
-
-        await interaction.response.edit_message(content=None, embed=sembed, view=self.view)  # type: ignore
-
-
-class ServantsManager(discord.ui.View):
-    def __init__(self, client: commands.Bot, their_choice, invoker_id: int, owner_id: int, owner_slays, conn):
-        """invoker is who is calling the command, owner_id is what the owner of these servants we're looking at are.
-
-        their_choice is the default value thats been picked (i.e. the default servant chosen specified from the
-        command."""
-
-        super().__init__(timeout=40.0)
-        self.child = Servants(client, owner_slays, their_choice, owner_id, conn)
-        self.add_item(self.child)
-
-        if invoker_id != owner_id:
-            for item in self.children:
-                if isinstance(item, Servants):
-                    continue
-                item.disabled = True
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.child.owner_id:
-            await interaction.response.send_message("You do not own this servant.", ephemeral=True)
-            return False
-        return True
-
-    async def on_timeout(self) -> None:
-        for item in self.children:
-            item.disabled = True
-        try:
-            await self.message.edit(view=self)  # type: ignore
-        except discord.NotFound:
-            pass
-
-    @discord.ui.button(label='Feed', style=discord.ButtonStyle.blurple, row=2)
-    async def feed_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
-
-        current_hunger = await self.child.conn.fetchone("SELECT hunger from `slay` WHERE userID = ? AND slay_name = ?",
-                                                        (self.child.owner_id, self.child.choice))
-        if current_hunger[0] >= 90:
-            return await interaction.response.send_message(content="Your servant is not hungry!", ephemeral=True)
-
-        dtls = await self.child.conn.execute(
-            "UPDATE `slay` SET hunger = hunger + ? WHERE slay_name = ? AND userID = ? RETURNING *",
-            (randint(10, 20), self.child.choice, self.child.owner_id))
-        await self.child.conn.commit()
-        dtls = await dtls.fetchone()
-
-        sembed = await Economy.servant_preset(Economy(self.child.client), self.child.owner_id, dtls)  # servant embed
-
-        await interaction.response.edit_message(content=None, embed=sembed, view=self)  # type: ignore
-
-    @discord.ui.button(label='Wash', style=discord.ButtonStyle.blurple, row=2)
-    async def wash_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
-
-        current_hygiene = await self.child.conn.fetchone(
-            "SELECT hygiene from `slay` WHERE userID = ? AND slay_name = ?", (self.child.owner_id, self.child.choice))
-        if current_hygiene[0] >= 90:
-            return await interaction.response.send_message(
-                content="You can't wash your servant, they are looking pretty already!", ephemeral=True)
-
-        dtls = await self.child.conn.execute(
-            "UPDATE `slay` SET hygiene = 100 WHERE slay_name = ? AND userID = ? RETURNING *",
-            (self.child.choice, self.child.owner_id))
-        await self.child.conn.commit()
-        dtls = await dtls.fetchone()
-
-        sembed = await Economy.servant_preset(Economy(self.child.client), self.child.owner_id, dtls)  # servant embed
-        await interaction.response.edit_message(content=None, embed=sembed, view=self)  # type: ignore
-
-        possible = choice(
-            ("You wet your servant's hair with warm water before applying a gentle tear-free shampoo.\n"
-             "They enjoyed every second of it.",
-             "You lathered the soap and massaged it onto their back to ensure a thorough cleaning.",
-             "Your servant is comforted being around you..",
-             "You rubbed a damp cloth around their entire body, inconsiderate of where you were touching.\n"
-             "Maybe this needed an extra cleanse?"
-             )
-        )
-
-        await interaction.channel.send(embed=membed(possible))
-
-    @discord.ui.button(label='Invest', style=discord.ButtonStyle.blurple, row=2)
-    async def invest_in_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(
-            InvestmentModal(self.child.conn, self.child.client, self.child.choice, self))
-
-    @discord.ui.button(label="\u200b", emoji="\U0001fac2", style=discord.ButtonStyle.gray, row=3)
-    async def hug(self, interaction: discord.Interaction, button: discord.ui.Button):
-        pronouns = {"Female": ("her", "she"), "Male": ("his", "he")}
-
-        data = await self.child.conn.fetchone(
-            "SELECT gender from `slay` WHERE userID = ? AND slay_name = ?", (self.child.owner_id, self.child.choice))
-        her_his, she_he = pronouns.get(data[0])[0], pronouns.get(data[0])[1]
-
-        selection = choice(
-            ("Your servant is greatful for your affection and embraces you tightly.",
-             f"You are enveloped in a warm, tight hug, savoring the moment with {her_his} body.",
-             f"Wrapped in each other's arms, you shared a tender hug with {her_his}, finding solace in the silent "
-             "connection.",
-             f"{she_he} held your body close, feeling a sense of security in the embrace of "
-             f"someone truly special to {her_his} heart.",
-             "As you hugged them, you whispered words of comfort, "
-             f"letting them know {she_he} was cherished and valued.",
-             f"The embrace was more than physical; it was celebrating the mutual connection {she_he} shared with you.",
-             f"With a smile, you embraced {her_his} lascivious body, feeling a sense of completeness as if both of "
-             "your hearts were synchronized in that moment.",
-             "The hug was a blend of familiarity and excitement, as if rediscovering the "
-             "joy of being close to someone dear.")
-        )
-        await interaction.response.send_message(embed=membed(selection))
-
-    @discord.ui.button(label="\u200b", emoji="\U0001f48b", style=discord.ButtonStyle.gray, row=3)
-    async def kiss(self, interaction: discord.Interaction, button: discord.ui.Button):
-        pronouns = {"Female": ("her", "she"), "Male": ("his", "he")}
-
-        data = await self.child.conn.fetchone(
-            "SELECT gender from `slay` WHERE userID = ? AND slay_name = ?", (self.child.owner_id, self.child.choice))
-        her_his, she_he = pronouns.get(data[0])[0], pronouns.get(data[0])[1]
-
-        selection = choice(
-            (f"Your came into contact with {her_his} lips, planting a lingering kiss that conveyed both passion and "
-             f"tenderness. {she_he.title()} was forever grateful.",
-             f"With a playful grin, you sealed {her_his} lips with a light, affectionate kiss.",
-             f"You closed {her_his} eyes slowly and gently kissed {her_his} on the cheek.",
-             f"In a tender moment, you leaned in and placed a soft kiss on {her_his} lips, expressing your affection.",
-             "You placed a passionate kiss speaking of desire and an unspoken connection that went beyond just words. "
-             f"{she_he} embraced it albeit awkwardly and held her captive in the state she was enthralled in.",
-             f"A gentle peck on the nose became a cherished routine, a simple act that spoke volumes.")
-        )
-        await interaction.response.send_message(embed=membed(selection))
-
-    @discord.ui.button(emoji="\U00002728", label="Add Photo", style=discord.ButtonStyle.green, row=4)
-    async def photo_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(ImageModal(self.child.conn, self.child.client, self.child.choice, self))
-
-    @discord.ui.button(emoji="\U00002728", label="Add Colour", style=discord.ButtonStyle.green, row=4)
-    async def hex_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(HexModal(self.child.conn, self.child.client, self.child.choice, self))
-
-
 class Economy(commands.Cog):
 
     def __init__(self, client: commands.Bot):
@@ -1344,7 +1041,6 @@ class Economy(commands.Cog):
                                                         "Find out what could've happened by calling the command "
                                                         "[`>reasons`](https://www.google.com/).", colour=0x2F3136,
                                             timestamp=datetime.datetime.now(datetime.UTC))
-        self.batch_update.start()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         role = interaction.guild.get_role(1168204249096785980)
@@ -1357,27 +1053,6 @@ class Economy(commands.Cog):
         if (role in ctx.author.roles) or (role is None):
             return True
         return False
-
-    def cog_unload(self):
-        self.batch_update.cancel()
-
-    @tasks.loop(hours=1.0)
-    async def batch_update(self):
-        async with self.client.pool_connection.acquire() as conn:  # type: ignore
-            conn: asqlite_Connection
-
-            await conn.execute(
-                f"""
-                UPDATE `{SLAY_TABLE_NAME}` 
-                SET love = CASE WHEN love - $0 < 0 THEN 0 ELSE love - $0 END, 
-                hunger = CASE WHEN hunger - $1 < 0 THEN 0 ELSE hunger - $1 END
-                """,
-                randint(1, 5), randint(1, 8)
-            )
-
-    @batch_update.before_loop
-    async def before_update(self):
-        await self.client.wait_until_ready()
 
     @staticmethod
     async def send_return_interaction_orginal_response(interaction: discord.Interaction):
@@ -1394,7 +1069,7 @@ class Economy(commands.Cog):
     @staticmethod
     def calculate_exp_for(*, level: int):
         """Calculate the experience points required for a given level."""
-        return ceil((level / 0.9) ** 2)
+        return ceil((level / 0.9) ** 0.8)
 
     async def create_leaderboard_preset(self, chosen_choice: str):
         """A single reused function used to map the chosen leaderboard made by the user to the associated query."""
@@ -1652,38 +1327,6 @@ class Economy(commands.Cog):
                 icon_url=self.client.user.avatar.url)
 
             return lb
-
-    async def servant_preset(self, owner_id: int, dtls):
-        """Get servant details from the given owner ID, return it in a unique servant card."""
-        owner_name = self.client.get_user(owner_id)
-
-        (slay_name, gender, productivity, love, energy, hexx, lvl, xp, hygiene, status, investment, hunger,
-         claimed, img) = (
-            dtls[0], dtls[2], dtls[3], dtls[4], dtls[5], dtls[8], dtls[9], dtls[10], dtls[11], dtls[12], dtls[13],
-            dtls[14], dtls[-2], dtls[-1])
-
-        gend = {"Female": 0xF3AAE0, "Male": 0x737ECF}
-
-        boundary = self.calculate_exp_for(level=lvl)
-        claimed = string_to_datetime(claimed)
-
-        status = "Awaiting orders" if status else "Busy with work"
-        sdetails = discord.Embed(
-            title=f"{slay_name} {gender_emotes.get(gender)}",
-            description=f"**Status**: {status}\n"
-                        f"**Investment**: \U000023e3 {investment:,}",
-            color=hexx or gend.setdefault(gender, 0x2B2D31))
-
-        sdetails.add_field(name="Hunger", value=f"{generate_progress_bar(hunger)} ({hunger}%)")
-        sdetails.add_field(name="Energy", value=f"{generate_progress_bar(energy)} ({energy}%)")
-        sdetails.add_field(name="Love", value=f"{generate_progress_bar(love)} ({love}%)")
-        sdetails.add_field(name="Claimed", value=discord.utils.format_dt(claimed, style="D"))
-        sdetails.add_field(name="Hygiene", value=f"{generate_progress_bar(hygiene)} ({hygiene}%)")
-        sdetails.add_field(name='Experience', value=f"{generate_progress_bar((xp / boundary) * 100)}\n`Level {lvl}`")
-
-        sdetails.set_footer(text=f"Belongs to {owner_name.name}", icon_url=owner_name.display_avatar.url)
-        sdetails.set_image(url=img)
-        return sdetails
 
     async def raise_pmulti_warning(self, interaction: discord.Interaction, their_pmulti: int | str):
         """Warn users if they have not set up a personal multiplier yet using a webhook."""
@@ -1962,7 +1605,8 @@ class Economy(commands.Cog):
     # ------------------- slay ----------------
 
     @staticmethod
-    async def open_slay(conn_input: asqlite_Connection, user: discord.Member, sn: str, gd: str, dateclaim: str):
+    async def open_slay(conn_input: asqlite_Connection, user: discord.Member, sn: str, gd: str, pd: float, happy: int,
+                        stus: int):
         """
         Open a new slay entry for a user in the slay database table.
 
@@ -1972,29 +1616,31 @@ class Economy(commands.Cog):
         - sn (str): The name of the slay.
         - gd (str): The gender of the slay.
         - pd (float): The productivity value associated with the slay.
+        - happy (int): The happiness value associated with the slay.
+        - stus (int): The status value associated with the slay.
         """
 
         await conn_input.execute(
-            "INSERT INTO slay (slay_name, userID, gender, claimed) VALUES (?, ?, ?, ?)",
-            (sn, user.id, gd, dateclaim))
+            "INSERT INTO slay (slay_name, userID, gender, productivity, happiness, status) VALUES (?, ?, ?, ?, ?, ?)",
+            (sn, user.id, gd, pd, happy, stus))
         await conn_input.commit()
 
     @staticmethod
-    async def get_servants(conn_input: asqlite_Connection, user: discord.Member):
+    async def get_slays(conn_input: asqlite_Connection, user: discord.Member):
         """
-        Retrieve all servant entries for a specific user from the servant database table.
+        Retrieve all slay entries for a specific user from the slay database table.
 
         Parameters:
         - conn_input (asqlite_Connection): The SQLite database connection.
-        - user (discord.Member): The Discord member for whom servant entries are being retrieved.
+        - user (discord.Member): The Discord member for whom slay entries are being retrieved.
 
         Returns:
-        List[Dict[str, Union[int, str, float]]]: A list of dictionaries containing servant information,
+        List[Dict[str, Union[int, str, float]]]: A list of dictionaries containing slay information,
         or an empty list if no entries are found.
 
         Description:
-        This static method retrieves all servant entries for a specific user from the servant database table.
-        The result is a list of dictionaries, each representing a servant entry with associated information such as
+        This static method retrieves all slay entries for a specific user from the slay database table.
+        The result is a list of dictionaries, each representing a slay entry with associated information such as
         slay_name, userID, gender, productivity, happiness, and status.
         If no entries are found, an empty list is returned.
 
@@ -2101,22 +1747,6 @@ class Economy(commands.Cog):
                     'ON CONFLICT (userID) DO UPDATE SET exp = exp + ? RETURNING exp, level',
                     (interaction.user.id, exp_gainable))
 
-                # val = await connection.fetchone(
-                #     f'UPDATE `{SLAY_TABLE_NAME}` SET exp = exp + ? WHERE userID = ? '
-                #     f'AND EXISTS (SELECT 1 FROM `{SLAY_TABLE_NAME}` WHERE userID = ?) RETURNING exp, level',
-                #     (exp_gainable, interaction.user.id, interaction.user.id))
-                # if val:
-                #     xp, level = val
-                #     exp_needed = self.calculate_exp_for(level=level)
-                #
-                #     if xp >= exp_needed:
-                #         await connection.execute(
-                #             """UPDATE `slay` SET level = level + 1, exp = 0 WHERE userID = ?""",
-                #             (interaction.user.id,))
-                #
-                #         await self.send_custom_text(interaction,
-                #                                     custom_text=f'{interaction.user.mention} has just leveled '
-                #                                                 f'up to Level **{level + 1}**.')
                 if record:
                     xp, level = record
                     exp_needed = self.calculate_exp_for(level=level)
@@ -2653,124 +2283,159 @@ class Economy(commands.Cog):
         await interaction.response.send_message(f"{cemoji} Your profile is now {mode}.",  # type: ignore
                                                 ephemeral=True, delete_after=7.5)
 
-    servant = app_commands.Group(name='servant', description='manage your servant.', guild_only=True,
-                                 guild_ids=APP_GUILDS_ID)
+    slay = app_commands.Group(name='slay', description='manage your slay.',
+                              guild_only=True,
+                              guild_ids=APP_GUILDS_ID)
 
-    @servant.command(name='hire', description='hire your own servant.')
-    @app_commands.describe(name='what this new servant will be called', gender="what gender this servant will have")
-    async def hire_slv(self, interaction: discord.Interaction, name: str, gender: Literal["Male", "Female"]):
+    @slay.command(name='hire', description='hire your own slay.')
+    @app_commands.describe(user='member to make a slay. if empty, specify new_slay_name.',
+                           new_slay_name='The name of your slay, if you didn\'t pick a user.',
+                           gender="the gender of your slay, doesn't have to be true..",
+                           investment="how much robux your willing to spend on this slay (no shortcuts)")
+    async def hire_slv(self, interaction: discord.Interaction, user: Optional[discord.Member],
+                       new_slay_name: Optional[str], gender: Literal["male", "female"], investment: int):
         """This is a subcommand. Hire a new slay based on the parameters, which affect the economic indicators."""
+
+        msg = await self.send_return_interaction_orginal_response(interaction)
 
         async with self.client.pool_connection.acquire() as conn:  # type: ignore
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await msg.edit(content=None, embed=self.not_registered)
 
-            servants = await conn.execute("SELECT slay_name FROM slay WHERE userID = ?", (interaction.user.id,))
-            servants = await servants.fetchall()
-            size = len(servants)
+            if user and (interaction.user.id == user.id):
+                return await msg.edit(content="Why would you make yourself a slay?")
+            elif (user is None) and (new_slay_name is None):
+                return await msg.edit(content="You did not input any slay.")
+            elif (new_slay_name is not None) and (user is not None):
+                return await msg.edit(content="You cannot name your slay if the user has also "
+                                              "been inputted. Remove this argument if needed.")
+            elif abs(investment) > await self.get_wallet_data_only(interaction.user, conn):
+                return await msg.edit(
+                    content=None,
+                    embed=membed("Your slay will not obey your orders if you do not guarantee your investment.\n"
+                                 "Hook up some more robux in your investment to increase your slay's productivity."))
+            else:
 
-            if size >= 6:
-                return await interaction.response.send_message(
-                    embed=membed("You cannot have more than 6 servants."))
+                investment = abs(investment)
+                await self.update_bank_new(interaction.user, conn, -investment)
+                prod = labour_productivity_via(investment=investment)
+                slays = await self.get_slays(conn, interaction.user)
+                if new_slay_name is None:
+                    new_slay_name = user.display_name
 
-            for servant in servants:
-                if name.lower() == servant[0].lower():
-                    return await interaction.response.send_message(  # type: ignore
-                        content="Hey, you already own a servant with that name!")
+                if not slays:
 
-            intro = choice(("Your servant has come fourth.", "And here they come.",
-                            "Your servant is feeling nervous upfront.", "Here come's the charm."))
-            slaye = discord.Embed(
-                title=intro,
-                description=(
-                    "You are a stranger to your them right now.\n\n"
-                    "Give them something to do or comfort them with whatever your choosing.\n"
-                    "Remember, your servant can only give you what you give back:\n"
-                    "- Keep them happy so that they are obedient\n"
-                    "- Give them time to relax when they are zapped out\n"
-                    "- They are human, they want to feel loved just like you do\n"
-                    "- Give them the necessities needed to survive, food, water and the likes.\n\n"
-                    "Lack of care may also lead to your servant fleeing away."),
-                color=0x00FF7F)
+                    await self.open_slay(conn, interaction.user, new_slay_name, gender, prod, 100, 1)
+                    slayy = discord.Embed(description=f"## Slay Summary\n"
+                                                      f"- Paid **\U000023e3 {investment:,}** for the following:\n"
+                                                      f" - Your brand new slay named {new_slay_name}\n"
+                                                      f" - {new_slay_name} has a productivity level "
+                                                      f"of `{prod}`.",
+                                          colour=discord.Colour.from_rgb(0, 0, 0))
+                    slayy.set_footer(text="1/6 slots consumed")
+                    await msg.edit(content=None, embed=slayy)
 
-            slaye.set_footer(text=f"{size + 1}/6 slay slots consumed")
-            await self.open_slay(conn, interaction.user, name, gender, datetime_to_string(datetime.datetime.now()))
-            await interaction.response.send_message(content=None, embed=slaye)
+                else:
+                    if len(slays) >= 6:
+                        return await msg.edit(
+                            content=None,
+                            embed=membed("## You have reached the maximum slay quota for now.\n"
+                                         "You must abandon a current slay before hiring a new one."))
 
-    @servant.command(name='abandon', description='abandon your servant.')
-    @app_commands.describe(servant_name='the name of your servant.')
-    async def abandon_slv(self, interaction: discord.Interaction, servant_name: str):
+                    for slay in slays:
+                        if new_slay_name == slay[0]:
+                            return await msg.edit(
+                                content="You already own a slay with that name.")
+
+                    await self.open_slay(conn, interaction.user, new_slay_name, gender, prod, 100, 1)
+
+                    slaye = discord.Embed(description=f"## Slay Summary\n"
+                                                      f"- Paid **\U000023e3 {investment:,}** for the following:\n"
+                                                      f" - Your brand new slay named {new_slay_name}\n"
+                                                      f" - {new_slay_name} has a productivity level "
+                                                      f"of `{prod}`.",
+                                          color=discord.Color.from_rgb(0, 0, 0))
+                    slaye.set_footer(text=f"{len(slays) + 1}/6 slay slots consumed")
+
+                    await msg.edit(content=None, embed=slaye)
+
+    @slay.command(name='abandon', description='abandon your slay.')
+    @app_commands.rename(slay_purge='slay')
+    @app_commands.describe(user='member to make a slay. if empty, specify new_slay_name.',
+                           slay_purge='the name of your slay, if you didn\'t pick a user.')
+    async def abandon_slv(self, interaction: discord.Interaction, user: Optional[discord.Member],
+                          slay_purge: Optional[str]):
         """This is a subcommand. Abandon an existing slay."""
 
         async with self.client.pool_connection.acquire() as conn:  # type: ignore
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.followup.send(embed=self.not_registered)
 
-            servants = await conn.execute("SELECT slay_name, claimed FROM slay WHERE userID = ?",
-                                          (interaction.user.id,))
-            servants = await servants.fetchall()
+            if (user is None) and (slay_purge is None):
+                return await interaction.response.send_message("You did not input any slay.")  # type: ignore
+            elif (slay_purge is not None) and (user is not None):
+                return await interaction.response.send_message(  # type: ignore
+                    "You cannot name your slay if the user has also "
+                    "been inputted. Remove this argument if needed.")
+            else:
+                slays = await self.get_slays(conn, interaction.user)
 
-            for servant in servants:
-                if servant[0].lower() != servant_name.lower():
-                    continue
-                since_arrival = string_to_datetime(servant[-1])
+                if slay_purge is None:
+                    slay_purge = user.display_name
 
-                if (datetime.datetime.now() - since_arrival).total_seconds() < 172_800:
-                    time_required = since_arrival + datetime.timedelta(days=2)
-                    return await interaction.response.send_message(
-                        embed=membed(
-                            "You cannot get rid of them just yet!\n"
-                            f"Come back {discord.utils.format_dt(time_required, style='R')} if you're convinced"
-                            f" {servant_name.title()} is not for you."))
-                await self.delete_slay(conn, interaction.user, servant_name)
-                return await interaction.response.send_message(
-                    embed=membed(f"Alright, {servant_name.title()} was told to leave.\n"
-                                 f"They politely left without question."))
+                await self.delete_slay(conn, interaction.user, slay_purge)
 
-            return await interaction.response.send_message(  # type: ignore
-                embed=membed("We couldn't find a servant that you own with that name."))
+                return await interaction.response.send_message(  # type: ignore
+                    embed=membed(f"Attempted to remove {slay_purge} from your owned slays.\n"
+                                 f" - {len(slays)}/6 total slay slots consumed."))
 
-    @servant.command(name='view', description="see all user's servants.")
-    @app_commands.describe(user='the user to view the servants of', chosen_choice="the name of the servant")
-    @app_commands.rename(chosen_choice="servant_name")
-    async def view_servents(self, interaction: discord.Interaction, user: Optional[discord.Member], chosen_choice: str):
+    @slay.command(name='viewall', description="see a user's owned slaves.")
+    @app_commands.describe(user='the user to view the slays of')
+    async def view_all_slays(self, interaction: discord.Interaction, user: Optional[discord.Member]):
         """This is a subcommand. View all current slays owned by the author or optionally another user."""
 
-        if user is None:
-            user = interaction.user
         async with self.client.pool_connection.acquire() as conn:  # type: ignore
             conn: asqlite_Connection
 
-            dtls = await conn.fetchone("SELECT * FROM `slay` WHERE LOWER(slay_name) = LOWER(?) AND userID = ?",
-                                       (chosen_choice, user.id))
-            if dtls is None:
+            if user is None:
+                user = interaction.user
 
-                return await interaction.response.send_message(
-                    embed=membed("I could not find a servant with that name."))
+            if await self.can_call_out(user, conn):
+                return await interaction.followup.send(embed=NOT_REGISTERED)
 
-            sep = await conn.fetchall("SELECT slay_name, gender FROM `slay` WHERE userID = ?", (user.id,))
+            stats = {1: "Free", 0: "Working"}
+            slays = await self.get_slays(conn, user)
+            embed = discord.Embed(colour=0x2F3136)
+            embed.set_author(name=f'{user.name}\'s Slays', icon_url=user.display_avatar.url)
 
-            sembed = await self.servant_preset(user.id, dtls)  # servant embed
-            view = ServantsManager(client=self.client, their_choice=chosen_choice,
-                                   invoker_id=interaction.user.id, owner_id=user.id,
-                                   owner_slays=[(slay[0], slay[1]) for slay in sep], conn=conn)
+            if len(slays) == 0:
+                embed.add_field(name="Nothingness.", value="This user has no slays yet.", inline=False)
+                return await interaction.response.send_message(embed=embed)  # type: ignore
 
-            await interaction.response.send_message(embed=sembed, view=view)  # type: ignore
-            view.message = await interaction.original_response()
+            for slay in slays:
+                if 66 <= slay[4] <= 100:
+                    state = "\U0001f603 "
+                elif 33 <= slay[4] < 66:
+                    state = "\U0001f610 "
+                else:
+                    state = "\U0001f641 "
+                embed.add_field(name=f'{state}{slay[0]}', value=f'{ARROW}{slay[2]}\n{ARROW}{slay[3]}'
+                                                                f'\n{ARROW}{stats.get(slay[5])}')
 
-    @servant.command(name='work', description="assign your slays to do tasks for you.", extras={"exp_gained": 5})
+            embed.set_footer(text=f"{len(slays)}/6 slay slots consumed")
+            await interaction.response.send_message(embed=embed)  # type: ignore
+
+    @slay.command(name='work', description="assign your slays to do tasks for you.", extras={"exp_gained": 5})
     @app_commands.describe(duration="the time spent working (e.g, 18h or 1d 3h)")
     async def make_slay_work_pay(self, interaction: discord.Interaction, duration: str):
         """
         This is a subcommand. Dispatch your slays to work.
         The command has to be called again to receive the money gained from this action.
         """
-        if DOWN:
-            return await interaction.response.send_message(embed=DOWNM)
 
         msg = await self.send_return_interaction_orginal_response(interaction)
 
@@ -2781,7 +2446,7 @@ class Economy(commands.Cog):
                 if await self.can_call_out(interaction.user, conn):
                     return await msg.edit(content=None, embed=NOT_REGISTERED)
 
-                if len(await self.get_servants(conn, interaction.user)) == 0:
+                if len(await self.get_slays(conn, interaction.user)) == 0:
                     return await msg.edit(
                         content=None, embed=membed("You got no slays to send to work.")
                     )
@@ -2839,7 +2504,7 @@ class Economy(commands.Cog):
                             await self.change_slay_field(conn, interaction.user, "status", 1)
                             await self.change_slay_field(conn, interaction.user, "happiness", 100 - randint(20, 67))
                             summ = discord.Embed(colour=discord.Colour.from_rgb(66, 164, 155))
-                            slays = await self.get_servants(conn, interaction.user)
+                            slays = await self.get_slays(conn, interaction.user)
                             for slay in slays:
                                 if slay[-2] > 30:
                                     doing_what = labour_actions.get(index_l)
@@ -3918,7 +3583,7 @@ class Economy(commands.Cog):
 
                 active_sessions.update({interaction.user.id: 1})
                 embed = discord.Embed(
-                    title="Pending Confirmation",
+                    title="Are you sure you want to do this?",
                     description=f"Remember, you are about to erase **all** of {member.mention}'s data.\n"
                                 "There's no going back, please be certain.\n"
                                 "Type `y` to confirm this action or `n` to cancel it.", colour=0x2B2D31)
@@ -4678,21 +4343,6 @@ class Economy(commands.Cog):
             app_commands.Choice(name=str(the_chose), value=str(the_chose))
             for the_chose in chosen if current.lower() in the_chose
         ]
-
-    @view_servents.autocomplete('chosen_choice')
-    async def callback_thing(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
-        """Autocomplete callback for the servant menu."""
-        try:
-            user = interaction.namespace["user"]
-        except KeyError:
-            user = interaction.user
-
-        async with self.client.pool_connection.acquire() as conn:
-            chosen = await conn.fetchall("SELECT slay_name FROM slay WHERE userID = ?", (user.id,))
-
-        return [
-            app_commands.Choice(name=str(the_chose[0]), value=str(the_chose[0]))
-            for the_chose in chosen if current.lower() in the_chose[0].lower()]
 
 
 async def setup(client: commands.Bot):
