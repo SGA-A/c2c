@@ -42,18 +42,13 @@ class Pagination(discord.ui.View):
 
     def update_buttons(self) -> None:
         """Disable or re-enable buttons based on position in paginator."""
+
         self.children[2].label = f"{self.index}/{self.total_pages}"  # type: ignore
-        if self.index+1 > self.total_pages // 2:
-            self.children[4].disabled = True  # type: ignore
-        else:
-            self.children[4].disabled = False  # type: ignore
-            self.children[0].disabled = True  # type: ignore
 
-        if self.index - 1:
-            self.children[0].disabled = False  # type: ignore
-
+        self.children[0].disabled = self.index <= 2  # type: ignore
         self.children[1].disabled = self.index == 1  # type: ignore
         self.children[3].disabled = self.index == self.total_pages  # type: ignore
+        self.children[4].disabled = self.index >= self.total_pages - 1  # type: ignore
 
     @discord.ui.button(label="FIRST", style=discord.ButtonStyle.green)
     async def first(self, interaction: discord.Interaction, button: discord.Button) -> None:
