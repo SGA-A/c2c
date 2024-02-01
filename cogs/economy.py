@@ -3683,7 +3683,7 @@ class Economy(commands.Cog):
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(item_name='the name of the item you want to buy.',
                            quantity='the quantity of the item(s) you wish to buy')
-    async def buy(self, interaction: discord.Interaction, item_name, quantity: int):
+    async def buy(self, interaction: discord.Interaction, item_name: str, quantity: int):
         """Buy an item directly from the shop."""
 
         quantity = abs(quantity) or 1
@@ -3719,8 +3719,8 @@ class Economy(commands.Cog):
 
                 if required < 0:
                     return await interaction.response.send_message(  # type: ignore
-                        f"You're short by \U000023e3 **{abs(required)}** to "
-                        f"buy **{quantity:,}x** {name}, so uh no.")
+                        f"You're short on cash by \U000023e3 **{abs(required):,}** to "
+                        f"buy {ie} **{quantity:,}x** {name}, so uh no.")
 
                 await self.change_inv_new(interaction.user, required, name, conn)
                 modify_stock(item_name, "-", quantity)
@@ -4759,7 +4759,8 @@ class Economy(commands.Cog):
                 for the_chose in chosen if current.lower() in the_chose[0].lower()]
 
     @item.autocomplete('item_name')
-    @sell.autocomplete('sell_quantity')
+    @sell.autocomplete('item_name')
+    @buy.autocomplete('item_name')
     async def item_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         return [app_commands.Choice(name=item["name"], value=item["name"])
                 for item in SHOP_ITEMS if current.lower() in item["name"].lower()]
