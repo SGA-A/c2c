@@ -104,50 +104,62 @@ PRESTIGE_EMOTES = {
 }
 
 SHOP_ITEMS = [
-    {"name": "Keycard", "cost": 8269069420, "id": 1, "info": "Allows you to bypass certain restrictions, and you get "
+    {"name": "Keycard", "cost": 8269069420, "info": "Allows you to bypass certain restrictions, and you get "
                                                              "more returns from certain activities!",
      "url": "https://i.imgur.com/WZOWysT.png", "rarity": "Epic",
      "emoji": "<:lanyard:1165935243140796487>", "available": True},
 
-    {"name": "Trophy", "cost": 5085779847, "id": 2, "info": "Flex on your friends with this trophy! There are also "
+    {"name": "Trophy", "cost": 5085779847, "info": "Flex on your friends with this trophy! There are also "
                                                             "some hidden side effects..",
      "url": "https://i.imgur.com/32iEaMb.png", "rarity": "Luxurious",
      "emoji": "<:tr1:1165936712468418591>", "available": True},
 
-    {"name": "Dynamic Item", "cost": 55556587196, "id": 3,
+    {"name": "Dynamic Item", "cost": 55556587196,
      "info": "An item that changes use often. Its transformative "
              "functions change to match the seasonality of the year.",
      "url": "https://i.imgur.com/WX9mbie.png", "rarity": "Rare", "qn": "dynamic_item",
      "emoji": "<:dynamic:1197949814898446478>", "available": True},
 
-    {"name": "Resistor", "cost": 18102892402, "id": 4,
+    {"name": "Resistor", "cost": 18102892402,
      "info": "No one knows how this works because no one has ever purchased "
              "this item. May cause distress to certain individuals upon purchase.",
      "url": "https://i.imgur.com/ggO9QbL.png", "rarity": "Godly",
      "emoji": "<:resistor:1165934607447887973>", "available": False},
 
-    {"name": "Clan License", "cost": 75000000000000, "id": 5,
+    {"name": "Clan License", "cost": 10000000000,
      "info": "Create your own clan. It costs a fortune, but with it brings a lot of "
              "privileges exclusive to clan members.",
      "url": "https://i.imgur.com/nPcMNk8.png", "rarity": "Godly", "qn": "clan_license",
      "emoji": "<:clan_license:1165936231922806804>"},
 
-    {"name": "Hyperion", "cost": 494510771984, "id": 6,
+    {"name": "Hyperion", "cost": 494510771984,
      "info": "The `passive` drone that actively helps in increasing the returns in almost everything.",
      "url": "https://i.imgur.com/bmNyob0.png", "rarity": "Uncommon", "qn": "hyperion_drone",
      "emoji": "<:DroneHyperion:1171491601726574613>", "available": True},
 
-    {"name": "Crisis", "cost": 765191412472, "id": 7,
+    {"name": "Crisis", "cost": 765191412472,
      "info": "The `support` drone that can bring status effects into the game, wreaking havoc onto other users!",
      "url": "https://i.imgur.com/obOJwJm.png", "rarity": "Uncommon", "qn": "crisis_drone",
      "emoji": "<:DroneCrisis:1171491564258852894>", "available": True},
 
-    {"name": "Odd Eye", "cost": 33206481258, "id": 8,
+    {"name": "Natural Pack", "cost": 300000000,
+     "info": "Food that is so nutritious it is all you need to fill your apetite. "
+             "Hunger is virtually non-existent after consumption.",
+     "url": "https://i.imgur.com/YbqaM0d.png", "rarity": "Common",
+     "emoji": "<:servant_food:1202726866943873045>", "available": True},
+
+    {"name": "Suspicious Pack", "cost": 50_000_000,
+     "info": "An combination of food taken from the forest. It seems to have been tampered with "
+             "at some point, frowned upon by most people for its ill-effects.",
+     "url": "https://i.imgur.com/3ITIcbo.png", "rarity": "Common",
+     "emoji": "<:sus_servant_food:1202730354952110141>", "available": False},
+
+    {"name": "Odd Eye", "cost": 33206481258,
      "info": "An eye that may prove advantageous during certain events. It may even become a pet with time..",
      "url": "https://i.imgur.com/rErrYrH.gif", "rarity": "Rare",
      "qn": "odd_eye", "emoji": "<a:eyeOdd:1166465357142298676>", "available": True},
 
-    {"name": "Amulet", "cost": 159961918315, "id": 9,
+    {"name": "Amulet", "cost": 159961918315,
      "info": "Found from a black market, it is said that it contains an extract found only from the ancient relics "
              "lost millions of years ago.",
      "url": "https://i.imgur.com/m8jRWk5.png", "rarity": "Godly",
@@ -162,8 +174,11 @@ NAME_TO_INDEX = {
     "Clan License": 4,
     "Hyperion": 5,
     "Crisis": 6,
-    "Odd Eye": 7,
-    "Amulet": 8}
+    "Natural Pack": 7,
+    "Suspicious Pack": 8,
+    "Odd Eye": 9,
+    "Amulet": 10}
+
 
 with open('C:\\Users\\georg\\PycharmProjects\\c2c\\cogs\\times.json') as file_name_thi:
     times = json.load(file_name_thi)
@@ -1449,7 +1464,7 @@ class Economy(commands.Cog):
     def cog_unload(self):
         self.batch_update.cancel()
 
-    @tasks.loop(hours=1.0)
+    @tasks.loop(time=datetime.time(hour=datetime.datetime.now().hour, minute=datetime.datetime.now().minute+30))
     async def batch_update(self):
         async with self.client.pool_connection.acquire() as conn:  # type: ignore
             conn: asqlite_Connection
@@ -1460,7 +1475,7 @@ class Economy(commands.Cog):
                 SET love = CASE WHEN love - $0 < 0 THEN 0 ELSE love - $0 END, 
                 hunger = CASE WHEN hunger - $1 < 0 THEN 0 ELSE hunger - $1 END
                 """,
-                randint(1, 5), randint(1, 8)
+                1, 3
             )
 
     @batch_update.before_loop
@@ -2555,7 +2570,7 @@ class Economy(commands.Cog):
                 name = item["name"]
 
                 additional_notes.append(
-                    f"{item['emoji']} __{name}__ \U00002500 [\U000023e3 **{item['cost']:,}**]"
+                    f"{item['emoji']} {name} \U00002500 [\U000023e3 **{item['cost']:,}**]"
                     f"(https://youtu.be/dQw4w9WgXcQ) ({get_stock(name)})")
 
             async def get_page_part(page: int):
@@ -2564,8 +2579,9 @@ class Economy(commands.Cog):
                     color=0x2B2D31,
                     description=f"{sticky_msg}"
                 )
-                offset = (page - 1) * 5
+
                 length = 10
+                offset = (page - 1) * length
 
                 for item_mod in additional_notes[offset:offset + length]:
                     emb.description += f"{item_mod}\n"
@@ -2613,12 +2629,13 @@ class Economy(commands.Cog):
                 "Legendary": 0xDA4B3D,
                 "Epic": 0xDE63FF,
                 "Rare": 0x5250A6,
-                "Uncommon": 0x9EFF8E
-            }.get(rarity)
+                "Uncommon": 0x9EFF8E,
+                "Common": 0x367B70
+            }.setdefault(rarity, 0x2B2D31)
 
             async with self.client.pool_connection.acquire() as conn:  # type: ignore
                 conn: asqlite_Connection
-                data = await conn.fetchone("SELECT COUNT(*) FROM inventory WHERE [?] > 0", (name,))
+                data = await conn.fetchone("SELECT COUNT(*) FROM inventory WHERE ? > 0", (f"[{name}]",))
                 data = data[0]
                 their_count = await self.get_one_inv_data_new(interaction.user, name, conn)
 
@@ -3719,6 +3736,12 @@ class Economy(commands.Cog):
                 wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
                 required = wallet_amt - cost
                 stock = get_stock(name)
+
+                if not item["available"]:
+                    return await interaction.response.send_message(
+                        "You cannot purchase this item, it's not for sale.\n"
+                        "Someone could have it though, maybe they'll give you one."
+                    )
 
                 if stock == 0:
                     return await interaction.response.send_message(  # type: ignore
