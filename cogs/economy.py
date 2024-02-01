@@ -2577,8 +2577,7 @@ class Economy(commands.Cog):
     @app_commands.describe(item_name='the name of an item.')
     @app_commands.rename(item_name="name")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
-    async def lookup_item(self, interaction: discord.Interaction,
-                          item_name: str):
+    async def item(self, interaction: discord.Interaction, item_name: str):
         """This is a subcommand. Look up a particular item within the shop to get more information about it."""
 
         name_res = self.partial_match_for(item_name)
@@ -3684,15 +3683,10 @@ class Economy(commands.Cog):
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(item_name='the name of the item you want to buy.',
                            quantity='the quantity of the item(s) you wish to buy')
-    async def buy(self, interaction: discord.Interaction,
-                  item_name: Literal[
-                      'Keycard', 'Trophy', 'Clan License', 'Resistor', 'Amulet',
-                      'Dynamic Item', 'Hyperion', 'Crisis', 'Odd Eye'],
-                  quantity: Optional[Literal[1, 2, 3, 4, 5]]):
+    async def buy(self, interaction: discord.Interaction, item_name, quantity: int):
         """Buy an item directly from the shop."""
 
-        if quantity is None:
-            quantity = 1
+        quantity = abs(quantity) or 1
 
         async with self.client.pool_connection.acquire() as conn:  # type: ignore
             conn: asqlite_Connection
@@ -3700,117 +3694,108 @@ class Economy(commands.Cog):
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)  # type: ignore
 
-            wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
+            name_res = self.partial_match_for(item_name)
 
-            for item in SHOP_ITEMS:
-                access_name = ' '.join(item["name"].split('_'))
+            if name_res is None:
+                return await interaction.response.send_message(
+                    embed=membed("This item does not exist. Are you trying"
+                                 " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
+                                 "1121094935802822768/1202647997641523241) an item?"))
 
-                if item_name == access_name:
-                    ie = item['emoji']
-                    proper_name = item.setdefault('qn', None) or access_name
-                    stock_item = get_stock(item_name)
+            elif isinstance(name_res, list):
 
-                    if stock_item == 0:
-                        return await interaction.response.send_message(  # type: ignore
-                            embed=membed(f"## Unsuccessful Transaction\n"
-                                         f"- The {ie} **{item_name}** is currently out of stock.\n"
-                                         f" - Until a user who owns this item chooses to "
-                                         f"sell it, stocks cannot be refilled."))
+                suggestions = [item[0] for item in name_res]
+                await interaction.response.send_message(
+                    f"Found **{len(suggestions)}** possible matches. Did you mean to buy..\n"
+                    f"{'\n'.join(suggestions)}"
+                )
+            else:
+                item = SHOP_ITEMS[name_res]
+                name = item["name"]
+                ie = item["emoji"]
+                cost = item["cost"] * quantity
+                wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
+                required = wallet_amt - cost
 
-                    if quantity > stock_item:
-                        proper_name = " ".join(proper_name.split("_"))
-                        proper_name = make_plural(proper_name, stock_item)
-                        their_name = make_plural(proper_name, quantity)
-                        return await interaction.response.send_message(  # type: ignore
-                            embed=membed(f"## Unsuccessful Transaction\n"
-                                         f"There are only **{stock_item}** {ie} **{proper_name.title()}** available.\n"
-                                         f"{ARROW}Meaning you cannot "
-                                         f"possibly buy **{quantity}** {their_name.title()}."))
+                if required < 0:
+                    return await interaction.response.send_message(  # type: ignore
+                        f"You're short by \U000023e3 **{abs(required)}** to "
+                        f"buy **{quantity:,}x** {name}, so uh no.")
 
-                    total_cost = int((item["cost"] * int(quantity)))
+                await self.change_inv_new(interaction.user, required, name, conn)
+                modify_stock(item_name, "-", quantity)
+                new_am = await self.update_bank_new(interaction.user, conn, -cost)
 
-                    if wallet_amt < int(total_cost):
-                        proper_name = " ".join(proper_name.split("_"))
-                        proper_name = make_plural(proper_name, quantity)
-                        return await interaction.response.send_message(  # type: ignore
-                            embed=membed(f"## Unsuccessful Transaction\n"
-                                         f"You'll need {CURRENCY}**{total_cost - wallet_amt:,}** more to "
-                                         f"purchase {quantity} {ie} **{proper_name.title()}**."))
+                embed = discord.Embed(
+                    title=f"Successful Purchase",
+                    description=(
+                        f"> You have \U000023e3 {new_am:,} left.\n\n"
+                        f"**You bought:**\n"
+                        f"- {quantity}x {ie} {name}\n\n"
+                        f"**You paid:**\n"
+                        f"- \U000023e3 {cost:,}"),
+                    colour=0xFFFFFF)
+                embed.set_footer(text="Thanks for your business.")
 
-                    await self.update_inv_new(interaction.user, +int(quantity), item["name"], conn)
-                    await self.update_bank_new(interaction.user, conn, -total_cost)
-                    modify_stock(item_name, "-", quantity)
-
-                    match quantity:
-                        case 1:
-                            return await interaction.response.send_message(  # type: ignore
-                                embed=membed(f"## Success\n"
-                                             f"- Purchased **1** {ie} **{item_name}** by paying "
-                                             f"{CURRENCY}**{total_cost:,}**.\n"
-                                             f" - The items requested have been added to your inventory."))
-                        case _:
-                            their_name = ' '.join(proper_name.split("_"))
-                            their_name = make_plural(their_name, quantity)
-                            await interaction.response.send_message(  # type: ignore
-                                embed=membed(f"## Success\n"
-                                             f"- Purchased **{quantity}** {ie} **{their_name.title()}** by"
-                                             f" paying {CURRENCY}**{total_cost:,}**.\n"
-                                             f" - The items requested have been added to your inventory."))
+                await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='sell', description='sell an item from your inventory.', extras={"exp_gained": 4})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(item_name='the name of the item you want to sell.',
-                           sell_quantity='the quantity you wish to sell. defaults to 1.')
+                           sell_quantity='the amount to sell. defaults to 1.')
     async def sell(self, interaction: discord.Interaction,
-                   item_name: Literal[
-                       'Keycard', 'Trophy', 'Clan License', 'Resistor',
-                       'Amulet', 'Dynamic Item', 'Hyperion', 'Crisis', 'Odd Eye'],
-                   sell_quantity: Optional[Literal[1, 2, 3, 4, 5]]):
+                   item_name: str, sell_quantity: Optional[int]):
         """Sell an item you already own."""
+        sell_quantity = abs(sell_quantity) or 1
 
-        if sell_quantity is None:
-            sell_quantity = 1
-
-        name = item_name.replace(" ", "_")
         async with self.client.pool_connection.acquire() as conn:  # type: ignore
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)  # type: ignore
 
-            for item in SHOP_ITEMS:
-                if name == item["name"]:
-                    ie = item['emoji']
-                    cost = int(round((item["cost"] / 4) * sell_quantity, ndigits=None))
-                    quantity = await self.update_inv_new(interaction.user, 0, item["name"], conn)
+            name_res = self.partial_match_for(item_name)
 
-                    if quantity[0] < 1:
-                        return await interaction.response.send_message(  # type: ignore
-                            embed=membed(f"You don't have a {ie} **{item_name}** in your inventory."))
+            if name_res is None:
+                return await interaction.response.send_message(
+                    embed=membed("This item does not exist. Are you trying"
+                                 " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
+                                 "1121094935802822768/1202647997641523241) an item?"))
 
-                    new_quantity = quantity[0] - sell_quantity
-                    if new_quantity < 0:
-                        return await interaction.response.send_message(  # type: ignore
-                            "You are requesting to sell more than what you currently own. Not possible.")
+            elif isinstance(name_res, list):
 
-                    await self.change_inv_new(interaction.user, new_quantity, item["name"], conn)
-                    modify_stock(item_name, "+", sell_quantity)
-                    await self.update_bank_new(interaction.user, conn, +cost)
+                suggestions = [item[0] for item in name_res]  # Extract item names from the list
+                await interaction.response.send_message(
+                    f"Found **{len(suggestions)}** possible matches. Did you mean to sell..\n"
+                    f"{'\n'.join(suggestions)}"
+                )
+            else:
+                # Now, use the index to get the correct item attributes
+                item = SHOP_ITEMS[name_res]
+                name = item["name"]
+                ie = item["emoji"]
+                cost = floor((item["cost"] * sell_quantity) / 4)
 
-                    match sell_quantity:
-                        case 1:
-                            proper_name = item.setdefault('qn', None) or name
-                            proper_name = ' '.join(proper_name.split('_'))
-                            return await interaction.response.send_message(  # type: ignore
-                                embed=membed(f"You just sold 1 {ie} **{proper_name.title()}** and got "
-                                             f"<:robux:1146394968882151434> **{cost:,}** in return."))
-                        case _:
-                            proper_name = item.setdefault('qn', None) or name
-                            proper_name = ' '.join(proper_name.split('_'))
-                            proper_name = make_plural(proper_name, sell_quantity)
-                            return await interaction.response.send_message(  # type: ignore
-                                embed=membed(f"You just sold {sell_quantity} {ie} **{proper_name.title()}** and got "
-                                             f"<:robux:1146394968882151434> **{cost:,}** in return."))
+                quantity = await self.get_one_inv_data_new(interaction.user, name, conn)
+
+                required = quantity - sell_quantity
+
+                if required < 0:
+                    return await interaction.response.send_message(  # type: ignore
+                        f"You're **{abs(required)}** short on selling {ie} **{sell_quantity:,}x** {name}, so uh no.")
+
+                await self.change_inv_new(interaction.user, required, name, conn)
+                modify_stock(item_name, "+", sell_quantity)
+                await self.update_bank_new(interaction.user, conn, +cost)
+
+                embed = discord.Embed(
+                    title=f"{interaction.user.display_name}'s Receipt",
+                    description=(
+                        f"{interaction.user.display_name} sold {ie} **{sell_quantity:,}x** {name}* "
+                        f"and got paid \U000023e3 **{cost:,}**."))
+                embed.set_footer(text="Thanks for your business.")
+
+                await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="work", description="work and earn an income, if you have a job.",
                           extras={"exp_gained": 3})
@@ -4773,7 +4758,8 @@ class Economy(commands.Cog):
                 app_commands.Choice(name=str(the_chose[0]), value=str(the_chose[0]))
                 for the_chose in chosen if current.lower() in the_chose[0].lower()]
 
-    @lookup_item.autocomplete('item_name')
+    @item.autocomplete('item_name')
+    @sell.autocomplete('sell_quantity')
     async def item_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         return [app_commands.Choice(name=item["name"], value=item["name"])
                 for item in SHOP_ITEMS if current.lower() in item["name"].lower()]
