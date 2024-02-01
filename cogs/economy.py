@@ -61,6 +61,7 @@ INV_TABLE_NAME = "inventory"
 ARROW = "<:arrowe:1180428600625877054>"
 CURRENCY = '<:robux:1146394968882151434>'
 PREMIUM_CURRENCY = '<:robuxpremium:1174417815327998012>'
+sticky_msg = "> \U0001f4cc This command is undergoing changes!\n\n"
 ERR_UNREASON = membed('You are unqualified to use this command. Possible reasons include '
                       'insufficient balance and/or unreasonable input.')
 DOWNM = membed('This command is currently outdated and will be made available at a later date.')
@@ -105,63 +106,63 @@ PRESTIGE_EMOTES = {
 SHOP_ITEMS = [
     {"name": "Keycard", "cost": 8269069420, "id": 1, "info": "Allows you to bypass certain restrictions, and you get "
                                                              "more returns from certain activities!",
-     "url": "https://i.imgur.com/WZOWysT.png", "rarity": "**Common** <:common:1166316338571132928>",
-     "emoji": "<:lanyard:1165935243140796487>"},
+     "url": "https://i.imgur.com/WZOWysT.png", "rarity": "Epic",
+     "emoji": "<:lanyard:1165935243140796487>", "available": True},
 
     {"name": "Trophy", "cost": 5085779847, "id": 2, "info": "Flex on your friends with this trophy! There are also "
                                                             "some hidden side effects..",
-     "url": "https://i.imgur.com/32iEaMb.png", "rarity": "**Luxurious** <:luxurious:1166316420125163560>",
-     "emoji": "<:tr1:1165936712468418591>"},
+     "url": "https://i.imgur.com/32iEaMb.png", "rarity": "Luxurious",
+     "emoji": "<:tr1:1165936712468418591>", "available": True},
 
-    {"name": "Dynamic_Item", "cost": 55556587196, "id": 3,
+    {"name": "Dynamic Item", "cost": 55556587196, "id": 3,
      "info": "An item that changes use often. Its transformative "
              "functions change to match the seasonality of the year.",
-     "url": "https://i.imgur.com/WX9mbie.png", "rarity": "**Rare** <:rare:1166316365892825138>", "qn": "dynamic_item",
-     "emoji": "<:dynamic:1197949814898446478>"},
+     "url": "https://i.imgur.com/WX9mbie.png", "rarity": "Rare", "qn": "dynamic_item",
+     "emoji": "<:dynamic:1197949814898446478>", "available": True},
 
     {"name": "Resistor", "cost": 18102892402, "id": 4,
      "info": "No one knows how this works because no one has ever purchased "
              "this item. May cause distress to certain individuals upon purchase.",
-     "url": "https://i.imgur.com/ggO9QbL.png", "rarity": "**Luxurious** <:luxurious:1166316420125163560>",
-     "emoji": "<:resistor:1165934607447887973>"},
+     "url": "https://i.imgur.com/ggO9QbL.png", "rarity": "Godly",
+     "emoji": "<:resistor:1165934607447887973>", "available": False},
 
-    {"name": "Clan_License", "cost": 20876994182, "id": 5,
+    {"name": "Clan License", "cost": 75000000000000, "id": 5,
      "info": "Create your own clan. It costs a fortune, but with it brings a lot of "
              "privileges exclusive to clan members.",
-     "url": "https://i.imgur.com/nPcMNk8.png", "rarity": "**Rare** <:rare:1166316365892825138>", "qn": "clan_license",
+     "url": "https://i.imgur.com/nPcMNk8.png", "rarity": "Godly", "qn": "clan_license",
      "emoji": "<:clan_license:1165936231922806804>"},
 
-    {"name": "Hyperion", "cost": 49510771984, "id": 6,
+    {"name": "Hyperion", "cost": 494510771984, "id": 6,
      "info": "The `passive` drone that actively helps in increasing the returns in almost everything.",
-     "url": "https://i.imgur.com/bmNyob0.png", "rarity": "**Rare** <:rare:1166316365892825138>", "qn": "hyperion_drone",
-     "emoji": "<:DroneHyperion:1171491601726574613>"},
+     "url": "https://i.imgur.com/bmNyob0.png", "rarity": "Uncommon", "qn": "hyperion_drone",
+     "emoji": "<:DroneHyperion:1171491601726574613>", "available": True},
 
     {"name": "Crisis", "cost": 765191412472, "id": 7,
      "info": "The `support` drone that can bring status effects into the game, wreaking havoc onto other users!",
-     "url": "https://i.imgur.com/obOJwJm.png", "rarity": "**Rare** <:rare:1166316365892825138>", "qn": "crisis_drone",
-     "emoji": "<:DroneCrisis:1171491564258852894>"},
+     "url": "https://i.imgur.com/obOJwJm.png", "rarity": "Uncommon", "qn": "crisis_drone",
+     "emoji": "<:DroneCrisis:1171491564258852894>", "available": True},
 
-    {"name": "Odd_Eye", "cost": 33206481258, "id": 8,
+    {"name": "Odd Eye", "cost": 33206481258, "id": 8,
      "info": "An eye that may prove advantageous during certain events. It may even become a pet with time..",
-     "url": "https://i.imgur.com/rErrYrH.gif", "rarity": "**Luxurious** <:luxurious:1166316420125163560>",
-     "qn": "odd_eye", "emoji": "<a:eyeOdd:1166465357142298676>"},
+     "url": "https://i.imgur.com/rErrYrH.gif", "rarity": "Rare",
+     "qn": "odd_eye", "emoji": "<a:eyeOdd:1166465357142298676>", "available": True},
 
     {"name": "Amulet", "cost": 159961918315, "id": 9,
      "info": "Found from a black market, it is said that it contains an extract found only from the ancient relics "
              "lost millions of years ago.",
-     "url": "https://i.imgur.com/m8jRWk5.png", "rarity": "**Luxurious** <:luxurious:1166316420125163560>",
-     "emoji": "<:amuletrccc:1196529299847643198>"},
+     "url": "https://i.imgur.com/m8jRWk5.png", "rarity": "Godly",
+     "emoji": "<:amuletrccc:1196529299847643198>", "available": True},
 ]
 
 NAME_TO_INDEX = {
     "Keycard": 0,
     "Trophy": 1,
-    "Dynamic_Item": 2,
+    "Dynamic Item": 2,
     "Resistor": 3,
-    "Clan_License": 4,
+    "Clan License": 4,
     "Hyperion": 5,
     "Crisis": 6,
-    "Odd_Eye": 7,
+    "Odd Eye": 7,
     "Amulet": 8}
 
 with open('C:\\Users\\georg\\PycharmProjects\\c2c\\cogs\\times.json') as file_name_thi:
@@ -2266,9 +2267,7 @@ class Economy(commands.Cog):
             else:
                 server_bs = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0)
                 multi_own = discord.Embed(colour=0x2F3136,
-                                          description=f'> **The way multipliers work is being changed soon.** It will '
-                                                      f'no longer be fixed and will offer more flexibility. See [#35]('
-                                                      f'https://github.com/SGA-A/c2c/issues/35) for the details.\n\n'
+                                          description=f'{sticky_msg}'
                                                       f'Personal multiplier: **{their_multi[0]:,}**%\n'
                                                       f'*A multiplier that is unique to a user and is usually a fixed '
                                                       f'amount.*\n\n'
@@ -2555,32 +2554,28 @@ class Economy(commands.Cog):
             additional_notes = list()
 
             for item in SHOP_ITEMS:
-                name = " ".join(item["name"].split("_"))
+                name = item["name"]
 
                 additional_notes.append(
-                    f"{item['emoji']} __{name}__ \U00002014 "
-                    f"[\U000023e3 **{item['cost']:,}**](https://youtu.be/dQw4w9WgXcQ)\n"
-                    f"{ARROW}{item["info"]}\n"
-                    f"{ARROW}ID: `{item['id']}`\n"
-                    f"{ARROW}Quantity Remaining: `{get_stock(name)}`")
+                    f"{item['emoji']} __{name}__ \U00002500 [\U000023e3 **{item['cost']:,}**]"
+                    f"(https://youtu.be/dQw4w9WgXcQ) ({get_stock(name)})")
 
             async def get_page_part(page: int):
-                """Helper function to determine what page of the paginator we're on."""
                 emb = discord.Embed(
                     title="Shop",
                     color=0x2B2D31,
-                    description=""
+                    description=f"{sticky_msg}"
                 )
                 offset = (page - 1) * 5
-                length = 3
+                length = 10
 
                 for item_mod in additional_notes[offset:offset + length]:
-                    emb.description += f"{item_mod}\n\n"
+                    emb.description += f"{item_mod}\n"
                 n = Pagination.compute_total_pages(len(additional_notes), length)
-                emb.set_footer(text=f"This is page {page} of {n}")
+                emb.set_footer(text="The number in brackets is the total quantity available.")
                 return emb, n
 
-            await Pagination(interaction, get_page_part).navigate()
+        await Pagination(interaction, get_page_part).navigate()
 
     @shop.command(name='lookup', description='fetch details about an item.')
     @app_commands.describe(item_name='the name of the item find out about.')
@@ -2588,83 +2583,59 @@ class Economy(commands.Cog):
                           item_name: str):
         """This is a subcommand. Look up a particular item within the shop to get more information about it."""
 
-        item_name = self.partial_match_for(item_name)
+        name_res = self.partial_match_for(item_name)
 
-        if not item_name:
+        if not name_res:
             return await interaction.response.send_message(
                 embed=membed("This item does not exist. Are you trying"
                              " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
                              "1121094935802822768/1202647997641523241) an item?"))
 
-        elif isinstance(item_name, list):
+        elif isinstance(name_res, list):
 
-            suggestions = {item[0] for item in item_name}
+            suggestions = {item[0] for item in name_res}
 
             return await interaction.response.send_message(
                 embed=discord.Embed(
-                    title=f"Found {len(item_name)} results",
-                    description="\n".join(suggestions),
+                    title=f"Found {len(name_res)} results",
+                    description='\n'.join(suggestions),
                     colour=0x2B2D31
                 )
             )
         else:
-            item_name: int
-            item_name = SHOP_ITEMS[item_name]
-            return await interaction.response.send_message(item_name)
-            item_stock = get_stock(item_name)
+            attrs = SHOP_ITEMS[name_res]
+            name = attrs["name"]
+            cost = attrs["cost"]
+            rarity = attrs["rarity"]
+            item_stock = get_stock(name)
 
-            match item_stock:
-                case 0:
-                    stock_resp = "The item is currently out of stock."
-                case 1 | 2 | 3:
-                    stock_resp = f"There are shortage in stocks, only **{item_stock}** remain."
-                case _:
-                    stock_resp = f"The item is in stock (**{item_stock}** available)."
+            rarity_to_colour = {
+                "Godly": 0xE2104B,
+                "Legendary": 0xDA4B3D,
+                "Epic": 0xDE63FF,
+                "Rare": 0x5250A6,
+                "Uncommon": 0x9EFF8E
+            }.get(rarity)
 
-            match item_name:
-                case 'Keycard':
-                    clr = discord.Colour.from_rgb(80, 85, 252)
-                case 'Trophy':
-                    clr = discord.Colour.from_rgb(254, 204, 78)
-                case 'Clan License':
-                    clr = discord.Colour.from_rgb(209, 30, 54)
-                case 'Resistor':
-                    clr = discord.Colour.from_rgb(78, 0, 237)
-                case 'Dynamic Item':
-                    clr = discord.Colour.from_rgb(233, 0, 15)
-                case _:
-                    clr = discord.Colour.from_rgb(54, 123, 112)
+            async with self.client.pool_connection.acquire() as conn:  # type: ignore
+                conn: asqlite_Connection
+                data = await conn.fetchone(f"SELECT COUNT(*) FROM inventory WHERE {name} > 0")
+                data = data[0]
+                their_count = await self.get_one_inv_data_new(interaction.user, name, conn)
 
-            for item in SHOP_ITEMS:
-                stored = item["name"]
-                name_beta = stored.split("_")
-                name = " ".join(name_beta)
-                cost = item["cost"]
-
-                if name == item_name:
-                    async with self.client.pool_connection.acquire() as conn:  # type: ignore
-                        conn: asqlite_Connection
-                        data = await conn.execute(f"SELECT COUNT(*) FROM inventory WHERE {stored} > 0")
-                        data = await data.fetchone()
-                        owned_by_how_many = data[0]
-                        their_count = await self.get_one_inv_data_new(interaction.user, stored, conn)
-
-                    em = discord.Embed(title=name,
-                                       description=f"> {item["info"]}\n\n"
-                                                   f"{stock_resp}\n"
-                                                   f"**{owned_by_how_many}** {make_plural("person", owned_by_how_many)} "
-                                                   f"{plural_for_own(owned_by_how_many)} this item.\n"
-                                                   f"You own **{their_count}**.",
-                                       colour=clr, url="https://www.youtube.com"
-                                       )
-                    em.set_thumbnail(url=item["url"])
-                    em.add_field(name="Buying price", value=f"<:robux:1146394968882151434> {cost:,}")
-                    em.add_field(name="Selling price",
-                                 value=f"<:robux:1146394968882151434> {floor(int(cost) / 4):,}")
-
-                    return await interaction.response.send_message(embed=em)  # type: ignore
-
-            await interaction.response.send_message(f"There is no item named {item_name}.")  # type: ignore
+            em = discord.Embed(title=name,
+                               description=f"> {attrs["info"]}\n\n"
+                                           f"There are {item_stock or "none"} left for purchase.\n"
+                                           f"**{data}** {make_plural("person", data)} "
+                                           f"{plural_for_own(data)} this item.\n"
+                                           f"You own **{their_count}**.",
+                               colour=rarity_to_colour, url="https://www.youtube.com")
+            em.set_thumbnail(url=attrs["url"])
+            em.add_field(name="Buying price", value=f"<:robux:1146394968882151434> {cost:,}")
+            em.add_field(name="Selling price",
+                         value=f"<:robux:1146394968882151434> {floor(int(cost) / 4):,}")
+            em.set_footer(text=f"This is {rarity}!")
+            return await interaction.response.send_message(embed=em)  # type: ignore
 
     profile = app_commands.Group(name='editprofile', description='custom-profile-orientated commands for use.',
                                  guild_only=True, guild_ids=APP_GUILDS_ID)
@@ -3336,7 +3307,7 @@ class Economy(commands.Cog):
                         continue
 
                 procfile.description = (f"### {user.name}'s Profile - [{data[4]}](https://www.dis.gd/support)\n"
-                                        f"{note}"
+                                        f"{sticky_msg}{note}"
                                         f"{PRESTIGE_EMOTES.setdefault(data[6], "")} Prestige Level **{data[6]}**"
                                         f"{UNIQUE_BADGES.setdefault(data[-1], "")}\n"
                                         f"<:bountybag:1195653667135692800> Bounty: \U000023e3 **{data[5]:,}**\n"
@@ -3986,7 +3957,7 @@ class Economy(commands.Cog):
 
                 balance = discord.Embed(color=0x2F3136, timestamp=discord.utils.utcnow())
                 balance.set_author(name=f"{user.name}'s balance", icon_url=user.display_avatar.url)
-
+                balance.description = "".join(sticky_msg.splitlines())
                 balance.add_field(name="<:walleten:1195719280898097192> Wallet", value=f"\U000023e3 {nd[0]:,}",
                                   inline=True)
                 balance.add_field(name="<:banken:1195708938734288967> Bank", value=f"\U000023e3 {nd[1]:,}",
