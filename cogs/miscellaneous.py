@@ -324,14 +324,14 @@ class Miscellaneous(commands.Cog):
             if tagsearch is None:
 
                 return await interaction.followup.send(  # type: ignore
-                    embed=membed(f"## No posts found.\n"
-                                 f"- There are a few known causes:\n"
-                                 f" - Entering an invalid tag name.\n"
-                                 f" - Accessing some posts under the `copyright` tag.\n"
-                                 f" - There are no posts found under this tag.\n"
-                                 f" - The page requested exceeds the max length.\n"
-                                 f"- You can find a tag by using /tagsearch "
-                                 f"or [the website.](https://konachan.net/tag)"))
+                    embed=membed("## No posts found.\n"
+                                 "- There are a few known causes:\n"
+                                 " - Entering an invalid tag name.\n"
+                                 " - Accessing some posts under the `copyright` tag.\n"
+                                 " - There are no posts found under this tag.\n"
+                                 " - The page requested exceeds the max length.\n"
+                                 "- You can find a tag by using /tagsearch "
+                                 "or [the website.](https://konachan.net/tag)"))
 
         attachments = set()
         descriptionerfyrd = set()
@@ -486,7 +486,7 @@ class Miscellaneous(commands.Cog):
 
         await interaction.response.send_message(embed=embed)  # type: ignore
 
-    @anime.command(name='filter', description="filter sfw waifu images that are retrieved")
+    @anime.command(name='filter', description="filter sfw waifu images that are retrieved.")
     @app_commands.describe(waifu="include a female anime/manga character",
                            maid="include women/girls employed to do work in their uniform",
                            marin_kitagawa="include marin from my dress-up darling",
