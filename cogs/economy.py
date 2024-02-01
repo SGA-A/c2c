@@ -1959,16 +1959,12 @@ class Economy(commands.Cog):
         """Register a new user's inventory records into the db."""
 
         await conn_input.execute(f"INSERT INTO `{INV_TABLE_NAME}`(userID) VALUES(?)", (user.id,))
-
-        for item in SHOP_ITEMS:
-            await conn_input.execute(f"UPDATE `{INV_TABLE_NAME}` SET `{item["name"]}` = ? WHERE userID = ?",
-                                     (0, user.id,))
         await conn_input.commit()
 
     @staticmethod
     async def get_one_inv_data_new(user: discord.Member, item: str, conn_input: asqlite_Connection) -> Optional[Any]:
         """Fetch inventory data from one specific item inputted."""
-        users = await conn_input.execute(f"SELECT {item} FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
+        users = await conn_input.execute(f"SELECT [{item}] FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
         users = await users.fetchone()
         return users[0]
 
@@ -1977,7 +1973,7 @@ class Economy(commands.Cog):
                              conn_input: asqlite_Connection) -> Optional[Any]:
         """Modify a user's inventory."""
         data = await conn_input.execute(
-            f"UPDATE `{INV_TABLE_NAME}` SET `{mode}` = `{mode}` + ? WHERE userID = ? RETURNING `{mode}`",
+            f"UPDATE `{INV_TABLE_NAME}` SET [{mode}] = [{mode}] + ? WHERE userID = ? RETURNING [{mode}]",
             (amount, user.id))
         await conn_input.commit()
         data = await data.fetchone()
@@ -1989,7 +1985,7 @@ class Economy(commands.Cog):
         """Change a specific attribute in the user's inventory data and return the updated value."""
 
         data = await conn_input.execute(
-            f"UPDATE `{INV_TABLE_NAME}` SET `{mode}` = ? WHERE userID = ? RETURNING `{mode}`", (amount, user.id))
+            f"UPDATE `{INV_TABLE_NAME}` SET [{mode}] = ? WHERE userID = ? RETURNING [{mode}]", (amount, user.id))
         await conn_input.commit()
         data = await data.fetchone()
         return data
@@ -2577,15 +2573,17 @@ class Economy(commands.Cog):
 
         await Pagination(interaction, get_page_part).navigate()
 
-    @shop.command(name='lookup', description='fetch details about an item.')
-    @app_commands.describe(item_name='the name of the item find out about.')
+    @app_commands.command(name='item', description='see more details on a specific item.')
+    @app_commands.describe(item_name='the name of an item.')
+    @app_commands.rename(item_name="name")
+    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     async def lookup_item(self, interaction: discord.Interaction,
                           item_name: str):
         """This is a subcommand. Look up a particular item within the shop to get more information about it."""
 
         name_res = self.partial_match_for(item_name)
 
-        if not name_res:
+        if name_res is None:
             return await interaction.response.send_message(
                 embed=membed("This item does not exist. Are you trying"
                              " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
@@ -2593,8 +2591,7 @@ class Economy(commands.Cog):
 
         elif isinstance(name_res, list):
 
-            suggestions = {item[0] for item in name_res}
-
+            suggestions = [item[0] for item in name_res]  # Extract item names from the list
             return await interaction.response.send_message(
                 embed=discord.Embed(
                     title=f"Found {len(name_res)} results",
@@ -2603,6 +2600,7 @@ class Economy(commands.Cog):
                 )
             )
         else:
+            # Now, use the index to get the correct item attributes
             attrs = SHOP_ITEMS[name_res]
             name = attrs["name"]
             cost = attrs["cost"]
@@ -2619,22 +2617,22 @@ class Economy(commands.Cog):
 
             async with self.client.pool_connection.acquire() as conn:  # type: ignore
                 conn: asqlite_Connection
-                data = await conn.fetchone(f"SELECT COUNT(*) FROM inventory WHERE {name} > 0")
+                data = await conn.fetchone(f"SELECT COUNT(*) FROM inventory WHERE ? > 0", ("Odd Eye",))
                 data = data[0]
                 their_count = await self.get_one_inv_data_new(interaction.user, name, conn)
 
             em = discord.Embed(title=name,
                                description=f"> {attrs["info"]}\n\n"
-                                           f"There are {item_stock or "none"} left for purchase.\n"
+                                           f"There are **{item_stock or "none"}** left for purchase.\n"
                                            f"**{data}** {make_plural("person", data)} "
                                            f"{plural_for_own(data)} this item.\n"
                                            f"You own **{their_count}**.",
                                colour=rarity_to_colour, url="https://www.youtube.com")
-            em.set_thumbnail(url=attrs["url"])
+            em.set_thumbnail(url=attrs.get("url"))
             em.add_field(name="Buying price", value=f"<:robux:1146394968882151434> {cost:,}")
             em.add_field(name="Selling price",
                          value=f"<:robux:1146394968882151434> {floor(int(cost) / 4):,}")
-            em.set_footer(text=f"This is {rarity}!")
+            em.set_footer(text=f"This is {rarity.lower()}!")
             return await interaction.response.send_message(embed=em)  # type: ignore
 
     profile = app_commands.Group(name='editprofile', description='custom-profile-orientated commands for use.',
@@ -3002,7 +3000,6 @@ class Economy(commands.Cog):
                                 'issues.**', colour=0x2B2D31))
 
     @app_commands.command(name="use", description="use an item you own from your inventory.", extras={"exp_gained": 3})
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(item='the name of the item to use')
     @app_commands.checks.cooldown(1, 6)
     async def use_item(self, interaction: discord.Interaction,
@@ -4766,7 +4763,7 @@ class Economy(commands.Cog):
         ]
 
     @view_servents.autocomplete('servant_name')
-    async def callback_thing(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+    async def servant_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         """Autocomplete callback for the servant menu."""
 
         async with self.client.pool_connection.acquire() as conn:  # type: ignore
@@ -4775,6 +4772,11 @@ class Economy(commands.Cog):
             return [
                 app_commands.Choice(name=str(the_chose[0]), value=str(the_chose[0]))
                 for the_chose in chosen if current.lower() in the_chose[0].lower()]
+
+    @lookup_item.autocomplete('item_name')
+    async def item_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        return [app_commands.Choice(name=item["name"], value=item["name"])
+                for item in SHOP_ITEMS if current.lower() in item["name"].lower()]
 
 
 async def setup(client: commands.Bot):
