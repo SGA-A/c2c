@@ -149,7 +149,7 @@ SHOP_ITEMS = [
      "emoji": "<:servant_food:1202726866943873045>", "available": True},
 
     {"name": "Suspicious Pack", "cost": 50_000_000,
-     "info": "An combination of food taken from the forest. It seems to have been tampered with "
+     "info": "A combination of food taken from the forest. It seems to have been tampered with "
              "at some point, frowned upon by most people for its ill-effects.",
      "url": "https://i.imgur.com/3ITIcbo.png", "rarity": "Common",
      "emoji": "<:sus_servant_food:1202730354952110141>", "available": False},
@@ -1464,7 +1464,7 @@ class Economy(commands.Cog):
     def cog_unload(self):
         self.batch_update.cancel()
 
-    @tasks.loop(time=datetime.time(hour=datetime.datetime.now().hour, minute=datetime.datetime.now().minute+30))
+    @tasks.loop(time=datetime.time(hour=datetime.datetime.now().hour, minute=min(0, datetime.datetime.now().minute)))
     async def batch_update(self):
         async with self.client.pool_connection.acquire() as conn:  # type: ignore
             conn: asqlite_Connection
@@ -2635,7 +2635,7 @@ class Economy(commands.Cog):
 
             async with self.client.pool_connection.acquire() as conn:  # type: ignore
                 conn: asqlite_Connection
-                data = await conn.fetchone("SELECT COUNT(*) FROM inventory WHERE ? > 0", (f"[{name}]",))
+                data = await conn.fetchone(f"SELECT COUNT(*) FROM inventory WHERE `{name}` > 0")
                 data = data[0]
                 their_count = await self.get_one_inv_data_new(interaction.user, name, conn)
 
