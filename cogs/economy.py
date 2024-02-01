@@ -515,7 +515,7 @@ class BlackjackUi(discord.ui.View):
             return True
         else:
             emb = discord.Embed(
-                description=f"This game is not held under your name.",
+                description="This game is not held under your name.",
                 color=0x2F3136
             )
             await interaction.response.send_message(embed=emb, ephemeral=True)  # type: ignore
@@ -981,7 +981,7 @@ class ImageModal(discord.ui.Modal):
 
     async def on_error(self, interaction: discord.Interaction, error):
         return await interaction.response.send_message(  # type: ignore
-            embed=membed(f"The url of the photo you provided was not valid, try a different one."))
+            embed=membed("The url of the photo you provided was not valid, try a different one."))
 
 
 class HexModal(discord.ui.Modal):
@@ -1020,9 +1020,9 @@ class HexModal(discord.ui.Modal):
 
     async def on_error(self, interaction: discord.Interaction, error):
         return await interaction.response.send_message(  # type: ignore
-            embed=membed(f"The hex colour provided was not valid.\n"
-                         f"It needs to be in this format: `#FFFFFF`.\n"
-                         f"Note that you do not need to include the hashtag."))
+            embed=membed("The hex colour provided was not valid.\n"
+                         "It needs to be in this format: `#FFFFFF`.\n"
+                         "Note that you do not need to include the hashtag."))
 
 
 class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
@@ -1079,7 +1079,8 @@ class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
     async def on_error(self, interaction: discord.Interaction, error):
         print_exception(type(error), error, error.__traceback__)
         return await interaction.response.send_message(  # type: ignore
-            embed=membed(f"Something went wrong."))
+            embed=membed("Something went wrong. Errors like this happen from time to time.\n"
+                         "The developers have been notified and will resolve the issue soon."))
 
 
 class UpdateInfo(discord.ui.Modal, title="Update Bio"):
@@ -1383,7 +1384,7 @@ class ServantsManager(discord.ui.View):
              f"In a tender moment, you leaned in and placed a soft kiss on {her_his} lips, expressing your affection.",
              "You placed a passionate kiss speaking of desire and an unspoken connection that went beyond just words. "
              f"{she_he.title()} embraced it albeit awkwardly and held her captive in the state she was enthralled in.",
-             f"A gentle peck on the nose became a cherished routine, a simple act that spoke volumes.")
+             "A gentle peck on the nose became a cherished routine, a simple act that spoke volumes.")
         )
 
         dtls = await self.child.conn.execute(
@@ -1777,8 +1778,9 @@ class Economy(commands.Cog):
         status = "Awaiting orders" if status else "Busy with work"
         sdetails = discord.Embed(
             title=f"{slay_name} {gender_emotes.get(gender)}",
-            description=f"**Status**: {status}\n"
-                        f"**Investment**: \U000023e3 {investment:,}",
+            description=f"**Status:** {status}\n"
+                        f"**Investment:** \U000023e3 {investment:,}\n"
+                        f"**Productivity:** `{productivity}x`",
             color=hexx or gend.setdefault(gender, 0x2B2D31))
 
         sdetails.add_field(name="Hunger", value=f"{generate_progress_bar(hunger)} ({hunger}%)")
@@ -2616,7 +2618,7 @@ class Economy(commands.Cog):
 
             async with self.client.pool_connection.acquire() as conn:  # type: ignore
                 conn: asqlite_Connection
-                data = await conn.fetchone(f"SELECT COUNT(*) FROM inventory WHERE ? > 0", ("Odd Eye",))
+                data = await conn.fetchone("SELECT COUNT(*) FROM inventory WHERE [?] > 0", (name,))
                 data = data[0]
                 their_count = await self.get_one_inv_data_new(interaction.user, name, conn)
 
@@ -3727,12 +3729,12 @@ class Economy(commands.Cog):
                 new_am = await self.update_bank_new(interaction.user, conn, -cost)
 
                 embed = discord.Embed(
-                    title=f"Successful Purchase",
+                    title="Successful Purchase",
                     description=(
                         f"> You have \U000023e3 {new_am:,} left.\n\n"
-                        f"**You bought:**\n"
+                        "**You bought:**\n"
                         f"- {quantity}x {ie} {name}\n\n"
-                        f"**You paid:**\n"
+                        "**You paid:**\n"
                         f"- \U000023e3 {cost:,}"),
                     colour=0xFFFFFF)
                 embed.set_footer(text="Thanks for your business.")
