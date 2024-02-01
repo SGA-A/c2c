@@ -3718,6 +3718,17 @@ class Economy(commands.Cog):
                 cost = item["cost"] * quantity
                 wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
                 required = wallet_amt - cost
+                stock = get_stock(name)
+
+                if stock == 0:
+                    return await interaction.response.send_message(  # type: ignore
+                        embed=membed(f"There is literally no {ie} **{item_name}** left for you sorry."))
+
+                if quantity > stock:
+                    return await interaction.response.send_message(  # type: ignore
+                        embed=membed(f"We're short on {ie} {name} available, so you "
+                                     f"can only buy a maximum of **{stock}x**.\n"
+                                     f"Nothing is unlimited in the real world!"))
 
                 if required < 0:
                     return await interaction.response.send_message(  # type: ignore
