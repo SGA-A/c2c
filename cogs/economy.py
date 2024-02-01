@@ -1345,7 +1345,7 @@ class ServantsManager(discord.ui.View):
              f"{she_he.title()} held your body close, feeling a sense of security in the embrace of "
              f"someone truly special to {her_his} heart.",
              "As you hugged them, you whispered words of comfort, "
-             f"letting them know {she_he} was cherished and valued.",
+             f"letting {her_his} mind know {she_he} was cherished and valued.",
              f"The embrace was more than physical; it was celebrating the mutual connection {she_he} shared with you.",
              f"With a smile, you embraced {her_his} lascivious body, feeling a sense of completeness as if both of "
              "your hearts were synchronized in that moment.",
@@ -1464,6 +1464,21 @@ class Economy(commands.Cog):
     @batch_update.before_loop
     async def before_update(self):
         await self.client.wait_until_ready()
+
+    @staticmethod
+    def partial_match_for(item_input: str):
+        """If the user types part of an item name, get that item name indicated.
+
+        This is known as partial matching for item names."""
+
+        matching_keys = [(item_name, item_index) for item_name, item_index in NAME_TO_INDEX.items() if
+                         item_input.lower() in item_name.lower()]
+
+        if not matching_keys:
+            return None
+        if len(matching_keys) == 1:
+            return matching_keys[0][1]
+        return matching_keys
 
     @staticmethod
     async def send_return_interaction_orginal_response(interaction: discord.Interaction):
@@ -2568,66 +2583,88 @@ class Economy(commands.Cog):
             await Pagination(interaction, get_page_part).navigate()
 
     @shop.command(name='lookup', description='fetch details about an item.')
-    @app_commands.describe(item_name='the name of the item you want to sell.')
+    @app_commands.describe(item_name='the name of the item find out about.')
     async def lookup_item(self, interaction: discord.Interaction,
-                          item_name: Literal[
-                              'Keycard', 'Trophy', 'Clan License', 'Resistor', 'Amulet',
-                              'Dynamic Item', 'Hyperion', 'Crisis', 'Odd Eye']):
+                          item_name: str):
         """This is a subcommand. Look up a particular item within the shop to get more information about it."""
 
-        item_stock = get_stock(item_name)
-        match item_stock:
-            case 0:
-                stock_resp = "The item is currently out of stock."
-            case 1 | 2 | 3:
-                stock_resp = f"There are shortage in stocks, only **{item_stock}** remain."
-            case _:
-                stock_resp = f"The item is in stock (**{item_stock}** available)."
+        item_name = self.partial_match_for(item_name)
 
-        match item_name:
-            case 'Keycard':
-                clr = discord.Colour.from_rgb(80, 85, 252)
-            case 'Trophy':
-                clr = discord.Colour.from_rgb(254, 204, 78)
-            case 'Clan License':
-                clr = discord.Colour.from_rgb(209, 30, 54)
-            case 'Resistor':
-                clr = discord.Colour.from_rgb(78, 0, 237)
-            case 'Dynamic Item':
-                clr = discord.Colour.from_rgb(233, 0, 15)
-            case _:
-                clr = discord.Colour.from_rgb(54, 123, 112)
+        if not item_name:
+            return await interaction.response.send_message(
+                embed=membed("This item does not exist. Are you trying"
+                             " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
+                             "1121094935802822768/1202647997641523241) an item?"))
 
-        for item in SHOP_ITEMS:
-            stored = item["name"]
-            name_beta = stored.split("_")
-            name = " ".join(name_beta)
-            cost = item["cost"]
+        elif isinstance(item_name, list):
 
-            if name == item_name:
-                async with self.client.pool_connection.acquire() as conn:  # type: ignore
-                    conn: asqlite_Connection
-                    data = await conn.execute(f"SELECT COUNT(*) FROM inventory WHERE {stored} > 0")
-                    data = await data.fetchone()
-                    owned_by_how_many = data[0]
-                    their_count = await self.get_one_inv_data_new(interaction.user, stored, conn)
+            suggestions = {item[0] for item in item_name}
 
-                em = discord.Embed(title=name,
-                                   description=f"> {item["info"]}\n\n"
-                                               f"{stock_resp}\n"
-                                               f"**{owned_by_how_many}** {make_plural("person", owned_by_how_many)} "
-                                               f"{plural_for_own(owned_by_how_many)} this item.\n"
-                                               f"You own **{their_count}**.",
-                                   colour=clr, url="https://www.youtube.com"
-                                   )
-                em.set_thumbnail(url=item["url"])
-                em.add_field(name="Buying price", value=f"<:robux:1146394968882151434> {cost:,}")
-                em.add_field(name="Selling price",
-                             value=f"<:robux:1146394968882151434> {floor(int(cost) / 4):,}")
+            return await interaction.response.send_message(
+                embed=discord.Embed(
+                    title=f"Found {len(item_name)} results",
+                    description="\n".join(suggestions),
+                    colour=0x2B2D31
+                )
+            )
+        else:
+            item_name: int
+            item_name = SHOP_ITEMS[item_name]
+            return await interaction.response.send_message(item_name)
+            item_stock = get_stock(item_name)
 
-                return await interaction.response.send_message(embed=em)  # type: ignore
+            match item_stock:
+                case 0:
+                    stock_resp = "The item is currently out of stock."
+                case 1 | 2 | 3:
+                    stock_resp = f"There are shortage in stocks, only **{item_stock}** remain."
+                case _:
+                    stock_resp = f"The item is in stock (**{item_stock}** available)."
 
-        await interaction.response.send_message(f"There is no item named {item_name}.")  # type: ignore
+            match item_name:
+                case 'Keycard':
+                    clr = discord.Colour.from_rgb(80, 85, 252)
+                case 'Trophy':
+                    clr = discord.Colour.from_rgb(254, 204, 78)
+                case 'Clan License':
+                    clr = discord.Colour.from_rgb(209, 30, 54)
+                case 'Resistor':
+                    clr = discord.Colour.from_rgb(78, 0, 237)
+                case 'Dynamic Item':
+                    clr = discord.Colour.from_rgb(233, 0, 15)
+                case _:
+                    clr = discord.Colour.from_rgb(54, 123, 112)
+
+            for item in SHOP_ITEMS:
+                stored = item["name"]
+                name_beta = stored.split("_")
+                name = " ".join(name_beta)
+                cost = item["cost"]
+
+                if name == item_name:
+                    async with self.client.pool_connection.acquire() as conn:  # type: ignore
+                        conn: asqlite_Connection
+                        data = await conn.execute(f"SELECT COUNT(*) FROM inventory WHERE {stored} > 0")
+                        data = await data.fetchone()
+                        owned_by_how_many = data[0]
+                        their_count = await self.get_one_inv_data_new(interaction.user, stored, conn)
+
+                    em = discord.Embed(title=name,
+                                       description=f"> {item["info"]}\n\n"
+                                                   f"{stock_resp}\n"
+                                                   f"**{owned_by_how_many}** {make_plural("person", owned_by_how_many)} "
+                                                   f"{plural_for_own(owned_by_how_many)} this item.\n"
+                                                   f"You own **{their_count}**.",
+                                       colour=clr, url="https://www.youtube.com"
+                                       )
+                    em.set_thumbnail(url=item["url"])
+                    em.add_field(name="Buying price", value=f"<:robux:1146394968882151434> {cost:,}")
+                    em.add_field(name="Selling price",
+                                 value=f"<:robux:1146394968882151434> {floor(int(cost) / 4):,}")
+
+                    return await interaction.response.send_message(embed=em)  # type: ignore
+
+            await interaction.response.send_message(f"There is no item named {item_name}.")  # type: ignore
 
     profile = app_commands.Group(name='editprofile', description='custom-profile-orientated commands for use.',
                                  guild_only=True, guild_ids=APP_GUILDS_ID)
