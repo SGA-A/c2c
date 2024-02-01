@@ -1239,6 +1239,48 @@ class ServantsManager(discord.ui.View):
         except discord.NotFound:
             pass
 
+    async def add_exp_handle_interactions(self, interaction: discord.Interaction, mode: str, by=1):
+        """Add experience points to the servant increment their level if max XP is hit."""
+
+        val = await self.child.conn.execute(
+            f'UPDATE `{SLAY_TABLE_NAME}` SET exp = exp + ? WHERE userID = ? AND slay_name = ? '
+            f'AND EXISTS (SELECT 1 FROM `{SLAY_TABLE_NAME}` WHERE userID = ?) RETURNING exp, level',
+            (by, interaction.user.id, self.child.choice, interaction.user.id))
+        val = await val.fetchone()
+
+        if val:
+            xp, level = val
+            exp_needed = Economy.calculate_serv_exp_for(level=level)
+
+            if xp >= exp_needed:
+                await self.child.conn.execute(
+                    "UPDATE `slay` SET level = level + 1, exp = 0 WHERE userID = ? AND slay_name = ?",
+                    (interaction.user.id, self.child.choice))
+                await self.child.conn.execute(
+                    f"UPDATE `{BANK_TABLE_NAME}` SET points = points + 1 WHERE userID = ?", (interaction.user.id,)
+                )
+
+                up = discord.Embed(title=f"Your {self.child.choice.title()} just leveled up!",
+                                   description=f"` {level} ` \U0000279c ` {level + 1} `")
+                up.set_footer(text="You now have an extra point to spend in training.")
+                await interaction.channel.send(embed=up)
+
+        if mode.startswith("f"):
+            dtls = await self.child.conn.execute(
+                "UPDATE `slay` SET hunger = hunger + ? WHERE slay_name = ? AND userID = ? RETURNING *",
+                (randint(10, 20), self.child.choice, self.child.owner_id))
+            await self.child.conn.commit()
+            dtls = await dtls.fetchone()
+        else:
+            dtls = await self.child.conn.execute(
+                "UPDATE `slay` SET hygiene = 100 WHERE slay_name = ? AND userID = ? RETURNING *",
+                (self.child.choice, self.child.owner_id))
+            await self.child.conn.commit()
+            dtls = await dtls.fetchone()
+
+        sembed = await Economy.servant_preset(Economy(self.child.client), self.child.owner_id, dtls)  # servant embed
+        await interaction.response.edit_message(content=None, embed=sembed, view=self)  # type: ignore
+
     @discord.ui.button(label="Manage", style=discord.ButtonStyle.blurple, row=1)
     async def manage_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.child.owner_id:
@@ -1259,15 +1301,7 @@ class ServantsManager(discord.ui.View):
             return await interaction.response.send_message(  # type: ignore
                 content="Your servant is not hungry!", ephemeral=True)
 
-        dtls = await self.child.conn.execute(
-            "UPDATE `slay` SET hunger = hunger + ? WHERE slay_name = ? AND userID = ? RETURNING *",
-            (randint(10, 20), self.child.choice, self.child.owner_id))
-        await self.child.conn.commit()
-        dtls = await dtls.fetchone()
-
-        sembed = await Economy.servant_preset(Economy(self.child.client), self.child.owner_id, dtls)  # servant embed
-
-        await interaction.response.edit_message(content=None, embed=sembed, view=self)  # type: ignore
+        await self.add_exp_handle_interactions(interaction, mode="feed")
 
     @discord.ui.button(label='Wash', style=discord.ButtonStyle.blurple, row=1)
     async def wash_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1277,15 +1311,6 @@ class ServantsManager(discord.ui.View):
         if current_hygiene[0] >= 90:
             return await interaction.response.send_message(  # type: ignore
                 content="You can't wash them just yet, they are looking pretty clean already!", ephemeral=True)
-
-        dtls = await self.child.conn.execute(
-            "UPDATE `slay` SET hygiene = 100 WHERE slay_name = ? AND userID = ? RETURNING *",
-            (self.child.choice, self.child.owner_id))
-        await self.child.conn.commit()
-        dtls = await dtls.fetchone()
-
-        sembed = await Economy.servant_preset(Economy(self.child.client), self.child.owner_id, dtls)  # servant embed
-        await interaction.response.edit_message(content=None, embed=sembed, view=self)  # type: ignore
 
         possible = choice(
             ("You wet your servant's hair with warm water before applying a gentle tear-free shampoo.\n"
@@ -1298,6 +1323,7 @@ class ServantsManager(discord.ui.View):
         )
 
         await interaction.channel.send(embed=membed(possible))
+        await self.add_exp_handle_interactions(interaction, mode="wash")
 
     @discord.ui.button(label='Invest', style=discord.ButtonStyle.blurple, row=1)
     async def invest_in_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1326,6 +1352,18 @@ class ServantsManager(discord.ui.View):
              "The hug was a blend of familiarity and excitement, as if rediscovering the "
              "joy of being close to someone dear.")
         )
+
+        dtls = await self.child.conn.execute(
+            "UPDATE `slay` SET love = love + 35 WHERE slay_name = ? AND userID = ? AND love <= 100 RETURNING *",
+            (self.child.choice, self.child.owner_id))
+
+        dtls = await dtls.fetchone()
+
+        if dtls is not None:
+            await self.child.conn.commit()
+
+            sembed = await Economy.servant_preset(Economy(self.child.client), self.child.owner_id, dtls)
+            await interaction.message.edit(content=None, embed=sembed, view=self)  # type: ignore
         await interaction.response.send_message(embed=membed(selection))  # type: ignore
 
     @discord.ui.button(label="\u200b", emoji="\U0001f48b", style=discord.ButtonStyle.gray, row=2)
@@ -1346,6 +1384,16 @@ class ServantsManager(discord.ui.View):
              f"{she_he.title()} embraced it albeit awkwardly and held her captive in the state she was enthralled in.",
              f"A gentle peck on the nose became a cherished routine, a simple act that spoke volumes.")
         )
+
+        dtls = await self.child.conn.execute(
+            "UPDATE `slay` SET love = love + 35 WHERE slay_name = ? AND userID = ? AND love <= 100 RETURNING *",
+            (self.child.choice, self.child.owner_id))
+        dtls = await dtls.fetchone()
+
+        if dtls is not None:
+            await self.child.conn.commit()
+            sembed = await Economy.servant_preset(Economy(self.child.client), self.child.owner_id, dtls)
+            await interaction.message.edit(content=None, embed=sembed, view=self)  # type: ignore
         await interaction.response.send_message(embed=membed(selection))  # type: ignore
 
     @discord.ui.button(emoji="\U00002728", label="Add Photo", style=discord.ButtonStyle.green, row=3)
@@ -1433,6 +1481,11 @@ class Economy(commands.Cog):
     def calculate_exp_for(*, level: int):
         """Calculate the experience points required for a given level."""
         return ceil((level / 0.9) ** 2)
+
+    @staticmethod
+    def calculate_serv_exp_for(*, level: int):
+        """Calculate the experience points required for a given level."""
+        return int((1 / 0.5) ** 2)
 
     async def create_leaderboard_preset(self, chosen_choice: str):
         """A single reused function used to map the chosen leaderboard made by the user to the associated query."""
@@ -2139,22 +2192,6 @@ class Economy(commands.Cog):
                     'ON CONFLICT (userID) DO UPDATE SET exp = exp + ? RETURNING exp, level',
                     (interaction.user.id, exp_gainable))
 
-                # val = await connection.fetchone(
-                #     f'UPDATE `{SLAY_TABLE_NAME}` SET exp = exp + ? WHERE userID = ? '
-                #     f'AND EXISTS (SELECT 1 FROM `{SLAY_TABLE_NAME}` WHERE userID = ?) RETURNING exp, level',
-                #     (exp_gainable, interaction.user.id, interaction.user.id))
-                # if val:
-                #     xp, level = val
-                #     exp_needed = self.calculate_exp_for(level=level)
-                #
-                #     if xp >= exp_needed:
-                #         await connection.execute(
-                #             """UPDATE `slay` SET level = level + 1, exp = 0 WHERE userID = ?""",
-                #             (interaction.user.id,))
-                #
-                #         await self.send_custom_text(interaction,
-                #                                     custom_text=f'{interaction.user.mention} has just leveled '
-                #                                                 f'up to Level **{level + 1}**.')
                 if record:
                     xp, level = record
                     exp_needed = self.calculate_exp_for(level=level)
