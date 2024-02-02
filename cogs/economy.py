@@ -1981,7 +1981,7 @@ class Economy(commands.Cog):
     @staticmethod
     async def get_one_inv_data_new(user: discord.Member, item: str, conn_input: asqlite_Connection) -> Optional[Any]:
         """Fetch inventory data from one specific item inputted."""
-        users = await conn_input.execute(f"SELECT [{item}] FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
+        users = await conn_input.execute(f"SELECT `{item}` FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
         users = await users.fetchone()
         return users[0]
 
@@ -3313,10 +3313,10 @@ class Economy(commands.Cog):
                 for i in range(1, 4):
                     try:
                         that_item = showcase[i - 1]
-                        if item == "0":
+                        if that_item == "0":
                             continue
                         qty = await self.get_one_inv_data_new(user, that_item, conn)
-                        if qty >= 1:
+                        if qty:
                             nshowcase.append(f"`{qty}x` {SHOP_ITEMS[NAME_TO_INDEX.get(that_item)]['emoji']}")
                     except IndexError:
                         continue
