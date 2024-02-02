@@ -104,13 +104,13 @@ PRESTIGE_EMOTES = {
 }
 
 SHOP_ITEMS = [
-    {"name": "Keycard", "cost": 8269069420, "info": "Allows you to bypass certain restrictions, and you get "
-                                                             "more returns from certain activities!",
+    {"name": "Keycard", "cost": 8269069420,
+     "info": "Allows you to bypass certain restrictions, and you get more returns from certain activities!",
      "url": "https://i.imgur.com/WZOWysT.png", "rarity": "Epic",
      "emoji": "<:lanyard:1165935243140796487>", "available": True},
 
-    {"name": "Trophy", "cost": 5085779847, "info": "Flex on your friends with this trophy! There are also "
-                                                            "some hidden side effects..",
+    {"name": "Trophy", "cost": 5085779847,
+     "info": "Flex on your friends with this trophy! There are also some hidden side effects..",
      "url": "https://i.imgur.com/32iEaMb.png", "rarity": "Luxurious",
      "emoji": "<:tr1:1165936712468418591>", "available": True},
 
@@ -1517,7 +1517,7 @@ class Economy(commands.Cog):
     @staticmethod
     def calculate_serv_exp_for(*, level: int):
         """Calculate the experience points required for a given level."""
-        return int((1 / 0.5) ** 2)
+        return int((level / 0.59) ** 3)
 
     async def create_leaderboard_preset(self, chosen_choice: str):
         """A single reused function used to map the chosen leaderboard made by the user to the associated query."""
@@ -1809,29 +1809,15 @@ class Economy(commands.Cog):
         sdetails.set_image(url=img)
         return sdetails
 
-    async def raise_pmulti_warning(self, interaction: discord.Interaction, their_pmulti: int | str):
-        """Warn users if they have not set up a personal multiplier yet using a webhook."""
-        if their_pmulti in {"0", 0}:
-            hook_id = get_profile_key_value(f"{interaction.channel.id} webhook")
-            if hook_id is None:
-                async with self.client.session.get("https://i.imgur.com/3aMsyXI.jpg") as resp:  # type: ignore
-                    avatar_data = await resp.read()
-                hook = await interaction.channel.create_webhook(name='Notify', avatar=avatar_data)
-                modify_profile("update", f"{interaction.channel.id} webhook", hook.id)
-            else:
-                hook = await self.client.fetch_webhook(hook_id)
-
-            await hook.send(f"Hey {interaction.user.mention}! We noticed you have not set a personal "
-                            f"multiplier. You should set one up now to increase your returns!")
-
     async def send_custom_text(self, interaction: discord.Interaction,
                                custom_text: str):
         """Send a custom text using the webhook provided."""
         hook_id = get_profile_key_value(f"{interaction.channel.id} webhook")
+
         if hook_id is None:
-            async with self.client.session.get("https://i.imgur.com/3aMsyXI.jpg") as resp:  # type: ignore
+            async with self.client.session.get(f"{self.client.user.avatar.url}") as resp:  # type: ignore
                 avatar_data = await resp.read()
-            hook = await interaction.channel.create_webhook(name='Notify', avatar=avatar_data)
+            hook = await interaction.channel.create_webhook(name='c2c', avatar=avatar_data)
             modify_profile("update", f"{interaction.channel.id} webhook", hook.id)
         else:
             hook = await self.client.fetch_webhook(hook_id)
@@ -2554,7 +2540,7 @@ class Economy(commands.Cog):
                               guild_ids=APP_GUILDS_ID)
 
     @shop.command(name='view', description='view all shop items.')
-    @app_commands.checks.cooldown(1, 6)
+    @app_commands.checks.cooldown(1, 12)
     async def view_the_shop(self, interaction: discord.Interaction):
         """This is a subcommand. View the currently available items within the shop."""
 
@@ -3487,9 +3473,6 @@ class Economy(commands.Cog):
                 view=HighLow(interaction, self.client, hint_provided=hint, bet=real_amount, value=number),
                 embed=query)
 
-            pmulti = await self.get_pmulti_data_only(interaction.user, conn)
-            await self.raise_pmulti_warning(interaction, pmulti[0])
-
     @app_commands.command(name='slots',
                           description='try your luck on a slot machine.', extras={"exp_gained": 3})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -3916,11 +3899,9 @@ class Economy(commands.Cog):
     @app_commands.describe(user='the user to return the balance of',
                            with_force='whether to register this user if not already')
     @app_commands.guild_only()
-    @app_commands.checks.cooldown(1, 6)
     async def find_balance(self, interaction: discord.Interaction, user: Optional[discord.Member],
                            with_force: Optional[bool]):
         """Returns a user's balance."""
-        msg = await self.send_return_interaction_orginal_response(interaction)
 
         user = user or interaction.user
 
@@ -3932,8 +3913,8 @@ class Economy(commands.Cog):
                     await self.open_bank_new(user, conn)
                     await self.open_inv_new(user, conn)
                     await self.open_cooldowns(user, conn)
-                    return await msg.edit(content=None, embed=membed(f"Force registered {user.name}."))
-                await msg.edit(content=None, embed=membed(f"{user.name} isn't registered."))
+                    return await interaction.response.send_message(embed=membed(f"Force registered {user.name}."))
+                await interaction.response.send_message(embed=membed(f"{user.name} isn't registered."))
 
             elif await self.can_call_out(user, conn) and (user.id == interaction.user.id):
 
@@ -3958,7 +3939,7 @@ class Economy(commands.Cog):
                                f"</withdraw:1172898644622585876>, </deposit:1172898644622585877>, "
                                f"</inventory:1172898644287029333>, </shop view:1172898645532749946>, "
                                f"</buy:1172898644287029334>")
-                return await msg.edit(content=None, embed=norer)
+                return await interaction.response.send_message(embed=norer)
             else:
                 nd = await conn.execute("SELECT wallet, bank, bankspace FROM `bank` WHERE userID = ?", (user.id,))
                 nd = await nd.fetchone()
@@ -3989,12 +3970,7 @@ class Economy(commands.Cog):
                 balance.add_field(name="<:nettotalen:1195710560910725180> Total Net",
                                   value=f"\U000023e3 {inv + bank:,}", inline=True)
 
-                if user.id in self.client.owner_ids:
-                    balance.set_footer(icon_url='https://cdn.discordapp.com/emojis/1174417902980583435.webp?size=128&'
-                                                'quality=lossless',
-                                       text='mallow is dazzled')
-
-                await msg.edit(content=None, embed=balance)
+                await interaction.response.send_message(embed=balance)
 
     @app_commands.command(name="resetmydata", description="opt out of the virtual economy.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -4063,7 +4039,6 @@ class Economy(commands.Cog):
     @app_commands.command(name="withdraw", description="withdraw robux from your account.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(robux='the amount of robux to withdraw. Supports Shortcuts (max, all, exponents).')
-    @app_commands.checks.cooldown(1, 6)
     async def withdraw(self, interaction: discord.Interaction, robux: str):
         """Withdraw a given amount of robux from your bank."""
 
@@ -4119,7 +4094,6 @@ class Economy(commands.Cog):
     @app_commands.command(name='deposit', description="deposit robux to your bank account.")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(robux='the amount of robux to deposit. Supports Shortcuts (max, all, exponents).')
-    @app_commands.checks.cooldown(1, 6)
     async def deposit(self, interaction: discord.Interaction, robux: str):
         """Deposit an amount of robux into your bank."""
 
@@ -4631,8 +4605,6 @@ class Economy(commands.Cog):
             embed=start, view=my_view)
         my_view.message = await interaction.original_response()
 
-        await self.raise_pmulti_warning(interaction, pmulti[0])
-
     @app_commands.command(name="bet",
                           description="bet your robux on a dice roll.", extras={"exp_gained": 3})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -4759,8 +4731,6 @@ class Economy(commands.Cog):
             embed.add_field(name=interaction.user.name, value=f"Rolled `{your_choice[0]}` {''.join(badges)}")
             embed.add_field(name=self.client.user.name, value=f"Rolled `{bot_choice[0]}`")
             await interaction.response.send_message(embed=embed)  # type: ignore
-
-            await self.raise_pmulti_warning(interaction, pmulti)
 
     @play_blackjack.autocomplete('bet_amount')
     @bet.autocomplete('exponent_amount')
