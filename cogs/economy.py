@@ -132,7 +132,7 @@ SHOP_ITEMS = [
      "info": "Create your own clan. It costs a fortune, but with it brings a lot of "
              "privileges exclusive to clan members.",
      "url": "https://i.imgur.com/nPcMNk8.png", "rarity": "Godly", "qn": "clan_license",
-     "emoji": "<:clan_license:1165936231922806804>"},
+     "emoji": "<:clan_license:1165936231922806804>", "available": True},
 
     {"name": "Hyperion", "cost": 494510771984,
      "info": "The `passive` drone that actively helps in increasing the returns in almost everything.",
@@ -3404,6 +3404,8 @@ class Economy(commands.Cog):
                 for i in range(1, 4):
                     try:
                         that_item = showcase[i - 1]
+                        that_item: str
+                        that_item = that_item.replace("_", " ")
                         if that_item == "0":
                             continue
                         qty = await self.get_one_inv_data_new(user, that_item, conn)
@@ -3825,14 +3827,14 @@ class Economy(commands.Cog):
                     )
 
                 if stock == 0:
-                    return await interaction.response.send_message(  # type: ignore
-                        embed=membed(f"There is literally no {ie} **{item_name}** left for you sorry."))
+                    return await interaction.response.send_message(
+                        f"There is literally no {ie} **{item_name}** left for you sorry.")
 
                 if quantity > stock:
-                    return await interaction.response.send_message(  # type: ignore
-                        embed=membed(f"We're short on {ie} {name} available, so you "
-                                     f"can only buy a maximum of **{stock}x**.\n"
-                                     f"Nothing is unlimited in the real world!"))
+                    return await interaction.response.send_message(
+                        f"We're short on {ie} {name} available, so you "
+                        f"can only buy a maximum of **{stock}x**.\n"
+                        f"Nothing is unlimited in the real world!")
 
                 if required < 0:
                     return await interaction.response.send_message(  # type: ignore
@@ -3875,9 +3877,9 @@ class Economy(commands.Cog):
 
             if name_res is None:
                 return await interaction.response.send_message(
-                    embed=membed("This item does not exist. Are you trying"
-                                 " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
-                                 "1121094935802822768/1202647997641523241) an item?"))
+                    "This item does not exist. Are you trying"
+                    " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
+                    "1121094935802822768/1202647997641523241) an item?")
 
             elif isinstance(name_res, list):
 
@@ -3946,7 +3948,7 @@ class Economy(commands.Cog):
             job_val = await self.get_job_data_only(user=interaction.user, conn_input=conn)
 
             if job_val == "None":
-                await interaction.response.send_message(  # type: ignore
+                return await interaction.response.send_message(  # type: ignore
                     embed=membed("You don't have a job, get one first."))
 
             possible_words: tuple = words.get(job_val)[0]
