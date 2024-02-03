@@ -1,4 +1,6 @@
 """The virtual economy system of the bot."""
+from discord.ui import Item
+
 from other.utilities import parse_duration, datetime_to_string, string_to_datetime, labour_productivity_via
 from asyncio import sleep, TimeoutError as asyncTE
 from string import ascii_letters, digits
@@ -10,7 +12,7 @@ from discord.ext import commands, tasks
 from math import floor, ceil
 from random import randint, choices, choice, sample, shuffle
 from pluralizer import Pluralizer
-from discord import app_commands, SelectOption
+from discord import app_commands, SelectOption, Interaction
 from asqlite import Connection as asqlite_Connection
 from typing import Optional, Literal, Any, Union, List
 from traceback import print_exception
@@ -497,6 +499,12 @@ class BlackjackUi(discord.ui.View):
         """Disable all items within the blackjack interface."""
         for item in self.children:
             item.disabled = True
+
+    async def on_error(self, interaction: Interaction, error: Exception, item: Item[Any], /) -> None:
+        print_exception(type(error), error, error.__traceback__)
+        await interaction.response.send_message("Something went wrong, this game did not work as intended.\n"
+                                                "The developers have received a traceback detailing what happened, "
+                                                "and will soon begin looking into the issue.")
 
     async def on_timeout(self) -> None:
         await self.disable_all_items()
@@ -3405,7 +3413,7 @@ class Economy(commands.Cog):
                         continue
 
                 procfile.description = (f"### {user.name}'s Profile - [{data[4]}](https://www.dis.gd/support)\n"
-                                        f"{sticky_msg}{note}"
+                                        f"{note}"
                                         f"{PRESTIGE_EMOTES.setdefault(data[6], "")} Prestige Level **{data[6]}**"
                                         f"{UNIQUE_BADGES.setdefault(data[-1], "")}\n"
                                         f"<:bountybag:1195653667135692800> Bounty: \U000023e3 **{data[5]:,}**\n"
@@ -3726,26 +3734,21 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=NOT_REGISTERED)  # type: ignore
 
             em = discord.Embed(color=0x2F3136)
-            length = 3
+            length = 8
             value, svalue = 0, 0
             total_items = 0
             owned_items = []
 
             for item in SHOP_ITEMS:
                 name = item["name"]
-                qualified_name = " ".join(name.split("_"))
                 cost = item["cost"]
-                item_id = item["id"]
                 item_emoji = item["emoji"]
-                item_type = item["rarity"]
                 data = await self.update_inv_new(member, 0, name, conn)
                 if data[0] >= 1:
                     value += int(cost) * data[0]
                     svalue += int(cost / 4) * data[0]
                     total_items += data[0]
-                    owned_items.append(
-                        f"{item_emoji} **{qualified_name}** ({data[0]} owned)\n"
-                        f"ID: **`{item_id}`**\nItem Type: {item_type}")
+                    owned_items.append(f"{item_emoji} **{name}** \U00002500 {data[0]}")
 
             if len(owned_items) == 0:
                 em.set_author(name=f"{member.name}'s Inventory", icon_url=member.display_avatar.url)
@@ -3763,17 +3766,15 @@ class Economy(commands.Cog):
                 em.set_author(name=f"{member.name}'s Inventory", icon_url=member.display_avatar.url)
 
                 offset = (page - 1) * length
-
-                em.description = (f"{member.name} currently has **`{total_items}`** item(s) in their inventory.\n"
-                                  f"**Net Value:** <:robux:1146394968882151434> {value:,}\n"
-                                  f"**Sell Value:** <:robux:1146394968882151434> {svalue:,}\n\n")
+                em.timestamp = discord.utils.utcnow()
+                em.description = (f"Total: **`{total_items}`** item(s).\n"
+                                  f"**Net Value:** \U000023e3 {value:,}\n"
+                                  f"**Sell Value:** \U000023e3 {svalue:,}\n\n")
 
                 for itemm in owned_items[offset:offset + length]:
-                    em.description += f"{itemm}\n\n"
+                    em.description += f"{itemm}\n"
 
                 n = Pagination.compute_total_pages(len(owned_items), length)
-
-                em.set_footer(text=f"Owned Items \U00002500 Page {page} of {n}")
                 return em, n
 
             await Pagination(interaction, get_page_part).navigate()
