@@ -1392,7 +1392,7 @@ class ServantsManager(discord.ui.View):
 
         possible = choice(
             ("You wet your servant's hair with warm water before applying a gentle tear-free shampoo.\n"
-             f" enjoyed every second of it.",
+             " enjoyed every second of it.",
              "You lathered the soap and massaged it onto their back to ensure a thorough cleaning.",
              "Your servant is comforted being around you..",
              "You rubbed a damp cloth around their entire body, inconsiderate of where you were touching.\n"
