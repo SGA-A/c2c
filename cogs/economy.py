@@ -1187,12 +1187,13 @@ class Leaderboard(discord.ui.View):
 
 
 class Servants(discord.ui.Select):
-    def __init__(self, client: commands.Bot, their_slays: tuple, their_choice: str, owner_id: int, conn):
+    def __init__(self, client: commands.Bot, their_slays: list, their_choice: str, owner_id: int, conn):
 
         options = []
 
         for slay in their_slays:
-            options.append(SelectOption(emoji=gender_emotes.setdefault(slay[1]), label=slay[0]))
+            options.append(SelectOption(emoji=gender_emotes.setdefault(slay[1]), label=slay[0],
+                                        description=f"Level {slay[2]} | Skill Level {slay[-1]}"))
 
         self.client: commands.Bot = client
         self.owner_id = owner_id
@@ -1319,16 +1320,17 @@ class ServantsManager(discord.ui.View):
             exp_needed = Economy.calculate_serv_exp_for(level=level)
 
             if xp >= exp_needed:
-                await self.child.conn.execute(
-                    "UPDATE `slay` SET level = level + 1, exp = 0 WHERE userID = ? AND slay_name = ?",
-                    (interaction.user.id, self.child.choice))
-                await self.child.conn.execute(
-                    f"UPDATE `{BANK_TABLE_NAME}` SET points = points + 1 WHERE userID = ?", (interaction.user.id,)
-                )
 
                 up = discord.Embed(title=f"Your {self.child.choice.title()} just leveled up!",
                                    description=f"` {level} ` \U0000279c ` {level + 1} `")
                 up.set_footer(text="You now have an extra point to spend in training.")
+
+                await self.child.conn.execute(
+                    "UPDATE `slay` SET level = level + 1, exp = 0 WHERE userID = ? AND slay_name = ?",
+                    (interaction.user.id, self.child.choice))
+                if not level % 10:
+                    up.description += f"\n**Your servant just unlocked a new Skill Level: SL{level//10}**"
+
                 await interaction.channel.send(embed=up)
 
         if mode.startswith("f"):
@@ -1872,9 +1874,9 @@ class Economy(commands.Cog):
         """Get servant details from the given owner ID, return it in a unique servant card."""
         owner_name = self.client.get_user(owner_id)
 
-        (slay_name, gender, productivity, love, energy, skillpoints, hexx, lvl, xp, hygiene, status, investment, hunger,
+        (slay_name, gender, productivity, love, energy, hexx, lvl, xp, hygiene, status, investment, hunger,
          claimed, img) = (
-            dtls[0], dtls[2], dtls[3], dtls[4], dtls[5], dtls[6], dtls[7], dtls[8], dtls[9], dtls[10], dtls[11],
+            dtls[0], dtls[2], dtls[3], dtls[4], dtls[5], dtls[7], dtls[8], dtls[9], dtls[10], dtls[11],
             dtls[12], dtls[13], dtls[-2], dtls[-1])
 
         gend = {"Female": 0xF3AAE0, "Male": 0x737ECF}
@@ -1882,12 +1884,11 @@ class Economy(commands.Cog):
         boundary = self.calculate_exp_for(level=lvl)
         claimed = string_to_datetime(claimed)
 
-        status = "Awaiting orders" if status else "Busy with work"
         sdetails = discord.Embed(
             title=f"{slay_name} {gender_emotes.get(gender)}",
-            description=f"**Investment:** \U000023e3 {investment:,}\n"
-                        f"**Productivity:** `{productivity}x`\n"
-                        f"**Skill Points:** {skillpoints:,}",
+            description=f"Currently: {"*Awaiting orders*" if status else "*Working*"}\n"
+                        f"**Investment:** \U000023e3 {investment:,}\n"
+                        f"**Productivity:** `{productivity}x`\n",
             color=hexx or gend.setdefault(gender, 0x2B2D31))
 
         sdetails.add_field(name="Hunger", value=f"{generate_progress_bar(hunger)} ({hunger}%)")
@@ -2931,11 +2932,11 @@ class Economy(commands.Cog):
                     embed=membed("Nobody owns a servant with the name provided."))
 
             user_id = dtls[1]
-            sep = await conn.fetchall("SELECT slay_name, gender FROM `slay` WHERE userID = $0", user_id)
+            sep = await conn.fetchall("SELECT slay_name, gender, level, skillL FROM `slay` WHERE userID = $0", user_id)
 
             sembed = await self.servant_preset(user_id, dtls)  # servant embed
             view = ServantsManager(client=self.client, their_choice=servant_name, owner_id=user_id,
-                                   owner_slays=[(slay[0], slay[1]) for slay in sep], conn=conn)
+                                   owner_slays=[(slay[0], slay[1], slay[2], slay[-1]) for slay in sep], conn=conn)
 
             await interaction.response.send_message(embed=sembed, view=view)  # type: ignore
             view.message = await interaction.original_response()
@@ -2943,6 +2944,7 @@ class Economy(commands.Cog):
     # @servant.command(name='train', description="train your servant")
     # @app_commands.describe(duration="the time spent working (e.g, 18h or 1d 3h)")
     # async def train_servant(self, interaction: discord.Interaction, duration: str):
+
 
     @servant.command(name='work', description="assign your slays to do tasks for you.")
     @app_commands.describe(duration="the time spent working (e.g, 18h or 1d 3h)")
