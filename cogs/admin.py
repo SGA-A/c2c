@@ -84,7 +84,7 @@ class Administrate(commands.Cog):
     @commands.command(name='uptime', description='returns the time the bot has been active for.')
     async def uptime(self, ctx: commands.Context):
         """Returns uptime in terms of days, hours, minutes and seconds"""
-        diff = datetime.now() - self.client.time_launch  # type: ignore
+        diff = datetime.now() - self.client.time_launch
         minutes, seconds = divmod(diff.total_seconds(), 60)
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
@@ -118,7 +118,7 @@ class Administrate(commands.Cog):
             eligible = len(active_members) + len(activated_members)
             actual = 0
 
-            async with self.client.pool_connection.acquire() as conn:  # type: ignore
+            async with self.client.pool_connection.acquire() as conn:
                 conn: asqlite_Connection
                 payouts = {}
 
@@ -184,7 +184,7 @@ class Administrate(commands.Cog):
         """Generates or deducts a given amount of robux to the mentioned user."""
 
         real_amount = determine_exponent(amount)
-        async with self.client.pool_connection.acquire() as conn:  # type: ignore
+        async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
             their_bank = await Economy.get_spec_bank_data(member, "bank", conn)
             their_wallet = await Economy.get_wallet_data_only(member, conn)
@@ -215,7 +215,7 @@ class Administrate(commands.Cog):
                                   icon_url=interaction.user.display_avatar.url)
                 embed2.set_footer(text="configuration type: ADD_TO")
 
-                await interaction.response.send_message(embed=embed2,  # type: ignore
+                await interaction.response.send_message(embed=embed2,
                                                         ephemeral=ephemeral)
 
             elif configuration == "remove":
@@ -244,7 +244,7 @@ class Administrate(commands.Cog):
                 embed3.set_thumbnail(url=member.display_avatar.url)
                 embed3.set_footer(text="configuration type: REMOVE_FROM")
 
-                await interaction.response.send_message(  # type: ignore
+                await interaction.response.send_message(
                     embed=embed3, ephemeral=ephemeral)
 
             else:
@@ -261,7 +261,7 @@ class Administrate(commands.Cog):
                 embed4.set_thumbnail(url=member.display_avatar.url)
                 embed4.set_author(name=f"Requested by {interaction.user.name}",
                                   icon_url=interaction.user.avatar.url)
-                await interaction.response.send_message(embed=embed4,  # type: ignore
+                await interaction.response.send_message(embed=embed4,
                                                         ephemeral=ephemeral)
 
     @app_commands.command(name='pin', description='pin a message in any channel.')
@@ -283,18 +283,18 @@ class Administrate(commands.Cog):
 
             await message.pin(reason=f'Requested by {interaction.user.name}.')
 
-            await interaction.response.send_message(  # type: ignore
+            await interaction.response.send_message(
                 f"Successfully pinned the message of id {message_id} "
                 f"sent by {message.author.name}.\n\n",
                 ephemeral=True, delete_after=3.0)
 
         except discord.NotFound:
 
-            await interaction.response.send_message(  # type: ignore
+            await interaction.response.send_message(
                 'Failed to pin the message, it was not found or was deleted.')
 
         except discord.HTTPException as http:
-            await interaction.response.send_message(  # type: ignore
+            await interaction.response.send_message(
                 f'Failed to pin the message, with a return status code of `{http.status}`.',
                 ephemeral=True, delete_after=3.0)
 
@@ -322,7 +322,7 @@ class Administrate(commands.Cog):
         c = await b.fetch_message(int(message_id))
         emoji = self.return_custom_emoji(emote)  # a function to return a custom emoji
         await c.add_reaction(emoji)
-        await interaction.response.send_message(  # type: ignore
+        await interaction.response.send_message(
             content='the emoji has been added to the message', ephemeral=True, delete_after=3.0)
 
     @commands.command(name='sync', description='sync client tree for changes.', aliases=("sy",))
@@ -716,7 +716,7 @@ class Administrate(commands.Cog):
                            new_content='The new content to replace it with')
     async def edit_msg(self, interaction: discord.Interaction, msg: str, new_content: str):
         """Edit a message that was sent by the client."""
-        await interaction.response.defer(thinking=True)  # type: ignore
+        await interaction.response.defer(thinking=True)
         a = await self.client.fetch_guild(interaction.guild.id)
         b = await a.fetch_channel(interaction.channel.id)
         c = await b.fetch_message(int(msg))
@@ -728,8 +728,8 @@ class Administrate(commands.Cog):
     async def quit_client(self, ctx):
         """Quits the bot gracefully."""
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
-        await self.client.session.close()  # type: ignore
-        await self.client.pool_connection.close()  # type: ignore
+        await self.client.session.close()
+        await self.client.pool_connection.close()
         await self.client.http.close()
         await self.client.close()
 
@@ -755,7 +755,7 @@ class Administrate(commands.Cog):
                 message = message.replace(f'<{match}>', f"{emoji}")
                 continue
             if ctx.interaction:
-                return await ctx.send("I could not format your emoji, because "  # type: ignore
+                return await ctx.send("I could not format your emoji, because "
                                       "that does not exist within my internal cache!\n"
                                       "As such, your message was not sent.", ephemeral=True)
             return
@@ -769,3 +769,4 @@ class Administrate(commands.Cog):
 async def setup(client):
     """Setup for cog."""
     await client.add_cog(Administrate(client))
+    
