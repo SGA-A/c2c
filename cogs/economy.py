@@ -1177,6 +1177,29 @@ class DropdownLB(discord.ui.Select):
 
         await interaction.response.edit_message(content=None, embed=lb, view=self.view)
 
+class ChooseServants(discord.ui.Select):
+    def __init__(self, client: commands.Bot, their_choice: str):
+        optionss = []
+
+        for option in optionss:
+            if option.value == their_choice:
+                option.default = True
+
+        super().__init__(options=optionss)
+        self.client: commands.Bot = client
+
+    async def callback(self, interaction: discord.Interaction):
+
+        chosen_choice = self.values
+
+        for option in self.options:
+            if option.value == chosen_choice:
+                option.default = True
+                continue
+            option.default = False
+
+        await interaction.response.edit_message(content=None, embed=lb, view=self.view)
+
 
 class Leaderboard(discord.ui.View):
     def __init__(self, client: commands.Bot, their_choice, channel_id):
@@ -1961,7 +1984,7 @@ class Economy(commands.Cog):
         await conn_input.commit()
 
     @staticmethod
-    async def can_call_out(user: discord.Member, conn_input: asqlite_Connection):
+    async def can_call_out(user: discord.Member | discord.User, conn_input: asqlite_Connection):
         """Check if the user is NOT in the database and therefore not registered (evaluates True if not in db).
         Example usage:
         if await self.can_call_out(interaction.user, conn):
@@ -2967,14 +2990,9 @@ class Economy(commands.Cog):
             await interaction.response.send_message(embed=sembed, view=view)
             view.message = await interaction.original_response()
 
-    # @servant.command(name='train', description="train your servant")
-    # @app_commands.describe(duration="the time spent working (e.g, 18h or 1d 3h)")
-    # async def train_servant(self, interaction: discord.Interaction, duration: str):
-
-
     @servant.command(name='work', description="assign your slays to do tasks for you.")
     @app_commands.describe(duration="the time spent working (e.g, 18h or 1d 3h)")
-    async def make_slay_work_pay(self, interaction: discord.Interaction, duration: str):
+    async def make_servant_work(self, interaction: discord.Interaction, duration: str):
         """
         This is a subcommand. Dispatch your slays to work.
         The command has to be called again to receive the money gained from this action.
@@ -2982,125 +3000,60 @@ class Economy(commands.Cog):
         if DOWN:
             return await interaction.response.send_message(embed=DOWNM)
 
-        msg = await self.send_return_interaction_orginal_response(interaction)
-
         try:
             async with self.client.pool_connection.acquire() as conn:
                 conn: asqlite_Connection
 
                 if await self.can_call_out(interaction.user, conn):
-                    return await msg.edit(content=None, embed=NOT_REGISTERED)
+                    return await interaction.response.send_message(content=None, embed=self.not_registered)
 
-                if len(await self.get_servants(conn, interaction.user)) == 0:
-                    return await msg.edit(
-                        content=None, embed=membed("You got no slays to send to work.")
-                    )
+                data = await conn.fetchone(
+                    "SELECT slay_name, work_until FROM slay WHERE userID = ?", (interaction.user.id,))
+
+                if len(data) == 0:
+                    return await interaction.response.send_message(
+                        content=None, embed=membed("You got no slays to send to work."), ephemeral=True)
 
                 res_duration = parse_duration(duration)
 
-                cooldown = await self.fetch_cooldown(conn, user=interaction.user, cooldown_type="slaywork")
-                if cooldown is not None:
-                    if cooldown[0] in {"0", 0}:
-                        day = number_to_ordinal(int(res_duration.strftime("%d")))
-                        shallow = res_duration.strftime(f"%A the {day} of %B at %I:%M%p")
-                        await self.change_slay_field(conn, interaction.user, "status", 0)
-
-                        res_duration = datetime_to_string(res_duration)
-                        await self.update_cooldown(conn, user=interaction.user, cooldown_type="slaywork",
-                                                   new_cd=res_duration)
-                        await msg.edit(
-                            content=f"## Your slay(s) have been sent off.\n"
-                                    f"{ARROW}As commanded, they will work until {shallow} (UTC).")
-                    else:
-                        cooldown = string_to_datetime(cooldown[0])
-                        diff = cooldown - datetime.datetime.now()
-
-                        if diff.total_seconds() <= 0:
-                            content = set()
-                            await self.update_cooldown(conn, user=interaction.user, cooldown_type="slaywork",
-                                                       new_cd="0")
-
-                            labour_actions: dict = {
-                                0: "making numerous bets at the casino",
-                                1: "working at factory made for slays",
-                                2: "playing with the slot machine",
-                                3: "doing multiple high-low games",
-                                4: "bidding at an auction",
-                                5: "robbing vulnerable victims",
-                                6: "robbing the central bank"
-                            }
-
-                            sad_actions: dict = {
-                                0: "isolating oneself from friends and family",
-                                1: "struggling with a mundane job at a soul-crushing factory",
-                                2: "mindlessly hoping for a change and working for better treatment",
-                                3: "seeking fleeting excitement for others to give money",
-                                4: "trying to fill the emptiness in his heart",
-                                5: "trying to succumb to a life of crime",
-                                6: "desperately attempting to rob the central bank, a futile and dangerous endeavor"
-                            }
-
-                            happy_slays = await self.count_happiness_above_threshold(conn, interaction.user)
-
-                            index_l = 0
-                            slay_fund = randint(50000000, 325000000 * happy_slays)
-                            total_fund = 0 + slay_fund
-                            disproportionate_share = 0
-                            await self.change_slay_field(conn, interaction.user, "status", 1)
-                            await self.change_slay_field(conn, interaction.user, "happiness", 100 - randint(20, 67))
-                            summ = discord.Embed(colour=discord.Colour.from_rgb(66, 164, 155))
-                            slays = await self.get_servants(conn, interaction.user)
-                            for slay in slays:
-                                if slay[-2] > 30:
-                                    doing_what = labour_actions.get(index_l)
-                                    disproportionate_share = randint(20000000, slay_fund - disproportionate_share)
-                                    bonus = round((1.2 / 100) * disproportionate_share) + disproportionate_share
-                                    total_fund += bonus
-
-                                    content.add(f'- {slay[0]} was {doing_what} and got a total '
-                                                f'of **\U000023e3 {disproportionate_share:,}**\n'
-                                                f' - Bonus: **\U000023e3 {bonus:,}**')
-                                else:
-                                    doing_what = sad_actions.get(index_l)
-                                    loss = (slay[-2] / 100) * disproportionate_share
-                                    disproportionate_share = randint(2000, abs(slay_fund - disproportionate_share))
-                                    content.add(f'- {slay[0]} was {doing_what} and got a total '
-                                                f'of **\U000023e3 {loss:,}**\n'
-                                                f' - Bonus: **\U000023e3 {bonus:,}**')
-
-                                    if not summ.fields:
-                                        summ.add_field(name='You have an unhappy slay.',
-                                                       value='Paying too little attention to your '
-                                                             'slay\'s needs will result in your slay running away.',
-                                                       inline=False)
-                                index_l += 1
-
-                            await self.modify_happiness(conn, interaction.user)
-                            net_returns = await self.update_bank_new(interaction.user, conn, total_fund)
-                            summ.set_footer(icon_url=interaction.user.display_avatar.url,
-                                            text=f"For {interaction.user.name}")
-                            summ.description = (f"## <a:2635serversubscriptionsanimated:1174417911344013523> Paycheck\n"
-                                                f"> Your slays have made **\U000023e3 {slay_fund:,}**.\n"
-                                                f"> Your new `wallet` balance now is **\U000023e3 {net_returns[0]:,}**."
-                                                f"\n\nHere is a summary:\n"
-                                                f"{'\n'.join(content)}\n")
-
-                            return await msg.edit(content=None, embed=summ)
-                        else:
-                            minutes, seconds = divmod(diff.total_seconds(), 60)
-                            hours, minutes = divmod(minutes, 60)
-                            days, hours = divmod(hours, 24)
-                            await msg.edit(content=f"Your slays are still working.\n"
-                                                   f"They will finish working in **{int(days)}** days, "
-                                                   f"**{int(hours)}** hours, **{int(minutes)}** minutes "
-                                                   f"and **{int(seconds)}** seconds. ")
+                if data[1] == "0":
+                    day = number_to_ordinal(int(res_duration.strftime("%d")))
+                    shallow = res_duration.strftime(f"%A the {day} of %B at %I:%M%p")
+                    res_duration = datetime_to_string(res_duration)
+                    
+                    data = await conn.execute(
+                        """UPDATE `slay` 
+                        SET status = 0, slaywork = ? WHERE userID = ?` AND slay_name = ?""",
+                        (res_duration, interaction.user.id, data[0]))
+                    await conn.commit()
+                    
+                    await interaction.response.send_message(
+                        embed=discord.Embed(
+                            title="Your servant is now working.",
+                            description=f"Finishes working on {shallow}.",
+                            color=0x2B2D31
+                        )
+                    )
                 else:
-                    return await msg.edit(content="## No data has been found under your name.\n"
-                                                  "- This is because you've registered after the "
-                                                  "cooldown system was implemented.\n"
-                                                  "- A quick fix is to use the /discontinue command "
-                                                  "and re-register (you can request a developer to "
-                                                  "add your original items back).")
+                    cooldown = data[1]
+                    cooldown = string_to_datetime(cooldown)
+                    diff = cooldown - datetime.datetime.now()
+
+                    if diff.total_seconds() <= 0:
+                        content = set()
+                        await self.update_cooldown(conn, user=interaction.user, cooldown_type="slaywork",
+                                                    new_cd="0")
+
+                        return await interaction.response.send_message(content=None, embed=)
+                    else:
+                        minutes, seconds = divmod(diff.total_seconds(), 60)
+                        hours, minutes = divmod(minutes, 60)
+                        days, hours = divmod(hours, 24)
+                        await interaction.response.send_message(
+                            f"Your slays are still working.\n"
+                            f"They will finish working in **{int(days)}** days, "
+                            f"**{int(hours)}** hours, **{int(minutes)}** minutes "
+                            f"and **{int(seconds)}** seconds. ")
         except ValueError as veer:
             await msg.edit(content=f"{veer}")
 
