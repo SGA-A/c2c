@@ -1177,29 +1177,6 @@ class DropdownLB(discord.ui.Select):
 
         await interaction.response.edit_message(content=None, embed=lb, view=self.view)
 
-class ChooseServants(discord.ui.Select):
-    def __init__(self, client: commands.Bot, their_choice: str):
-        optionss = []
-
-        for option in optionss:
-            if option.value == their_choice:
-                option.default = True
-
-        super().__init__(options=optionss)
-        self.client: commands.Bot = client
-
-    async def callback(self, interaction: discord.Interaction):
-
-        chosen_choice = self.values
-
-        for option in self.options:
-            if option.value == chosen_choice:
-                option.default = True
-                continue
-            option.default = False
-
-        await interaction.response.edit_message(content=None, embed=lb, view=self.view)
-
 
 class Leaderboard(discord.ui.View):
     def __init__(self, client: commands.Bot, their_choice, channel_id):
@@ -1223,7 +1200,7 @@ class Servants(discord.ui.Select):
         options = []
 
         for slay in their_slays:
-            options.append(SelectOption(emoji=gender_emotes.setdefault(slay[1]), label=slay[0],
+            options.append(SelectOption(emoji=gender_emotes.get(slay[1]), label=slay[0],
                                         description=f"Level {slay[2]} | Skill Level {slay[-1]}"))
 
         self.client: commands.Bot = client
@@ -1256,12 +1233,10 @@ class Servants(discord.ui.Select):
 
 
 class SelectTaskMenu(discord.ui.Select):
-    def __init__(self, client: commands.Bot, chosen_servant: str, owner_id: int, conn):
+    def __init__(self, client: commands.Bot, conn):
 
         self.conn = conn
         self.client = client
-        self.owner_id = owner_id
-        self.their_choice = chosen_servant
 
         options = [
             SelectOption(emoji="<:battery_green:1203056234731671683>",
@@ -1284,14 +1259,13 @@ class SelectTaskMenu(discord.ui.Select):
                          label="Prostitution", description="Skill L3 | \U000023e3 ~1T")
         ]
 
-        super().__init__(options=options, placeholder="Pick a task", row=0)
+        super().__init__(options=options, placeholder="Pick a task")
 
     async def callback(self, interaction: discord.Interaction):
-
+        for item in self.children:
+            item.disabled = True
         chosen = self.values[0]
-
-
-        await interaction.response.edit_message(content="Select a job you'd like", view=self.view)
+        await interaction.response.edit_message(f"Done. You chose {chosen}.", view=self)
 
 
 class ServantsManager(discord.ui.View):
@@ -2991,15 +2965,12 @@ class Economy(commands.Cog):
             view.message = await interaction.original_response()
 
     @servant.command(name='work', description="assign your slays to do tasks for you.")
-    @app_commands.describe(duration="the time spent working (e.g, 18h or 1d 3h)")
-    async def make_servant_work(self, interaction: discord.Interaction, duration: str):
+    @app_commands.describe(duration="the time spent working (e.g, 18h or 1d 3h)", servant_name="the name of the servant")
+    async def make_servant_work(self, interaction: discord.Interaction, servant_name: str, duration: str):
         """
         This is a subcommand. Dispatch your slays to work.
         The command has to be called again to receive the money gained from this action.
         """
-        if DOWN:
-            return await interaction.response.send_message(embed=DOWNM)
-
         try:
             async with self.client.pool_connection.acquire() as conn:
                 conn: asqlite_Connection
@@ -3008,31 +2979,34 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(content=None, embed=self.not_registered)
 
                 data = await conn.fetchone(
-                    "SELECT slay_name, work_until FROM slay WHERE userID = ?", (interaction.user.id,))
+                    "SELECT slay_name, work_until, skillL FROM slay WHERE userID = ? AND LOWER(slay_name) = LOWER(?)", 
+                    (interaction.user.id, servant_name))
 
-                if len(data) == 0:
+                if data is None:
                     return await interaction.response.send_message(
-                        content=None, embed=membed("You got no slays to send to work."), ephemeral=True)
+                        content=None, embed=membed("No servants found with that name.\n"
+                                                   "It may belong to someone else."), ephemeral=True)
 
-                res_duration = parse_duration(duration)
+                # res_duration = parse_duration(duration)
 
                 if data[1] == "0":
-                    day = number_to_ordinal(int(res_duration.strftime("%d")))
-                    shallow = res_duration.strftime(f"%A the {day} of %B at %I:%M%p")
-                    res_duration = datetime_to_string(res_duration)
+                    # day = number_to_ordinal(int(res_duration.strftime("%d")))
+                    # shallow = res_duration.strftime(f"%A the {day} of %B at %I:%M%p")
+                    # res_duration = datetime_to_string(res_duration)
                     
-                    data = await conn.execute(
-                        """UPDATE `slay` 
-                        SET status = 0, slaywork = ? WHERE userID = ?` AND slay_name = ?""",
-                        (res_duration, interaction.user.id, data[0]))
-                    await conn.commit()
+                    # data = await conn.execute(
+                    #     """UPDATE `slay` 
+                    #     SET status = 0, slaywork = ? WHERE userID = ?` AND LOWER(slay_name) = LOWER(?)""",
+                    #     (res_duration, interaction.user.id, servant_name))
+                    # await conn.commit()
                     
                     await interaction.response.send_message(
                         embed=discord.Embed(
-                            title="Your servant is now working.",
-                            description=f"Finishes working on {shallow}.",
+                            title="Task Menu",
+                            description=f"What would you like {data[0].title()} to do?",
                             color=0x2B2D31
-                        )
+                        ),
+                        view=SelectTaskMenu(self.client, conn,)
                     )
                 else:
                     cooldown = data[1]
@@ -3044,18 +3018,18 @@ class Economy(commands.Cog):
                         await self.update_cooldown(conn, user=interaction.user, cooldown_type="slaywork",
                                                     new_cd="0")
 
-                        return await interaction.response.send_message(content=None, embed=)
+                        return await interaction.response.send_message(content=None)
                     else:
                         minutes, seconds = divmod(diff.total_seconds(), 60)
                         hours, minutes = divmod(minutes, 60)
                         days, hours = divmod(hours, 24)
                         await interaction.response.send_message(
-                            f"Your slays are still working.\n"
+                            f"{data[0]} is still working.\n"
                             f"They will finish working in **{int(days)}** days, "
                             f"**{int(hours)}** hours, **{int(minutes)}** minutes "
                             f"and **{int(seconds)}** seconds. ")
         except ValueError as veer:
-            await msg.edit(content=f"{veer}")
+            await interaction.response.send_message(content=f"{veer}")
 
     @commands.command(name='reasons', description='identify causes of registration errors.')
     @commands.cooldown(1, 6)
