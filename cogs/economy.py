@@ -1096,7 +1096,7 @@ class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
         await self.conn.commit()
         dtls = await dtls.fetchone()
 
-        sembed = await Economy.servant_preset(Economy(self.client), interaction.user.id, dtls)  # servant embed
+        sembed = await Economy.servant_preset(Economy(self.client), interaction.user.id, dtls)
         await interaction.response.edit_message(content=None, embed=sembed, view=self.the_view)
 
     async def on_error(self, interaction: discord.Interaction, error):
@@ -1233,12 +1233,12 @@ class Servants(discord.ui.Select):
 
 
 class SelectTaskMenu(discord.ui.Select):
-    def __init__(self, client: commands.Bot, their_slays: tuple, their_choice: str, owner_id: int, conn):
+    def __init__(self, client: commands.Bot, chosen_servant: str, owner_id: int, conn):
 
         self.conn = conn
         self.client = client
         self.owner_id = owner_id
-        self.their_choice = their_choice
+        self.their_choice = chosen_servant
 
         options = [
             SelectOption(emoji="<:battery_green:1203056234731671683>",
@@ -1267,18 +1267,8 @@ class SelectTaskMenu(discord.ui.Select):
 
         chosen = self.values[0]
 
-        for option in self.options:
-            if option.value == chosen:
-                option.default = True
-                continue
-            option.default = False
 
-        dtls = await self.conn.fetchone("SELECT * FROM `slay` WHERE userID = ? AND slay_name = ?",
-                                        (self.owner_id, self.values[0]))
-
-        sembed = await Economy.servant_preset(Economy(self.client), self.owner_id, dtls)  # servant embed
-
-        await interaction.response.edit_message(content=None, embed=sembed, view=self.view)
+        await interaction.response.edit_message(content="Select a job you'd like", view=self.view)
 
 
 class ServantsManager(discord.ui.View):
@@ -1303,6 +1293,7 @@ class ServantsManager(discord.ui.View):
             if item.label == "Manage":
                 self.manage_button = item
                 continue
+
             self.removed_items.append(item)
             self.remove_item(item)
 
@@ -1337,8 +1328,10 @@ class ServantsManager(discord.ui.View):
                     "UPDATE `slay` SET level = level + 1, exp = 0 WHERE userID = ? AND slay_name = ?",
                     (interaction.user.id, self.child.choice))
                 if not level % 10:
+                    await self.child.conn.execute(
+                        "UPDATE `slay` SET skillL = skillL + 1 WHERE userID = ? AND slay_name = ?",)
                     up.description += f"\n**Your servant just unlocked a new Skill Level: SL{level//10}**"
-
+                    
                 await interaction.channel.send(embed=up)
 
         if mode.startswith("f"):
@@ -1353,7 +1346,7 @@ class ServantsManager(discord.ui.View):
         await self.child.conn.commit()
         dtls = await dtls.fetchone()
 
-        sembed = await Economy.servant_preset(Economy(self.child.client), self.child.owner_id, dtls)  # servant embed
+        sembed = await Economy.servant_preset(Economy(self.child.client), self.child.owner_id, dtls) 
         await interaction.response.edit_message(content=None, embed=sembed, view=self)
 
     @discord.ui.button(label="Manage", style=discord.ButtonStyle.blurple, row=1)
@@ -1566,7 +1559,7 @@ class Economy(commands.Cog):
     def cog_unload(self):
         self.batch_update.cancel()
 
-    @tasks.loop(time=datetime.time(hour=datetime.datetime.now().hour, minute=min(0, datetime.datetime.now().minute)))
+    @tasks.loop(minutes=30)
     async def batch_update(self):
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
@@ -1575,9 +1568,10 @@ class Economy(commands.Cog):
                 f"""
                 UPDATE `{SLAY_TABLE_NAME}` 
                 SET love = CASE WHEN love - $0 < 0 THEN 0 ELSE love - $0 END, 
-                hunger = CASE WHEN hunger - $1 < 0 THEN 0 ELSE hunger - $1 END
+                hunger = CASE WHEN hunger - $1 < 0 THEN 0 ELSE hunger - $1 END,
+                energy = CASE WHEN energy + $2 > 100 THEN 0 ELSE energy + $2 END
                 """,
-                1, 3
+                1, 3, 10
             )
 
     @batch_update.before_loop
@@ -1878,15 +1872,16 @@ class Economy(commands.Cog):
 
             return lb
 
-    async def servant_preset(self, owner_id: int, dtls):
+    async def servant_preset(self, owner_id: int, dtls, children=None):
         """Get servant details from the given owner ID, return it in a unique servant card."""
+
         owner_name = self.client.get_user(owner_id)
 
         (slay_name, gender, productivity, love, energy, hexx, lvl, xp, hygiene, status, investment, hunger,
          claimed, img) = (
             dtls[0], dtls[2], dtls[3], dtls[4], dtls[5], dtls[7], dtls[8], dtls[9], dtls[10], dtls[11],
             dtls[12], dtls[13], dtls[-2], dtls[-1])
-
+        
         gend = {"Female": 0xF3AAE0, "Male": 0x737ECF}
 
         boundary = self.calculate_exp_for(level=lvl)
@@ -1896,8 +1891,23 @@ class Economy(commands.Cog):
             title=f"{slay_name} {gender_emotes.get(gender)}",
             description=f"Currently: {"*Awaiting orders*" if status else "*Working*"}\n"
                         f"**Investment:** \U000023e3 {investment:,}\n"
-                        f"**Productivity:** `{productivity}x`\n",
+                        f"**Productivity:** `{productivity}x`",
             color=hexx or gend.setdefault(gender, 0x2B2D31))
+
+        if children:
+            if energy <= 25:
+                for item in children:
+                    if not hasattr(item, "label"):
+                        continue
+                    item.disabled = True
+                sdetails.description += ("\nYour servant has virtually no energy.\n"
+                                        "They'll wake up soon.")
+            else:
+                if not status:
+                    for item in children:
+                        if not hasattr(item, "label"):
+                            continue
+                        item.disabled = True
 
         sdetails.add_field(name="Hunger", value=f"{generate_progress_bar(hunger)} ({hunger}%)")
         sdetails.add_field(name="Energy", value=f"{generate_progress_bar(energy)} ({energy}%)")
@@ -2333,7 +2343,6 @@ class Economy(commands.Cog):
     @app_commands.checks.cooldown(1, 6)
     async def my_multi(self, interaction: discord.Interaction, user_name: Optional[discord.Member]):
         """View a user's personal multiplier and global multipliers linked with the server invocation."""
-
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
@@ -2951,9 +2960,9 @@ class Economy(commands.Cog):
             user_id = dtls[1]
             sep = await conn.fetchall("SELECT slay_name, gender, level, skillL FROM `slay` WHERE userID = $0", user_id)
 
-            sembed = await self.servant_preset(user_id, dtls)  # servant embed
             view = ServantsManager(client=self.client, their_choice=servant_name, owner_id=user_id,
                                    owner_slays=[(slay[0], slay[1], slay[2], slay[-1]) for slay in sep], conn=conn)
+            sembed = await self.servant_preset(user_id, dtls, children=view.children)  # servant embed
 
             await interaction.response.send_message(embed=sembed, view=view)
             view.message = await interaction.original_response()
