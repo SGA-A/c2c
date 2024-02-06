@@ -15,7 +15,6 @@ from traceback import print_exception
 
 import discord
 import datetime
-import json
 
 from other.utilities import parse_duration, datetime_to_string, string_to_datetime, labour_productivity_via
 from other.pagination import Pagination
@@ -42,6 +41,9 @@ def number_to_ordinal(n):
 
 BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
+MAX_BET_KEYCARD = 15_000_000
+MAX_BET_WITHOUT = 10_000_000
+MIN_BET = 500_000
 COOLDOWN_TABLE_NAME = "cooldowns"
 APP_GUILDS_ID = [829053898333225010, 780397076273954886]
 DOWN = True
@@ -105,62 +107,62 @@ PRESTIGE_EMOTES = {
 }
 
 SHOP_ITEMS = [
-    {"name": "Keycard", "cost": 8269069420,
+    {"name": "Keycard", "cost": 10_000_000,
      "info": "Allows you to bypass certain restrictions, and you get more returns from certain activities!",
      "url": "https://i.imgur.com/WZOWysT.png", "rarity": "Epic",
      "emoji": "<:lanyard:1165935243140796487>", "available": False},
 
-    {"name": "Trophy", "cost": 5085779847,
+    {"name": "Trophy", "cost": 500_000_000,
      "info": "Flex on your friends with this trophy! There are also some hidden side effects..",
      "url": "https://i.imgur.com/32iEaMb.png", "rarity": "Luxurious",
      "emoji": "<:tr1:1165936712468418591>", "available": True},
 
-    {"name": "Dynamic Item", "cost": 55556587196,
+    {"name": "Dynamic Item", "cost": 1_000_000_000,
      "info": "An item that changes use often. Its transformative "
              "functions change to match the seasonality of the year.",
      "url": "https://i.imgur.com/WX9mbie.png", "rarity": "Rare", "qn": "dynamic_item",
      "emoji": "<:dynamic:1197949814898446478>", "available": True},
 
-    {"name": "Resistor", "cost": 18102892402,
+    {"name": "Resistor", "cost": 750_000_000,
      "info": "No one knows how this works because no one has ever purchased "
              "this item. May cause distress to certain individuals upon purchase.",
      "url": "https://i.imgur.com/ggO9QbL.png", "rarity": "Godly",
      "emoji": "<:resistor:1165934607447887973>", "available": False},
 
-    {"name": "Clan License", "cost": 10000000000,
+    {"name": "Clan License", "cost": 1_250_000_000,
      "info": "Create your own clan. It costs a fortune, but with it brings a lot of "
              "privileges exclusive to clan members.",
      "url": "https://i.imgur.com/nPcMNk8.png", "rarity": "Godly", "qn": "clan_license",
      "emoji": "<:clan_license:1165936231922806804>", "available": True},
 
-    {"name": "Hyperion", "cost": 494510771984,
+    {"name": "Hyperion", "cost": 3_000_000_000,
      "info": "The `passive` drone that actively helps in increasing the returns in almost everything.",
      "url": "https://i.imgur.com/bmNyob0.png", "rarity": "Uncommon", "qn": "hyperion_drone",
      "emoji": "<:DroneHyperion:1171491601726574613>", "available": True},
 
-    {"name": "Crisis", "cost": 765191412472,
+    {"name": "Crisis", "cost": 1_500_000_000,
      "info": "The `support` drone that can bring status effects into the game, wreaking havoc onto other users!",
      "url": "https://i.imgur.com/obOJwJm.png", "rarity": "Uncommon", "qn": "crisis_drone",
      "emoji": "<:DroneCrisis:1171491564258852894>", "available": True},
 
-    {"name": "Natural Pack", "cost": 300000000,
+    {"name": "Natural Pack", "cost": 1_000_000,
      "info": "Food that is so nutritious it is all you need to fill your apetite. "
              "Hunger is virtually non-existent after consumption.",
      "url": "https://i.imgur.com/YbqaM0d.png", "rarity": "Common",
      "emoji": "<:servant_food:1202726866943873045>", "available": True},
 
-    {"name": "Suspicious Pack", "cost": 50_000_000,
+    {"name": "Suspicious Pack", "cost": 500_000,
      "info": "A combination of food taken from the forest. It seems to have been tampered with "
              "at some point, frowned upon by most people for its ill-effects.",
      "url": "https://i.imgur.com/3ITIcbo.png", "rarity": "Common",
      "emoji": "<:sus_servant_food:1202730354952110141>", "available": False},
 
-    {"name": "Odd Eye", "cost": 33206481258,
+    {"name": "Odd Eye", "cost": 3_000_000_000,
      "info": "An eye that may prove advantageous during certain events. It may even become a pet with time..",
      "url": "https://i.imgur.com/rErrYrH.gif", "rarity": "Rare",
      "qn": "odd_eye", "emoji": "<a:eyeOdd:1166465357142298676>", "available": True},
 
-    {"name": "Amulet", "cost": 159961918315,
+    {"name": "Amulet", "cost": 4_500_000_000,
      "info": "Found from a black market, it is said that it contains an extract found only from the ancient relics "
              "lost millions of years ago.",
      "url": "https://i.imgur.com/m8jRWk5.png", "rarity": "Godly",
@@ -179,25 +181,6 @@ NAME_TO_INDEX = {
     "Suspicious Pack": 8,
     "Odd Eye": 9,
     "Amulet": 10}
-
-
-with open('C:\\Users\\georg\\Documents\\c2c\\cogs\\times.json') as file_name_thi:
-    times = json.load(file_name_thi)
-
-with open('C:\\Users\\georg\\Documents\\c2c\\cogs\\claimed.json') as file_name_four:
-    claims = json.load(file_name_four)
-
-
-def save_times():
-    """Save other extraneous data related to the bot in a JSON file."""
-    with open('C:\\Users\\georg\\Documents\\c2c\\cogs\\times.json', 'w') as file_name_seven:
-        json.dump(times, file_name_seven, indent=4)
-
-
-def acknowledge_claim():
-    """Acknowledge certain user interactions in a JSON file."""
-    with open('C:\\Users\\georg\\Documents\\c2c\\cogs\\claimed.json', 'w') as file_name_nine:
-        json.dump(claims, file_name_nine, indent=4)
 
 
 def calculate_hand(hand):
@@ -2672,7 +2655,7 @@ class Economy(commands.Cog):
                 emb = discord.Embed(
                     title="Shop",
                     color=0x2B2D31,
-                    description=f"{sticky_msg}"
+                    description=""
                 )
 
                 length = 10
@@ -3483,14 +3466,13 @@ class Economy(commands.Cog):
             :return: A boolean indicating whether the amount is valid for the function to proceed."""
             if value <= 0:
                 return False
-            elif value > 75_000_000:
+            if value > MAX_BET_KEYCARD:
                 return False
-            elif value < 100000:
+            if value < MIN_BET:
                 return False
-            elif value > user_balance:
+            if value > user_balance:
                 return False
-            else:
-                return True
+            return True
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
@@ -3502,10 +3484,7 @@ class Economy(commands.Cog):
 
             if isinstance(real_amount, str):
                 if real_amount in {'all', 'max'}:
-                    if 75000000 > wallet_amt:
-                        real_amount = wallet_amt
-                    else:
-                        real_amount = 75000000
+                    real_amount = min(wallet_amt, MAX_BET_KEYCARD)
                 else:
                     return await interaction.response.send_message(embed=ERR_UNREASON)
 
@@ -3556,46 +3535,27 @@ class Economy(commands.Cog):
         except AssertionError:
             if amount in {'max', 'all'}:
                 if data >= 1:
-                    amount = min(75_000_000, wallet_amt)
+                    amount = min(MAX_BET_KEYCARD*2, wallet_amt)
                 else:
-                    amount = min(50_000_000, wallet_amt)
+                    amount = min(MAX_BET_WITHOUT*2, wallet_amt)
             else:
                 return await interaction.response.send_message(embed=ERR_UNREASON)
 
         # --------------- Contains checks before betting i.e. has keycard, meets bet constraints. -------------
-        if data >= 1:
-            if not (30000 <= amount <= 75000000):
+        if data:
+            if MIN_BET*2 < amount < MAX_BET_KEYCARD*2:
                 return await interaction.response.send_message(
-                    embed=discord.Embed(colour=0x2F3136, description=(
-                        f'## You did not meet the slot machine criteria.\n'
-                        f'- You wanted to bet {CURRENCY}**{amount:,}**\n'
-                        f' - A minimum bet of {CURRENCY}**30,000** must be made\n'
-                        f' - A maximum bet of {CURRENCY}**75,000,000** can only be made.'
-                    )))
-            elif amount > wallet_amt:
-                return await interaction.response.send_message(
-                    embed=discord.Embed(colour=0x2F3136, description=(
-                        f'Cannot perform this action.\n'
-                        f'You only have {CURRENCY}**{wallet_amt:,}**.\n'
-                        f'You\'ll need {CURRENCY}**{amount - wallet_amt:,}** more in your wallet first.'
-                    )))
+                    embed=membed(f"You can't bet less than \U000023e3 **{MIN_BET*2:,}**.\n"
+                                 f"You also can't bet anything more than \U000023e3 **{MAX_BET_KEYCARD*2:,}**."))	
         else:
-            if not (50000 <= amount <= 50000000):
+            if MIN_BET*2 < amount < MAX_BET_WITHOUT*2:
                 return await interaction.response.send_message(
-                    embed=discord.Embed(colour=0x2F3136, description=(
-                        f'## You did not meet the slot machine criteria.\n'
-                        f'- You wanted to bet {CURRENCY}**{amount:,}**\n'
-                        f' - A minimum bet of {CURRENCY}**50,000** must be made.\n'
-                        f' - A maximum bet of {CURRENCY}**50,000,000** can only be made.'
-                    )))
+                    embed=membed(f"You can't bet less than \U000023e3 **{MIN_BET*2:,}**.\n"
+                                 f"You also can't bet anything more than \U000023e3 **{MAX_BET_WITHOUT*2:,}**."))
 
-            elif amount > wallet_amt:
+        if amount > wallet_amt:
                 return await interaction.response.send_message(
-                    embed=discord.Embed(colour=0x2F3136, description=(
-                        f"## Cannot perform this action.\n"
-                        f"You only have {CURRENCY}**{wallet_amt:,}**.\n"
-                        f"You'll need {CURRENCY}**{amount - wallet_amt:,}** more in your wallet first."
-                    )))
+                    embed=membed("You are too poor for this bet."))
 
         # ------------------ THE SLOT MACHINE ITESELF ------------------------
 
@@ -3874,9 +3834,9 @@ class Economy(commands.Cog):
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
 
-            job_val = await self.get_job_data_only(user=interaction.user, conn_input=conn)
+            job_name = await self.get_job_data_only(user=interaction.user, conn_input=conn)
 
-            if job_val == "None":
+            if job_name == "None":
                 return await interaction.response.send_message(
                     embed=membed("You don't have a job, get one first."))
 
@@ -3898,7 +3858,7 @@ class Economy(commands.Cog):
                 ncd = datetime_to_string(ncd)
                 await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
-                words = {
+                job_attrs = {
                 "Plumber": (("TOILET", "SINK", "SEWAGE", "SANITATION", "DRAINAGE", "PIPES"), 20_000_000),
                 "Cashier": (("ROBUX", "TILL", "ITEMS", "WORKER", 
                             "REGISTER", "CHECKOUT", "TRANSACTIONS", "RECEIPTS"), 35_000_000),
@@ -3914,7 +3874,7 @@ class Economy(commands.Cog):
                             "INVESTIGATION", "ARREST", "UNIFORM", "BADGE", "INTERROGATION"), 75_000_000)
                 }
 
-                possible_words: tuple = words.get(job_val)[0]
+                possible_words: tuple = job_attrs.get(job_name)[0]
                 selected_word = choice(possible_words)
 
                 letters_to_hide = max(1, len(selected_word) // 3)  # You can adjust this ratio
@@ -3938,10 +3898,9 @@ class Economy(commands.Cog):
 
                 await interaction.response.send_message(embed=todo)
                 prompt = await interaction.original_response()  
-                salary = words.get(job_val)[-1]
-                reduced = randint(10000000, salary)
+                reduced = randint(10000000, job_attrs.get(job_name)[-1])
                 embed = discord.Embed()
-                
+
                 try:
                     await self.client.wait_for('message', check=check, timeout=15.0)
                 except asyncTE:
@@ -3950,14 +3909,14 @@ class Economy(commands.Cog):
                     embed.title = "Terrible work!"
                     embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for a sub-par shift"
                     embed.colour = discord.Colour.brand_red()
-                    embed.set_footer(text=f"Working as a {job_val}")
+                    embed.set_footer(text=f"Working as a {job_name}")
                     await prompt.edit(content=None, embed=embed)
                 else:
                     await self.update_bank_new(interaction.user, conn, reduced)
                     embed.title = "Great work!"
                     embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for your shift"
                     embed.colour = discord.Colour.brand_green()
-                    embed.set_footer(text=f"Working as a {job_val}")
+                    embed.set_footer(text=f"Working as a {job_name}")
                     await prompt.edit(content=None, embed=embed)
 
     @app_commands.command(name="balance", description="returns a user's current balance.")
@@ -4576,46 +4535,28 @@ class Economy(commands.Cog):
         except AssertionError:
             if bet_amount.lower() in {'max', 'all'}:
                 if has_keycard:
-                    namount = min(100_000_000, wallet_amt)
+                    namount = min(MAX_BET_KEYCARD, wallet_amt)
                 else:
-                    namount = min(50_000_000, wallet_amt)
+                    namount = min(MAX_BET_WITHOUT, wallet_amt)
             else:
                 return await interaction.response.send_message(embed=ERR_UNREASON)
 
         # -------------------- Check to see if user has sufficient balance --------------------------
 
         if has_keycard:
-            if not (500_000 <= namount <= 100_000_000):
+            if MIN_BET < namount < MAX_BET_KEYCARD:
                 return await interaction.response.send_message(
-                    embed=discord.Embed(colour=0x2F3136, description=(
-                        f'## You did not meet the blackjack criteria.\n'
-                        f'- You wanted to bet {CURRENCY}**{namount:,}**\n'
-                        f' - A minimum bet of {CURRENCY}**500,000** must be made\n'
-                        f' - A maximum bet of {CURRENCY}**100,000,000** can only be made.'
-                    )))
-            elif namount > wallet_amt:
-                return await interaction.response.send_message(
-                    embed=discord.Embed(colour=0x2F3136, description=(
-                        f'Cannot perform this action.\n'
-                        f'You only have {CURRENCY}**{wallet_amt:,}**.\n'
-                        f'You\'ll need {CURRENCY}**{namount - wallet_amt:,}** more in your wallet first.'
-                    )))
+                    embed=membed(f"You can't bet less than \U000023e3 **{MIN_BET:,}**.\n"
+                                 f"You also can't bet anything more than \U000023e3 **{MAX_BET_KEYCARD:,}**."))
         else:
-            if not (1000000 <= namount <= 50_000_000):
+            if MIN_BET < namount < MAX_BET_WITHOUT:
                 return await interaction.response.send_message(
-                    embed=discord.Embed(colour=0x2F3136, description=(
-                        f'## You did not meet the blackjack criteria.\n'
-                        f'- You wanted to bet {CURRENCY}**{namount:,}**\n'
-                        f' - A minimum bet of {CURRENCY}**1,000,000** must be made.\n'
-                        f' - A maximum bet of {CURRENCY}**50,000,000** can only be made.'
-                    )))
-            elif namount > wallet_amt:
+                    embed=membed(f"You can't bet less than \U000023e3 **{MIN_BET:,}**.\n"
+                                 f"You also can't bet anything more than \U000023e3 **{MAX_BET_WITHOUT:,}**."))
+        
+        if namount > wallet_amt:
                 return await interaction.response.send_message(
-                    embed=discord.Embed(colour=0x2F3136, description=(
-                        f"## Cannot perform this action.\n"
-                        f"You only have {CURRENCY}**{wallet_amt:,}**.\n"
-                        f"You'll need {CURRENCY}**{namount - wallet_amt:,}** more in your wallet first."
-                    )))
+                    embed=membed("You are too poor for this bet."))
 
         # ------------ In the case where the user already won --------------
         if self.calculate_hand(player_hand) == 21:
@@ -4707,47 +4648,26 @@ class Economy(commands.Cog):
             except AssertionError:
                 if exponent_amount.lower() in {'max', 'all'}:
                     if has_keycard:
-                        amount = min(100_000_000, wallet_amt)
+                        amount = min(MAX_BET_KEYCARD, wallet_amt)
                     else:
-                        amount = min(50_000_000, wallet_amt)
+                        amount = min(MAX_BET_WITHOUT, wallet_amt)
                 else:
                     return await interaction.response.send_message(embed=ERR_UNREASON)
 
             if has_keycard:
-                if (amount > 100000000) or (amount < 100000):
-                    err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the bet criteria:\n'
-                                                                     f'- You wanted to bet {CURRENCY}**{amount:,}**\n'
-                                                                     f' - A minimum bet of {CURRENCY}**100,000** must '
-                                                                     f'be made\n'
-                                                                     f' - A maximum bet of {CURRENCY}**100,000,000** '
-                                                                     f'can only be made.')
-                    return await interaction.response.send_message(embed=err)
-                elif amount > wallet_amt:
-                    err = discord.Embed(colour=0x2F3136, description=f'Cannot perform this action, '
-                                                                     f'you only have {CURRENCY}**{wallet_amt:,}**.\n'
-                                                                     f'You\'ll need '
-                                                                     f'{CURRENCY}**{amount - wallet_amt:,}**'
-                                                                     f' more in your wallet first.')
-                    return await interaction.response.send_message(embed=err)
+                if MIN_BET < amount < MAX_BET_KEYCARD:
+                    return await interaction.response.send_message(
+                    embed=membed(f"You can't bet less than \U000023e3 **{MIN_BET:,}**.\n"
+                                 f"You also can't bet anything more than \U000023e3 **{MAX_BET_KEYCARD:,}**."))
             else:
-                if (amount > 50000000) or (amount < 500000):
-                    err = discord.Embed(colour=0x2F3136, description=f'## You did not meet the bet criteria:\n'
-                                                                     f'- You wanted to bet {CURRENCY}**{amount:,}**.\n'
-                                                                     f' - A minimum bet of {CURRENCY}**500,000** must '
-                                                                     f'be made (this can decrease when you acquire a'
-                                                                     f' <:lanyard:1165935243140796487> Keycard).\n'
-                                                                     f' - A maximum bet of {CURRENCY}**50,000,000** '
-                                                                     f'can only be made (this can increase when you '
-                                                                     f'acquire a <:lanyard:1165935243140796487> '
-                                                                     f'Keycard).')
-                    return await interaction.response.send_message(embed=err)
-                elif amount > wallet_amt:
-                    err = discord.Embed(colour=0x2F3136, description=f'Cannot perform this action, '
-                                                                     f'you only have {CURRENCY}**{wallet_amt:,}**.\n'
-                                                                     f'You\'ll need '
-                                                                     f'{CURRENCY}**{amount - wallet_amt:,}**'
-                                                                     f' more in your wallet first.')
-                    return await interaction.response.send_message(embed=err)
+                if MIN_BET < amount < MAX_BET_WITHOUT:
+                    return await interaction.response.send_message(
+                    embed=membed(f"You can't bet less than \U000023e3 **{MIN_BET:,}**.\n"
+                                 f"You also can't bet anything more than \U000023e3 **{MAX_BET_WITHOUT:,}**."))
+            
+            if amount > wallet_amt:
+                    return await interaction.response.send_message(
+                        embed=membed("You are too poor for this bet."))
 
             # --------------------------------------------------------
             smulti = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti
@@ -4808,20 +4728,12 @@ class Economy(commands.Cog):
 
     @play_blackjack.autocomplete('bet_amount')
     @bet.autocomplete('exponent_amount')
-    async def callback_max_100(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
-        """Autocomplete callback for when the maximum accepted bet value is 100 million."""
-
-        chosen = {"all", "max", "50e6", "100e6"}
-        return [
-            app_commands.Choice(name=str(the_chose), value=str(the_chose))
-            for the_chose in chosen if current.lower() in the_chose
-        ]
-
     @slots.autocomplete('amount')
     @highlow.autocomplete('robux')
-    async def callback_max_75(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
-        """Autocomplete callback for when the maximum accepted bet value is 75 million."""
-        chosen = {"all", "max", "50e6", "75e6"}
+    async def calback_max_50(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        """Autocomplete callback for when the maximum accepted bet value is 50 million."""
+
+        chosen = {"all", "max", "20e6"}
         return [
             app_commands.Choice(name=str(the_chose), value=str(the_chose))
             for the_chose in chosen if current.lower() in the_chose
