@@ -3793,7 +3793,7 @@ class Economy(commands.Cog):
                 embed = discord.Embed(
                     title="Successful Purchase",
                     description=(
-                        f"> You have \U000023e3 {new_am:,} left.\n\n"
+                        f"> You have \U000023e3 {new_am[0]:,} left.\n\n"
                         "**You bought:**\n"
                         f"- {quantity}x {ie} {name}\n\n"
                         "**You paid:**\n"
@@ -3868,22 +3868,6 @@ class Economy(commands.Cog):
     async def work(self, interaction: discord.Interaction):
         """Work at your current job. You must have one for this to work."""
 
-        words = {
-            "Plumber": [("TOILET", "SINK", "SEWAGE", "SANITATION", "DRAINAGE", "PIPES"), 400000000],
-            "Cashier": [("ROBUX", "TILL", "ITEMS", "WORKER", "REGISTER", "CHECKOUT", "TRANSACTIONS", "RECEIPTS"),
-                        500000000],
-            "Fisher": [
-                ("FISHING", "NETS", "TRAWLING", "FISHERMAN", "CATCH", "VESSEL", "AQUATIC", "HARVESTING", "MARINE"),
-                550000000],
-            "Janitor": [
-                ("CLEANING", "SWEEPING", "MOPING", "CUSTODIAL", "MAINTENANCE", "SANITATION", "BROOM", "VACUUMING"),
-                650000000],
-            "Youtuber": [("CONTENT CREATION", "VIDEO PRODUCTION", "CHANNEL", "SUBSCRIBERS", "EDITING", "UPLOAD",
-                          "VLOGGING", "MONETIZATION", "THUMBNAILS", "ENGAGEMENT"), 1000000000],
-            "Police": [("LAW ENFORCEMENT", "PATROL", "CRIME PREVENTION", "INVESTIGATION", "ARREST", "UNIFORM", "BADGE",
-                        "INTERROGATION"), 1200000000]
-        }
-
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
@@ -3896,50 +3880,85 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(
                     embed=membed("You don't have a job, get one first."))
 
-            possible_words: tuple = words.get(job_val)[0]
-            selected_word = choice(possible_words)
+            cooldown = await self.fetch_cooldown(conn, user=interaction.user, cooldown_type="work")
+        
+            can_continue = False
+            if cooldown[0] != "0":
+                cooldown = string_to_datetime(cooldown[0])
+                now = datetime.datetime.now()
+                diff = cooldown - now
+                if diff.total_seconds() > 0:
+                    when = datetime.datetime.now() + datetime.timedelta(seconds=diff.total_seconds())
+                    return await interaction.response.send_message(
+                        embed=membed(
+                            f"You can work again {discord.utils.format_dt(when, 't')} ({discord.utils.format_dt(when, 'R')})"))
+                can_continue = True
+            if (cooldown[0] == "0") or can_continue:
+                ncd = datetime.datetime.now() + datetime.timedelta(minutes=40)
+                ncd = datetime_to_string(ncd)
+                await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
-            letters_to_hide = max(1, len(selected_word) // 3)  # You can adjust this ratio
+                words = {
+                "Plumber": (("TOILET", "SINK", "SEWAGE", "SANITATION", "DRAINAGE", "PIPES"), 20_000_000),
+                "Cashier": (("ROBUX", "TILL", "ITEMS", "WORKER", 
+                            "REGISTER", "CHECKOUT", "TRANSACTIONS", "RECEIPTS"), 35_000_000),
+                "Fisher": (
+                    ("FISHING", "NETS", "TRAWLING", "FISHERMAN", "CATCH", 
+                    "VESSEL", "AQUATIC", "HARVESTING", "MARINE"), 40_000_000),
+                "Janitor": (("CLEANING", "SWEEPING", "MOPING", "CUSTODIAL", 
+                            "MAINTENANCE", "SANITATION", "BROOM", "VACUUMING"), 45_000_000),
+                "Youtuber": (("CONTENT CREATION", "VIDEO PRODUCTION", 
+                            "CHANNEL", "SUBSCRIBERS", "EDITING", "UPLOAD", "VLOGGING", 
+                            "MONETIZATION", "THUMBNAILS", "ENGAGEMENT"), 50_000_000),
+                "Police": (("LAW ENFORCEMENT", "PATROL", "CRIME PREVENTION", 
+                            "INVESTIGATION", "ARREST", "UNIFORM", "BADGE", "INTERROGATION"), 75_000_000)
+                }
 
-            indices_to_hide = [i for i, char in enumerate(selected_word) if char.isalpha()]
-            indices_hidden = sample(indices_to_hide, min(letters_to_hide, len(indices_to_hide)))
+                possible_words: tuple = words.get(job_val)[0]
+                selected_word = choice(possible_words)
 
-            hidden_word_list = [char if i not in indices_hidden else '_' for i, char in enumerate(selected_word)]
-            hidden_word = ''.join(hidden_word_list)
+                letters_to_hide = max(1, len(selected_word) // 3)  # You can adjust this ratio
 
-            def check(m):
-                """Requirements that the client has to wait for."""
-                return (m.content.lower() == selected_word.lower()
-                        and m.channel == interaction.channel and m.author == interaction.user)
+                indices_to_hide = [i for i, char in enumerate(selected_word) if char.isalpha()]
+                indices_hidden = sample(indices_to_hide, min(letters_to_hide, len(indices_to_hide)))
 
-            await interaction.response.send_message(
-                embed=membed(
-                    f"## <:worke:1195716983384191076> What is the word?\n"
-                    f"- Write out the word, filling out the blanks: \U0000279c "
-                    f"[`{hidden_word}`](https://www.sss.com)."))
-            my_msg = await interaction.original_response()
+                hidden_word_list = [char if i not in indices_hidden else '_' for i, char in enumerate(selected_word)]
+                hidden_word = ''.join(hidden_word_list)
 
-            salary = words.get(job_val)[-1]
-            rangeit = randint(10000000, salary)
+                def check(m):
+                    """Requirements that the client has to wait for."""
+                    return (m.content.lower() == selected_word.lower()
+                            and m.channel == interaction.channel and m.author == interaction.user)
 
-            embed = discord.Embed()
-            try:
-                await self.client.wait_for('message', check=check, timeout=15.0)
-            except asyncTE:
-                rangeit = floor((25 / 100) * rangeit)
-                await self.update_bank_new(interaction.user, conn, rangeit)
-                embed.title = "Terrible work!"
-                embed.description = f"**You were given:**\n- \U000023e3 {rangeit:,} for a sub-par shift"
-                embed.colour = discord.Colour.brand_red()
-                embed.set_footer(text=f"Working as a {job_val}")
-                await my_msg.edit(content=None, embed=embed)
-            else:
-                await self.update_bank_new(interaction.user, conn, rangeit)
-                embed.title = "Great work!"
-                embed.description = f"**You were given:**\n- \U000023e3 {rangeit:,} for your shift"
-                embed.colour = discord.Colour.brand_green()
-                embed.set_footer(text=f"Working as a {job_val}")
-                await my_msg.edit(content=None, embed=embed)
+                todo = discord.Embed(
+                    title="What is the word?",
+                    description=f"[`{hidden_word}`](https://www.sss.com)",
+                    colour=0x2B2D31
+                )
+
+                await interaction.response.send_message(embed=todo)
+                prompt = await interaction.original_response()  
+                salary = words.get(job_val)[-1]
+                reduced = randint(10000000, salary)
+                embed = discord.Embed()
+                
+                try:
+                    await self.client.wait_for('message', check=check, timeout=15.0)
+                except asyncTE:
+                    reduced = floor((25 / 100) * reduced)
+                    await self.update_bank_new(interaction.user, conn, reduced)
+                    embed.title = "Terrible work!"
+                    embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for a sub-par shift"
+                    embed.colour = discord.Colour.brand_red()
+                    embed.set_footer(text=f"Working as a {job_val}")
+                    await prompt.edit(content=None, embed=embed)
+                else:
+                    await self.update_bank_new(interaction.user, conn, reduced)
+                    embed.title = "Great work!"
+                    embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for your shift"
+                    embed.colour = discord.Colour.brand_green()
+                    embed.set_footer(text=f"Working as a {job_val}")
+                    await prompt.edit(content=None, embed=embed)
 
     @app_commands.command(name="balance", description="returns a user's current balance.")
     @app_commands.describe(user='the user to return the balance of',
@@ -4002,18 +4021,17 @@ class Economy(commands.Cog):
 
                 balance = discord.Embed(color=0x2F3136, timestamp=discord.utils.utcnow())
                 balance.set_author(name=f"{user.name}'s balance", icon_url=user.display_avatar.url)
-                balance.description = "".join(sticky_msg.splitlines())
-                balance.add_field(name="<:walleten:1195719280898097192> Wallet", value=f"\U000023e3 {nd[0]:,}",
+                balance.add_field(name="Wallet", value=f"\U000023e3 {nd[0]:,}",
                                   inline=True)
-                balance.add_field(name="<:banken:1195708938734288967> Bank", value=f"\U000023e3 {nd[1]:,}",
+                balance.add_field(name="Bank", value=f"\U000023e3 {nd[1]:,}",
                                   inline=True)
-                balance.add_field(name="<:bankspacen:1198635497107501147> Bankspace",
+                balance.add_field(name="Bankspace",
                                   value=f"\U000023e3 {nd[2]:,} ({space}% full)", inline=True)
-                balance.add_field(name="<:netben:1195710007233228850> Money Net", value=f"\U000023e3 {bank:,}",
+                balance.add_field(name="Money Net", value=f"\U000023e3 {bank:,}",
                                   inline=True)
-                balance.add_field(name="<:netinven:1195711122343481364> Inventory Net", value=f"\U000023e3 {inv:,}",
+                balance.add_field(name="Inventory Net", value=f"\U000023e3 {inv:,}",
                                   inline=True)
-                balance.add_field(name="<:nettotalen:1195710560910725180> Total Net",
+                balance.add_field(name="Total Net",
                                   value=f"\U000023e3 {inv + bank:,}", inline=True)
 
                 await interaction.response.send_message(embed=balance)
@@ -4099,6 +4117,11 @@ class Economy(commands.Cog):
             bank_amt = await self.get_spec_bank_data(interaction.user, "bank", conn)
             if isinstance(actual_amount, str):
                 if actual_amount.lower() == "all" or actual_amount.lower() == "max":
+
+                    if not bank_amt:
+                        return await interaction.response.send_message(
+                            embed=membed("You have nothing to withdraw."))
+
                     wallet_new = await self.update_bank_new(user, conn, +bank_amt)
                     bank_new = await self.update_bank_new(user, conn, -bank_amt, "bank")
 
@@ -4159,12 +4182,18 @@ class Economy(commands.Cog):
             if isinstance(actual_amount, str):
                 if actual_amount.lower() == "all" or actual_amount.lower() == "max":
                     available_bankspace = details[2] - details[1]
+
                     if not available_bankspace:
                         return await interaction.response.send_message(
                             embed=membed(f"You can only hold **\U000023e3 {details[2]:,}** in your bank right now.\n"
                                          f"To hold more, use currency commands and level up more."))
 
                     available_bankspace = min(wallet_amt, available_bankspace)
+                    
+                    if not available_bankspace:
+                        return await interaction.response.send_message(
+                            embed=membed("You have nothing to deposit."))
+
                     wallet_new = await self.update_bank_new(user, conn, -available_bankspace)
                     bank_new = await self.update_bank_new(user, conn, +available_bankspace, "bank")
 
@@ -4356,7 +4385,6 @@ class Economy(commands.Cog):
                 return await interaction.followup.send(
                     embed=membed("You cannot rob the casino as a police officer.")
                 )
-
             if cooldown is not None:
                 if cooldown[0] in {"0", 0}:
                     channel = interaction.channel
