@@ -68,7 +68,7 @@ sticky_msg = "> \U0001f4cc This command is undergoing changes!\n\n"
 ERR_UNREASON = membed('You are unqualified to use this command. Possible reasons include '
                       'insufficient balance and/or unreasonable input.')
 DOWNM = membed('This command is currently outdated and will be made available at a later date.')
-NOT_REGISTERED = membed('Could not find account associated with the user provided.')
+NOT_REGISTERED = membed('Could not find an account associated with the user provided.')
 active_sessions = dict()
 BONUS_MULTIPLIERS = {
     "🍕🍕": 55,
@@ -1061,7 +1061,8 @@ class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
             if expo.lower() in {'max', 'all'}:
                 amount = wallet_amt
             else:
-                return await interaction.response.send_message(embed=ERR_UNREASON)
+                return await interaction.response.send_message(
+                    embed=membed("You need to provide a valid input to bet with."))
 
         if amount > wallet_amt:
             return await interaction.response.send_message(
@@ -1216,10 +1217,13 @@ class Servants(discord.ui.Select):
 
 
 class SelectTaskMenu(discord.ui.Select):
-    def __init__(self, client: commands.Bot, conn):
+    def __init__(self, client: commands.Bot, conn, servant_name: str, 
+                 skill_lvl: int, interaction: discord.Interaction):
 
         self.conn = conn
         self.client = client
+        self.worker = servant_name
+        self.skill_lvl = skill_lvl
 
         options = [
             SelectOption(emoji="<:battery_green:1203056234731671683>",
@@ -1244,10 +1248,60 @@ class SelectTaskMenu(discord.ui.Select):
 
         super().__init__(options=options, placeholder="Pick a task")
 
-    async def callback(self, interaction: discord.Interaction):
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user == self.interaction.user:
+            return True
+        else:
+            await interaction.response.send_message(
+                embed=membed("This is not your servant."), ephemeral=True)
+            return False
+
+    async def on_timeout(self) -> None:
         for item in self.children:
             item.disabled = True
+        await self.message.edit(view=self)
+
+    def calculate_time(self, skill_level, task_difficulty):
+        """Task difficulty is expected to be expressed in terms of the option's label.
+        
+        This always returns the time needed to complete the task in hours"""
+
+        base_time_hours = 1
+        base_time_minutes = base_time_hours * 60
+
+        skill_multiplier = {0: 2, 1: 1.5, 2: 1, 3: 0.75}  # Adjust as needed
+        difficulty_multiplier = {"<:battery_green:1203056234731671683>": 0.5,
+                                 "<:battery_yellow:1203056272396648558>": 1.5,
+                                 "<:battery_red:1203056297310822411>": 3}  # Adjust as needed
+
+        adjusted_time_minutes = base_time_minutes * skill_multiplier[skill_level] * difficulty_multiplier[task_difficulty]
+        adjusted_time_hours = round(adjusted_time_minutes / 60)
+
+        return adjusted_time_hours
+
+    async def callback(self, interaction: discord.Interaction):
+        
         chosen = self.values[0]
+
+        for option in self.options:
+            if option.label == chosen:
+                option.default = True
+                emoji = option.emoji
+                break
+
+        for item in self.children:
+            item.disabled = True
+
+        res_duration = self.calculate_time(skill_level=self.skill_lvl, task_difficulty=emoji)
+        res_duration = datetime.datetime.now() + datetime.timedelta(hours=res_duration)
+        res_duration = datetime_to_string(res_duration)
+
+        data = await self.conn.execute(
+            """UPDATE `slay` 
+            SET status = 0, work_until = ? WHERE userID = ? AND LOWER(slay_name) = LOWER(?)""",
+            (res_duration, interaction.user.id, self.worker))
+        await self.conn.commit()
+
         await interaction.response.edit_message(f"Done. You chose {chosen}.", view=self)
 
 
@@ -1522,7 +1576,7 @@ class Economy(commands.Cog):
                                                         "Find out what could've happened by calling the command "
                                                         "[`>reasons`](https://www.google.com/).", colour=0x2F3136,
                                             timestamp=datetime.datetime.now(datetime.UTC))
-        self.batch_update.start()
+        # self.batch_update.start()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         role = interaction.guild.get_role(1168204249096785980)
@@ -1536,27 +1590,27 @@ class Economy(commands.Cog):
             return True
         return False
 
-    def cog_unload(self):
-        self.batch_update.cancel()
+    # def cog_unload(self):
+    #     self.batch_update.cancel()
 
-    @tasks.loop(minutes=30)
-    async def batch_update(self):
-        async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
+    # @tasks.loop(minutes=30)
+    # async def batch_update(self):
+    #     async with self.client.pool_connection.acquire() as conn:
+    #         conn: asqlite_Connection
 
-            await conn.execute(
-                f"""
-                UPDATE `{SLAY_TABLE_NAME}` 
-                SET love = CASE WHEN love - $0 < 0 THEN 0 ELSE love - $0 END, 
-                hunger = CASE WHEN hunger - $1 < 0 THEN 0 ELSE hunger - $1 END,
-                energy = CASE WHEN energy + $2 > 100 THEN 0 ELSE energy + $2 END
-                """,
-                1, 3, 10
-            )
+    #         await conn.execute(
+    #             f"""
+    #             UPDATE `{SLAY_TABLE_NAME}` 
+    #             SET love = CASE WHEN love - $0 < 0 THEN 0 ELSE love - $0 END, 
+    #             hunger = CASE WHEN hunger - $1 < 0 THEN 0 ELSE hunger - $1 END,
+    #             energy = CASE WHEN energy + $2 > 100 THEN 0 ELSE energy + $2 END
+    #             """,
+    #             1, 3, 10
+    #         )
 
-    @batch_update.before_loop
-    async def before_update(self):
-        await self.client.wait_until_ready()
+    # @batch_update.before_loop
+    # async def before_update(self):
+    #     await self.client.wait_until_ready()
 
     @staticmethod
     def partial_match_for(item_input: str):
@@ -2372,11 +2426,10 @@ class Economy(commands.Cog):
                                guild_only=True, guild_ids=APP_GUILDS_ID)
 
     @share.command(name="robux", description="share robux with another user.", extras={"exp_gained": 5})
-    @app_commands.describe(other='the user to give robux to',
+    @app_commands.describe(recipient='the user receiving the robux shared.',
                            amount='the amount of robux to give them. Supports Shortcuts (max, all, exponents).')
-    @app_commands.rename(other='user')
     @app_commands.checks.cooldown(1, 6)
-    async def give_robux(self, interaction: discord.Interaction, other: discord.Member, amount: str):
+    async def give_robux(self, interaction: discord.Interaction, recipient: discord.Member, amount: str):
         """"Give an amount of robux to another user."""
 
         inter_user = interaction.user
@@ -2384,7 +2437,7 @@ class Economy(commands.Cog):
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
-            if not (await self.can_call_out_either(inter_user, other, conn)):
+            if not (await self.can_call_out_either(inter_user, recipient, conn)):
                 return await interaction.response.send_message(embed=NOT_REGISTERED)
             else:
                 real_amount = determine_exponent(amount)
@@ -2394,71 +2447,88 @@ class Economy(commands.Cog):
                     if real_amount.lower() == 'all' or real_amount.lower() == 'max':
                         real_amount = wallet_amt_host
                     else:
-                        return await interaction.response.send_message(embed=ERR_UNREASON)
-                    host_amt = await self.update_bank_new(inter_user, conn, -int(real_amount))
-                    recp_amt = await self.update_bank_new(other, conn, int(real_amount))
+                        return await interaction.response.send_message(
+                            embed=membed("You need to provide a valid amount to share this with."))
+                    await self.update_bank_new(inter_user, conn, -int(real_amount))
+                    await self.update_bank_new(recipient, conn, int(real_amount))
                 else:
-                    if real_amount == 0:
-                        return await interaction.response.send_message(embed=ERR_UNREASON)
+                    if not real_amount:
+                        return await interaction.response.send_message(
+                            embed=membed("The share amount needs to be greater than zero."))
                     elif real_amount > wallet_amt_host:
-                        return await interaction.response.send_message(embed=ERR_UNREASON)
+                        return await interaction.response.send_message(
+                            embed=membed("You don't have that much money to share."))
                     else:
-                        host_amt = await self.update_bank_new(inter_user, conn, -int(real_amount))
-                        recp_amt = await self.update_bank_new(other, conn, int(real_amount))
+                        await self.update_bank_new(inter_user, conn, -int(real_amount))
+                        await self.update_bank_new(recipient, conn, int(real_amount))
 
-                embed = discord.Embed(
-                    title='Transaction Complete',
-                    description=f'- {inter_user.mention} has given {other.mention} \U000023e3 {real_amount:,}\n'
-                                f'- {inter_user.mention} now has \U000023e3 {host_amt[0]:,} in their wallet.\n'
-                                f'- {other.mention} now has \U000023e3 {recp_amt[0]:,} in their wallet.',
-                    colour=0x2F3136)
-                embed.set_thumbnail(url="https://i.imgur.com/RxQuE8T.png")
-                embed.set_author(name=f'Transaction made by {inter_user.name}',
-                                 icon_url=inter_user.display_avatar.url)
-                return await interaction.response.send_message(embed=embed)
+                return await interaction.response.send_message(
+                    embed=membed(f"Shared \U000023e3 **{real_amount:,}** with {recipient.mention}!"))
 
     @share.command(name='items', description='share items with another user.', extras={"exp_gained": 5})
     @app_commands.describe(item_name='the name of the item you want to share.',
-                           amount='the amount of this item to share', username='the name of the user to share it with')
+                           quantity='the amount of this item to share', 
+                           recipient='who receives this item you share')
     @app_commands.checks.cooldown(1, 5)
     async def give_items(self, interaction: discord.Interaction,
-                         item_name: Literal[
-                             'Keycard', 'Trophy', 'Clan License', 'Resistor', 'Amulet',
-                             'Dynamic Item', 'Hyperion', 'Crisis', 'Odd Eye'],
-                         amount: Literal[1, 2, 3, 4, 5], username: discord.Member):
+                         item_name: str,
+                         quantity: int, recipient: discord.Member):
         """Give an amount of items to another user."""
 
         primm = interaction.user
+        name_res = self.partial_match_for(item_name)
 
-        async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
-            item_name = item_name.replace(" ", "_")
-            if not (await self.can_call_out_either(primm, username, conn)):
-                embed = discord.Embed(description=f'Either you or {username.name} does not have an account.\n'
-                                                  f'</balance:1179817617435926686> to register.',
-                                      colour=0x2F3136)
-                return await interaction.response.send_message(embed=embed)
-            else:
-                quantity = await self.update_inv_new(primm, 0, item_name, conn)
-                if amount > quantity[0]:
-                    return await interaction.response.send_message(embed=ERR_UNREASON)
+        if name_res is None:
+            return await interaction.response.send_message(
+                embed=membed("This item does not exist. Are you trying"
+                             " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
+                             "1121094935802822768/1202647997641523241) an item?"))
+
+        elif isinstance(name_res, list):
+
+            suggestions = [item[0] for item in name_res]
+            return await interaction.response.send_message(
+                embed=discord.Embed(
+                    title=f"Found {len(name_res)} results",
+                    description='\n'.join(suggestions),
+                    colour=0x2B2D31
+                )
+            )
+        else:
+            attrs = SHOP_ITEMS[name_res]
+            name = attrs["name"]
+            ie = attrs["emoji"]
+            rarity = attrs["rarity"]
+
+            rarity_to_colour = {
+                "Godly": 0xE2104B,
+                "Legendary": 0xDA4B3D,
+                "Epic": 0xDE63FF,
+                "Rare": 0x5250A6,
+                "Uncommon": 0x9EFF8E,
+                "Common": 0x367B70
+            }.setdefault(rarity, 0x2B2D31)
+
+
+            async with self.client.pool_connection.acquire() as conn:
+                conn: asqlite_Connection
+
+                if not (await self.can_call_out_either(primm, recipient, conn)):
+                    return await interaction.response.send_message(
+                        embed=membed(f"Either you or the recipient are not registered."))
                 else:
-                    receiver = await self.update_inv_new(username, +amount, item_name, conn)
-                    new_after_transaction = quantity[0] - amount
-                    sender = await self.change_inv_new(primm, new_after_transaction, item_name, conn)
-                    item_name = " ".join(item_name.split("_"))
-                    transaction_success = discord.Embed(
-                        title="Transaction Complete",
-                        description=f'- {primm.mention} has given **{amount}** {make_plural(item_name, amount)}\n'
-                                    f'- {primm.mention} now has **{sender[0]}** {make_plural(item_name, sender[0])}\n'
-                                    f'- {username.mention} now '
-                                    f'has **{receiver[0]}** {make_plural(item_name, receiver[0])}',
-                        colour=0x2B2D31)
-                    transaction_success.set_thumbnail(url="https://i.imgur.com/xRJ2hpF.png")
-                    transaction_success.set_author(name=f'Transaction made by {primm.name}',
-                                                   icon_url=primm.display_avatar.url)
+                    their_quantity = await self.get_one_inv_data_new(primm, item_name, conn,)
+                    if quantity > their_quantity:
+                        return await interaction.response.send_message(
+                            embed=membed(f"You only have **{their_quantity:,}x {ie} {name}** to share, so uh no."))
+                    else:
+                        await self.update_inv_new(recipient, +quantity, item_name, conn)
+                        await self.update_inv_new(primm, -quantity, item_name, conn)
 
-                    await interaction.response.send_message(embed=transaction_success)
+                        await interaction.response.send_message(
+                            embed=discord.Embed(
+                                description=f"Shared **{quantity}x {ie} {item_name}** with {recipient.mention}!",
+                                colour=rarity_to_colour))
 
     showcase = app_commands.Group(name="showcase", description="manage your showcased items.", guild_only=True,
                                   guild_ids=APP_GUILDS_ID)
@@ -2695,7 +2765,6 @@ class Economy(commands.Cog):
                 )
             )
         else:
-            # Now, use the index to get the correct item attributes
             attrs = SHOP_ITEMS[name_res]
             name = attrs["name"]
             cost = attrs["cost"]
@@ -2948,12 +3017,15 @@ class Economy(commands.Cog):
             view.message = await interaction.original_response()
 
     @servant.command(name='work', description="assign your slays to do tasks for you.")
-    @app_commands.describe(duration="the time spent working (e.g, 18h or 1d 3h)", servant_name="the name of the servant")
-    async def make_servant_work(self, interaction: discord.Interaction, servant_name: str, duration: str):
+    @app_commands.describe(
+        duration="the time spent working (e.g, 18h or 1d 3h)", 
+        servant_name="the name of the servant")
+    async def make_servant_work(self, interaction: discord.Interaction, servant_name: str):
         """
         This is a subcommand. Dispatch your slays to work.
         The command has to be called again to receive the money gained from this action.
         """
+
         try:
             async with self.client.pool_connection.acquire() as conn:
                 conn: asqlite_Connection
@@ -2967,50 +3039,37 @@ class Economy(commands.Cog):
 
                 if data is None:
                     return await interaction.response.send_message(
-                        content=None, embed=membed("No servants found with that name.\n"
-                                                   "It may belong to someone else."), ephemeral=True)
-
-                # res_duration = parse_duration(duration)
-
-                if data[1] == "0":
-                    # day = number_to_ordinal(int(res_duration.strftime("%d")))
-                    # shallow = res_duration.strftime(f"%A the {day} of %B at %I:%M%p")
-                    # res_duration = datetime_to_string(res_duration)
-                    
-                    # data = await conn.execute(
-                    #     """UPDATE `slay` 
-                    #     SET status = 0, slaywork = ? WHERE userID = ?` AND LOWER(slay_name) = LOWER(?)""",
-                    #     (res_duration, interaction.user.id, servant_name))
-                    # await conn.commit()
-                    
-                    await interaction.response.send_message(
-                        embed=discord.Embed(
-                            title="Task Menu",
-                            description=f"What would you like {data[0].title()} to do?",
-                            color=0x2B2D31
-                        ),
-                        view=SelectTaskMenu(self.client, conn,)
-                    )
-                else:
-                    cooldown = data[1]
-                    cooldown = string_to_datetime(cooldown)
-                    diff = cooldown - datetime.datetime.now()
+                        embed=membed("No servants were found with that name."), ephemeral=True)
+                
+                slay_name, work_until, skill_level = data
+                if work_until != "0":
+                    work_until = string_to_datetime(work_until)
+                    diff = work_until - datetime.datetime.now()
 
                     if diff.total_seconds() <= 0:
-                        content = set()
                         await self.update_cooldown(conn, user=interaction.user, cooldown_type="slaywork",
                                                     new_cd="0")
-
-                        return await interaction.response.send_message(content=None)
+                        
                     else:
-                        minutes, seconds = divmod(diff.total_seconds(), 60)
-                        hours, minutes = divmod(minutes, 60)
-                        days, hours = divmod(hours, 24)
-                        await interaction.response.send_message(
-                            f"{data[0]} is still working.\n"
-                            f"They will finish working in **{int(days)}** days, "
-                            f"**{int(hours)}** hours, **{int(minutes)}** minutes "
-                            f"and **{int(seconds)}** seconds. ")
+                        when = datetime.datetime.now() + datetime.timedelta(seconds=diff.total_seconds())
+                        relative = discord.utils.format_dt(when, style="R")
+                        when = discord.utils.format_dt(when)
+                        return await interaction.response.send_message(
+                            embed=membed(f"{slay_name} is still working.\n"
+                                         f"They'll be back {when} ({relative})."))
+                
+                prompt = SelectTaskMenu(self.client, conn, slay_name, skill_level, interaction)
+                await interaction.response.send_message(
+                    embed=discord.Embed(
+                        title="Task Menu",
+                        description=f"What would you like {data[0].title()} to do?\n"
+                                    "Some tasks require your servant to attain a certain skill level.",
+                        color=0x2B2D31
+                    ),
+                    view=prompt)
+                
+                prompt.message = await interaction.original_response()
+
         except ValueError as veer:
             await interaction.response.send_message(content=f"{veer}")
 
@@ -3841,83 +3900,81 @@ class Economy(commands.Cog):
                     embed=membed("You don't have a job, get one first."))
 
             cooldown = await self.fetch_cooldown(conn, user=interaction.user, cooldown_type="work")
-        
-            can_continue = False
-            if cooldown[0] != "0":
-                cooldown = string_to_datetime(cooldown[0])
-                now = datetime.datetime.now()
-                diff = cooldown - now
-                if diff.total_seconds() > 0:
-                    when = datetime.datetime.now() + datetime.timedelta(seconds=diff.total_seconds())
-                    return await interaction.response.send_message(
-                        embed=membed(
-                            f"You can work again {discord.utils.format_dt(when, 't')} ({discord.utils.format_dt(when, 'R')})"))
-                can_continue = True
-            if (cooldown[0] == "0") or can_continue:
-                ncd = datetime.datetime.now() + datetime.timedelta(minutes=40)
-                ncd = datetime_to_string(ncd)
-                await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
-                job_attrs = {
-                "Plumber": (("TOILET", "SINK", "SEWAGE", "SANITATION", "DRAINAGE", "PIPES"), 20_000_000),
-                "Cashier": (("ROBUX", "TILL", "ITEMS", "WORKER", 
-                            "REGISTER", "CHECKOUT", "TRANSACTIONS", "RECEIPTS"), 35_000_000),
-                "Fisher": (
-                    ("FISHING", "NETS", "TRAWLING", "FISHERMAN", "CATCH", 
-                    "VESSEL", "AQUATIC", "HARVESTING", "MARINE"), 40_000_000),
-                "Janitor": (("CLEANING", "SWEEPING", "MOPING", "CUSTODIAL", 
-                            "MAINTENANCE", "SANITATION", "BROOM", "VACUUMING"), 45_000_000),
-                "Youtuber": (("CONTENT CREATION", "VIDEO PRODUCTION", 
-                            "CHANNEL", "SUBSCRIBERS", "EDITING", "UPLOAD", "VLOGGING", 
-                            "MONETIZATION", "THUMBNAILS", "ENGAGEMENT"), 50_000_000),
-                "Police": (("LAW ENFORCEMENT", "PATROL", "CRIME PREVENTION", 
-                            "INVESTIGATION", "ARREST", "UNIFORM", "BADGE", "INTERROGATION"), 75_000_000)
-                }
+            ncd = string_to_datetime(cooldown[0])
+            now = datetime.datetime.now()
 
-                possible_words: tuple = job_attrs.get(job_name)[0]
-                selected_word = choice(possible_words)
+            diff = ncd - now
+            if diff.total_seconds() > 0:
+                when = now + datetime.timedelta(seconds=diff.total_seconds())
+                return await interaction.response.send_message(
+                    embed=membed(
+                        f"You can work again at {discord.utils.format_dt(when, 't')} ({discord.utils.format_dt(when, 'R')})"))
 
-                letters_to_hide = max(1, len(selected_word) // 3)  # You can adjust this ratio
+            ncd = discord.utils.utcnow() + datetime.timedelta(minutes=40)
+            ncd = datetime_to_string(ncd)
+            await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
-                indices_to_hide = [i for i, char in enumerate(selected_word) if char.isalpha()]
-                indices_hidden = sample(indices_to_hide, min(letters_to_hide, len(indices_to_hide)))
+            job_attrs = {
+            "Plumber": (("TOILET", "SINK", "SEWAGE", "SANITATION", "DRAINAGE", "PIPES"), 20_000_000),
+            "Cashier": (("ROBUX", "TILL", "ITEMS", "WORKER", 
+                        "REGISTER", "CHECKOUT", "TRANSACTIONS", "RECEIPTS"), 35_000_000),
+            "Fisher": (
+                ("FISHING", "NETS", "TRAWLING", "FISHERMAN", "CATCH", 
+                "VESSEL", "AQUATIC", "HARVESTING", "MARINE"), 40_000_000),
+            "Janitor": (("CLEANING", "SWEEPING", "MOPING", "CUSTODIAL", 
+                        "MAINTENANCE", "SANITATION", "BROOM", "VACUUMING"), 45_000_000),
+            "Youtuber": (("CONTENT CREATION", "VIDEO PRODUCTION", 
+                        "CHANNEL", "SUBSCRIBERS", "EDITING", "UPLOAD", "VLOGGING", 
+                        "MONETIZATION", "THUMBNAILS", "ENGAGEMENT"), 50_000_000),
+            "Police": (("LAW ENFORCEMENT", "PATROL", "CRIME PREVENTION", 
+                        "INVESTIGATION", "ARREST", "UNIFORM", "BADGE", "INTERROGATION"), 75_000_000)
+            }
 
-                hidden_word_list = [char if i not in indices_hidden else '_' for i, char in enumerate(selected_word)]
-                hidden_word = ''.join(hidden_word_list)
+            possible_words: tuple = job_attrs.get(job_name)[0]
+            selected_word = choice(possible_words)
 
-                def check(m):
-                    """Requirements that the client has to wait for."""
-                    return (m.content.lower() == selected_word.lower()
-                            and m.channel == interaction.channel and m.author == interaction.user)
+            letters_to_hide = max(1, len(selected_word) // 3)  # You can adjust this ratio
 
-                todo = discord.Embed(
-                    title="What is the word?",
-                    description=f"[`{hidden_word}`](https://www.sss.com)",
-                    colour=0x2B2D31
-                )
+            indices_to_hide = [i for i, char in enumerate(selected_word) if char.isalpha()]
+            indices_hidden = sample(indices_to_hide, min(letters_to_hide, len(indices_to_hide)))
 
-                await interaction.response.send_message(embed=todo)
-                prompt = await interaction.original_response()  
-                reduced = randint(10000000, job_attrs.get(job_name)[-1])
-                embed = discord.Embed()
+            hidden_word_list = [char if i not in indices_hidden else '_' for i, char in enumerate(selected_word)]
+            hidden_word = ''.join(hidden_word_list)
 
-                try:
-                    await self.client.wait_for('message', check=check, timeout=15.0)
-                except asyncTE:
-                    reduced = floor((25 / 100) * reduced)
-                    await self.update_bank_new(interaction.user, conn, reduced)
-                    embed.title = "Terrible work!"
-                    embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for a sub-par shift"
-                    embed.colour = discord.Colour.brand_red()
-                    embed.set_footer(text=f"Working as a {job_name}")
-                    await prompt.edit(content=None, embed=embed)
-                else:
-                    await self.update_bank_new(interaction.user, conn, reduced)
-                    embed.title = "Great work!"
-                    embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for your shift"
-                    embed.colour = discord.Colour.brand_green()
-                    embed.set_footer(text=f"Working as a {job_name}")
-                    await prompt.edit(content=None, embed=embed)
+            def check(m):
+                """Requirements that the client has to wait for."""
+                return (m.content.lower() == selected_word.lower()
+                        and m.channel == interaction.channel and m.author == interaction.user)
+
+            todo = discord.Embed(
+                title="What is the word?",
+                description=f"[`{hidden_word}`](https://www.sss.com)",
+                colour=0x2B2D31
+            )
+
+            await interaction.response.send_message(embed=todo)
+            prompt = await interaction.original_response()  
+            reduced = randint(10000000, job_attrs.get(job_name)[-1])
+            embed = discord.Embed()
+
+            try:
+                await self.client.wait_for('message', check=check, timeout=15.0)
+            except asyncTE:
+                reduced = floor((25 / 100) * reduced)
+                await self.update_bank_new(interaction.user, conn, reduced)
+                embed.title = "Terrible work!"
+                embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for a sub-par shift"
+                embed.colour = discord.Colour.brand_red()
+                embed.set_footer(text=f"Working as a {job_name}")
+                await prompt.edit(content=None, embed=embed)
+            else:
+                await self.update_bank_new(interaction.user, conn, reduced)
+                embed.title = "Great work!"
+                embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for your shift"
+                embed.colour = discord.Colour.brand_green()
+                embed.set_footer(text=f"Working as a {job_name}")
+                await prompt.edit(content=None, embed=embed)
 
     @app_commands.command(name="balance", description="returns a user's current balance.")
     @app_commands.describe(user='the user to return the balance of',
@@ -4757,6 +4814,7 @@ class Economy(commands.Cog):
 
     @item.autocomplete('item_name')
     @sell.autocomplete('item_name')
+    @give_items.autocomplete('item_name')
     async def item_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         return [app_commands.Choice(name=item["name"], value=item["name"])
                 for item in SHOP_ITEMS if current.lower() in item["name"].lower()]
