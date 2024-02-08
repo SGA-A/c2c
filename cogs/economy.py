@@ -18,6 +18,7 @@ import datetime
 
 from other.utilities import parse_duration, datetime_to_string, string_to_datetime, labour_productivity_via
 from other.pagination import Pagination
+from asqlite import Connection as asqlite_Connection
 
 
 def membed(custom_description: str) -> discord.Embed:
@@ -47,6 +48,7 @@ MIN_BET = 500_000
 COOLDOWN_TABLE_NAME = "cooldowns"
 APP_GUILDS_ID = [829053898333225010, 780397076273954886]
 DOWN = True
+gend = {"Female": 0xF3AAE0, "Male": 0x737ECF}
 gender_emotes = {"Male": "<:male:1201993062885380097>", "Female": "<:female:1201992742574755891>"}
 UNIQUE_BADGES = {
     992152414566232139: "<:e1_stafff:1145039666916110356>",
@@ -235,7 +237,10 @@ def return_rand_str():
     return password
 
 
-def format_number_short(number):
+# Existing code for format_number_short function
+
+
+def format_number_short(number: int) -> str:
     """
     Format a numerical value in a concise, abbreviated form.
 
@@ -275,6 +280,43 @@ def format_number_short(number):
         return '{:.1f}T'.format(number / 1e12)
 
 
+def reverse_format_number_short(formatted_number: str) -> int:
+    """
+    Reverse the process of formatting a numerical value in a concise, abbreviated form.
+
+    Parameters:
+    - formatted_number (str): The formatted string representing the number in a short, human-readable form.
+
+    Returns:
+    int: The numerical value represented by the formatted string.
+
+    Description:
+    This function reverses the process of formatting a numerical value in a concise and abbreviated manner.
+    It takes a formatted string, such as '1.2M' or '2.5B', and converts it back to the corresponding numerical value.
+    The function supports values formatted with 'K' for thousands, 'M' for millions, 'B' for billions, and 'T' for trillions.
+
+    Example:
+    >>> reverse_format_number_short('500')
+    500
+    >>> reverse_format_number_short('1.5K')
+    1500
+    >>> reverse_format_number_short('1.2M')
+    1200000
+    >>> reverse_format_number_short('2.5B')
+    2500000000
+    >>> reverse_format_number_short('9.0T')
+    9000000000000
+    """
+
+    suffixes = {'K': 1e3, 'M': 1e6, 'B': 1e9, 'T': 1e12}
+
+    for suffix, value in suffixes.items():
+        if formatted_number.endswith(suffix):
+            number_part = formatted_number[:-1]
+            return int(float(number_part) * value)
+
+    return int(formatted_number)
+
 def owners_nolimit(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
     """Any of the owners of the client bypass all cooldown restrictions (i.e. Splint + inter_geo)."""
     if interaction.user.id in {546086191414509599, 992152414566232139}:
@@ -312,7 +354,7 @@ def determine_exponent(rinput: str) -> str | int:
 
 def generate_slot_combination():
     """A slot machine that generates and returns one row of slots."""
-    slot = ['🔥', '😳', '🌟', '💔', '🖕', '🤡', '🍕', '🍆', '🍑']
+    slot = ('🔥', '😳', '🌟', '💔', '🖕', '🤡', '🍕', '🍆', '🍑')
 
     weights = [
         (800, 1000, 800, 100, 900, 800, 1000, 800, 800),
@@ -343,7 +385,6 @@ def generate_progress_bar(percentage):
     percentage = round(percentage, -1)
     if percentage > 100:
         percentage = 100
-
     progress_bar = {
         0: "<:pb1e:1199056980195676201><:pb2e:1199056978908037180>"
            "<:pb2e:1199056978908037180><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
@@ -1143,6 +1184,7 @@ class DropdownLB(discord.ui.Select):
         for option in optionss:
             if option.value == their_choice:
                 option.default = True
+            option.default = False
 
         super().__init__(options=optionss)
         self.client: commands.Bot = client
@@ -1177,6 +1219,28 @@ class Leaderboard(discord.ui.View):
         except discord.NotFound:
             pass
 
+class DispatchServantView(discord.ui.View):
+    def __init__(self, client: commands.Bot, conn, chosen_slay: str, skill_lvl, interaction: discord.Interaction):
+        super().__init__(timeout=40.0)
+        self.interaction = interaction
+        self.add_item(SelectTaskMenu(client, conn, chosen_slay, skill_lvl))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user == self.interaction.user:
+            return True
+        else:
+            await interaction.response.send_message(
+                embed=membed("This is not your servant."), ephemeral=True)
+            return False
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+        try:
+            await self.message.edit(view=self)
+        except discord.NotFound:
+            pass
+
 
 class Servants(discord.ui.Select):
     def __init__(self, client: commands.Bot, their_slays: list, their_choice: str, owner_id: int, conn):
@@ -1193,10 +1257,11 @@ class Servants(discord.ui.Select):
         self.choice = their_choice
 
         for option in options:
-            if option.value == their_choice:
+            if option.value == self.choice:
                 option.default = True
+            option.default = False
 
-        super().__init__(options=options, placeholder="Servant Name", row=0)
+        super().__init__(options=options, placeholder="Select Servant Name", row=0)
 
     async def callback(self, interaction: discord.Interaction):
 
@@ -1205,7 +1270,6 @@ class Servants(discord.ui.Select):
         for option in self.options:
             if option.value == self.choice:
                 option.default = True
-                continue
             option.default = False
 
         dtls = await self.conn.fetchone("SELECT * FROM `slay` WHERE userID = ? AND slay_name = ?",
@@ -1217,13 +1281,18 @@ class Servants(discord.ui.Select):
 
 
 class SelectTaskMenu(discord.ui.Select):
-    def __init__(self, client: commands.Bot, conn, servant_name: str, 
-                 skill_lvl: int, interaction: discord.Interaction):
+    def __init__(self, client: commands.Bot, conn, servant_name: str, skill_lvl: int):
 
         self.conn = conn
         self.client = client
         self.worker = servant_name
         self.skill_lvl = skill_lvl
+
+        self.attrs = {
+            1203056234731671683: (0, 25, 0.5, 0x73f27b),
+            1203056272396648558: (1, 50, 1.5, 0xf4c500),
+            1203056297310822411: (2, 75, 3.0, 0xde4147)
+        }
 
         options = [
             SelectOption(emoji="<:battery_green:1203056234731671683>",
@@ -1238,8 +1307,6 @@ class SelectTaskMenu(discord.ui.Select):
                          label="Delude Robbers", description="Skill L2 | \U000023e3 ~5B"),
             SelectOption(emoji="<:battery_yellow:1203056272396648558>",
                          label="Plan heists on idle", description="Skill L2 | \U000023e3 ~10B"),
-            SelectOption(emoji="<:battery_yellow:1203056272396648558>",
-                         label="Plan heists on idle", description="Skill L2 | \U000023e3 ~10B"),
             SelectOption(emoji="<:battery_red:1203056297310822411>",
                          label="Perform large-scale crimes", description="Skill L3 | \U000023e3 ~50B"),
             SelectOption(emoji="<:battery_red:1203056297310822411>",
@@ -1248,62 +1315,80 @@ class SelectTaskMenu(discord.ui.Select):
 
         super().__init__(options=options, placeholder="Pick a task")
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user == self.interaction.user:
-            return True
-        else:
-            await interaction.response.send_message(
-                embed=membed("This is not your servant."), ephemeral=True)
-            return False
-
-    async def on_timeout(self) -> None:
-        for item in self.children:
-            item.disabled = True
-        await self.message.edit(view=self)
-
-    def calculate_time(self, skill_level, task_difficulty):
+    def calculate_time(self, skill_level, emoji_id: int):
         """Task difficulty is expected to be expressed in terms of the option's label.
         
         This always returns the time needed to complete the task in hours"""
 
-        base_time_hours = 1
+        base_time_hours = 1.5
         base_time_minutes = base_time_hours * 60
 
         skill_multiplier = {0: 2, 1: 1.5, 2: 1, 3: 0.75}  # Adjust as needed
-        difficulty_multiplier = {"<:battery_green:1203056234731671683>": 0.5,
-                                 "<:battery_yellow:1203056272396648558>": 1.5,
-                                 "<:battery_red:1203056297310822411>": 3}  # Adjust as needed
 
-        adjusted_time_minutes = base_time_minutes * skill_multiplier[skill_level] * difficulty_multiplier[task_difficulty]
+        adjusted_time_minutes = base_time_minutes * skill_multiplier[skill_level] * self.attrs[emoji_id][2]
         adjusted_time_hours = round(adjusted_time_minutes / 60)
 
         return adjusted_time_hours
 
     async def callback(self, interaction: discord.Interaction):
         
+        energy = await self.conn.fetchone("SELECT energy, hunger FROM `slay` WHERE userID = ? AND slay_name = ?", 
+                                         (interaction.user.id, self.worker))
+        energy, hunger = energy
+
         chosen = self.values[0]
 
         for option in self.options:
             if option.label == chosen:
                 option.default = True
-                emoji = option.emoji
-                break
+                uri = option.emoji.url
+                emoji = option.emoji.id
+                description = option.description
+            option.default = False
+            
+        if energy < self.attrs[emoji][1]:
+            return await interaction.response.send_message(
+                embed=membed(f"{self.worker.title()} is too tired to do this task."), delete_after=3.0)
 
-        for item in self.children:
-            item.disabled = True
+        if hunger <= 50:
+            return await interaction.response.send_message(
+                embed=membed(f"{self.worker.title()} is malnourished and cannot be dispatched.\n"
+                             "Give them something to eat first."), delete_after=3.0)        
 
-        res_duration = self.calculate_time(skill_level=self.skill_lvl, task_difficulty=emoji)
+        if self.skill_lvl < self.attrs[emoji][0]:
+            return await interaction.response.send_message(
+                embed=membed(f"{self.worker.title()} hasn't attained the minimum skill level required."), 
+                delete_after=3.0)
+
+        # ! This is where you clear the view and must not listen any longer to it
+        self.view.clear_items()
+        self.view.stop()
+
+        payout = description.split("~")[-1]
+        payout = reverse_format_number_short(payout)
+
+        res_duration = self.calculate_time(skill_level=self.skill_lvl, emoji_id=emoji)
         res_duration = datetime.datetime.now() + datetime.timedelta(hours=res_duration)
+    
+        embed = discord.Embed(
+            title="Task Started",
+            description=f"{self.worker.title()} has started the task titled {repr(chosen)}.\n"
+                        f"- They should finish {discord.utils.format_dt(res_duration, style="R")}.\n"
+                        f"- There is a small chance that your servant may not return, depending on risk associated.\n"
+                        f"- You'll need to call this command again to check back on their progress.",
+            colour=0x313338)
+        embed.set_thumbnail(url=uri)
+
+        await interaction.response.edit_message(embed=embed, view=self.view)
+        
         res_duration = datetime_to_string(res_duration)
-
-        data = await self.conn.execute(
-            """UPDATE `slay` 
-            SET status = 0, work_until = ? WHERE userID = ? AND LOWER(slay_name) = LOWER(?)""",
-            (res_duration, interaction.user.id, self.worker))
+        payout = randint(payout, payout + (payout // 2))
+        await self.conn.execute(
+            """
+            UPDATE `slay` SET status = 0, work_until = ?, tasktype = ?, toreduce = ?, toadd = ? 
+            WHERE userID = ? AND LOWER(slay_name) = LOWER(?)
+            """, (res_duration, emoji, self.attrs[emoji][1], payout, interaction.user.id, self.worker))
         await self.conn.commit()
-
-        await interaction.response.edit_message(f"Done. You chose {chosen}.", view=self)
-
 
 class ServantsManager(discord.ui.View):
     pronouns = {"Female": ("her", "she"), "Male": ("his", "he")}
@@ -1576,7 +1661,7 @@ class Economy(commands.Cog):
                                                         "Find out what could've happened by calling the command "
                                                         "[`>reasons`](https://www.google.com/).", colour=0x2F3136,
                                             timestamp=datetime.datetime.now(datetime.UTC))
-        # self.batch_update.start()
+        self.batch_update.start()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         role = interaction.guild.get_role(1168204249096785980)
@@ -1590,27 +1675,27 @@ class Economy(commands.Cog):
             return True
         return False
 
-    # def cog_unload(self):
-    #     self.batch_update.cancel()
+    def cog_unload(self):
+        self.batch_update.cancel()
 
-    # @tasks.loop(minutes=30)
-    # async def batch_update(self):
-    #     async with self.client.pool_connection.acquire() as conn:
-    #         conn: asqlite_Connection
+    @tasks.loop(minutes=15)
+    async def batch_update(self):
+        async with self.client.pool_connection.acquire() as conn:
+            conn: asqlite_Connection
 
-    #         await conn.execute(
-    #             f"""
-    #             UPDATE `{SLAY_TABLE_NAME}` 
-    #             SET love = CASE WHEN love - $0 < 0 THEN 0 ELSE love - $0 END, 
-    #             hunger = CASE WHEN hunger - $1 < 0 THEN 0 ELSE hunger - $1 END,
-    #             energy = CASE WHEN energy + $2 > 100 THEN 0 ELSE energy + $2 END
-    #             """,
-    #             1, 3, 10
-    #         )
+            await conn.execute(
+                f"""
+                UPDATE `{SLAY_TABLE_NAME}` 
+                SET love = CASE WHEN love - $0 < 0 THEN 0 ELSE love - $0 END, 
+                hunger = CASE WHEN hunger - $1 < 0 THEN 0 ELSE hunger - $1 END,
+                energy = CASE WHEN energy + $2 > 100 THEN 0 ELSE energy + $2 END
+                """,
+                1, 3, 10
+            )
 
-    # @batch_update.before_loop
-    # async def before_update(self):
-    #     await self.client.wait_until_ready()
+    @batch_update.before_loop
+    async def before_update(self):
+        await self.client.wait_until_ready()
 
     @staticmethod
     def partial_match_for(item_input: str):
@@ -1915,8 +2000,6 @@ class Economy(commands.Cog):
          claimed, img) = (
             dtls[0], dtls[2], dtls[3], dtls[4], dtls[5], dtls[7], dtls[8], dtls[9], dtls[10], dtls[11],
             dtls[12], dtls[13], dtls[-2], dtls[-1])
-        
-        gend = {"Female": 0xF3AAE0, "Male": 0x737ECF}
 
         boundary = self.calculate_exp_for(level=lvl)
         claimed = string_to_datetime(claimed)
@@ -1936,12 +2019,6 @@ class Economy(commands.Cog):
                     item.disabled = True
                 sdetails.description += ("\nYour servant has virtually no energy.\n"
                                         "They'll wake up soon.")
-            else:
-                if not status:
-                    for item in children:
-                        if not hasattr(item, "label"):
-                            continue
-                        item.disabled = True
 
         sdetails.add_field(name="Hunger", value=f"{generate_progress_bar(hunger)} ({hunger}%)")
         sdetails.add_field(name="Energy", value=f"{generate_progress_bar(energy)} ({energy}%)")
@@ -2331,6 +2408,7 @@ class Economy(commands.Cog):
         Increment the total command ran by a user by 1 for each call. Increase the interaction user's invoker if
         they are registered.
         """
+
         async with self.client.pool_connection.acquire() as connection:
             connection: asqlite_Connection
 
@@ -2362,9 +2440,30 @@ class Economy(commands.Cog):
                             bankspace = bankspace + ? WHERE userID = ?""",
                             (randint(300_000, 20_000_000), interaction.user.id))
 
-                        await self.send_custom_text(interaction,
-                                                    custom_text=f'{interaction.user.mention} has just leveled '
-                                                                f'up to Level **{level + 1}**.')
+                        user = interaction.user.name
+                        congos = choice(
+                            (f"Great work, {user}!",
+                             f"Hard work paid off, {user}!",
+                             f"Inspiring, {user}!",
+                             f"Top notch, {user}!",
+                             f"You're on fire, {user}!",
+                             f"You're on a roll, {user}!",
+                             f"Keep it up, {user}!",
+                             f"Amazing, {user}!",
+                             f"Fantastic work, {user}!",
+                             f"Superb effort, {user}!",
+                             f"Brilliant job, {user}!",
+                             f"Outstanding work, {user}!",
+                             f"You're doing great, {user}!"))
+                        
+                        embed = discord.Embed(
+                            title="Level Up!",
+                            description=f"{congos}\n"
+                                        f"You've leveled up from level **{level:,}** to level **{level+1:,}**.",
+                            colour=0x55BEFF
+                        )
+
+                        await interaction.followup.send(embed=embed)
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
@@ -3017,8 +3116,7 @@ class Economy(commands.Cog):
             view.message = await interaction.original_response()
 
     @servant.command(name='work', description="assign your slays to do tasks for you.")
-    @app_commands.describe(
-        duration="the time spent working (e.g, 18h or 1d 3h)", 
+    @app_commands.describe( 
         servant_name="the name of the servant")
     async def make_servant_work(self, interaction: discord.Interaction, servant_name: str):
         """
@@ -3034,36 +3132,81 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(content=None, embed=self.not_registered)
 
                 data = await conn.fetchone(
-                    "SELECT slay_name, work_until, skillL FROM slay WHERE userID = ? AND LOWER(slay_name) = LOWER(?)", 
-                    (interaction.user.id, servant_name))
-
+                    """
+                    SELECT slay_name, work_until, skillL FROM slay
+                    WHERE userID = ? AND LOWER(slay_name) = LOWER(?)
+                    """, (interaction.user.id, servant_name))
+                
                 if data is None:
                     return await interaction.response.send_message(
-                        embed=membed("No servants were found with that name."), ephemeral=True)
+                        embed=membed("We could not find a servant with that name."), ephemeral=True)
                 
                 slay_name, work_until, skill_level = data
+
                 if work_until != "0":
                     work_until = string_to_datetime(work_until)
                     diff = work_until - datetime.datetime.now()
 
-                    if diff.total_seconds() <= 0:
-                        await self.update_cooldown(conn, user=interaction.user, cooldown_type="slaywork",
-                                                    new_cd="0")
-                        
-                    else:
+                    if diff.total_seconds() > 0:
                         when = datetime.datetime.now() + datetime.timedelta(seconds=diff.total_seconds())
                         relative = discord.utils.format_dt(when, style="R")
                         when = discord.utils.format_dt(when)
+
+                        embed = discord.Embed(
+                            title=f"{slay_name}'s Progression",
+                            description="ETA: {when} ({relative}).\n"
+                                        "")
+
                         return await interaction.response.send_message(
                             embed=membed(f"{slay_name} is still working.\n"
-                                         f"They'll be back {when} ({relative})."))
-                
-                prompt = SelectTaskMenu(self.client, conn, slay_name, skill_level, interaction)
+                                         f"They'll be back on {when} ({relative})."))
+                    
+                    # TODO stuff beneath here if the servant is done working
+                    # ! Anything in this branch will execute only if the servant has finished working.
+                    # ! Consider payouts, energy and hunger changes.
+
+                    data = await conn.execute(
+                            """
+                            UPDATE `slay` set tasks_completed = tasks_completed + 1,
+                            status = 1, energy = CASE WHEN energy - toreduce < 0 THEN 0 ELSE energy - toreduce END, 
+                            work_until = 0 WHERE userID = ? AND slay_name = ? RETURNING toadd, hex, gender
+                            """,
+                            (interaction.user.id, slay_name))
+                    data = await data.fetchone()
+
+                    hex = data[1] or gend.setdefault(data[2], 0x2B2D31)
+
+                    embed = discord.Embed(
+                        title="Task Complete",
+                        description=f"**{slay_name} has given you:**\n"
+                                    f"- \U000023e3 {data[0]:,}", 
+                        colour=hex)
+                    embed.set_footer(text="No taxes!")
+
+                    res = choices([0, 1], weights=(0.85, 0.15), k=1)
+                    await self.update_bank_new(interaction.user, conn, data[0])
+                    
+                    if res[0]:
+                        qty, ranitem = randint(1, 3), choice(SHOP_ITEMS)
+                        await self.update_inv_new(interaction.user, qty, ranitem["name"], conn)
+                        embed.description += f"\n- {qty}x {ranitem['emoji']} {ranitem['name']} (bonus)\n"
+                    
+                    await conn.commit()
+                    
+                    await interaction.response.send_message(embed=embed)
+                    msg = await interaction.original_response()
+                    return await msg.add_reaction("<a:owoKonataDance:1205288135861473330>")
+
+                prompt = DispatchServantView(self.client, conn, slay_name, skill_level, interaction)
                 await interaction.response.send_message(
                     embed=discord.Embed(
                         title="Task Menu",
-                        description=f"What would you like {data[0].title()} to do?\n"
-                                    "Some tasks require your servant to attain a certain skill level.",
+                        description=f"What would you like {slay_name.title()} to do?\n"
+                                    "Some tasks require your servant to attain a certain skill level.\n"
+                                    "- 25 energy points are required for <:battery_green:1203056234731671683>\n"
+                                    "- 50 energy points are required for <:battery_yellow:1203056272396648558>\n"
+                                    "- 75 energy points are required for <:battery_red:1203056297310822411>\n"
+                                    f"You can only pick 1 task for {slay_name.title()} to complete.",
                         color=0x2B2D31
                     ),
                     view=prompt)
