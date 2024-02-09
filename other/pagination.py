@@ -22,38 +22,33 @@ class Pagination(discord.ui.View):
         if interaction.user == self.interaction.user:
             return True
         emb = membed("You have not created this interaction.")
-        await interaction.response.send_message(embed=emb, ephemeral=True)  # type: ignore
+        await interaction.response.send_message(embed=emb, ephemeral=True)
         return False
 
     async def navigate(self) -> None:
         """Get through the paginator properly."""
         emb, self.total_pages = await self.get_page(self.index)
         if self.total_pages == 1:
-            await self.interaction.response.send_message(embed=emb)  # type: ignore
+            await self.interaction.response.send_message(embed=emb)
         elif self.total_pages > 1:
             self.update_buttons()
-            await self.interaction.response.send_message(embed=emb, view=self)  # type: ignore
+            await self.interaction.response.send_message(embed=emb, view=self)
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
         """Update the page index in response to changes in the current page."""
         emb, self.total_pages = await self.get_page(self.index)
         self.update_buttons()
-        await interaction.response.edit_message(embed=emb, view=self)  # type: ignore
+        await interaction.response.edit_message(embed=emb, view=self)
 
     def update_buttons(self) -> None:
         """Disable or re-enable buttons based on position in paginator."""
-        self.children[2].label = f"{self.index}/{self.total_pages}"  # type: ignore
-        if self.index+1 > self.total_pages // 2:
-            self.children[4].disabled = True  # type: ignore
-        else:
-            self.children[4].disabled = False  # type: ignore
-            self.children[0].disabled = True  # type: ignore
 
-        if self.index - 1:
-            self.children[0].disabled = False  # type: ignore
+        self.children[2].label = f"{self.index}/{self.total_pages}"
 
-        self.children[1].disabled = self.index == 1  # type: ignore
-        self.children[3].disabled = self.index == self.total_pages  # type: ignore
+        self.children[0].disabled = self.index <= 2
+        self.children[1].disabled = self.index == 1
+        self.children[3].disabled = self.index == self.total_pages
+        self.children[4].disabled = self.index >= self.total_pages - 1
 
     @discord.ui.button(label="FIRST", style=discord.ButtonStyle.green)
     async def first(self, interaction: discord.Interaction, button: discord.Button) -> None:

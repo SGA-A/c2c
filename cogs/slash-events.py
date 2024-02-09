@@ -22,8 +22,8 @@ class SlashExceptionHandler(commands.Cog):
     async def get_app_command_error(self, interaction: Interaction,
                                     error: AppCommandError):
 
-        if not interaction.response.is_done():  # type: ignore
-            await interaction.response.defer(thinking=True)  # type: ignore
+        if not interaction.response.is_done():
+            await interaction.response.defer(thinking=True)
 
         if isinstance(error, CheckFailure):
             exception = Embed(title='Exception', colour=0x2B2D31)
@@ -42,9 +42,11 @@ class SlashExceptionHandler(commands.Cog):
                                     value=', '.join(error.missing_permissions).title())
 
             elif isinstance(error, CommandOnCooldown):  # when the command a user executes is on cooldown
+
                 exception.title = choice([
                     "Too spicy, take a breather..", "Take a chill pill", "Woah now, slow it down",
                     "Let's slow it down here", "Slow it down bud", "Spam isn't cool fam", "Hold your horses..."])
+                
                 exception.set_thumbnail(url=None)
                 exception.colour = 0x2B2D31
                 after_cd = datetime.datetime.now() + datetime.timedelta(seconds=error.retry_after)
