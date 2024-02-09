@@ -27,8 +27,6 @@
     <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff" style="max-width:100%;"></a>
   <a href="https://img.shields.io/badge/os-windows-yellow">
     <img alt="Windows" src="https://img.shields.io/badge/os-windows-yellow"></a>
-  <a href="https://img.shields.io/badge/os-linux-yellow">
-    <img alt="Linux" src="https://img.shields.io/badge/os-linux-yellow"></a>
   <a href="https://www.python.org/downloads/release">
     <img alt="Python Compatible Versions" src="https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue"></a>
   <br/>
