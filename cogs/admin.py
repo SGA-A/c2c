@@ -100,8 +100,7 @@ class Administrate(commands.Cog):
         if pinned_if_any is not None:
             try:
                 already_pinned = await ctx.fetch_message(pinned_if_any)
-                await already_pinned.unpin(
-                    reason="Outdated weekly reward announcement")  # unpin if stored
+                await already_pinned.unpin(reason="Outdated weekly reward announcement")  # unpin if stored
             except discord.HTTPException:
                 msg = await ctx.send(
                     content="**[WARNING]:** Previous weekly reward announcement was detected, but"
@@ -111,7 +110,6 @@ class Administrate(commands.Cog):
                                               f"I have cancelled the payout operation.")
 
         if ctx.guild.id == 829053898333225010:
-
             active_members = ctx.guild.get_role(1190772029830471781).members
             activated_members = ctx.guild.get_role(1190772182591209492).members
 
@@ -122,25 +120,26 @@ class Administrate(commands.Cog):
                 conn: asqlite_Connection
                 payouts = {}
 
-                for member in activated_members:  # activated member rewards
-                    if await Economy.can_call_out(member, conn):
-                        continue
-                    amt_activated = randint(1_100_000_000, 2_100_000_000)
-                    await Economy.update_bank_new(member, conn, amt_activated)
-                    payouts.update(
-                        {f"{member.mention}": (amt_activated,
-                                               ctx.guild.get_role(1190772182591209492).mention)})
-                    actual += 1
+                async with conn.transaction():
+                    for member in activated_members:  # activated member rewards
+                        if await Economy.can_call_out(member, conn):
+                            continue
+                        amt_activated = randint(1_100_000_000, 2_100_000_000)
+                        await Economy.update_bank_new(member, conn, amt_activated)
+                        payouts.update(
+                            {f"{member.mention}": (amt_activated,
+                                                ctx.guild.get_role(1190772182591209492).mention)})
+                        actual += 1
 
-                for member in active_members:  # active member rewards
-                    if await Economy.can_call_out(member, conn):
-                        continue
-                    amt_active = randint(200000000, 1100000000)
-                    await Economy.update_bank_new(member, conn, amt_active)
-                    payouts.update(
-                        {f"{member.mention}": (amt_active,
-                                               ctx.guild.get_role(1190772029830471781).mention)})
-                    actual += 1
+                    for member in active_members:  # active member rewards
+                        if await Economy.can_call_out(member, conn):
+                            continue
+                        amt_active = randint(200000000, 1100000000)
+                        await Economy.update_bank_new(member, conn, amt_active)
+                        payouts.update(
+                            {f"{member.mention}": (amt_active,
+                                                ctx.guild.get_role(1190772029830471781).mention)})
+                        actual += 1
 
                 dt_now = datetime.now()
                 payday = discord.Embed(
@@ -164,7 +163,7 @@ class Administrate(commands.Cog):
                 await unpinned.pin(reason="Latest weekly rewards announcement")
                 modify_profile("update", "weeklyr msg id", unpinned.id)  # store to unpin later
         else:
-            await ctx.send("This command is to be only in **cc**.")
+            await ctx.send("This command is to be called only within **cc**.")
 
     @app_commands.command(name="config", description="adjust a user's robux directly.")
     @app_commands.guilds(discord.Object(id=829053898333225010),
@@ -189,80 +188,61 @@ class Administrate(commands.Cog):
             their_bank = await Economy.get_spec_bank_data(member, "bank", conn)
             their_wallet = await Economy.get_wallet_data_only(member, conn)
 
+            embed = discord.Embed(title='Success', 
+                                  colour=discord.Colour.random(),
+                                  timestamp=discord.utils.utcnow())
+            
             if configuration == "add":
+                if deposit_mode == "bank":
+                    new_amount = their_bank + int(real_amount)
+                    await Economy.update_bank_new(member, conn, +int(real_amount), deposit_mode)
+                else:
+                    new_amount = their_wallet + int(real_amount)
+                    await Economy.update_bank_new(member, conn, +int(real_amount))
 
-                match deposit_mode:
-                    case "bank":
-                        new_amount = their_bank + int(real_amount)
-                        await Economy.update_bank_new(member, conn, +int(real_amount), deposit_mode)
-                    case _:
-                        new_amount = their_wallet + int(real_amount)
-                        await Economy.update_bank_new(member, conn, +int(real_amount))
-
-                total = (their_bank + their_wallet) + int(real_amount)
-                embed2 = discord.Embed(
-                    title='Success',
-                    description=(
-                        f"\U0000279c Added {CURRENCY}{int(real_amount):,} robux to "
-                        f"**{member.display_name}**'s balance.\n"
-                        f"\U0000279c **{member.display_name}**'s new "
-                        f"**`{deposit_mode}`** balance is {CURRENCY}{new_amount:,}.\n"
-                        f"\U0000279c **{member.display_name}**'s total balance now "
-                        f"is {CURRENCY}{total:,}"),
-                    colour=discord.Colour.dark_green(), timestamp=datetime.now())
-                embed2.set_thumbnail(url=member.display_avatar.url)
-                embed2.set_author(name=f"Requested by {interaction.user.name}",
-                                  icon_url=interaction.user.display_avatar.url)
-                embed2.set_footer(text="configuration type: ADD_TO")
-
-                await interaction.response.send_message(embed=embed2,
-                                                        ephemeral=ephemeral)
-
+                total = their_bank + their_wallet + int(real_amount)
+                embed.description = (
+                    f"- Added {CURRENCY}{int(real_amount):,} robux to "
+                    f"**{member.display_name}**'s balance.\n"
+                    f"- **{member.display_name}**'s new "
+                    f"**`{deposit_mode}`** balance is {CURRENCY}{new_amount:,}.\n"
+                    f"- **{member.display_name}**'s total balance now "
+                    f"is {CURRENCY}{total:,}"
+                )
+                embed.set_footer(text="configuration type: ADD_TO")
             elif configuration == "remove":
+                if deposit_mode == "bank":
+                    new_amount = their_bank - int(real_amount)
+                    await Economy.update_bank_new(member, conn, -int(real_amount), deposit_mode)
+                else:
+                    new_amount = their_wallet - int(real_amount)
+                    await Economy.update_bank_new(member, conn, -int(real_amount))
 
-                match deposit_mode:
-                    case "bank":
-                        new_amount = their_bank - int(real_amount)
-                        await Economy.update_bank_new(member, conn, -int(real_amount), deposit_mode)
-                    case _:
-                        new_amount = their_wallet - int(real_amount)
-                        await Economy.update_bank_new(member, conn, -int(real_amount))
-
-                total = (their_bank + their_wallet) - int(real_amount)
-                embed3 = discord.Embed(
-                    title='Success',
-                    description=(
-                        f"\U0000279c deducted {CURRENCY}{int(real_amount):,} "
-                        f"robux from **{member.display_name}**'s balance.\n"
-                        f"\U0000279c **{member.display_name}**'s new "
-                        f"**`{deposit_mode}`** balance is {CURRENCY}{new_amount:,}.\n"
-                        f"\U0000279c **{member.display_name}**'s total balance now "
-                        f"is {CURRENCY}{total:,}"),
-                    colour=discord.Colour.dark_red(), timestamp=datetime.now())
-                embed3.set_author(name=f"Requested by {interaction.user.name}",
-                                  icon_url=interaction.user.avatar.url)
-                embed3.set_thumbnail(url=member.display_avatar.url)
-                embed3.set_footer(text="configuration type: REMOVE_FROM")
-
-                await interaction.response.send_message(
-                    embed=embed3, ephemeral=ephemeral)
-
+                total = their_bank + their_wallet - int(real_amount)
+                embed.description = (
+                    f"- Deducted {CURRENCY}{int(real_amount):,} "
+                    f"robux from **{member.display_name}**'s balance.\n"
+                    f"- **{member.display_name}**'s new "
+                    f"**`{deposit_mode}`** balance is {CURRENCY}{new_amount:,}.\n"
+                    f"- **{member.display_name}**'s total balance now "
+                    f"is {CURRENCY}{total:,}"
+                )
+                embed.set_footer(text="configuration type: REMOVE_FROM")
             else:
                 change = int(real_amount) - their_wallet
                 await Economy.update_bank_new(member, conn, +change, deposit_mode)
-                embed4 = discord.Embed(
-                    title='Success',
-                    description=f"\U0000279c **{member.display_name}**'s "
-                                f"**`{deposit_mode}`** balance has been "
-                                f"changed to {CURRENCY}{abs(their_wallet + change):,}.",
-                    colour=discord.Colour.dark_purple(),
-                    timestamp=datetime.now())
-                embed4.set_footer(text="configuration type: ALTER_TO")
-                embed4.set_thumbnail(url=member.display_avatar.url)
-                embed4.set_author(name=f"Requested by {interaction.user.name}",
-                                  icon_url=interaction.user.avatar.url)
-                await interaction.response.send_message(embed=embed4,
-                                                        ephemeral=ephemeral)
+                embed.description = (
+                    f"- \U0000279c **{member.display_name}**'s "
+                    f"**`{deposit_mode}`** balance has been "
+                    f"changed to {CURRENCY}{abs(their_wallet + change):,}."
+                )
+                embed.set_footer(text="configuration type: ALTER_TO")
+
+            await conn.commit()
+            embed.set_thumbnail(url=member.display_avatar.url)
+            embed.set_author(name=f"Requested by {interaction.user.name}", icon_url=interaction.user.avatar.url)
+
+            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @app_commands.command(name='pin', description='pin a message in any channel.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -338,7 +318,7 @@ class Administrate(commands.Cog):
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
     @commands.command(name='eval', description='evaluates arbitrary code.')
-    async def eval(self, ctx, *, script_body: str):
+    async def eval(self, ctx: commands.Context, *, script_body: str):
         """Evaluates arbitrary code."""
 
         env = {
@@ -377,7 +357,7 @@ class Administrate(commands.Cog):
             value = stdout.getvalue()
             try:
                 await ctx.message.add_reaction('<:successful:1183089889269530764>')
-            except:
+            except discord.HTTPException:
                 pass
 
             if ret is None:
