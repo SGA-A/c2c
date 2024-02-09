@@ -16,9 +16,8 @@ from traceback import print_exception
 import discord
 import datetime
 
-from other.utilities import parse_duration, datetime_to_string, string_to_datetime, labour_productivity_via
+from other.utilities import datetime_to_string, string_to_datetime, labour_productivity_via
 from other.pagination import Pagination
-from asqlite import Connection as asqlite_Connection
 
 
 def membed(custom_description: str) -> discord.Embed:
@@ -2614,7 +2613,7 @@ class Economy(commands.Cog):
 
                 if not (await self.can_call_out_either(primm, recipient, conn)):
                     return await interaction.response.send_message(
-                        embed=membed(f"Either you or the recipient are not registered."))
+                        embed=membed("Either you or the recipient are not registered."))
                 else:
                     their_quantity = await self.get_one_inv_data_new(primm, item_name, conn,)
                     if quantity > their_quantity:
