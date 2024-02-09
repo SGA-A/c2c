@@ -539,12 +539,14 @@ class DepositOrWithdraw(discord.ui.Modal):
             val = int(val)
         except ValueError:
             return await interaction.response.send_message(
-                embed=membed("You need to provide a real amount.")
-            )
+                embed=membed("You need to provide a real amount."),
+                delete_after=3.0, ephemeral=True)
 
         if not val:
                 return await interaction.response.send_message(
-                    embed=membed("You need to have a positive value.")
+                    embed=membed("You need to have a positive value."),
+                    ephemeral=True,
+                    delete_after=3.0
                 )
         
         embed = self.message.embeds[0]
@@ -553,7 +555,8 @@ class DepositOrWithdraw(discord.ui.Modal):
             if val > self.their_default:
                 return await interaction.response.send_message(
                     embed=membed(f"You only have \U000023e3 **{self.their_default:,}**, "
-                                 f"therefore cannot {self.title.lower()} \U000023e3 **{val:,}**."))
+                                 f"therefore cannot {self.title.lower()} \U000023e3 **{val:,}**."),
+                    ephemeral=True, delete_after=5.0)
 
             data = await self.conn.execute(
                 "UPDATE bank SET bank = bank + ?, wallet = wallet + ? WHERE userID = ? "
@@ -572,12 +575,13 @@ class DepositOrWithdraw(discord.ui.Modal):
             return await interaction.response.edit_message(embed=embed, view=self.view_children)
         
         # ! Deposit Branch
-
+        
         if val > self.their_default:
+            banksp = await Economy.get_spec_bank_data(interaction.user, "bankspace", self.conn)
             return await interaction.response.send_message(
-                embed=membed(f"You can only hold \U000023e3 **{data[2]:,}** in your bank right now.\n"
-                                "To hold more, use currency commands and level up more."),
-                ephemeral=True)
+                embed=membed(f"You can only hold \U000023e3 **{banksp:,}** in your bank right now.\n"
+                             "To hold more, use currency commands and level up more."),
+                ephemeral=True, delete_after=5.0)
 
         updated = await self.conn.execute(
             "UPDATE bank SET bank = bank + ?, wallet = wallet + ? WHERE userID = ? "
@@ -624,7 +628,8 @@ class BalanceView(discord.ui.View):
         if self.interaction.user.id != interaction.user.id:
             await interaction.response.send_message(
                 f"This balance menu is controlled by {self.interaction.user.mention}, you will "
-                "have to run the original command yourself.", ephemeral=True)
+                "have to run the original command yourself.", ephemeral=True,
+                delete_after=5.0)
             return False
         return True
     
@@ -646,7 +651,8 @@ class BalanceView(discord.ui.View):
 
         if not bank_amt:
             return await interaction.response.send_message(
-                embed=membed("You have nothing to withdraw."))
+                embed=membed("You have nothing to withdraw."), 
+                ephemeral=True, delete_after=3.0)
 
         await interaction.response.send_modal(DepositOrWithdraw(title=button.label, default_val=bank_amt,
                                                                  conn=conn, message=self.message, view_children=self))
@@ -661,13 +667,16 @@ class BalanceView(discord.ui.View):
 
         if not data[0]:
             return await interaction.response.send_message(
-                embed=membed("You have nothing to deposit."))
+                embed=membed("You have nothing to deposit."),
+                ephemeral=True, delete_after=3.0)
+        
         available_bankspace = data[2] - data[1]
 
         if not available_bankspace:
             return await interaction.response.send_message(
                 embed=membed(f"You can only hold \U000023e3 **{data[2]:,}** in your bank right now.\n"
-                             "To hold more, use currency commands and level up more."))
+                             "To hold more, use currency commands and level up more."),
+                ephemeral=True, delete_after=5.0)
 
         available_bankspace = min(data[0], available_bankspace)
         
