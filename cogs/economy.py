@@ -1752,7 +1752,7 @@ class ServantsManager(discord.ui.View):
 
         possible = choice(
             ("You wet your servant's hair with warm water before applying a gentle tear-free shampoo.\n"
-             " enjoyed every second of it.",
+             "They enjoyed every second of it.",
              "You lathered the soap and massaged it onto their back to ensure a thorough cleaning.",
              "Your servant is comforted being around you..",
              "You rubbed a damp cloth around their entire body, inconsiderate of where you were touching.\n"
@@ -1922,7 +1922,7 @@ class Economy(commands.Cog):
                 SET love = CASE WHEN love - $0 < 0 THEN 0 ELSE love - $0 END, 
                 hunger = CASE WHEN hunger - $1 < 0 THEN 0 ELSE hunger - $1 END,
                 energy = CASE WHEN energy + $2 > 100 THEN 0 ELSE energy + $2 END,
-                hygiene = CASE WHEN hygiene - $2 < 0 THEN 0 ELSE hygiene - $2 END
+                hygiene = CASE WHEN hygiene - $3 < 0 THEN 0 ELSE hygiene - $3 END
                 """,
                 5, 10, 15, 20
             )
