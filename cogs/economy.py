@@ -1672,19 +1672,23 @@ class ServantsManager(discord.ui.View):
                 exp_needed = Economy.calculate_serv_exp_for(level=level)
 
                 if xp >= exp_needed:
-
-                    up = discord.Embed(title=f"Your {self.child.choice.title()} just leveled up!",
-                                    description=f"` {level} ` \U0000279c ` {level + 1} `")
-                    up.set_footer(text="You now have an extra point to spend in training.")
+                    
+                    up = discord.Embed(
+                        title=f"Your {self.child.choice.title()} just leveled up!", 
+                        description=f"` {level} ` \U0000279c ` {level + 1} `",
+                        colour=discord.Colour.random())
 
                     await self.child.conn.execute(
                         "UPDATE `slay` SET level = level + 1, exp = 0 WHERE userID = ? AND slay_name = ?",
                         (interaction.user.id, self.child.choice))
                     
-                    if not level % 10:
+                    distance = 3 - (level+1) % 3 if (level+1) % 3 != 0 else 0
+                    if distance:
+                        up.set_footer(text=f"{distance} levels left to unlocking a new skill level!")
+                    else:
                         await self.child.conn.execute(
                             "UPDATE `slay` SET skillL = skillL + 1 WHERE userID = ? AND slay_name = ?",)
-                        up.description += f"\n**Your servant just unlocked a new Skill Level: SL{level//10}**"
+                        up.set_footer(text=f"Your servant just unlocked: Skill L{level//3}!")
                         
                     await interaction.channel.send(embed=up)
 
