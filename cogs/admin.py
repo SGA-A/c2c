@@ -64,7 +64,7 @@ class Administrate(commands.Cog):
         # remove `foo`
         return content.strip('` \n')
 
-    @commands.command(name='firstmsg', description='fetch the first message of a channel.')
+    @commands.command(name='firstmsg', description='Fetch the first message of a channel')
     async def first_message_fetchit(self, ctx: commands.Context):
         """Fetch the first message of a channel. Used for nostalgic purposes."""
         await ctx.message.delete()
@@ -81,7 +81,7 @@ class Administrate(commands.Cog):
         await ctx.send("I could not fetch the"
                        f" first message for {ctx.channel.mention}. Sorry.")
 
-    @commands.command(name='uptime', description='returns the time the bot has been active for.')
+    @commands.command(name='uptime', description='Returns the time the bot has been active for')
     async def uptime(self, ctx: commands.Context):
         """Returns uptime in terms of days, hours, minutes and seconds"""
         diff = datetime.now() - self.client.time_launch
@@ -91,7 +91,7 @@ class Administrate(commands.Cog):
         await ctx.send(content=f"**Uptime**: {int(days)} days, {int(hours)} hours, "
                                f"{int(minutes)} minutes and {int(seconds)} seconds.")
 
-    @commands.command(name="p_n", description="send payouts to eligible members.")
+    @commands.command(name="p_n", description="Send payouts to eligible members")
     async def rewards_user_roles(self, ctx: commands.Context):
         """Send a weekly payout to users that are eligible."""
         await ctx.message.delete()
@@ -165,7 +165,7 @@ class Administrate(commands.Cog):
         else:
             await ctx.send("This command is to be called only within **cc**.")
 
-    @app_commands.command(name="config", description="adjust a user's robux directly.")
+    @app_commands.command(name="config", description="Adjust a user's robux directly")
     @app_commands.guilds(discord.Object(id=829053898333225010),
                          discord.Object(id=780397076273954886))
     @app_commands.describe(configuration='the type of mode used for modifying robux',
@@ -244,7 +244,7 @@ class Administrate(commands.Cog):
 
             await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
-    @app_commands.command(name='pin', description='pin a message in any channel.')
+    @app_commands.command(name='pin', description='Pin a message in any channel')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(message_id='the ID of the message to be pinned',
                            channel_name="the channel to fetch the pinned message from")
@@ -279,7 +279,7 @@ class Administrate(commands.Cog):
                 ephemeral=True, delete_after=3.0)
 
     @commands.command(name='cthr', aliases=('ct', 'create_thread'),
-                      description='preset to create forum channels.')
+                      description='Use a preset to create forum channels')
     async def create_thread(self, ctx: commands.Context, thread_name: str):
         """Create a forum channel quickly with only name of thread required as argument."""
         if isinstance(ctx.channel, discord.TextChannel):
@@ -292,7 +292,7 @@ class Administrate(commands.Cog):
                            delete_after=5.0)
 
     @app_commands.command(name='react',
-                          description='force-react to messages with any reaction.')
+                          description='Force-react to messages with any reaction')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(message_id='the ID of the message to react to:',
                            emote='the name of the emoji to react with, e.g., KarenLaugh')
@@ -305,19 +305,24 @@ class Administrate(commands.Cog):
         await interaction.response.send_message(
             content='the emoji has been added to the message', ephemeral=True, delete_after=3.0)
 
-    @commands.command(name='sync', description='sync client tree for changes.', aliases=("sy",))
+    @commands.command(name='sync', description='Sync the client tree for changes', aliases=("sy",))
     async def sync_tree(self, ctx: commands.Context) -> None:
         """Sync the client's tree to either the guild or globally, varies from time to time."""
         print("syncing")
         # Application command synchronization - uncomment stmts when syncing globally
         # ctx.bot.tree.copy_global_to(guild=discord.Object(id=780397076273954886))
         # ctx.bot.tree.copy_global_to(guild=discord.Object(id=829053898333225010))
+
+        # ctx.bot.tree.remove_command('balance', guild=discord.Object(id=780397076273954886))
+        # ctx.bot.tree.remove_command('balance', guild=discord.Object(id=829053898333225010))
+
         await ctx.bot.tree.sync(guild=discord.Object(id=780397076273954886))
         await ctx.bot.tree.sync(guild=discord.Object(id=829053898333225010))
+        
         # await ctx.bot.tree.sync(guild=None)
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
-    @commands.command(name='eval', description='evaluates arbitrary code.')
+    @commands.command(name='eval', description='Evaluates arbitrary code')
     async def eval(self, ctx: commands.Context, *, script_body: str):
         """Evaluates arbitrary code."""
 
@@ -367,7 +372,7 @@ class Administrate(commands.Cog):
                 self._last_result = ret
                 await ctx.send(f'```py\n{value}{ret}\n```')
 
-    @commands.command(name='blank', description='newlines to clear a channel.')
+    @commands.command(name='blank', description='Sends newlines to clear a channel')
     async def blank(self, ctx):
         """Clear out the channel."""
         await ctx.send(
@@ -415,7 +420,7 @@ class Administrate(commands.Cog):
             "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
             "\n > Blanked out the channel.")
 
-    @commands.command(name='regex', description='load automod match_regex rules.')
+    @commands.command(name='regex', description='Load automod match_regex rules')
     async def automod_regex(self, ctx):
         """Automod regex rules and their patterns."""
         await ctx.guild.create_automod_rule(
@@ -426,7 +431,7 @@ class Administrate(commands.Cog):
             actions=[discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
-    @commands.command(name='mentions', description='load automod mass_mentions rules.')
+    @commands.command(name='mentions', description='Load automod mass_mentions rules')
     async def automod_mentions(self, ctx):
         """Automod mentioning rules"""
         await ctx.guild.create_automod_rule(
@@ -436,7 +441,7 @@ class Administrate(commands.Cog):
             actions=[discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
-    @commands.command(name='keyword', description='load automod by_keyword rules.')
+    @commands.command(name='keyword', description='Load automod by_keyword rules')
     async def automod_keyword(self, ctx, the_word):
         """Automod keyword rules"""
         await ctx.guild.create_automod_rule(
@@ -446,7 +451,7 @@ class Administrate(commands.Cog):
             actions=[discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
-    @commands.command(name='update', description='preset to update channel info.')
+    @commands.command(name='update', description='Update channel information')
     async def push_update(self, ctx):
         """Push an update directly to the info channel."""
 
@@ -470,7 +475,7 @@ class Administrate(commands.Cog):
                              '9497042b3aad0518f08dd2bfefb0e2262f4a7149_hq.gif'))
         await original.edit(embed=embed)
 
-    @commands.command(name='update3', description='preset to modify rules and guidelines.')
+    @commands.command(name='update3', description='Modify rules and guidelines')
     async def push_update3(self, ctx):
         """Push an update to the rules channel."""
         await ctx.message.delete()
@@ -509,7 +514,7 @@ class Administrate(commands.Cog):
 
         await original.edit(embed=r)
 
-    @commands.command(name='update2', description='preset to edit welcome banner.')
+    @commands.command(name='update2', description='Edit the welcome message for the server')
     async def push_update2(self, ctx):
         """Push to update the welcome and info embed within its respective channel."""
         await ctx.message.delete()
@@ -626,7 +631,7 @@ class Administrate(commands.Cog):
             ch = self.client.fetch_channel(1124090797613142087)
             await ch.send(err.__cause__)
 
-    @commands.command(name='update4', description='updates the progress tracker.')
+    @commands.command(name='update4', description='Update the progress tracker')
     async def override_economy(self, ctx):
         """Update the progress tracker on the Economy system."""
         await ctx.message.delete()
@@ -682,7 +687,7 @@ class Administrate(commands.Cog):
                 " making it possible!"))
         await original.edit(embed=temporary)
 
-    @commands.command(name='ccil', description='sends invite for cc.')
+    @commands.command(name='ccil', description='Sends an invite for the cc support server')
     async def preset_ccil(self, ctx):
         """Sends the invite link to join the support server (cc)."""
         await ctx.message.delete()
@@ -690,7 +695,7 @@ class Administrate(commands.Cog):
                        "This link ***will never*** expire, but note that it can "
                        "be disabled by an Administrator without notice.", silent=True)
 
-    @app_commands.command(name='edit', description='edit a message from me.')
+    @app_commands.command(name='edit', description='Edit a message from me')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(msg='The ID of the message to edit',
                            new_content='The new content to replace it with')
@@ -704,7 +709,7 @@ class Administrate(commands.Cog):
         await interaction.followup.send(content="The edits have been made", ephemeral=True,
                                         delete_after=3.0)
 
-    @commands.command(name='quit', description='quits the bot gracefully.', aliases=('q',))
+    @commands.command(name='quit', description='Quits the bot gracefully', aliases=('q',))
     async def quit_client(self, ctx):
         """Quits the bot gracefully."""
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
@@ -713,7 +718,7 @@ class Administrate(commands.Cog):
         await self.client.http.close()
         await self.client.close()
 
-    @commands.hybrid_command(name='repeat', description='repeat what you typed.', aliases=('say',))
+    @commands.hybrid_command(name='repeat', description='Repeat what you typed', aliases=('say',))
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(message='what you want me to say',
                            channel='what channel i should send in')
@@ -749,4 +754,3 @@ class Administrate(commands.Cog):
 async def setup(client):
     """Setup for cog."""
     await client.add_cog(Administrate(client))
-    
