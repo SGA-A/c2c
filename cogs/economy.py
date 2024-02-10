@@ -1922,8 +1922,9 @@ class Economy(commands.Cog):
                 SET love = CASE WHEN love - $0 < 0 THEN 0 ELSE love - $0 END, 
                 hunger = CASE WHEN hunger - $1 < 0 THEN 0 ELSE hunger - $1 END,
                 energy = CASE WHEN energy + $2 > 100 THEN 0 ELSE energy + $2 END
+                hygiene = CASE WHEN hygiene - $2 < 0 THEN 0 ELSE hygiene - $2 END
                 """,
-                1, 3, 10
+                5, 10, 15, 20
             )
             await conn.commit()
 
