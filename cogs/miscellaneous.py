@@ -229,13 +229,25 @@ class Miscellaneous(commands.Cog):
                 data = response.status
         return data
 
-    @commands.command(name='invite', description='link to invite c2c to your server.')
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author.bot:
+            return
+
+        if ("geo" in message.content) or ("teo" in message.content):
+            await message.add_reaction("<a:StoleThisEmote7:793153800612479017>")
+        if ("0x80" in message.content) or ("cookies" in message.content):
+            await message.add_reaction("<:0x80:1125061332698406923>")
+        if "c2c" in message.content:
+            await message.add_reaction("<:milady:973571282031484968>")
+
+    @commands.command(name='invite', description='Links the invite for c2c')
     async def invite_bot(self, ctx):
         await ctx.send(embed=membed("The button component gives a direct link to invite me to your server.\n"
                                     "Remember that only developers can invite the bot."),
                        view=InviteButton(self.client))
 
-    @commands.command(name='calculate', aliases=('c', 'calc'), description='compute a string / math expression.')
+    @commands.command(name='calculate', aliases=('c', 'calc'), description='Compute a string or math expression')
     async def calculator(self, ctx: commands.Context, *, expression):
 
         try:
@@ -245,7 +257,7 @@ class Miscellaneous(commands.Cog):
         except Exception as e:
             await ctx.reply(f'<:warning_nr:1195732155544911882> **Error:** {str(e)}', mention_author=False)
 
-    @commands.command(name='ping', description='checks latency of the bot.')
+    @commands.command(name='ping', description='Checks latency of the bot')
     async def ping(self, ctx):
         start = perf_counter()
         message = await ctx.send("<:latencye:1195741921482641579> Ping...")
@@ -299,7 +311,7 @@ class Miscellaneous(commands.Cog):
 
         await msg.edit(content="No embeds were found within this message.")
 
-    @app_commands.command(name='bored', description="find something to do.")
+    @app_commands.command(name='bored', description="Find something to do if you're bored")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(activity_type='the type of activity to think of')
     async def prompt_act(self, interaction: discord.Interaction,
@@ -322,7 +334,7 @@ class Miscellaneous(commands.Cog):
     anime = app_commands.Group(name='anime', description="commands related to anime!", guild_only=True,
                                guild_ids=APP_GUILDS_ID)
 
-    @anime.command(name='kona', description='retrieve nsfw posts from konachan.')
+    @anime.command(name='kona', description='Retrieve NSFW posts from Konachan')
     @app_commands.describe(tags='the tags to base searches upon', page='the page to look through under a tag')
     async def kona_fetch(self, interaction: discord.Interaction, tags: Optional[str], page: Optional[int]):
 
@@ -384,7 +396,7 @@ class Miscellaneous(commands.Cog):
                                        delete_after=30.0)
         await interaction.response.send_message(embed=embed)
 
-    @anime.command(name='tagsearch', description='retrieve anime tags from konachan.')
+    @anime.command(name='tagsearch', description='Retrieve tags from Konachan')
     @app_commands.describe(tag_pattern="the pattern to use to find match results")
     async def tag_fetch(self, interaction: discord.Interaction, tag_pattern: str):
 
@@ -424,7 +436,7 @@ class Miscellaneous(commands.Cog):
         embed.description = "\n".join(descriptionerfyrd)
         await interaction.response.send_message(embed=embed)
 
-    @anime.command(name='char', description="retrieve sfw or nsfw anime images.")
+    @anime.command(name='char', description="Retrieve SFW or NSFW anime images")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     @app_commands.describe(filter_by='what type of image to retrieve')
     async def get_via_nekos(self, interaction: discord.Interaction,
@@ -486,7 +498,7 @@ class Miscellaneous(commands.Cog):
 
             await msg.edit(content=None, embed=embed)
 
-    @anime.command(name='random', description="get a completeley random waifu image.")
+    @anime.command(name='random', description="Get a completeley random waifu image")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def waifu_random_fetch(self, interaction: discord.Interaction):
 
@@ -512,7 +524,7 @@ class Miscellaneous(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @anime.command(name='filter', description="filter sfw waifu images that are retrieved.")
+    @anime.command(name='filter', description="Filter from SFW waifu images to send")
     @app_commands.describe(waifu="include a female anime/manga character",
                            maid="include women/girls employed to do work in their uniform",
                            marin_kitagawa="include marin from my dress-up darling",
@@ -553,7 +565,7 @@ class Miscellaneous(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name='emojis', description='fetch all the emojis c2c can access.')
+    @app_commands.command(name='emojis', description='Fetch all the emojis c2c can access')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     async def emojis_paginator(self, interaction: discord.Interaction):
         length = 10
@@ -583,7 +595,7 @@ class Miscellaneous(commands.Cog):
 
         await Pagination(interaction, get_page_part).navigate()
 
-    @commands.command(name='spsearch', description='search for songs on spotify.', aliases=('sps', 'ss'))
+    @commands.command(name='spsearch', description='Search for songs on spotify', aliases=('sps', 'ss'))
     async def search_sp(self, ctx, *, name_of_song):
         async with ctx.typing():
             song_emb = discord.Embed(colour=discord.Colour.from_rgb(79, 190, 78),
@@ -615,7 +627,7 @@ class Miscellaneous(commands.Cog):
                                     f'{f'\n{boarder * 7}'.join(lisr)}')
             await ctx.send(embed=song_emb)
 
-    @commands.command(name='aboutpop', description='explains how popularity is calculated.')
+    @commands.command(name='aboutpop', description='Explains how popularity is calculated')
     async def about_pop_attr(self, ctx: commands.Context):
         async with ctx.typing():
             embed = membed(
@@ -632,7 +644,7 @@ class Miscellaneous(commands.Cog):
                 "updated in real time!")
             await ctx.send(embed=embed)
 
-    @app_commands.command(name='inviter', description='creates a server invite link.')
+    @app_commands.command(name='inviter', description='Creates a server invite link')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.checks.has_permissions(create_instant_invite=True)
     @app_commands.describe(invite_lifespan='the duration of which the invite should last, must be > 0.',
@@ -666,7 +678,7 @@ class Miscellaneous(commands.Cog):
                            icon_url=interaction.user.display_avatar.url)
         await interaction.response.send_message(embed=success)
 
-    @app_commands.command(name='define', description='define any word of choice.')
+    @app_commands.command(name='define', description='Define any word of choice')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.checks.cooldown(1, 3, key=lambda i: i.user.id)
     @app_commands.describe(word='the term that is to be defined for you')
@@ -697,7 +709,7 @@ class Miscellaneous(commands.Cog):
             await interaction.response.send_message(
                 content='Try again, but this time input an actual word.')
 
-    @app_commands.command(name='randomfact', description='generates a random fact.')
+    @app_commands.command(name='randomfact', description='Queries a random fact')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
     async def random_fact(self, interaction: Interaction):
@@ -709,7 +721,7 @@ class Miscellaneous(commands.Cog):
             the_fact = text[0].get('fact')
             await interaction.response.send_message(f"{the_fact}.")
 
-    @app_commands.command(name="image", description="manipulate a user's avatar.")
+    @app_commands.command(name="image", description="Manipulate a user's avatar")
     @app_commands.describe(user="the user to apply the manipulation to",
                            endpoint="what kind of manipulation sorcery to use")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -740,7 +752,7 @@ class Miscellaneous(commands.Cog):
                                       attachments=[discord.File(buffer, f'{endpoint}.gif')])
             await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
 
-    @app_commands.command(name="image2", description="manipulate a user's avatar (continued).")
+    @app_commands.command(name="image2", description="Manipulate a user's avatar further")
     @app_commands.describe(user="the user to apply the manipulation to",
                            endpoint="what kind of manipulation sorcery to use")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
@@ -769,7 +781,7 @@ class Miscellaneous(commands.Cog):
                                       attachments=[discord.File(buffer, f'{endpoint}.gif')])
             await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
 
-    @app_commands.command(name="locket", description="insert photos into a heart-shaped locket.")
+    @app_commands.command(name="locket", description="Insert people into a heart-shaped locket")
     @app_commands.describe(user="the user to add to the locket", user2="the second user to add to the locket")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     async def locket_manip(self, interaction: discord.Interaction,
@@ -794,7 +806,7 @@ class Miscellaneous(commands.Cog):
                                       attachments=[discord.File(buffer, 'heart_locket.gif')])
             await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
 
-    @app_commands.command(name='com', description='finds most common letters in sentences.')
+    @app_commands.command(name='com', description='Finds most common letters in a sentences')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(word='the sentence(s) to find the frequent letters of')
     async def common(self, interaction: Interaction, word: str):
@@ -831,7 +843,7 @@ class Miscellaneous(commands.Cog):
 
         await interaction.response.send_message(embed=membed(f'The most common letter is {answer}.'))
 
-    @app_commands.command(name='charinfo', description='show info on characters (max 25).')
+    @app_commands.command(name='charinfo', description='Show you info about character. Maximum 25 at once.')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.describe(characters='any written letters or symbols')
     async def charinfo(self, interaction: Interaction, *, characters: str):
@@ -851,7 +863,7 @@ class Miscellaneous(commands.Cog):
             return await interaction.response.send_message('Output too long to display.')
         await interaction.response.send_message(msg, suppress_embeds=True)
 
-    @commands.command(name='spotify', aliases=('sp',), description="fetch spotify RP information.")
+    @commands.command(name='spotify', aliases=('sp',), description="Fetch spotify rich prescence information")
     async def find_spotify_activity(self, ctx: commands.Context, *,
                                     username: Union[discord.Member, discord.User] = None):
         """Fetch a given user's spotify rich prescence, return as a simple formatted card."""
@@ -891,13 +903,13 @@ class Miscellaneous(commands.Cog):
                                     f"Return code: `{response.status}`."))
             await ctx.send(f"{username.display_name} has no activity.")
 
-    @app_commands.command(name='feedback', description='send feedback to the c2c developers.')
+    @app_commands.command(name='feedback', description='Send feedback to the c2c developers')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     async def feedback(self, interaction: discord.Interaction):
         feedback_modal = FeedbackModal()
         await interaction.response.send_modal(feedback_modal)
 
-    @app_commands.command(name='about', description='shows stats related to the client.')
+    @app_commands.command(name='about', description='Tells you information about the bot itself')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.checks.cooldown(1, 10, key=lambda i: i.guild.id)
     async def about_the_bot(self, interaction: discord.Interaction):
@@ -981,7 +993,7 @@ class Miscellaneous(commands.Cog):
         embed.set_footer(text=f'Made with discord.py v{discord.__version__}', icon_url='http://i.imgur.com/5BFecvA.png')
         await interaction.followup.send(embed=embed)
 
-    @commands.command(name="pickupline", description="get pick up lines to use.", aliases=('pul',))
+    @commands.command(name="pickupline", description="Get pick up lines to use", aliases=('pul',))
     @commands.guild_only()
     async def pick_up_lines(self, ctx: commands.Context):
         async with ctx.typing():
@@ -991,7 +1003,7 @@ class Miscellaneous(commands.Cog):
                 data = await resp.json()
                 await ctx.reply(data["pickupline"])
 
-    @commands.command(name="wyr", description="get 'would you rather' questions.")
+    @commands.command(name="wyr", description="Get 'would you rather' questions to use")
     @commands.guild_only()
     async def would_yr(self, ctx: commands.Context):
         async with ctx.typing():
@@ -1003,7 +1015,7 @@ class Miscellaneous(commands.Cog):
                                 f'1. {data["ops1"].capitalize()} or..\n'
                                 f'2. {data["ops2"].capitalize()}')
 
-    @commands.command(name="alert", description="real incoming iphone alerts.")
+    @commands.command(name="alert", description="Create real incoming iphone alerts")
     @commands.guild_only()
     async def alert_iph(self, ctx: commands.Context, *, custom_text: str):
         async with ctx.typing():
@@ -1014,7 +1026,7 @@ class Miscellaneous(commands.Cog):
                     return await ctx.send("The service is currently not available, try again later.")
                 await ctx.send(resp.url)
 
-    @app_commands.command(name='tn', description="get time now in a chosen format.")
+    @app_commands.command(name='tn', description="Get the time now in your chosen format")
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     @app_commands.rename(spec="mode")
     @app_commands.describe(spec='the mode of displaying the current time now')
@@ -1033,7 +1045,7 @@ class Miscellaneous(commands.Cog):
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
-    @commands.command(name='avatar', description="display a user's enlarged avatar.")
+    @commands.command(name='avatar', description="Display a user's enlarged avatar")
     async def avatar(self, ctx, *, username: Union[discord.Member, discord.User] = None):
         """Shows a user's enlarged avatar (if possible)."""
         embed = discord.Embed(colour=0x2F3136)
@@ -1043,7 +1055,7 @@ class Miscellaneous(commands.Cog):
         embed.set_image(url=avatar)
         await ctx.send(embed=embed)
 
-    @commands.command(name='banner', description="display a user's enlarged banner.")
+    @commands.command(name='banner', description="Display a user's enlarged banner")
     async def banner(self, ctx, *, username: Union[discord.Member, discord.User] = None):
         """Shows a user's enlarged avatar (if possible)."""
         embed = discord.Embed(colour=0x2F3136)
