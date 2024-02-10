@@ -20,7 +20,7 @@ class Music(commands.Cog):
         voice_client.play(source, after=lambda e: print('Player error: %s' % e) if e else self.client.loop.create_task(
             self.play_source(voice_client)))
 
-    @commands.command(name='join', description="joins a voice channel.")
+    @commands.command(name='join', description="Join a voice channel")
     async def join(self, ctx, *, channel: VoiceChannel):
         """Joins a voice channel"""
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
@@ -30,7 +30,7 @@ class Music(commands.Cog):
 
         await channel.connect(self_deaf=True)
 
-    @commands.command(name='preset', description='quick join and play music.')
+    @commands.command(name='preset', description='Quickly join and play some music')
     async def use_preset(self, ctx):
         async with ctx.typing():
             if ctx.author.voice:
@@ -41,7 +41,7 @@ class Music(commands.Cog):
             else:
                 await ctx.send('You aren\'t in a voice channel.')
 
-    @commands.command(name='play', description='plays a file from the local filesystem.')
+    @commands.command(name='play', description='Plays a file from the local filesystem')
     async def play_music(self, ctx,):
         """Plays a file from the local filesystem"""
         channel = ctx.channel
@@ -94,7 +94,7 @@ class Music(commands.Cog):
 
             await my_msg.edit(content=f'Now playing: `{file_name}`', embed=None)
 
-    @commands.command(name='pause', description='pause the player, if playing.')
+    @commands.command(name='pause', description='Pause the player, if playing music')
     async def pause_cl(self, ctx):
         if ctx.voice_client:
             if ctx.voice_client.is_playing():
@@ -105,7 +105,7 @@ class Music(commands.Cog):
         else:
             await ctx.send("Not connected to voice.")
 
-    @commands.command(name='resume', description='resume the player, if paused.')
+    @commands.command(name='resume', description='Resume the player, if music is paused')
     async def resume_cl(self, ctx):
         if ctx.voice_client:
             if ctx.voice_client.is_paused():
@@ -115,7 +115,7 @@ class Music(commands.Cog):
                 return await ctx.send("The player is not paused.")
         await ctx.send("Not connected to voice.")
 
-    @commands.command(name='volume', description='changes the player\'s volume.')
+    @commands.command(name='volume', description="Changes the player's volume")
     async def volume(self, ctx, volume: int):
         """Changes the player's volume"""
 
@@ -125,7 +125,7 @@ class Music(commands.Cog):
         ctx.voice_client.source.volume = volume / 100
         await ctx.send(f"Changed volume to {volume}%")
 
-    @commands.command(name='stop', description='stop and disconnect the bot from voice.',
+    @commands.command(name='stop', description='Stops the player, disconnecting the bot from voice',
                       aliases=('leave', 'disconnect'))
     async def stop(self, ctx):
         """Stops and disconnects the bot from voice"""
