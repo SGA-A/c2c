@@ -1684,7 +1684,7 @@ class ServantsManager(discord.ui.View):
                     
                     distance = 3 - (level+1) % 3 if (level+1) % 3 != 0 else 0
                     if distance:
-                        up.set_footer(text=f"{distance} levels left to unlocking a new skill level!")
+                        up.set_footer(text=f"{distance} level(s) left to unlocking a new skill level!")
                     else:
                         await self.child.conn.execute(
                             "UPDATE `slay` SET skillL = skillL + 1 WHERE userID = ? AND slay_name = ?",)
