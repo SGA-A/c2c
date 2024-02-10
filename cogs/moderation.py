@@ -6,7 +6,7 @@ class Moderation(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
 
-    @commands.command(name="close", description="close the invocation thread.")
+    @commands.command(name="close", description="Close the invocation thread")
     @commands.guild_only()
     async def close_thread(self, ctx: commands.Context):
         await ctx.message.delete()
@@ -29,7 +29,7 @@ class Moderation(commands.Cog):
         else:
             await ctx.reply("<:warning_nr:1195732155544911882> This is not a thread.", mention_author=False)
 
-    @commands.command(name='delay', description='sets slowmode for the invoker channel.', aliases=('d',))
+    @commands.command(name='delay', description='Sets a slowmode for the invoker channel', aliases=('d',))
     @commands.has_permissions(manage_channels=True)
     async def set_delay(self, ctx: commands.Context, slowmode_in_seconds: int):
         """Sets a delay to which users can send messages. You must have the appropriate permissions."""
@@ -39,7 +39,7 @@ class Moderation(commands.Cog):
             return await ctx.send(f'<:slowed:1195739862100353114> Slowmode set to {slowmode_in_seconds} seconds.')
         await ctx.send("<:normale:1195740534703136921> Disabled slowmode.")
 
-    @commands.command(name="purge", description="bulk-remove messages, excluding pins.")
+    @commands.command(name="purge", description="Bulk-remove messages, excluding pins")
     @commands.has_permissions(manage_messages=True)
     @commands.guild_only()
     async def purge(self, ctx: commands.Context, purge_max_amount: int):
