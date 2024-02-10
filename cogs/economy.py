@@ -540,7 +540,7 @@ class DepositOrWithdraw(discord.ui.Modal):
             val = int(val)
         except ValueError:
             return await interaction.response.send_message(
-                embed=membed("You need to provide a real amount."),
+                embed=membed(f"You need to provide a real amount to {self.title.lower()}."),
                 delete_after=3.0, ephemeral=True)
 
         if not val:
@@ -770,8 +770,10 @@ class BlackjackUi(discord.ui.View):
             losse.set_author(name=f"{self.interaction.user.name}'s timed-out blackjack game",
                              icon_url=self.interaction.user.display_avatar.url)
 
-            return await self.message.edit(
-                content=None, embed=losse, view=self)
+            try:
+                await self.message.edit(content=None, embed=losse, view=self)
+            except discord.NotFound:
+                await self.message.channel.send(embed=losse, view=None)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user == self.interaction.user:
@@ -1405,7 +1407,9 @@ class UpdateInfo(discord.ui.Modal, title="Update Bio"):
 
 class DropdownLB(discord.ui.Select):
     def __init__(self, client: commands.Bot, their_choice: str):
-        optionss = [
+        self.client: commands.Bot = client
+
+        options = [
             SelectOption(label='Bank + Wallet', description='Sort by the sum of bank and wallet.'),
             SelectOption(label='Wallet', description='Sort by the wallet amount only.'),
             SelectOption(label='Bank', description='Sort by the bank amount only.'),
@@ -1415,13 +1419,10 @@ class DropdownLB(discord.ui.Select):
             SelectOption(label='Level', description="Sort by player level.")
         ]
 
-        for option in optionss:
-            if option.value == their_choice:
-                option.default = True
-            option.default = False
+        super().__init__(options=options)
 
-        super().__init__(options=optionss)
-        self.client: commands.Bot = client
+        for option in self.options:
+            option.default = option.value == their_choice
 
     async def callback(self, interaction: discord.Interaction):
 
@@ -1490,12 +1491,10 @@ class Servants(discord.ui.Select):
         self.conn = conn
         self.choice = their_choice
 
-        for option in options:
-            if option.value == self.choice:
-                option.default = True
-            option.default = False
-
         super().__init__(options=options, placeholder="Select Servant Name", row=0)
+
+        for option in options:
+            option.default = option.value == self.choice
 
     async def callback(self, interaction: discord.Interaction):
 
@@ -1692,13 +1691,8 @@ class ServantsManager(discord.ui.View):
                         
                     await interaction.channel.send(embed=up)
 
-            if mode.startswith("f"):
-                dtls = await self.child.conn.execute(
-                    "UPDATE `slay` SET hunger = hunger + ? WHERE slay_name = ? AND userID = ? RETURNING *",
-                    (randint(10, 20), self.child.choice, self.child.owner_id))
-            else:
-                dtls = await self.child.conn.execute(
-                    "UPDATE `slay` SET hygiene = 100 WHERE slay_name = ? AND userID = ? RETURNING *",
+            dtls = await self.child.conn.execute(
+                    f"UPDATE `slay` SET {mode} = 100 WHERE slay_name = ? AND userID = ? RETURNING *",
                     (self.child.choice, self.child.owner_id))
 
             dtls = await dtls.fetchone()
@@ -1733,7 +1727,7 @@ class ServantsManager(discord.ui.View):
             return await interaction.response.send_message(
                 content="Your servant is not hungry!", ephemeral=True, delete_after=5.0)
 
-        await self.add_exp_handle_interactions(interaction, mode="feed")
+        await self.add_exp_handle_interactions(interaction, mode="hunger")
 
     @discord.ui.button(label='Wash', style=discord.ButtonStyle.blurple, row=1)
     async def wash_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1748,7 +1742,8 @@ class ServantsManager(discord.ui.View):
 
         if current_hygiene[0] >= 90:
             return await interaction.response.send_message(
-                content="You can't wash them just yet, they are looking pretty clean already!", ephemeral=True)
+                content="You can't wash them just yet, they are looking pretty clean already!", 
+                ephemeral=True, delete_after=3.0)
 
         possible = choice(
             ("You wet your servant's hair with warm water before applying a gentle tear-free shampoo.\n"
@@ -1760,8 +1755,8 @@ class ServantsManager(discord.ui.View):
              )
         )
 
-        await interaction.channel.send(embed=membed(possible))
-        await self.add_exp_handle_interactions(interaction, mode="wash")
+        await interaction.channel.send(embed=membed(possible), delete_after=5.0)
+        await self.add_exp_handle_interactions(interaction, mode="hygiene")
 
     @discord.ui.button(label='Invest', style=discord.ButtonStyle.blurple, row=1)
     async def invest_in_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2246,15 +2241,6 @@ class Economy(commands.Cog):
                         f"**Productivity:** `{productivity}x`",
             color=hexx or gend.setdefault(gender, 0x2B2D31))
 
-        if children:
-            if energy <= 25:
-                for item in children:
-                    if not hasattr(item, "label"):
-                        continue
-                    item.disabled = True
-                sdetails.description += ("\nYour servant has virtually no energy.\n"
-                                        "They'll wake up soon.")
-
         sdetails.add_field(name="Hunger", value=f"{generate_progress_bar(hunger)} ({hunger}%)")
         sdetails.add_field(name="Energy", value=f"{generate_progress_bar(energy)} ({energy}%)")
         sdetails.add_field(name="Love", value=f"{generate_progress_bar(love)} ({love}%)")
@@ -2568,7 +2554,7 @@ class Economy(commands.Cog):
                                         command: Union[app_commands.Command, app_commands.ContextMenu]):
         """
         Increment the total command ran by a user by 1 for each call. Increase the interaction user's invoker if
-        they are registered.
+        they are registered. Also provide a tip if the total commands ran counter is a multiple of 15.
         """
 
         async with self.client.pool_connection.acquire() as connection:
@@ -2578,9 +2564,20 @@ class Economy(commands.Cog):
                 return
 
             async with connection.transaction():
-                await connection.execute(
-                    f"UPDATE `{BANK_TABLE_NAME}` SET `cmds_ran` = `cmds_ran` + ? WHERE userID = ?",
-                    (1, interaction.user.id))
+                total = await connection.execute(
+                    f"""
+                    UPDATE `{BANK_TABLE_NAME}` SET `cmds_ran` = `cmds_ran` + 1 
+                    WHERE userID = ? RETURNING cmds_ran
+                    """,
+                    (interaction.user.id,))
+                total = await total.fetchone()
+
+                if not total[0] % 15:
+                    return await interaction.followup.send(
+                        embed=membed("This is a tip placeholder.\n"
+                                     "There will be real tips here soon!"),
+                        ephemeral=True
+                    )
 
                 exp_gainable = command.extras.setdefault("exp_gained", None)
 
@@ -2626,6 +2623,7 @@ class Economy(commands.Cog):
                         )
 
                         await interaction.followup.send(embed=embed)
+                    return
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
@@ -3806,13 +3804,13 @@ class Economy(commands.Cog):
             :param user_balance: the user's balance currenctly, which should be an integer.
             :return: A boolean indicating whether the amount is valid for the function to proceed."""
             if value <= 0:
-                return False
+                return (False, "You can't bet less than 0.")
             if value > MAX_BET_KEYCARD:
-                return False
+                return (False, f"You can't bet more than \U000023e3 **{MAX_BET_KEYCARD:,}**.")
             if value < MIN_BET:
-                return False
+                return (False, f"You can't bet less than \U000023e3 **{MIN_BET:,}**.")
             if value > user_balance:
-                return False
+                return (False, "You are too poor for this bet.")
             return True
 
         async with self.client.pool_connection.acquire() as conn:
@@ -3827,10 +3825,13 @@ class Economy(commands.Cog):
                 if real_amount in {'all', 'max'}:
                     real_amount = min(wallet_amt, MAX_BET_KEYCARD)
                 else:
-                    return await interaction.response.send_message(embed=ERR_UNREASON)
-
-            if not (is_valid(int(real_amount), wallet_amt)):
-                return await interaction.response.send_message(embed=ERR_UNREASON)
+                    return await interaction.response.send_message(
+                        embed=membed("You need to provide a real amount to bet upon."))
+            
+            check = is_valid(abs(int(real_amount)), wallet_amt)
+            if not check[0]:
+                return await interaction.response.send_message(
+                    embed=membed(check[1]))
 
             number = randint(1, 100)
             hint = randint(1, 100)
@@ -3880,23 +3881,25 @@ class Economy(commands.Cog):
                 else:
                     amount = min(MAX_BET_WITHOUT*2, wallet_amt)
             else:
-                return await interaction.response.send_message(embed=ERR_UNREASON)
+                return await interaction.response.send_message(
+                    embed=membed("You need to provide a real amount to bet upon."))
 
         # --------------- Contains checks before betting i.e. has keycard, meets bet constraints. -------------
+        
+        if amount > wallet_amt:
+                return await interaction.response.send_message(
+                    embed=membed("You are too poor for this bet."))
+        
         if data:
-            if MIN_BET*2 < amount < MAX_BET_KEYCARD*2:
+            if (amount < MIN_BET*2) or (amount > MAX_BET_KEYCARD*2):
                 return await interaction.response.send_message(
                     embed=membed(f"You can't bet less than \U000023e3 **{MIN_BET*2:,}**.\n"
                                  f"You also can't bet anything more than \U000023e3 **{MAX_BET_KEYCARD*2:,}**."))	
         else:
-            if MIN_BET*2 < amount < MAX_BET_WITHOUT*2:
+            if (amount < MIN_BET*2) or (amount > MAX_BET_WITHOUT*2):
                 return await interaction.response.send_message(
                     embed=membed(f"You can't bet less than \U000023e3 **{MIN_BET*2:,}**.\n"
                                  f"You also can't bet anything more than \U000023e3 **{MAX_BET_WITHOUT*2:,}**."))
-
-        if amount > wallet_amt:
-                return await interaction.response.send_message(
-                    embed=membed("You are too poor for this bet."))
 
         # ------------------ THE SLOT MACHINE ITESELF ------------------------
 
@@ -4449,7 +4452,8 @@ class Economy(commands.Cog):
                     embed.add_field(name="Current Bank Balance", value=f"\U000023e3 {bank_new[0]:,}")
 
                     return await interaction.response.send_message(embed=embed)
-                return await interaction.response.send_message(embed=ERR_UNREASON)
+                return await interaction.response.send_message(
+                    embed=membed("You need to provide a real amount to withdraw."))
 
             amount_conv = abs(int(actual_amount))
 
@@ -4523,7 +4527,8 @@ class Economy(commands.Cog):
                     embed.add_field(name="Current Bank Balance", value=f"\U000023e3 {bank_new[0]:,}")
 
                     return await interaction.response.send_message(embed=embed)
-                return await interaction.response.send_message(embed=ERR_UNREASON)
+                return await interaction.response.send_message(
+                    embed=membed("You need to provide a real amount to deposit."))
 
             amount_conv = abs(int(actual_amount))
             available_bankspace = details[2] - details[1]
@@ -4818,7 +4823,7 @@ class Economy(commands.Cog):
             amount = determine_exponent(str(amount))
 
             bet_on = "heads" if "h" in bet_on.lower() else "tails"
-            if not MIN_BET <= amount <= MAX_BET_KEYCARD:
+            if (amount < MIN_BET) or (amount > MAX_BET_KEYCARD):
                 return await interaction.response.send_message(
                     embed=membed(
                         f"*As per-policy*, the minimum bet is \U000023e3 "
@@ -4829,7 +4834,8 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=self.not_registered)
             wallet_amt = await self.get_wallet_data_only(user, conn)
             if wallet_amt < amount:
-                return await interaction.response.send_message(embed=ERR_UNREASON)
+                return await interaction.response.send_message(
+                    embed=membed("You are too poor to make this bet."))
 
             coin = ("heads", "tails")
             result = choice(coin)
@@ -4901,24 +4907,25 @@ class Economy(commands.Cog):
                 else:
                     namount = min(MAX_BET_WITHOUT, wallet_amt)
             else:
-                return await interaction.response.send_message(embed=ERR_UNREASON)
+                return await interaction.response.send_message(
+                    embed=membed("You need to provide a real amount to bet upon."))
 
         # -------------------- Check to see if user has sufficient balance --------------------------
 
+        if namount > wallet_amt:
+                return await interaction.response.send_message(
+                    embed=membed("You are too poor for this bet."))
+
         if has_keycard:
-            if MIN_BET < namount < MAX_BET_KEYCARD:
+            if (namount < MIN_BET) or (namount > MAX_BET_KEYCARD):
                 return await interaction.response.send_message(
                     embed=membed(f"You can't bet less than \U000023e3 **{MIN_BET:,}**.\n"
                                  f"You also can't bet anything more than \U000023e3 **{MAX_BET_KEYCARD:,}**."))
         else:
-            if MIN_BET < namount < MAX_BET_WITHOUT:
+            if (namount < MIN_BET) or (namount > MAX_BET_WITHOUT):
                 return await interaction.response.send_message(
                     embed=membed(f"You can't bet less than \U000023e3 **{MIN_BET:,}**.\n"
                                  f"You also can't bet anything more than \U000023e3 **{MAX_BET_WITHOUT:,}**."))
-        
-        if namount > wallet_amt:
-                return await interaction.response.send_message(
-                    embed=membed("You are too poor for this bet."))
 
         # ------------ In the case where the user already won --------------
         if self.calculate_hand(player_hand) == 21:
@@ -5015,22 +5022,24 @@ class Economy(commands.Cog):
                     else:
                         amount = min(MAX_BET_WITHOUT, wallet_amt)
                 else:
-                    return await interaction.response.send_message(embed=ERR_UNREASON)
+                    return await interaction.response.send_message(
+                        embed=membed("You need to provide a real amount to bet upon."))
+
+            if amount > wallet_amt:
+                    return await interaction.response.send_message(
+                        embed=membed("You are too poor for this bet."))
 
             if has_keycard:
-                if MIN_BET < amount < MAX_BET_KEYCARD:
+
+                if (amount < MIN_BET) or (amount > MAX_BET_KEYCARD):
                     return await interaction.response.send_message(
                     embed=membed(f"You can't bet less than \U000023e3 **{MIN_BET:,}**.\n"
                                  f"You also can't bet anything more than \U000023e3 **{MAX_BET_KEYCARD:,}**."))
             else:
-                if MIN_BET < amount < MAX_BET_WITHOUT:
+                if (amount < MIN_BET) or (amount > MAX_BET_WITHOUT):
                     return await interaction.response.send_message(
                     embed=membed(f"You can't bet less than \U000023e3 **{MIN_BET:,}**.\n"
                                  f"You also can't bet anything more than \U000023e3 **{MAX_BET_WITHOUT:,}**."))
-            
-            if amount > wallet_amt:
-                    return await interaction.response.send_message(
-                        embed=membed("You are too poor for this bet."))
 
             # --------------------------------------------------------
             smulti = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti
@@ -5099,7 +5108,7 @@ class Economy(commands.Cog):
     async def calback_max_50(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         """Autocomplete callback for when the maximum accepted bet value is 50 million."""
 
-        chosen = {"all", "max", "20e6"}
+        chosen = {"all", "max", "15e6"}
         return [
             app_commands.Choice(name=str(the_chose), value=str(the_chose))
             for the_chose in chosen if current.lower() in the_chose
