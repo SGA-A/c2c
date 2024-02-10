@@ -10,7 +10,7 @@ from typing import Literal, Any
 from collections import deque
 from discord.utils import setup_logging, format_dt
 from discord import app_commands, Object, ui, Intents, Status, Embed, Interaction, CustomActivity
-from discord import RawReactionActionEvent, AppCommandType, SelectOption, Colour, Webhook
+from discord import RawReactionActionEvent, AppCommandType, SelectOption, Colour, Webhook, NotFound
 from asyncio import run, TimeoutError as asyncio_TimeoutError
 from typing import Dict, Optional, TYPE_CHECKING, Union, List
 from aiohttp import ClientSession
@@ -250,7 +250,7 @@ async def globally_block_dms(ctx):
 
 
 async def load_cogs():
-    for filename in listdir('./cogs'):
+    for filename in listdir('C:\\Users\\georg\\Documents\\c2c\\cogs'):
         if filename.endswith(".py"):
             await client.load_extension(f"cogs.{filename[:-3]}")
 
@@ -495,7 +495,11 @@ class Select(ui.View):
     async def on_timeout(self) -> None:
         for item in self.children:
             item.disabled = True
-        await self.message.edit(view=self)
+
+        try:
+            await self.message.edit(view=self)
+        except NotFound:
+            pass
 
 
 @client.command(name='confirm')
@@ -565,7 +569,7 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
     await ctx.send(f"Done. The webhook was sent to '{thread.name}' with ID {thread.id}.")
 
 
-@client.tree.command(name='help', description='help command for c2c, outlines all categories of commands.',
+@client.tree.command(name='help', description='The help command for c2c. Shows help for different categories.',
                      guilds=[Object(id=829053898333225010), Object(id=780397076273954886)])
 async def help_command(interaction: Interaction):
     epicker = choice(["<:githubB:1195500626382164119>",
