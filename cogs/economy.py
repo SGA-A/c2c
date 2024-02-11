@@ -579,7 +579,7 @@ class DepositOrWithdraw(discord.ui.Modal):
             if val > self.their_default:
                 return await interaction.response.send_message(
                     embed=membed(f"You only have \U000023e3 **{self.their_default:,}**, "
-                                 f"therefore cannot {self.title.lower()} \U000023e3 **{val:,}**."),
+                                 f"therefore cannot withdraw \U000023e3 **{val:,}**."),
                     ephemeral=True, delete_after=5.0)
 
             data = await self.conn.execute(
@@ -601,11 +601,12 @@ class DepositOrWithdraw(discord.ui.Modal):
         # ! Deposit Branch
         
         if val > self.their_default:
-            banksp = await Economy.get_spec_bank_data(interaction.user, "bankspace", self.conn)
             return await interaction.response.send_message(
-                embed=membed(f"You can only hold \U000023e3 **{banksp:,}** in your bank right now.\n"
-                             "To hold more, use currency commands and level up more."),
-                ephemeral=True, delete_after=5.0)
+                embed=membed(f"Either one (or both) of the following is true:\n" 
+                             f"1. You only have \U000023e3 **{self.their_default:,}**, "
+                             f"so you cannot deposit \U000023e3 **{val:,}**\n"
+                             "2. You don't have enough bankspace to deposit that amount."),
+                ephemeral=True)
 
         updated = await self.conn.execute(
             "UPDATE bank SET bank = bank + ?, wallet = wallet + ? WHERE userID = ? "
@@ -737,12 +738,19 @@ class RememberOrder(discord.ui.View):
 
         super().__init__(timeout=20.0)
         removed = [item for item in self.children]
-        shuffle(removed)
-
         self.clear_items()
-        for x in range(len(removed)):
-            removed[x].label = self.list_of_five_order[x]
-            self.add_item(removed[x])
+        
+        x = [0, 1, 2, 3, 4]
+        shuffle(x)
+        
+        for index in x:
+            removed[index].label = self.list_of_five_order[index]
+            self.add_item(removed[index])
+
+        # for item in removed:
+        #     removed[x].label = self.list_of_five_order[x]
+        #     self.add_item(item)
+        #     x += 1
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if self.interaction.user.id != interaction.user.id:
@@ -4271,7 +4279,8 @@ class Economy(commands.Cog):
     async def buy(self, interaction: discord.Interaction, item_name: str, quantity: int):
         """Buy an item directly from the shop."""
 
-        quantity = abs(quantity) or 1
+        quantity = quantity or 1
+        quantity = abs(quantity)
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
@@ -4349,7 +4358,8 @@ class Economy(commands.Cog):
     async def sell(self, interaction: discord.Interaction,
                    item_name: str, sell_quantity: Optional[int]):
         """Sell an item you already own."""
-        sell_quantity = abs(sell_quantity) or 1
+        sell_quantity = sell_quantity or 1
+        sell_quantity = abs(sell_quantity)
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
@@ -4395,11 +4405,119 @@ class Economy(commands.Cog):
                 embed = discord.Embed(
                     title=f"{interaction.user.display_name}'s Receipt",
                     description=(
-                        f"{interaction.user.display_name} sold {ie} **{sell_quantity:,}x** {name}* "
-                        f"and got paid \U000023e3 **{cost:,}**."))
+                        f"{interaction.user.display_name} sold {ie} **{sell_quantity:,}x** {name} "
+                        f"and got paid \U000023e3 **{cost:,}**."),
+                    colour=rarity_to_colour.get(item["rarity"]))
                 embed.set_footer(text="Thanks for your business.")
 
                 await interaction.response.send_message(embed=embed)
+
+    async def do_order(self, interaction: discord.Interaction, job_name: str):
+        possible_words: tuple = job_attrs.get(job_name)[0] 
+        possible_words = list(possible_words)
+        shuffle(possible_words)
+        reduced = randint(10000000, job_attrs.get(job_name)[-1])
+        selected_words = sample(possible_words, k=5)
+        selected_words = [word.lower() for word in selected_words]
+
+        embed = discord.Embed(
+            title="Remember the order of words!",
+            description="\n".join(selected_words),
+            colour=0x2B2D31)
+
+        await interaction.response.send_message(
+            embed=embed)
+        
+        view = RememberOrder(
+            interaction, client=self.client, 
+            list_of_five_order=selected_words, their_job=job_name,
+            base_reward=reduced)
+        view.message = await interaction.original_response()
+        
+        await sleep(3)
+        
+        await view.message.edit(
+            embed=membed("What was the order?"),
+            view=view
+        )
+
+    async def do_tiles(self, interaction: discord.Interaction, job_name: str, conn: asqlite_Connection):
+        elements = ["\U0001f7e5", "\U0001f7e7", "\U0001f7e8", "\U0001f7e9", "\U0001f7e6", "\U0001f7ea"]
+        shuffle(elements)
+        prompter = discord.Embed(
+            title="Remember the order of the tiles!",
+            description=" ".join(elements),
+            colour=0x2B2D31
+        )
+
+        prompter.set_footer(text="You have 3 seconds to remember the order.")
+
+        await interaction.response.send_message(embed=prompter)
+        asked_position = choices([0, 4, 5], k=1, weights=(50, 35, 15))[0]
+        await sleep(3)
+
+        relative_positions = {
+            0: "first",
+            4: "penultimate (second-last)",
+            5: "last"
+        }
+
+        view = RememberPosition(
+            interaction, conn, elements[asked_position], job_name)
+        
+        view.message = await interaction.original_response()
+        await view.message.edit(
+            embed=membed(f"What colour was on the *{relative_positions[asked_position]}* position?"),
+            view=view
+        )
+        return
+
+    async def do_fill_up_word(self, interaction: discord.Interaction, job_name: str, conn: asqlite_Connection):
+        possible_words: tuple = job_attrs.get(job_name)[0]
+        selected_word = choice(possible_words)
+
+        letters_to_hide = max(1, len(selected_word) // 3)  # You can adjust this ratio
+
+        indices_to_hide = [i for i, char in enumerate(selected_word) if char.isalpha()]
+        indices_hidden = sample(indices_to_hide, min(letters_to_hide, len(indices_to_hide)))
+
+        hidden_word_list = [char if i not in indices_hidden else '_' for i, char in enumerate(selected_word)]
+        hidden_word = ''.join(hidden_word_list)
+
+        def check(m):
+            """Requirements that the client has to wait for."""
+            return (m.content.lower() == selected_word.lower()
+                    and m.channel == interaction.channel and m.author == interaction.user)
+
+        todo = discord.Embed(
+            title="What is the word?",
+            description=f"[`{hidden_word}`](https://www.sss.com)",
+            colour=0x2B2D31
+        )
+
+        await interaction.response.send_message(embed=todo)
+        prompt = await interaction.original_response()  
+        reduced = randint(10000000, job_attrs.get(job_name)[-1])
+        embed = discord.Embed()
+
+        async with conn.transaction():
+            try:
+                await self.client.wait_for('message', check=check, timeout=15.0)
+            except asyncTE:
+                reduced = floor((25 / 100) * reduced)
+                await self.update_bank_new(interaction.user, conn, reduced)
+                embed.title = "Terrible work!"
+                embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for a sub-par shift"
+                embed.colour = discord.Colour.brand_red()
+                embed.set_footer(text=f"Working as a {job_name}")
+                await prompt.edit(content=None, embed=embed)
+            else:
+                await self.update_bank_new(interaction.user, conn, reduced)
+                embed.title = "Great work!"
+                embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for your shift"
+                embed.colour = discord.Colour.brand_green()
+                embed.set_footer(text=f"Working as a {job_name}")
+                await prompt.edit(content=None, embed=embed)
 
     @app_commands.command(name="work",
                           description="Work and earn an income, if you have a job",
@@ -4435,122 +4553,25 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(
                     embed=membed(
                         f"You can work again at {discord.utils.format_dt(when, 't')}"
-                        f" ({discord.utils.format_dt(when, 'R')})"))
-
-            possible_minigames = choices((0, 1, 2), k=1, weights=(10, 40, 50))
+                        f" ({discord.utils.format_dt(when, 'R')})."))
 
             async with conn.transaction():
                 ncd = discord.utils.utcnow() + datetime.timedelta(minutes=40)
                 ncd = datetime_to_string(ncd)
                 await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
-            if possible_minigames[0] == 2:
+            possible_minigames = choices((0, 1, 2), k=1, weights=(45, 25, 30))
+            num_to_func_link = {
+                2: "do_order",
+                1: "do_tiles",
+                0: "do_fill_up_word"
+            }
 
-                elements = ["\U0001f7e5", "\U0001f7e7", "\U0001f7e8", "\U0001f7e9", "\U0001f7e6", "\U0001f7ea"]
-                shuffle(elements)
-                prompter = discord.Embed(
-                    title="Remember the order of the tiles!",
-                    description=" ".join(elements),
-                    colour=0x2B2D31
-                )
-
-                prompter.set_footer(text="You have 3 seconds to remember the order.")
-
-                await interaction.response.send_message(embed=prompter)
-                asked_position = choices([0, 4, 5], k=1, weights=(50, 35, 15))[0]
-                await sleep(3)
-
-                relative_positions = {
-                    0: "first",
-                    4: "penultimate (second-last)",
-                    5: "last"
-                }
-
-                view = RememberPosition(
-                    interaction, conn, elements[asked_position], job_name)
-                
-                view.message = await interaction.original_response()
-                await view.message.edit(
-                    embed=membed(f"What colour was on the *{relative_positions[asked_position]}* position?"),
-                    view=view
-                )
-                return
-            
-            elif possible_minigames[0]:
-
-                possible_words: tuple = job_attrs.get(job_name)[0]
-                selected_word = choice(possible_words)
-
-                letters_to_hide = max(1, len(selected_word) // 3)  # You can adjust this ratio
-
-                indices_to_hide = [i for i, char in enumerate(selected_word) if char.isalpha()]
-                indices_hidden = sample(indices_to_hide, min(letters_to_hide, len(indices_to_hide)))
-
-                hidden_word_list = [char if i not in indices_hidden else '_' for i, char in enumerate(selected_word)]
-                hidden_word = ''.join(hidden_word_list)
-
-                def check(m):
-                    """Requirements that the client has to wait for."""
-                    return (m.content.lower() == selected_word.lower()
-                            and m.channel == interaction.channel and m.author == interaction.user)
-
-                todo = discord.Embed(
-                    title="What is the word?",
-                    description=f"[`{hidden_word}`](https://www.sss.com)",
-                    colour=0x2B2D31
-                )
-
-                await interaction.response.send_message(embed=todo)
-                prompt = await interaction.original_response()  
-                reduced = randint(10000000, job_attrs.get(job_name)[-1])
-                embed = discord.Embed()
-
-                async with conn.transaction():
-                    try:
-                        await self.client.wait_for('message', check=check, timeout=15.0)
-                    except asyncTE:
-                        reduced = floor((25 / 100) * reduced)
-                        await self.update_bank_new(interaction.user, conn, reduced)
-                        embed.title = "Terrible work!"
-                        embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for a sub-par shift"
-                        embed.colour = discord.Colour.brand_red()
-                        embed.set_footer(text=f"Working as a {job_name}")
-                        await prompt.edit(content=None, embed=embed)
-                    else:
-                        await self.update_bank_new(interaction.user, conn, reduced)
-                        embed.title = "Great work!"
-                        embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for your shift"
-                        embed.colour = discord.Colour.brand_green()
-                        embed.set_footer(text=f"Working as a {job_name}")
-                        await prompt.edit(content=None, embed=embed)
-            else:
-                possible_words: tuple = job_attrs.get(job_name)[0] 
-                possible_words = list(possible_words)
-                shuffle(possible_words)
-                reduced = randint(10000000, job_attrs.get(job_name)[-1])
-                selected_words = sample(possible_words, k=5)
-                selected_words = [word.lower() for word in selected_words]
-
-                embed = discord.Embed(
-                    title="Remember the order of words!",
-                    description="\n".join(selected_words),
-                    colour=0x2B2D31)
-
-                await interaction.response.send_message(
-                    embed=embed)
-                
-                view = RememberOrder(
-                    interaction, client=self.client, 
-                    list_of_five_order=selected_words, their_job=job_name,
-                    base_reward=reduced)
-                view.message = await interaction.original_response()
-                
-                await sleep(3)
-                
-                await view.message.edit(
-                    embed=membed("What was the order?"),
-                    view=view
-                )
+            method_name = num_to_func_link[possible_minigames[0]]  # Get the method name from the dict
+            method = getattr(self, method_name)  # Get the method from the class
+            if method_name == "do_order":  
+                return await method(interaction, job_name)
+            await method(interaction, job_name, conn)  # Call the method with connection as well
 
     @app_commands.command(name="balance", description="Get someone's balance. Wallet, bank, and net worth.")
     @app_commands.describe(user='The user to find the balance of.',
@@ -4816,19 +4837,18 @@ class Economy(commands.Cog):
             available_bankspace = details[2] - details[1]
             available_bankspace -= amount_conv
 
-            if available_bankspace < 0:
+            if amount_conv > wallet_amt:
                 return await interaction.response.send_message(
-                    embed=membed(f"You can only hold **\U000023e3 {details[2]:,}** in your bank right now.\n"
-                                 f"To hold more, use currency commands and level up more."))
+                    embed=membed(f"You don't have that much in your wallet (\U000023e3 **{wallet_amt:,}** currently)."))
 
             elif not amount_conv:
                 return await interaction.response.send_message(
                     embed=membed("The amount to deposit needs to be more than 0.")
                 )
-
-            elif amount_conv > wallet_amt:
+            elif available_bankspace < 0:
                 return await interaction.response.send_message(
-                    embed=membed(f"You don't have that much in your wallet (\U000023e3 **{wallet_amt:,}** currently)."))
+                    embed=membed(f"You can only hold **\U000023e3 {details[2]:,}** in your bank right now.\n"
+                                 f"To hold more, use currency commands and level up more."))
             else:
                 wallet_new = await self.update_bank_new(user, conn, -amount_conv)
                 bank_new = await self.update_bank_new(user, conn, +amount_conv, "bank")
