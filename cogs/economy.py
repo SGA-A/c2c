@@ -15,6 +15,7 @@ from traceback import print_exception
 
 import discord
 import datetime
+import aiofiles
 
 from other.utilities import datetime_to_string, string_to_datetime, labour_productivity_via
 from other.pagination import Pagination
@@ -2818,14 +2819,24 @@ class Economy(commands.Cog):
                 total = await total.fetchone()
 
                 if not total[0] % 15:
+
+                    async with aiofiles.open("C:\\Users\\georg\\Documents\\c2c\\tips.txt") as f:
+                        contents = await f.readlines()
+                        shuffle(contents)
+                        atip = choice(contents)
+
+                    tip = discord.Embed(
+                        description=f"\U0001f4a1 `TIP`: {atip}"
+                    )
+                    tip.set_footer(text="You will be able to disable these tips.")
+                    
                     return await interaction.followup.send(
-                        embed=membed("This is a tip placeholder.\n"
-                                     "There will be real tips here soon!"),
+                        embed=tip,
                         ephemeral=True
                     )
 
                 exp_gainable = command.extras.setdefault("exp_gained", None)
-
+                
                 if not exp_gainable:
                     return
 
