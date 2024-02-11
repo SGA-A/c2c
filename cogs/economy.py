@@ -641,8 +641,17 @@ class RememberPosition(discord.ui.View):
         removed = [item for item in self.children]
         shuffle(removed)
         self.clear_items()
-        for item in removed:
-            self.add_item(item)
+
+        # for item in removed:  # faster operation
+        #     self.add_item(item)
+
+        for item_iter in range(len(removed)):
+            removed[item_iter].row = 0
+            
+            if (item_iter+1) > 3:
+                removed[item_iter].row = 1
+
+            self.add_item(item=removed[item_iter])
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if self.interaction.user.id != interaction.user.id:
@@ -4539,7 +4548,6 @@ class Economy(commands.Cog):
             )
         
             job_name = data[1][0]
-            
             if job_name == "None":
                     return await interaction.response.send_message(
                         embed=membed("You don't have a job, get one first."))
@@ -4560,14 +4568,14 @@ class Economy(commands.Cog):
                 ncd = datetime_to_string(ncd)
                 await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
-            possible_minigames = choices((0, 1, 2), k=1, weights=(45, 25, 30))
+            possible_minigames = choices((0, 1, 2), k=1, weights=(45, 25, 30))[0]
             num_to_func_link = {
                 2: "do_order",
                 1: "do_tiles",
                 0: "do_fill_up_word"
             }
 
-            method_name = num_to_func_link[possible_minigames[0]]  # Get the method name from the dict
+            method_name = num_to_func_link[possible_minigames]  # Get the method name from the dict
             method = getattr(self, method_name)  # Get the method from the class
             if method_name == "do_order":  
                 return await method(interaction, job_name)
