@@ -99,7 +99,30 @@ BONUS_MULTIPLIERS = {
     "😳😳😳": 669,
     "🌟🌟🌟": 600,
     "🔥🔥🔥": 850
+}
 
+job_attrs = {
+    "Plumber": (("TOILET", "SINK", "SEWAGE", "SANITATION", "DRAINAGE", "PIPES",
+                 "FAUCET", "LEAKAGE", "FIXTURES", "CLOG", "VALVE", "CORROSION", "WRENCH",
+                 "SEPTIC", "FIXTURE", "TAP", "BLOCKAGE", "OVERFLOW", "PRESSURE", "REPAIRS",
+                 "BACKFLOW"), 10_000_000),
+    "Cashier": (("ROBUX", "TILL", "ITEMS", "WORKER", 
+                "REGISTER", "CHECKOUT", "TRANSACTIONS", "RECEIPTS", "SCANNER",
+                "PRICING", "BARCODES", "CURRENCY", "CHANGE", "CHECKOUT", "BAGGIN",
+                "DISCOUNTS", "REFUNDS", "EXCHANGE", "GIFTCARDS"), 13_000_000),
+    "Fisher": (("FISHING", "NETS", "TRAWLING", "FISHERMAN", "CATCH", 
+                "VESSEL", "AQUATIC", "HARVESTING", "MARINE"), 15_000_000),
+    "Janitor": (("CLEANING", "SWEEPING", "MOPING", "CUSTODIAL", 
+                "MAINTENANCE", "SANITATION", "BROOM", "VACUUMING", "RECYCLING",
+                "DUSTING", "RESTROOM", "LITTER", "POLISHING"), 16_000_000),
+    "Youtuber": (("CONTENT CREATION", "VIDEO PRODUCTION", 
+                "CHANNEL", "SUBSCRIBERS", "EDITING", "UPLOAD", "VLOGGING", 
+                "MONETIZATION", "THUMBNAILS", "ENGAGEMENT", "COMMENTS", "EQUIPMENT",
+                "LIGHTING", "MICROPHONE", "CAMERA", "COPYRIGHT", "COMMUNITY", "FANBASE",
+                "DEMOGRAPHIC"), 17_000_000),
+    "Police": (("LAW ENFORCEMENT", "PATROL", "CRIME PREVENTION", 
+                "INVESTIGATION", "ARREST", "UNIFORM", "BADGE", "INTERROGATION", "FORENSICS", "SUSPECT",
+                "PURSUIT", "INCIDENT", "EMERGENCY", "SUSPECT", "EVIDENCE", "RADIO", "DISPATCHER", "WITNESS"), 20_000_000)
 }
 
 PRESTIGE_EMOTES = {
@@ -623,7 +646,7 @@ class RememberPosition(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if self.interaction.user.id != interaction.user.id:
             await interaction.response.send_message(
-                "You are not working here.", ephemeral=True, delete_after=5.0)
+                embed=membed("This is not your shift."), ephemeral=True, delete_after=5.0)
             return False
         return True
     
@@ -697,6 +720,113 @@ class RememberPosition(discord.ui.View):
     async def purple_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Callback for the purple buttons."""
         await self.determine_outcome(interaction, button=button)
+
+
+class RememberOrder(discord.ui.View):
+    """A minigame to remember the position the tiles shown were on once hidden."""
+
+    def __init__(self, interaction: discord.Interaction, client: commands.Bot, 
+                 list_of_five_order: list, their_job: str, base_reward: int):
+
+        self.interaction = interaction
+        self.client: commands.Bot = client
+        self.list_of_five_order = list_of_five_order  # the exact order of the words shown to the user
+        self.their_job = their_job  # the job the user is working as
+        self.base_reward = base_reward  # the base reward the user will get
+        self.pos = 0  # the position we are currently at, checking the user's input
+
+        super().__init__(timeout=20.0)
+        removed = [item for item in self.children]
+        shuffle(removed)
+
+        self.clear_items()
+        for x in range(len(removed)):
+            removed[x].label = self.list_of_five_order[x]
+            self.add_item(removed[x])
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if self.interaction.user.id != interaction.user.id:
+            await interaction.response.send_message(
+                embed=membed("This is not your shift."), ephemeral=True, delete_after=5.0)
+            return False
+        return True
+    
+    async def on_timeout(self) -> Coroutine[Any, Any, None]:
+
+        self.base_reward = floor((25 / 100) * self.base_reward)
+
+        await Economy.update_bank_new(self.interaction.user, self.conn, self.base_reward)
+        await self.conn.commit()
+
+        embed = self.message.embeds[0]
+        embed.title = "Terrible effort!"
+        embed.description = f"**You were given:**\n- \U000023e3 {self.base_reward:,} for a sub-par shift"
+        embed.colour = discord.Colour.brand_red()
+        embed.set_footer(text=f"Working as a {self.their_job}")
+
+        try:
+            await self.message.edit(embed=embed, view=None)
+        except discord.NotFound:
+            pass
+    
+    """If the position of a given item was correct, disable the button."""
+
+    async def disable_if_correct(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if button.label == self.list_of_five_order[self.pos]:
+            button.disabled = True
+            self.pos += 1
+            if self.pos == 5:
+                async with self.client.pool_connection.acquire() as conn:
+                    conn: asqlite_Connection
+                    await Economy.update_bank_new(interaction.user, conn, self.base_reward)
+                    await conn.commit()
+                self.stop()
+                embed = self.message.embeds[0]
+                embed.title = "Great work!"
+                embed.description = f"**You were given:**\n- \U000023e3 {self.base_reward:,} for your shift"
+                embed.colour = discord.Colour.brand_green()
+                embed.set_footer(text=f"Working as a {self.their_job}")
+                return await interaction.response.edit_message(embed=embed, view=None)
+            return await interaction.response.edit_message(view=self)
+        
+        self.stop()
+        self.pos = self.pos or 1
+        self.base_reward -= int((self.pos / 4) * self.base_reward)
+        
+        async with self.client.pool_connection.acquire() as conn:
+            conn: asqlite_Connection
+            await Economy.update_bank_new(interaction.user, conn, self.base_reward)
+            await conn.commit()
+
+        embed = self.message.embeds[0]
+        embed.title = "Terrible work!"
+        embed.description = f"**You were given:**\n- \U000023e3 {self.base_reward:,} for a sub-par shift"
+        embed.colour = discord.Colour.brand_red()
+        embed.set_footer(text=f"Working as a {self.their_job}")
+
+        await interaction.response.edit_message(embed=embed, view=None)
+
+    @discord.ui.button(label="A")
+    async def choice_one(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.disable_if_correct(interaction, button=button)
+    
+    @discord.ui.button(label="B")
+    async def choice_two(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.disable_if_correct(interaction, button=button)
+
+    @discord.ui.button(label="C")
+    async def choice_three(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.disable_if_correct(interaction, button=button)
+
+    @discord.ui.button(label="D")
+    async def choice_four(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Callback for the green buttons."""
+        await self.disable_if_correct(interaction, button=button)
+
+    @discord.ui.button(label="E")
+    async def choice_five(self, interaction: discord.Interaction, button: discord.ui.Button):
+        """Callback for the blue buttons."""
+        await self.disable_if_correct(interaction, button=button)
 
 
 class BalanceView(discord.ui.View):
@@ -2061,130 +2191,6 @@ class Economy(commands.Cog):
     def calculate_serv_exp_for(*, level: int):
         """Calculate the experience points required for a given level."""
         return int((level / 0.59) ** 3)
-
-    # async def work_for_police(self, interaction: discord.Interaction, conn: asqlite_Connection):
-    #     """Work for the police force, this is a special command that only police officers can use."""
-    #     tasks = randint(1, 5)
-    #     if tasks:
-    #         base_reward = randint(5_000_000, 15_000_000)
-
-    #         identity_reason = {
-    #             "\U0001f920": 0,
-    #             "\U0001f600": 0,
-    #             "\U0001f62b": 0,
-    #             "\U0001f60f": "inery",
-    #             "\U0001f92b": "0",
-    #             "\U0001f620": "0",
-    #             "\U0001f921": "0",
-    #             "\U0001f971": "0",
-    #             "\U0001f606": "0",
-    #             "\U0001f925": ("0", 1.5),
-    #             "\U0001f608": ("0", 2),
-    #             "\U0001f92c": ("", 3),
-    #         }
-            
-    #         people = []
-    #         identities = list(identity_reason.keys())
-    #         shuffle(identities)
-            
-    #         """
-    #         for each person that is found with the key-value being a tuple,
-    #         the multiplier is the last index so catching 2 
-    #         """
-
-    #         chosen_criminal = None
-    #         count = 0
-    #         bonus = 0
-
-    #         embed = discord.Embed(
-    #                 title="Identify the criminals", colour=0x2B2D31)
-            
-    #         while len(people) < 3:
-    #             person = choice(identities)
-    #             attrs_identity = identity_reason.setdefault(person, None)
-
-    #             if not isinstance(attrs_identity, int) and (chosen_criminal is None):
-                    
-    #                 count = randint(0, 1)
-    #                 if not count:
-    #                     chosen_criminal = "None"
-    #                     continue
-    #                 chosen_criminal = person  # this never changes after being set
-                    
-    #                 if isinstance(attrs_identity, tuple):
-    #                     bonus = attrs_identity[1]
-    #                     base_reward *= bonus
-    #                     people.extend([chosen_criminal]*count)
-    #                     continue
-                    
-    #                 # if it's not a tuple, it's a string
-    #                 people.extend([chosen_criminal]*count)     
-    #                 continue
-                
-    #             # if it's an integer, it's a normal person
-    #             people.append(person)
-
-    #         embed.description=(
-    #                     f"> {'  '.join(people)}\n\n"
-    #                     "You are being shown the camera view of citizens above.")
-    #         await interaction.response.send_message(
-    #             embed=embed)
-    #         msg = await interaction.original_response()
-    #         await sleep(3)
-
-    #         embed.description = (
-    #             f"We need to catch these criminals: {chosen_criminal if chosen_criminal != "None" else person}.\n"
-    #             f"How many criminals did you see on the screen?")
-    #         await msg.edit(content=f"{interaction.user.mention}", embed=embed,
-    #                        allowed_mentions=discord.AllowedMentions(replied_user=True))
-
-    #         if bonus:
-    #             await interaction.followup.send(
-    #                 embed=membed("You're in for a treat, there are criminals "
-    #                              f"out there worth **{bonus}x** more than usual!"),
-    #                 ephemeral=True)
-
-
-    #         def check(m):
-    #             """Requirements that the client has to wait for."""
-    #             return (m.author == interaction.user and
-    #                      m.channel == interaction.channel and m.content.isdigit())
-            
-    #         try:
-    #             response = await self.client.wait_for(
-    #                 "message", check=check, timeout=30.0)
-    #         except asyncTE:
-    #             await msg.edit(
-    #                 content=None,
-    #                 embed=membed("You took too long to respond, the criminals got away."))
-    #         else:
-    #             embed = msg.embeds[0]
-    #             embed.description = ("**You were given:**\n"
-    #                                  f"- \U000023e3 {base_reward:,} for your shift")
-    #             await self.update_bank_new(interaction.user, conn, base_reward)
-    #             await conn.commit()
-    #             embed.set_footer(text="Working as a Police")
-
-    #             if int(response.content) == count:
-    #                 embed.title = "Great work!"
-    #                 embed.colour = discord.Colour.brand_green()
-    #                 return await msg.edit(content=None, embed=embed)
-    #             elif int(response.content) > 0:
-                    
-    #                 embed.title = "Not bad!"
-    #                 embed.description = ("**You were given:**\n"
-    #                                      f"- \U000023e3 {base_reward:,} for your shift")
-    #                 embed.colour = discord.Colour.yellow()
-
-    #                 return await msg.edit(
-    #                     content=("You didn't quite catch every criminal! "
-    #                              f"You got **{response.content}** but there "
-    #                              f"were **{count-int(response.content)}** left."), 
-    #                     embed=embed)
-                
-    #             embed.title = "Terrible work!"
-    #             embed.colour = discord.Colour.red()
-    #             await msg.edit(content=None, embed=embed)
 
     async def create_leaderboard_preset(self, chosen_choice: str):
         """A single reused function used to map the chosen leaderboard made by the user to the associated query."""
@@ -4431,13 +4437,14 @@ class Economy(commands.Cog):
                         f"You can work again at {discord.utils.format_dt(when, 't')}"
                         f" ({discord.utils.format_dt(when, 'R')})"))
 
-            possible_minigames = choices([0, 1], k=1, weights=(40, 60))
-            if possible_minigames[0]:
-                
-                async with conn.transaction():
-                    ncd = discord.utils.utcnow() + datetime.timedelta(minutes=40)
-                    ncd = datetime_to_string(ncd)
-                    await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
+            possible_minigames = choices((0, 1, 2), k=1, weights=(10, 40, 50))
+
+            async with conn.transaction():
+                ncd = discord.utils.utcnow() + datetime.timedelta(minutes=40)
+                ncd = datetime_to_string(ncd)
+                await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
+
+            if possible_minigames[0] == 2:
 
                 elements = ["\U0001f7e5", "\U0001f7e7", "\U0001f7e8", "\U0001f7e9", "\U0001f7e6", "\U0001f7ea"]
                 shuffle(elements)
@@ -4468,69 +4475,82 @@ class Economy(commands.Cog):
                     view=view
                 )
                 return
+            
+            elif possible_minigames[0]:
 
+                possible_words: tuple = job_attrs.get(job_name)[0]
+                selected_word = choice(possible_words)
 
-            job_attrs = {
-            "Plumber": (("TOILET", "SINK", "SEWAGE", "SANITATION", "DRAINAGE", "PIPES"), 20_000_000),
-            "Cashier": (("ROBUX", "TILL", "ITEMS", "WORKER", 
-                        "REGISTER", "CHECKOUT", "TRANSACTIONS", "RECEIPTS"), 35_000_000),
-            "Fisher": (
-                ("FISHING", "NETS", "TRAWLING", "FISHERMAN", "CATCH", 
-                "VESSEL", "AQUATIC", "HARVESTING", "MARINE"), 40_000_000),
-            "Janitor": (("CLEANING", "SWEEPING", "MOPING", "CUSTODIAL", 
-                        "MAINTENANCE", "SANITATION", "BROOM", "VACUUMING"), 45_000_000),
-            "Youtuber": (("CONTENT CREATION", "VIDEO PRODUCTION", 
-                        "CHANNEL", "SUBSCRIBERS", "EDITING", "UPLOAD", "VLOGGING", 
-                        "MONETIZATION", "THUMBNAILS", "ENGAGEMENT"), 50_000_000),
-            "Police": (("LAW ENFORCEMENT", "PATROL", "CRIME PREVENTION", 
-                        "INVESTIGATION", "ARREST", "UNIFORM", "BADGE", "INTERROGATION"), 75_000_000)
-            }
+                letters_to_hide = max(1, len(selected_word) // 3)  # You can adjust this ratio
 
-            possible_words: tuple = job_attrs.get(job_name)[0]
-            selected_word = choice(possible_words)
+                indices_to_hide = [i for i, char in enumerate(selected_word) if char.isalpha()]
+                indices_hidden = sample(indices_to_hide, min(letters_to_hide, len(indices_to_hide)))
 
-            letters_to_hide = max(1, len(selected_word) // 3)  # You can adjust this ratio
+                hidden_word_list = [char if i not in indices_hidden else '_' for i, char in enumerate(selected_word)]
+                hidden_word = ''.join(hidden_word_list)
 
-            indices_to_hide = [i for i, char in enumerate(selected_word) if char.isalpha()]
-            indices_hidden = sample(indices_to_hide, min(letters_to_hide, len(indices_to_hide)))
+                def check(m):
+                    """Requirements that the client has to wait for."""
+                    return (m.content.lower() == selected_word.lower()
+                            and m.channel == interaction.channel and m.author == interaction.user)
 
-            hidden_word_list = [char if i not in indices_hidden else '_' for i, char in enumerate(selected_word)]
-            hidden_word = ''.join(hidden_word_list)
+                todo = discord.Embed(
+                    title="What is the word?",
+                    description=f"[`{hidden_word}`](https://www.sss.com)",
+                    colour=0x2B2D31
+                )
 
-            def check(m):
-                """Requirements that the client has to wait for."""
-                return (m.content.lower() == selected_word.lower()
-                        and m.channel == interaction.channel and m.author == interaction.user)
+                await interaction.response.send_message(embed=todo)
+                prompt = await interaction.original_response()  
+                reduced = randint(10000000, job_attrs.get(job_name)[-1])
+                embed = discord.Embed()
 
-            todo = discord.Embed(
-                title="What is the word?",
-                description=f"[`{hidden_word}`](https://www.sss.com)",
-                colour=0x2B2D31
-            )
+                async with conn.transaction():
+                    try:
+                        await self.client.wait_for('message', check=check, timeout=15.0)
+                    except asyncTE:
+                        reduced = floor((25 / 100) * reduced)
+                        await self.update_bank_new(interaction.user, conn, reduced)
+                        embed.title = "Terrible work!"
+                        embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for a sub-par shift"
+                        embed.colour = discord.Colour.brand_red()
+                        embed.set_footer(text=f"Working as a {job_name}")
+                        await prompt.edit(content=None, embed=embed)
+                    else:
+                        await self.update_bank_new(interaction.user, conn, reduced)
+                        embed.title = "Great work!"
+                        embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for your shift"
+                        embed.colour = discord.Colour.brand_green()
+                        embed.set_footer(text=f"Working as a {job_name}")
+                        await prompt.edit(content=None, embed=embed)
+            else:
+                possible_words: tuple = job_attrs.get(job_name)[0] 
+                possible_words = list(possible_words)
+                shuffle(possible_words)
+                reduced = randint(10000000, job_attrs.get(job_name)[-1])
+                selected_words = sample(possible_words, k=5)
+                selected_words = [word.lower() for word in selected_words]
 
-            await interaction.response.send_message(embed=todo)
-            prompt = await interaction.original_response()  
-            reduced = randint(10000000, job_attrs.get(job_name)[-1])
-            embed = discord.Embed()
+                embed = discord.Embed(
+                    title="Remember the order of words!",
+                    description="\n".join(selected_words),
+                    colour=0x2B2D31)
 
-            async with conn.transaction():
-                try:
-                    await self.client.wait_for('message', check=check, timeout=15.0)
-                except asyncTE:
-                    reduced = floor((25 / 100) * reduced)
-                    await self.update_bank_new(interaction.user, conn, reduced)
-                    embed.title = "Terrible work!"
-                    embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for a sub-par shift"
-                    embed.colour = discord.Colour.brand_red()
-                    embed.set_footer(text=f"Working as a {job_name}")
-                    await prompt.edit(content=None, embed=embed)
-                else:
-                    await self.update_bank_new(interaction.user, conn, reduced)
-                    embed.title = "Great work!"
-                    embed.description = f"**You were given:**\n- \U000023e3 {reduced:,} for your shift"
-                    embed.colour = discord.Colour.brand_green()
-                    embed.set_footer(text=f"Working as a {job_name}")
-                    await prompt.edit(content=None, embed=embed)
+                await interaction.response.send_message(
+                    embed=embed)
+                
+                view = RememberOrder(
+                    interaction, client=self.client, 
+                    list_of_five_order=selected_words, their_job=job_name,
+                    base_reward=reduced)
+                view.message = await interaction.original_response()
+                
+                await sleep(3)
+                
+                await view.message.edit(
+                    embed=membed("What was the order?"),
+                    view=view
+                )
 
     @app_commands.command(name="balance", description="Get someone's balance. Wallet, bank, and net worth.")
     @app_commands.describe(user='The user to find the balance of.',
