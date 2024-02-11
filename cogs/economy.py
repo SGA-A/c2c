@@ -857,6 +857,7 @@ class BalanceView(discord.ui.View):
         self.their_wallet = wallet
         self.their_bank = bank
         self.their_bankspace = bankspace
+        self.viewing = viewing
         super().__init__(timeout=120.0)
         
         if viewing.id != interaction.user.id:
@@ -870,6 +871,8 @@ class BalanceView(discord.ui.View):
 
         self.children[0].disabled = not(bool(new_bank))
         self.children[1].disabled = not((bool(new_wallet) and bool(any_new_bankspace_left)))
+        self.children[0].disabled = self.viewing.id != self.interaction.user.id
+        self.children[1].disabled = self.viewing.id != self.interaction.user.id
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if self.interaction.user.id != interaction.user.id:
@@ -935,32 +938,29 @@ class BalanceView(discord.ui.View):
         """Refresh the current message to display the user's latest balance."""
 
         async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
-            nd = await conn.fetchone("SELECT wallet, bank, bankspace FROM `bank` WHERE userID = ?", (interaction.user.id,))
+            nd = await conn.execute("SELECT wallet, bank, bankspace FROM `bank` WHERE userID = ?", (self.viewing.id,))
+            nd = await nd.fetchone()
             bank = nd[0] + nd[1]
             inv = 0
 
             for item in SHOP_ITEMS:
                 name = item["name"]
                 cost = item["cost"]
-                data = await Economy.get_one_inv_data_new(interaction.user, name, conn)
+                data = await Economy.get_one_inv_data_new(self.viewing, name, conn)
                 inv += int(cost) * data
-            bankspace = (nd[1] / nd[2]) * 100
 
-            balance = discord.Embed(color=0x2F3136, timestamp=discord.utils.utcnow())
-            balance.set_author(name=f"{interaction.user.name}'s balance", icon_url=interaction.user.display_avatar.url)
-            balance.add_field(name="Wallet", value=f"\U000023e3 {nd[0]:,}",
-                                inline=True)
-            balance.add_field(name="Bank", value=f"\U000023e3 {nd[1]:,}",
-                                inline=True)
-            balance.add_field(name="Bankspace",
-                                value=f"\U000023e3 {nd[2]:,} ({bankspace:.2f}% full)", inline=True)
-            balance.add_field(name="Money Net", value=f"\U000023e3 {bank:,}",
-                                inline=True)
-            balance.add_field(name="Inventory Net", value=f"\U000023e3 {inv:,}",
-                                inline=True)
-            balance.add_field(name="Total Net",
-                                value=f"\U000023e3 {inv + bank:,}", inline=True)
+            space = round((nd[1] / nd[2]) * 100, 2)
+
+            balance = discord.Embed(
+                title=f"{self.viewing.name}'s balances", color=0x2F3136, timestamp=discord.utils.utcnow(),
+                url="https://dis.gd/support")
+            balance.add_field(name="Wallet", value=f"\U000023e3 {nd[0]:,}")
+            balance.add_field(name="Bank", value=f"\U000023e3 {nd[1]:,}")
+            balance.add_field(name="Bankspace", value=f"\U000023e3 {nd[2]:,} ({space}% full)")
+            balance.add_field(name="Money Net", value=f"\U000023e3 {bank:,}")
+            balance.add_field(name="Inventory Net", value=f"\U000023e3 {inv:,}")
+            balance.add_field(name="Total Net", value=f"\U000023e3 {inv + bank:,}")
+            
         self.checks(nd[1], nd[0], nd[2]-nd[1])
         await interaction.response.edit_message(content=None, embed=balance, view=self)
 
@@ -2865,6 +2865,7 @@ class Economy(commands.Cog):
                              f"You're on a roll, {user}!",
                              f"Keep it up, {user}!",
                              f"Amazing, {user}!",
+                             f"I'm proud of you, {user}!",
                              f"Fantastic work, {user}!",
                              f"Superb effort, {user}!",
                              f"Brilliant job, {user}!",
