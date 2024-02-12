@@ -4456,10 +4456,12 @@ class Economy(commands.Cog):
 
     async def do_order(self, interaction: discord.Interaction, job_name: str):
         possible_words: tuple = job_attrs.get(job_name)[0] 
-        possible_words = list(possible_words)
-        shuffle(possible_words)
+        list_possible_words = list(possible_words)
+        shuffle(list_possible_words)
+        
         reduced = randint(10000000, job_attrs.get(job_name)[-1])
-        selected_words = sample(possible_words, k=5)
+        
+        selected_words = sample(list_possible_words, k=5)
         selected_words = [word.lower() for word in selected_words]
 
         embed = discord.Embed(
@@ -4584,24 +4586,23 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(
                         embed=membed("You don't have a job, get one first."))
 
-            # ncd = string_to_datetime(data[0][0])
-            # now = datetime.datetime.now()
+            ncd = string_to_datetime(data[0][0])
+            now = datetime.datetime.now()
 
-            # diff = ncd - now
-            # if diff.total_seconds() > 0:
-            #     when = now + datetime.timedelta(seconds=diff.total_seconds())
-            #     return await interaction.response.send_message(
-            #         embed=membed(
-            #             f"You can work again at {discord.utils.format_dt(when, 't')}"
-            #             f" ({discord.utils.format_dt(when, 'R')})."))
+            diff = ncd - now
+            if diff.total_seconds() > 0:
+                when = now + datetime.timedelta(seconds=diff.total_seconds())
+                return await interaction.response.send_message(
+                    embed=membed(
+                        f"You can work again at {discord.utils.format_dt(when, 't')}"
+                        f" ({discord.utils.format_dt(when, 'R')})."))
 
-            # async with conn.transaction():
-            #     ncd = discord.utils.utcnow() + datetime.timedelta(minutes=40)
-            #     ncd = datetime_to_string(ncd)
-            #     await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
+            async with conn.transaction():
+                ncd = discord.utils.utcnow() + datetime.timedelta(minutes=40)
+                ncd = datetime_to_string(ncd)
+                await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
             possible_minigames = choices((0, 1, 2), k=1, weights=(45, 25, 30))[0]
-            possible_minigames = 2
 
             num_to_func_link = {
                 2: "do_order",
