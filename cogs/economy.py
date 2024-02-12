@@ -106,13 +106,13 @@ job_attrs = {
     "Plumber": (("TOILET", "SINK", "SEWAGE", "SANITATION", "DRAINAGE", "PIPES",
                  "FAUCET", "LEAKAGE", "FIXTURES", "CLOG", "VALVE", "CORROSION", "WRENCH",
                  "SEPTIC", "FIXTURE", "TAP", "BLOCKAGE", "OVERFLOW", "PRESSURE", "REPAIRS",
-                 "BACKFLOW"), 10_000_000),
+                 "BACKFLOW"), 14_000_000),
     "Cashier": (("ROBUX", "TILL", "ITEMS", "WORKER", 
                 "REGISTER", "CHECKOUT", "TRANSACTIONS", "RECEIPTS", "SCANNER",
                 "PRICING", "BARCODES", "CURRENCY", "CHANGE", "CHECKOUT", "BAGGIN",
-                "DISCOUNTS", "REFUNDS", "EXCHANGE", "GIFTCARDS"), 13_000_000),
+                "DISCOUNTS", "REFUNDS", "EXCHANGE", "GIFTCARDS"), 15_000_000),
     "Fisher": (("FISHING", "NETS", "TRAWLING", "FISHERMAN", "CATCH", 
-                "VESSEL", "AQUATIC", "HARVESTING", "MARINE"), 15_000_000),
+                "VESSEL", "AQUATIC", "HARVESTING", "MARINE"), 18_000_000),
     "Janitor": (("CLEANING", "SWEEPING", "MOPING", "CUSTODIAL", 
                 "MAINTENANCE", "SANITATION", "BROOM", "VACUUMING", "RECYCLING",
                 "DUSTING", "RESTROOM", "LITTER", "POLISHING"), 16_000_000),
@@ -120,10 +120,10 @@ job_attrs = {
                 "CHANNEL", "SUBSCRIBERS", "EDITING", "UPLOAD", "VLOGGING", 
                 "MONETIZATION", "THUMBNAILS", "ENGAGEMENT", "COMMENTS", "EQUIPMENT",
                 "LIGHTING", "MICROPHONE", "CAMERA", "COPYRIGHT", "COMMUNITY", "FANBASE",
-                "DEMOGRAPHIC"), 17_000_000),
+                "DEMOGRAPHIC"), 20_000_000),
     "Police": (("LAW ENFORCEMENT", "PATROL", "CRIME PREVENTION", 
                 "INVESTIGATION", "ARREST", "UNIFORM", "BADGE", "INTERROGATION", "FORENSICS", "SUSPECT",
-                "PURSUIT", "INCIDENT", "EMERGENCY", "SUSPECT", "EVIDENCE", "RADIO", "DISPATCHER", "WITNESS"), 20_000_000)
+                "PURSUIT", "INCIDENT", "EMERGENCY", "SUSPECT", "EVIDENCE", "RADIO", "DISPATCHER", "WITNESS"), 10_000_000)
 }
 
 PRESTIGE_EMOTES = {
@@ -1738,9 +1738,7 @@ class Servants(discord.ui.Select):
         self.choice = self.values[0]
 
         for option in self.options:
-            if option.value == self.choice:
-                option.default = True
-            option.default = False
+            option.default = option.value == self.choice
 
         dtls = await self.conn.fetchone("SELECT * FROM `slay` WHERE userID = ? AND slay_name = ?",
                                         (self.owner_id, self.choice))
@@ -2143,7 +2141,7 @@ class Economy(commands.Cog):
     def cog_unload(self):
         self.batch_update.cancel()
 
-    @tasks.loop(minutes=15)
+    @tasks.loop(hours=1)
     async def batch_update(self):
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
@@ -2162,7 +2160,7 @@ class Economy(commands.Cog):
 
     @batch_update.before_loop
     async def before_update(self):
-        await self.client.wait_until_ready()
+        self.batch_update.stop()
 
     @staticmethod
     def partial_match_for(item_input: str):
@@ -2444,11 +2442,10 @@ class Economy(commands.Cog):
 
             return lb
 
-    async def servant_preset(self, owner_id: int, dtls, children=None):
+    async def servant_preset(self, owner_id: int, dtls):
         """Get servant details from the given owner ID, return it in a unique servant card."""
 
         owner_name = self.client.get_user(owner_id)
-
         (slay_name, gender, productivity, love, energy, hexx, lvl, xp, hygiene, status, investment, hunger,
          claimed, img) = (
             dtls[0], dtls[2], dtls[3], dtls[4], dtls[5], dtls[7], dtls[8], dtls[9], dtls[10], dtls[11],
@@ -2474,21 +2471,6 @@ class Economy(commands.Cog):
         sdetails.set_footer(text=f"Belongs to {owner_name.name}", icon_url=owner_name.display_avatar.url)
         sdetails.set_image(url=img)
         return sdetails
-
-    async def send_custom_text(self, interaction: discord.Interaction,
-                               custom_text: str):
-        """Send a custom text using the webhook provided."""
-        hook_id = get_profile_key_value(f"{interaction.channel.id} webhook")
-
-        if hook_id is None:
-            async with self.client.session.get(f"{self.client.user.avatar.url}") as resp:
-                avatar_data = await resp.read()
-            hook = await interaction.channel.create_webhook(name='c2c', avatar=avatar_data)
-            modify_profile("update", f"{interaction.channel.id} webhook", hook.id)
-        else:
-            hook = await self.client.fetch_webhook(hook_id)
-
-        await hook.send(embed=membed(custom_text))
 
     @staticmethod
     def calculate_hand(hand):
@@ -3654,6 +3636,7 @@ class Economy(commands.Cog):
                                 'issues.**', colour=0x2B2D31))
 
     @app_commands.command(name="use", description="Use an item you own from your inventory", extras={"exp_gained": 3})
+    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(item='Select an item.')
     @app_commands.checks.cooldown(1, 6)
     async def use_item(self, interaction: discord.Interaction,
@@ -3664,6 +3647,9 @@ class Economy(commands.Cog):
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
+
+            if DOWN:
+                return await interaction.response.send_message(embed=DOWNM)
 
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
