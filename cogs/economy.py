@@ -764,10 +764,12 @@ class RememberOrder(discord.ui.View):
     
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
 
-        self.base_reward = floor((25 / 100) * self.base_reward)
+        async with self.client.pool_connection.acquire() as conn:
+            conn: asqlite_Connection
+            self.base_reward = floor((25 / 100) * self.base_reward)
 
-        await Economy.update_bank_new(self.interaction.user, self.conn, self.base_reward)
-        await self.conn.commit()
+            await Economy.update_bank_new(self.interaction.user, conn, self.base_reward)
+            await conn.commit()
 
         embed = self.message.embeds[0]
         embed.title = "Terrible effort!"
@@ -2965,11 +2967,12 @@ class Economy(commands.Cog):
 
             suggestions = [item[0] for item in name_res]
             return await interaction.response.send_message(
-                embed=discord.Embed(
-                    title=f"Found {len(name_res)} results",
-                    description='\n'.join(suggestions),
-                    colour=0x2B2D31
-                )
+                    content="You have a few options to choose from.",
+                    embed=discord.Embed(
+                        title=f"Found {len(name_res)} results",
+                        description='\n'.join(suggestions),
+                        colour=0x2B2D31
+                    )
             )
         else:
             attrs = SHOP_ITEMS[name_res]
@@ -3075,6 +3078,7 @@ class Economy(commands.Cog):
 
                 suggestions = [item[0] for item in name_res]  # Extract item names from the list
                 return await interaction.response.send_message(
+                    content="There is more than one item with that name. Select one of the following options.",
                     embed=discord.Embed(
                         title=f"Found {len(name_res)} results",
                         description='\n'.join(suggestions),
@@ -3637,46 +3641,61 @@ class Economy(commands.Cog):
 
     @app_commands.command(name="use", description="Use an item you own from your inventory", extras={"exp_gained": 3})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
-    @app_commands.describe(item='Select an item.')
+    @app_commands.describe(item='Select an item.', quantity='Amount of items to use, when possible.')
     @app_commands.checks.cooldown(1, 6)
-    async def use_item(self, interaction: discord.Interaction,
-                       item: Literal[
-                           'Keycard', 'Trophy', 'Clan License', 'Resistor', 'Amulet',
-                           'Dynamic Item', 'Hyperion', 'Crisis', 'Odd Eye']):
+    async def use_item(self, interaction: discord.Interaction, item: str, quantity: Optional[int] = 1):
         """Use a currently owned item."""
+        quantity = abs(quantity)
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
+            
+            name_res = self.partial_match_for(item)
 
-            if DOWN:
-                return await interaction.response.send_message(embed=DOWNM)
-
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
-            quantity = await self.get_one_inv_data_new(interaction.user, item, conn)
-
-            if not quantity:
+            if name_res is None:
                 return await interaction.response.send_message(
-                    embed=membed("You don't have this item in your inventory."))
+                    embed=membed("This item does not exist. Check the spelling and try again."))
 
-            match item:
-                case 'Keycard' | 'Resistor' | 'Hyperion' | 'Crisis':
-                    return await interaction.response.send_message(
-                        content="This item cannot be used. The effects are always passively active!")
-                case 'Trophy':
-                    if quantity > 1:
-                        content = f'\nThey have **{quantity}** of them, WHAT A BADASS'
-                    else:
-                        content = ''
-                    return await interaction.response.send_message(
-                        f"{interaction.user.name} is flexing on you all "
-                        f"with their <:tr1:1165936712468418591> **~~PEPE~~ TROPHY**{content}")
-                case _:
-                    return await interaction.response.send_message(
-                        embed=membed("The functions for this item aren't available.\n"
-                                     "If you wish to submit an idea for what these items do, "
-                                     "comment on [this issue on our Github.](https://github.com/SGA-A/c2c/issues/12)")
+            elif isinstance(name_res, list):
+
+                suggestions = [item[0] for item in name_res]  # Extract item names from the list
+                return await interaction.response.send_message(
+                    content="You have a few options to choose from.",
+                    embed=discord.Embed(
+                        title=f"Found {len(name_res)} results",
+                        description='\n'.join(suggestions),
+                        colour=0x2B2D31
                     )
+                )
+            else:
+                attrs = SHOP_ITEMS[name_res]
+                name = attrs["name"]
+                ie = attrs["emoji"]
+
+                quantity = await self.get_one_inv_data_new(interaction.user, name, conn)
+
+                if not quantity:
+                    return await interaction.response.send_message(
+                        embed=membed(f"You don't have a {ie} {name} in your inventory."))
+
+                match item:
+                    case 'Keycard' | 'Resistor' | 'Hyperion' | 'Crisis':
+                        return await interaction.response.send_message(
+                            content="This item cannot be used. The effects are always passively active!")
+                    case 'Trophy':
+                        if quantity > 1:
+                            content = f'\nThey have **{quantity}** of them, WHAT A BADASS'
+                        else:
+                            content = ''
+                        return await interaction.response.send_message(
+                            f"{interaction.user.name} is flexing on you all "
+                            f"with their <:tr1:1165936712468418591> **~~PEPE~~ TROPHY**{content}")
+                    case _:
+                        return await interaction.response.send_message(
+                            embed=membed("The functions for this item aren't available.\n"
+                                        "If you wish to submit an idea for what these items do, "
+                                        "comment on [this issue on our Github.](https://github.com/SGA-A/c2c/issues/12)")
+                        )
 
     @app_commands.command(name="prestige", description="Sacrifice currency stats in exchange for incremental perks")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -4315,9 +4334,13 @@ class Economy(commands.Cog):
             elif isinstance(name_res, list):
 
                 suggestions = [item[0] for item in name_res]
-                await interaction.response.send_message(
-                    f"Found **{len(suggestions)}** possible matches. Did you mean to buy..\n"
-                    f"{'\n'.join(suggestions)}"
+                return await interaction.response.send_message(
+                    content="You have a few options to choose from.",
+                    embed=discord.Embed(
+                        title=f"Found {len(name_res)} results",
+                        description='\n'.join(suggestions),
+                        colour=0x2B2D31
+                    )
                 )
             else:
                 item = SHOP_ITEMS[name_res]
@@ -4393,9 +4416,13 @@ class Economy(commands.Cog):
             elif isinstance(name_res, list):
 
                 suggestions = [item[0] for item in name_res]  # Extract item names from the list
-                await interaction.response.send_message(
-                    f"Found **{len(suggestions)}** possible matches. Did you mean to sell..\n"
-                    f"{'\n'.join(suggestions)}"
+                return await interaction.response.send_message(
+                    content="You have a few options to choose from.",
+                    embed=discord.Embed(
+                        title=f"Found {len(name_res)} results",
+                        description='\n'.join(suggestions),
+                        colour=0x2B2D31
+                    )
                 )
             else:
                 # Now, use the index to get the correct item attributes
@@ -4557,23 +4584,24 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(
                         embed=membed("You don't have a job, get one first."))
 
-            ncd = string_to_datetime(data[0][0])
-            now = datetime.datetime.now()
+            # ncd = string_to_datetime(data[0][0])
+            # now = datetime.datetime.now()
 
-            diff = ncd - now
-            if diff.total_seconds() > 0:
-                when = now + datetime.timedelta(seconds=diff.total_seconds())
-                return await interaction.response.send_message(
-                    embed=membed(
-                        f"You can work again at {discord.utils.format_dt(when, 't')}"
-                        f" ({discord.utils.format_dt(when, 'R')})."))
+            # diff = ncd - now
+            # if diff.total_seconds() > 0:
+            #     when = now + datetime.timedelta(seconds=diff.total_seconds())
+            #     return await interaction.response.send_message(
+            #         embed=membed(
+            #             f"You can work again at {discord.utils.format_dt(when, 't')}"
+            #             f" ({discord.utils.format_dt(when, 'R')})."))
 
-            async with conn.transaction():
-                ncd = discord.utils.utcnow() + datetime.timedelta(minutes=40)
-                ncd = datetime_to_string(ncd)
-                await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
+            # async with conn.transaction():
+            #     ncd = discord.utils.utcnow() + datetime.timedelta(minutes=40)
+            #     ncd = datetime_to_string(ncd)
+            #     await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
             possible_minigames = choices((0, 1, 2), k=1, weights=(45, 25, 30))[0]
+            possible_minigames = 2
 
             num_to_func_link = {
                 2: "do_order",
@@ -5425,6 +5453,7 @@ class Economy(commands.Cog):
     @add_showcase_item.autocomplete('item_name')
     @remove_showcase_item.autocomplete('item_name')
     @sell.autocomplete('item_name')
+    @use_item.autocomplete('item')
     @give_items.autocomplete('item_name')
     async def showcase_item_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         
