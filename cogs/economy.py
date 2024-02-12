@@ -4554,24 +4554,24 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(
                         embed=membed("You don't have a job, get one first."))
 
-            # ncd = string_to_datetime(data[0][0])
-            # now = datetime.datetime.now()
+            ncd = string_to_datetime(data[0][0])
+            now = datetime.datetime.now()
 
-            # diff = ncd - now
-            # if diff.total_seconds() > 0:
-            #     when = now + datetime.timedelta(seconds=diff.total_seconds())
-            #     return await interaction.response.send_message(
-            #         embed=membed(
-            #             f"You can work again at {discord.utils.format_dt(when, 't')}"
-            #             f" ({discord.utils.format_dt(when, 'R')})."))
+            diff = ncd - now
+            if diff.total_seconds() > 0:
+                when = now + datetime.timedelta(seconds=diff.total_seconds())
+                return await interaction.response.send_message(
+                    embed=membed(
+                        f"You can work again at {discord.utils.format_dt(when, 't')}"
+                        f" ({discord.utils.format_dt(when, 'R')})."))
 
-            # async with conn.transaction():
-            #     ncd = discord.utils.utcnow() + datetime.timedelta(minutes=40)
-            #     ncd = datetime_to_string(ncd)
-            #     await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
+            async with conn.transaction():
+                ncd = discord.utils.utcnow() + datetime.timedelta(minutes=40)
+                ncd = datetime_to_string(ncd)
+                await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
-            # possible_minigames = choices((0, 1, 2), k=1, weights=(45, 25, 30))[0]
-            possible_minigames = 1
+            possible_minigames = choices((0, 1, 2), k=1, weights=(45, 25, 30))[0]
+
             num_to_func_link = {
                 2: "do_order",
                 1: "do_tiles",
