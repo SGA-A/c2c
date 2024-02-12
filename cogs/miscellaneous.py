@@ -1,4 +1,3 @@
-from time import perf_counter
 from PyDictionary import PyDictionary
 from xml.etree.ElementTree import fromstring
 from other.pagination import Pagination
@@ -7,7 +6,7 @@ from random import choice
 from github import Github
 from re import compile as compile_it
 from psutil import Process, cpu_count
-from time import time
+from time import perf_counter
 from typing import Literal, Union, Optional
 from discord.ext import commands
 from other.spshit import get_song_attributes
@@ -263,8 +262,9 @@ class Miscellaneous(commands.Cog):
         message = await ctx.send("<:latencye:1195741921482641579> Ping...")
         end = perf_counter()
         duration = (end - start) * 1000
-        await message.edit(content='<:latencye:1195741921482641579> REST: {0:.2f}ms **\U0000007c** '
-                                   'WS: {1} ms'.format(duration, round(self.client.latency * 1000)))
+        await message.edit(
+            content=f"<:latencye:1195741921482641579> REST: {duration:.2f}ms **\U0000007c** "
+                    f"WS: {self.client.latency * 1000:2f} ms")
 
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     async def extract_source(self, interaction: discord.Interaction, message: discord.Message):
@@ -733,7 +733,7 @@ class Miscellaneous(commands.Cog):
                                   "cloth", "contour", "cow", "cube", "dilate", "fall", "fan", "flush", "gallery",
                                   "globe", "half-invert", "hearts", "infinity", "laundry", "lsd", "optics", "parapazzi"
                               ]]):
-        start = time()
+        start = perf_counter()
         await interaction.response.send_message("Loading..")
         msg = await interaction.original_response()
         user = user or interaction.user
@@ -746,9 +746,8 @@ class Miscellaneous(commands.Cog):
         async with self.client.session.get(api_url, params=params, headers=headers) as response:
             if response.status == 200:
                 buffer = BytesIO(await response.read())
-                end = time()
-                diff = round(end - start, ndigits=2)
-                return await msg.edit(content=f"Done. Took `{diff}s`.",
+                end = perf_counter()
+                return await msg.edit(content=f"Done. Took `{end-start:.2f}s`.",
                                       attachments=[discord.File(buffer, f'{endpoint}.gif')])
             await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
 
@@ -762,7 +761,7 @@ class Miscellaneous(commands.Cog):
                               Literal[
                                   "minecraft", "patpat", "plates", "pyramid", "radiate", "rain", "ripped", "ripple",
                                   "shred", "wiggle", "warp", "wave"]]):
-        start = time()
+        start = perf_counter()
         await interaction.response.send_message("Loading..")
         msg = await interaction.original_response()
         user = user or interaction.user
@@ -775,9 +774,8 @@ class Miscellaneous(commands.Cog):
         async with self.client.session.get(api_url, params=params, headers=headers) as response:
             if response.status == 200:
                 buffer = BytesIO(await response.read())
-                end = time()
-                diff = round(end - start, ndigits=2)
-                return await msg.edit(content=f"Done. Took `{diff}s`.",
+                end = perf_counter()
+                return await msg.edit(content=f"Done. Took `{end-start:.2f}s`.",
                                       attachments=[discord.File(buffer, f'{endpoint}.gif')])
             await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
 
@@ -786,7 +784,7 @@ class Miscellaneous(commands.Cog):
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     async def locket_manip(self, interaction: discord.Interaction,
                            user: Optional[discord.User], user2: discord.User):
-        start = time()
+        start = perf_counter()
 
         await interaction.response.send_message("Loading..")
         msg = await interaction.original_response()
@@ -800,9 +798,8 @@ class Miscellaneous(commands.Cog):
         async with self.client.session.get(api_url, params=params, headers=headers) as response:
             if response.status == 200:
                 buffer = BytesIO(await response.read())
-                end = time()
-                diff = round(end - start, ndigits=2)
-                return await msg.edit(content=f"Done. Took `{diff}s`.",
+                end = perf_counter()
+                return await msg.edit(content=f"Done. Took `{end-start:.2f}s`.",
                                       attachments=[discord.File(buffer, 'heart_locket.gif')])
             await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
 
