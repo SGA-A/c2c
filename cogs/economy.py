@@ -942,14 +942,14 @@ class BalanceView(discord.ui.View):
                 data = await Economy.get_one_inv_data_new(self.viewing, name, conn)
                 inv += int(cost) * data
 
-            space = round((nd[1] / nd[2]) * 100, 2)
+            space = (nd[1] / nd[2]) * 100
 
             balance = discord.Embed(
                 title=f"{self.viewing.name}'s balances", color=0x2F3136, timestamp=discord.utils.utcnow(),
                 url="https://dis.gd/support")
             balance.add_field(name="Wallet", value=f"\U000023e3 {nd[0]:,}")
             balance.add_field(name="Bank", value=f"\U000023e3 {nd[1]:,}")
-            balance.add_field(name="Bankspace", value=f"\U000023e3 {nd[2]:,} ({space}% full)")
+            balance.add_field(name="Bankspace", value=f"\U000023e3 {nd[2]:,} ({space:.2f}% full)")
             balance.add_field(name="Money Net", value=f"\U000023e3 {bank:,}")
             balance.add_field(name="Inventory Net", value=f"\U000023e3 {inv:,}")
             balance.add_field(name="Total Net", value=f"\U000023e3 {inv + bank:,}")
@@ -1055,14 +1055,14 @@ class BlackjackUi(discord.ui.View):
                 new_bj_lose = await Economy.update_bank_new(interaction.user, conn, 1, "bjl")
                 new_amount_balance = await Economy.update_bank_new(interaction.user, conn, -namount)
                 new_total = new_bj_lose[0] + bj_win[0]
-                prnctl = round((new_bj_lose[0] / new_total) * 100)
+                prnctl = (new_bj_lose[0] / new_total) * 100
                 await conn.commit()
 
                 embed = discord.Embed(colour=discord.Colour.brand_red(),
                                       description=f"**You lost. You went over 21 and busted.**\n"
                                                   f"You lost {CURRENCY}**{namount:,}**. You now "
                                                   f"have {CURRENCY}**{new_amount_balance[0]:,}**\n"
-                                                  f"You lost {prnctl}% of the games.")
+                                                  f"You lost {prnctl:.1f}% of the games.")
 
                 embed.add_field(name=f"{interaction.user.name} (Player)", 
                                 value=f"**Cards** - {' '.join(d_fver_p)}\n"
@@ -1094,7 +1094,7 @@ class BlackjackUi(discord.ui.View):
                 bj_lose = await bj_lose.fetchone()
                 new_bj_win = await Economy.update_bank_new(interaction.user, conn, 1, "bjw")
                 new_total = new_bj_win[0] + bj_lose[0]
-                prctnw = round((new_bj_win[0] / new_total) * 100)
+                prctnw = (new_bj_win[0] / new_total) * 100
                 pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
                 new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
                 
@@ -1107,7 +1107,7 @@ class BlackjackUi(discord.ui.View):
                                     description=f"**You win! You got to {player_sum}**.\n"
                                                 f"You won {CURRENCY}**{amount_after_multi:,}**. "
                                                 f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
-                                                f"You won {prctnw}% of the games.")
+                                                f"You won {prctnw:.1f}% of the games.")
 
                 win.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
                                                                               f"**Total** - `{player_sum}`")
@@ -1179,7 +1179,7 @@ class BlackjackUi(discord.ui.View):
                 bj_lose = await bj_lose.fetchone()
                 new_bj_win = await Economy.update_bank_new(interaction.user, conn, 1, "bjw")
                 new_total = new_bj_win[0] + bj_lose[0]
-                prctnw = round((new_bj_win[0] / new_total) * 100)
+                prctnw = (new_bj_win[0] / new_total) * 100
 
                 pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
                 new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
@@ -1192,7 +1192,7 @@ class BlackjackUi(discord.ui.View):
                                 description=f"**You win! The dealer went over 21 and busted.**\n"
                                             f"You won {CURRENCY}**{amount_after_multi:,}**. "
                                             f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
-                                            f"You won {prctnw}% of the games.")
+                                            f"You won {prctnw:.1f}% of the games.")
 
             win.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
                                                                           f"**Total** - `{player_sum}`")
@@ -1212,7 +1212,7 @@ class BlackjackUi(discord.ui.View):
                 bj_win = await bj_win.fetchone()
                 new_bj_lose = await Economy.update_bank_new(interaction.user, conn, 1, "bjl")
                 new_total = new_bj_lose[0] + bj_win[0]
-                prnctl = round((new_bj_lose[0] / new_total) * 100)
+                prnctl = (new_bj_lose[0] / new_total) * 100
                 await Economy.update_bank_new(interaction.user, conn, namount, "bjla")
                 new_amount_balance = await Economy.update_bank_new(interaction.user, conn, -namount)
                 await conn.commit()
@@ -1222,7 +1222,7 @@ class BlackjackUi(discord.ui.View):
                                               f"the dealer (`{dealer_total}`).**\n"
                                               f"You lost {CURRENCY}**{namount:,}**. You now "
                                               f"have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
-                                              f"You lost {prnctl}% of the games.")
+                                              f"You lost {prnctl:.1f}% of the games.")
 
             loser.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
                                                                             f"**Total** - `{player_sum}`")
@@ -1241,7 +1241,7 @@ class BlackjackUi(discord.ui.View):
                 bj_lose = await bj_lose.fetchone()
                 new_bj_win = await Economy.update_bank_new(interaction.user, conn, 1, "bjw")
                 new_total = new_bj_win[0] + bj_lose[0]
-                prctnw = round((new_bj_win[0] / new_total) * 100)
+                prctnw = (new_bj_win[0] / new_total) * 100
 
                 pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
                 new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
@@ -1255,7 +1255,7 @@ class BlackjackUi(discord.ui.View):
                                             f"dealer (`{dealer_total}`).**\n"
                                             f"You won {CURRENCY}**{amount_after_multi:,}**. "
                                             f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
-                                            f"You won {prctnw}% of the games.")
+                                            f"You won {prctnw:.1f}% of the games.")
             win.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
                                                                           f"**Total** - `{player_sum}`")
             win.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
@@ -1301,6 +1301,7 @@ class BlackjackUi(discord.ui.View):
             bj_win = await bj_win.fetchone()
             new_bj_lose = await Economy.update_bank_new(interaction.user, conn, 1, "bjl")
             new_total = new_bj_lose[0] + bj_win[0]
+            prcntl = (new_bj_lose[0] / new_total) * 100
             await Economy.update_bank_new(interaction.user, conn, namount, "bjla")
             await Economy.update_bank_new(self.interaction.guild.me, conn, namount)
             new_amount_balance = await Economy.update_bank_new(interaction.user, conn, -namount)
@@ -1310,7 +1311,7 @@ class BlackjackUi(discord.ui.View):
                               description=f"**You forfeit. The dealer took half of your bet for surrendering.**\n"
                                           f"You lost {CURRENCY}**{namount:,}**. You now "
                                           f"have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
-                                          f"You lost {round((new_bj_lose[0] / new_total) * 100)}% of the games.")
+                                          f"You lost {prcntl:.1f}% of the games.")
 
         loser.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
                                                                         f"**Total** - `{player_sum}`")
@@ -1719,11 +1720,8 @@ class DispatchServantView(discord.ui.View):
 class Servants(discord.ui.Select):
     def __init__(self, client: commands.Bot, their_slays: list, their_choice: str, owner_id: int, conn):
 
-        options = []
-
-        for slay in their_slays:
-            options.append(SelectOption(emoji=gender_emotes.get(slay[1]), label=slay[0],
-                                        description=f"Level {slay[2]} | Skill Level {slay[-1]}"))
+        options = [SelectOption(
+            emoji=gender_emotes.get(slay[1]), label=slay[0], description=f"Level {slay[2]} | Skill Level {slay[-1]}") for slay in their_slays]
 
         self.client: commands.Bot = client
         self.owner_id = owner_id
@@ -2218,20 +2216,18 @@ class Economy(commands.Cog):
                 data = await data.fetchall()
 
                 not_database = []
-                index = 0
 
-                for member in data:
+                for i, member in enumerate(data):
                     member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
-                    msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    their_badge = UNIQUE_BADGES.get(member_name.id, "")
+                    msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
-                    index += 1
 
                 msg = "\n".join(not_database)
 
                 lb = discord.Embed(
                     title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{index}` users.\n\n"
+                    description=f"Displaying the top `{len(data)}` users.\n\n"
                                 f"{msg}",
                     color=0x2F3136,
                     timestamp=discord.utils.utcnow()
@@ -2253,20 +2249,19 @@ class Economy(commands.Cog):
                 data = await data.fetchall()
 
                 not_database = []
-                index = 0
 
-                for member in data:
+
+                for i, member in enumerate(data):
                     member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
-                    msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    their_badge = UNIQUE_BADGES.get(member_name.id, "")
+                    msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
-                    index += 1
 
                 msg = "\n".join(not_database)
 
                 lb = discord.Embed(
                     title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{index}` users.\n\n"
+                    description=f"Displaying the top `{len(data)}` users.\n\n"
                                 f"{msg}",
                     color=0x2F3136,
                     timestamp=discord.utils.utcnow()
@@ -2285,22 +2280,19 @@ class Economy(commands.Cog):
                     ())
 
                 data = await data.fetchall()
-
                 not_database = []
-                index = 0
 
-                for member in data:
+                for i, member in enumerate(data):
                     member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
-                    msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    their_badge = UNIQUE_BADGES.get(member_name.id, "")
+                    msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
-                    index += 1
 
                 msg = "\n".join(not_database)
 
                 lb = discord.Embed(
                     title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{index}` users.\n\n"
+                    description=f"Displaying the top `{len(data)}` users.\n\n"
                                 f"{msg}",
                     color=0x2F3136,
                     timestamp=discord.utils.utcnow()
@@ -2327,20 +2319,18 @@ class Economy(commands.Cog):
                 data = await data.fetchall()
 
                 not_database = []
-                index = 0
 
-                for member in data:
+                for i, member in enumerate(data):
                     member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
-                    msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    their_badge = UNIQUE_BADGES.get(member_name.id, "")
+                    msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
-                    index += 1
 
                 msg = "\n".join(not_database)
 
                 lb = discord.Embed(
                     title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{index}` users.\n\n"
+                    description=f"Displaying the top `{len(data)}` users.\n\n"
                                 f"{msg}",
                     color=0x2F3136,
                     timestamp=discord.utils.utcnow()
@@ -2365,18 +2355,16 @@ class Economy(commands.Cog):
                 data = await data.fetchall()
 
                 not_database = []
-                index = 0
 
-                for member in data:
+                for i, member in enumerate(data):
                     member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
-                    msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
+                    their_badge = UNIQUE_BADGES.get(member_name.id, "")
+                    msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
-                    index += 1
 
                 lb = discord.Embed(
                     title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{index}` users.\n"
+                    description=f"Displaying the top `{len(data)}` users.\n"
                                 f"Users without a bounty aren't displayed.\n\n"
                                 f"{'\n'.join(not_database) or 'No data.'}",
                     color=0x2F3136,
@@ -2403,18 +2391,16 @@ class Economy(commands.Cog):
                 data = await data.fetchall()
 
                 not_database = []
-                index = 0
 
-                for member in data:
+                for i, member in enumerate(data):
                     member_name = await self.client.fetch_user(member[0])
-                    their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
-                    msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
+                    their_badge = UNIQUE_BADGES.get(member_name.id, "")
+                    msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
                     not_database.append(msg1)
-                    index += 1
 
                 lb = discord.Embed(
                     title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{index}` users.\n\n"
+                    description=f"Displaying the top `{len(data)}` users.\n\n"
                                 f"{'\n'.join(not_database) or 'No data.'}",
                     color=0x2F3136,
                     timestamp=discord.utils.utcnow()
@@ -2438,18 +2424,16 @@ class Economy(commands.Cog):
             data = await data.fetchall()
 
             not_database = []
-            index = 0
 
-            for member in data:
+            for i, member in enumerate(data):
                 member_name = await self.client.fetch_user(member[0])
-                their_badge = UNIQUE_BADGES.setdefault(member_name.id, "")
-                msg1 = f"**{index + 1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
+                their_badge = UNIQUE_BADGES.get(member_name.id, "")
+                msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
                 not_database.append(msg1)
-                index += 1
 
             lb = discord.Embed(
                 title=f"Leaderboard: {chosen_choice}",
-                description=f"Displaying the top `{index}` users.\n\n"
+                description=f"Displaying the top `{len(data)}` users.\n\n"
                             f"{'\n'.join(not_database) or 'No data.'}",
                 color=0x2F3136,
                 timestamp=discord.utils.utcnow())
@@ -3070,9 +3054,11 @@ class Economy(commands.Cog):
                         nshowcase.append(f"`{i}`. Empty slot")
                         continue
 
+                    item = item.replace("_", " ")
+                    emoji = SHOP_ITEMS[NAME_TO_INDEX[item]]["emoji"]
                     qty = await self.get_one_inv_data_new(interaction.user, item, conn)
                     if qty >= 1:
-                        nshowcase.append(f"`{i}`. {' '.join(item.split("_"))}")
+                        nshowcase.append(f"`{i}`. **{qty}x** {emoji} {item}")
                         continue
                     nshowcase.append(f"[**`{i}`**](https://www.google.com). **Requires replacement.**")
                 except IndexError:
@@ -3088,11 +3074,7 @@ class Economy(commands.Cog):
     @app_commands.checks.cooldown(1, 10)
     @app_commands.describe(item_name="Select an item.",
                            position="The position of this item in your showcase.")
-    async def add_showcase_item(self, interaction: discord.Interaction,
-                                position: int,
-                                item_name: Literal[
-                                    'Keycard', 'Trophy', 'Clan License', 'Resistor', 'Amulet',
-                                    'Dynamic Item', 'Hyperion', 'Crisis', 'Odd Eye']):
+    async def add_showcase_item(self, interaction: discord.Interaction, position: int, item_name: str):
         """This is a subcommand. Adds an item to your showcase."""
 
         async with self.client.pool_connection.acquire() as conn:
@@ -3101,24 +3083,49 @@ class Economy(commands.Cog):
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
 
-            item_name = "_".join(item_name.split(' '))
-            item_qty = await self.get_one_inv_data_new(interaction.user, item_name, conn)
+            name_res = self.partial_match_for(item_name)
 
-            showcase: str = await self.get_spec_bank_data(interaction.user, "showcase", conn)
-            showcase: list = showcase.split(" ")
+            if name_res is None:
+                return await interaction.response.send_message(
+                    embed=membed("This item does not exist. Check the spelling and try again."))
 
-            if 1 <= position <= 3:
+            elif isinstance(name_res, list):
 
+                suggestions = [item[0] for item in name_res]  # Extract item names from the list
+                return await interaction.response.send_message(
+                    embed=discord.Embed(
+                        title=f"Found {len(name_res)} results",
+                        description='\n'.join(suggestions),
+                        colour=0x2B2D31
+                    )
+                )
+            else:
+                attrs = SHOP_ITEMS[name_res]
+                name = attrs["name"]
+                item_name_fmt = name.replace(" ", "_")  # the format of the item name in the db
+
+                item_qty = await self.get_one_inv_data_new(interaction.user, name, conn)
+
+                showcase: str = await self.get_spec_bank_data(interaction.user, "showcase", conn)
+                showcase: list = showcase.split(" ")
+
+                if not (1 <= position <= 3):
+                    return await interaction.response.send_message(
+                    embed=membed("Invalid position.\n"
+                                "There are only 3 slots available.\n"
+                                "It must be one of the following: `1`, `2` or `3`.")
+                    )
+                
                 if len(showcase) > 3 and (showcase.count("0") == 0):
                     return await interaction.response.send_message(
                         embed=membed("You already have the maximum of 3 showcase slots."))
 
-                if item_qty == 0:
+                if not item_qty:
                     return await interaction.response.send_message(
                         embed=membed("You cannot flex on someone with something you don't even have."))
 
-                if item_name in showcase:
-                    item_index = showcase.index(item_name)
+                if item_name_fmt in showcase:
+                    item_index = showcase.index(item_name_fmt)
                     if item_index == position - 1:
                         return await interaction.response.send_message(
                             embed=membed("You already have this item in this slot."))
@@ -3126,15 +3133,15 @@ class Economy(commands.Cog):
                     showcase[item_index] = "0"
                     await interaction.channel.send(
                         embed=membed("**Warning:** You already had this item in your showcase.\n"
-                                     "I have removed it from it's previous location.\n"
-                                     "Your preview may not be accurate as a result."))
+                                    "I have removed it from it's previous location.\n"
+                                    "Your preview may not be accurate as a result."))
 
                 if showcase[position - 1] != "0":
                     await interaction.channel.send(
                         embed=membed("**Warning:** Another item was already in the specified position.\n"
-                                     "Under your request, it has been replaced with a new item."))
+                                    "Under your request, it has been replaced with a new item."))
 
-                showcase[position - 1] = item_name
+                showcase[position - 1] = item_name_fmt
                 showcase_shadow = " ".join(showcase)
                 showcase_view = await self.change_bank_new(interaction.user, conn, showcase_shadow, "showcase")
                 await conn.commit()
@@ -3150,19 +3157,11 @@ class Economy(commands.Cog):
 
                 return await interaction.response.send_message(embed=success)
 
-            await interaction.response.send_message(
-                embed=membed("Invalid position.\n"
-                             "There are only 3 slots available.\n"
-                             "It must be one of the following: `1`, `2` or `3`.")
-            )
-
     @showcase.command(name="remove", description="Remove an item from your showcase", extras={"exp_gained": 1})
     @app_commands.checks.cooldown(1, 10)
     @app_commands.describe(item_name="Select an item.")
     async def remove_showcase_item(self, interaction: discord.Interaction,
-                                   item_name: Literal[
-                                       'Keycard', 'Trophy', 'Clan License', 'Resistor', 'Amulet',
-                                       'Dynamic Item', 'Hyperion', 'Crisis', 'Odd Eye']):
+                                   item_name: str):
         """This is a subcommand. Removes an existing item from your showcase."""
 
         async with self.client.pool_connection.acquire() as conn:
@@ -3171,12 +3170,30 @@ class Economy(commands.Cog):
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
 
-            item_name = "_".join(item_name.split(' '))
+            name_res = self.partial_match_for(item_name)
 
-            showcase: str = await self.get_spec_bank_data(interaction.user, "showcase", conn)
-            showcase: list = showcase.split(" ")
+            if name_res is None:
+                return await interaction.response.send_message(
+                    embed=membed("This item does not exist. Check the spelling and try again."))
 
-            async with conn.transaction():
+            elif isinstance(name_res, list):
+
+                suggestions = [item[0] for item in name_res]
+                return await interaction.response.send_message(
+                    embed=discord.Embed(
+                        title=f"Found {len(name_res)} results",
+                        description='\n'.join(suggestions),
+                        colour=0x2B2D31
+                    )
+                )
+            else:
+                attrs = SHOP_ITEMS[name_res]
+                item_name = attrs["name"]
+                item_name = item_name.replace(" ", "_")
+
+                showcase: str = await self.get_spec_bank_data(interaction.user, "showcase", conn)
+                showcase: list = showcase.split(" ")
+
                 for item in showcase:
                     if item == "0":
                         continue
@@ -3184,7 +3201,9 @@ class Economy(commands.Cog):
                         item_index = showcase.index(item)
                         showcase[item_index] = "0"
                         showcase_shadow = " ".join(showcase)
-                        showcase_view = await self.change_bank_new(interaction.user, conn, showcase_shadow, "showcase")
+                        showcase_view = await self.change_bank_new(
+                            interaction.user, conn, showcase_shadow, "showcase")
+                        await conn.commit()
 
                         success = discord.Embed(
                             title="Changes to showcase",
@@ -3198,15 +3217,17 @@ class Economy(commands.Cog):
                         success.set_footer(text="How humble of you.")
                         return await interaction.response.send_message(embed=success)
 
-            await interaction.response.send_message(
-                embed=membed("Could not find that item in your showcase. Sorry."))
+                await interaction.response.send_message(
+                    embed=membed("Could not find that item in your showcase. Sorry."))
 
     shop = app_commands.Group(name='shop', description='view items available for purchase.', guild_only=True,
                               guild_ids=APP_GUILDS_ID)
 
     @shop.command(name='view', description='View all the shop items')
+    @app_commands.describe(sort_by='The custom order to sort by. Defaults to Name.')
     @app_commands.checks.cooldown(1, 12)
-    async def view_the_shop(self, interaction: discord.Interaction):
+    async def view_the_shop(self, interaction: discord.Interaction, 
+                            sort_by: Optional[Literal["Name", "Cost", "Rarity"]] = "Name"):
         """This is a subcommand. View the currently available items within the shop."""
 
         async with self.client.pool_connection.acquire() as conn:
@@ -3214,17 +3235,17 @@ class Economy(commands.Cog):
 
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
+                
+            sort_by = sort_by.lower()
+            should_reverse = sort_by == "cost"
 
-            additional_notes = list()
+            shop_sorted = sorted(SHOP_ITEMS, key=lambda x: x[f"{sort_by}"], reverse=should_reverse)
 
-            for item in SHOP_ITEMS:
-                if not item["available"]:
-                    continue
-                name = item["name"]
-
-                additional_notes.append(
-                    f"{item['emoji']} {name} \U00002500 [\U000023e3 **{item['cost']:,}**]"
-                    f"(https://youtu.be/dQw4w9WgXcQ) ({get_stock(name)})")
+            additional_notes = [
+                f"{item['emoji']} {item['name']} \U00002500 [\U000023e3 **{item['cost']:,}**]"
+                f"(https://youtu.be/dQw4w9WgXcQ) ({get_stock(item['name'])})"
+                for item in shop_sorted if item["available"]
+            ]
 
             async def get_page_part(page: int):
                 emb = discord.Embed(
@@ -3255,9 +3276,7 @@ class Economy(commands.Cog):
 
         if name_res is None:
             return await interaction.response.send_message(
-                embed=membed("This item does not exist. Are you trying"
-                             " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
-                             "1121094935802822768/1202647997641523241) an item?"))
+                embed=membed("This item does not exist. Check the spelling and try again."))
 
         elif isinstance(name_res, list):
 
@@ -3988,15 +4007,15 @@ class Economy(commands.Cog):
                 total_blackjacks = data[4] + data[5]
 
                 try:
-                    winbe = round((data[2] / total_bets) * 100)
+                    winbe = (data[2] / total_bets) * 100
                 except ZeroDivisionError:
                     winbe = 0
                 try:
-                    winsl = round((data[0] / total_slots) * 100)
+                    winsl = (data[0] / total_slots) * 100
                 except ZeroDivisionError:
                     winsl = 0
                 try:
-                    winbl = round((data[4] / total_blackjacks) * 100)
+                    winbl = (data[4] / total_blackjacks) * 100
                 except ZeroDivisionError:
                     winbl = 0
 
@@ -4007,17 +4026,17 @@ class Economy(commands.Cog):
                                 value=f"Won: \U000023e3 {data[8]:,}\n"
                                       f"Lost: \U000023e3 {data[9]:,}\n"
                                       f"Net: \U000023e3 {data[8] - data[9]:,}\n"
-                                      f"Win: {winbe}% ({data[2]})")
+                                      f"Win: {winbe:.0f}% ({data[2]})")
                 stats.add_field(name=f"SLOTS ({total_slots:,})",
                                 value=f"Won: \U000023e3 {data[6]:,}\n"
                                       f"Lost: \U000023e3 {data[7]:,}\n"
                                       f"Net: \U000023e3 {data[6] - data[7]:,}\n"
-                                      f"Win: {winsl}% ({data[0]})")
+                                      f"Win: {winsl:.0f}% ({data[0]})")
                 stats.add_field(name=f"BLACKJACK ({total_blackjacks:,})",
                                 value=f"Won: \U000023e3 {data[10]:,}\n"
                                       f"Lost: \U000023e3 {data[11]:,}\n"
                                       f"Net: \U000023e3 {data[10] - data[11]:,}\n"
-                                      f"Win: {winbl}% ({data[4]})")
+                                      f"Win: {winbl:.0f}% ({data[4]})")
                 stats.set_footer(text="The number next to the name is how many matches are recorded")
 
                 await msg.edit(content=None, embed=stats)
@@ -4166,14 +4185,13 @@ class Economy(commands.Cog):
                     interaction.user, conn, "slotwa", amount_after_multi, 
                     "wallet", amount_after_multi, "slotw", 1)
 
-                prcntw = round(
-                    (updated[2] / (id_lose_amount + updated[2])) * 100, 1)
+                prcntw = (updated[2] / (id_lose_amount + updated[2])) * 100
 
                 embed = discord.Embed(description=f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
                                                 f"**It's a match!** You've won "
                                                 f"\U000023e3 **{amount_after_multi:,}** robux.\n"
                                                 f"Your new balance is \U000023e3 **{updated[1]:,}**.\n"
-                                                f"You've won {prcntw}% of all slots games.",
+                                                f"You've won {prcntw:.1f}% of all slots games.",
                                     colour=discord.Color.brand_green())
 
                 embed.set_author(name=f"{interaction.user.name}'s winning slot machine",
@@ -4191,14 +4209,13 @@ class Economy(commands.Cog):
                     interaction.user, conn, "slotwa", amount_after_multi, 
                     "wallet", amount_after_multi, "slotw", 1)
 
-                prcntw = round(
-                    (updated[2] / (id_lose_amount + updated[2])) * 100, 1)
+                prcntw = (updated[2] / (id_lose_amount + updated[2])) * 100
 
                 embed = discord.Embed(
                     description=f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
                                 f"**It's a match!** You've won \U000023e3 **{amount_after_multi:,}** robux.\n"
                                 f"Your new balance is \U000023e3 **{updated[1]:,}**.\n"
-                                f"You've won {prcntw}% of all slots games.",
+                                f"You've won {prcntw:.1f}% of all slots games.",
                     colour=discord.Color.brand_green())
 
                 embed.set_footer(text=f"Multiplier: {new_multi}%")
@@ -4209,12 +4226,12 @@ class Economy(commands.Cog):
                 updated = await self.update_bank_three_new(
                     interaction.user, conn, "slotla", amount, "wallet", -amount, "slotl", 1)
 
-                prcntl = round((updated[-1] / (updated[-1] + id_won_amount)) * 100, 1)
+                prcntl = (updated[-1] / (updated[-1] + id_won_amount)) * 100
 
                 embed = discord.Embed(description=f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
                                                 f"**No match!** You've lost {CURRENCY}**{amount:,}** robux.\n"
                                                 f"Your new balance is {CURRENCY}**{updated[1]:,}**.\n"
-                                                f"You've lost {prcntl}% of all slots games.",
+                                                f"You've lost {prcntl:.1f}% of all slots games.",
                                     colour=discord.Color.brand_red())
 
                 embed.set_author(name=f"{interaction.user.name}'s losing slot machine",
@@ -4649,14 +4666,14 @@ class Economy(commands.Cog):
                     data = await self.get_one_inv_data_new(user, name, conn)
                     inv += int(cost) * data
 
-                space = round((nd[1] / nd[2]) * 100, 2)
+                space = (nd[1] / nd[2]) * 100
 
                 balance = discord.Embed(
                     title=f"{user.name}'s balances", color=0x2F3136, timestamp=discord.utils.utcnow(),
                     url="https://dis.gd/support")
                 balance.add_field(name="Wallet", value=f"\U000023e3 {nd[0]:,}")
                 balance.add_field(name="Bank", value=f"\U000023e3 {nd[1]:,}")
-                balance.add_field(name="Bankspace", value=f"\U000023e3 {nd[2]:,} ({space}% full)")
+                balance.add_field(name="Bankspace", value=f"\U000023e3 {nd[2]:,} ({space:.2f}% full)")
                 balance.add_field(name="Money Net", value=f"\U000023e3 {bank:,}")
                 balance.add_field(name="Inventory Net", value=f"\U000023e3 {inv:,}")
                 balance.add_field(name="Total Net", value=f"\U000023e3 {inv + bank:,}")
@@ -4977,9 +4994,9 @@ class Economy(commands.Cog):
                 async with conn.transaction():
                     if not result[0]:
                         fine = randint(1, prim_d[0])
-                        prcf = round((fine / prim_d[0]) * 100, ndigits=1)
+                        prcf = (fine / prim_d[0]) * 100
                         conte = (f'- You were caught stealing now you paid {other.name} \U000023e3 **{fine:,}**.\n'
-                                 f'- **{prcf}**% of your money was handed over to the victim.')
+                                 f'- **{prcf:.1f}**% of your money was handed over to the victim.')
 
                         b = prim_d[-1]
                         if b:
@@ -4997,11 +5014,11 @@ class Economy(commands.Cog):
                         await self.update_bank_new(interaction.user, conn, +steal_amount)
                         await self.update_bank_new(other, conn, -steal_amount)
 
-                        prcf = round((steal_amount / host_d[0]) * 100, ndigits=1)
+                        prcf = (steal_amount / host_d[0]) * 100
 
                         return await interaction.response.send_message(
                             embed=membed(f"You managed to steal \U000023e3 **{steal_amount:,}** from {other.name}.\n"
-                                         f"You took a dandy **{prcf}**% of {other.name}."),
+                                         f"You took a dandy **{prcf:.1f}**% of {other.name}."),
                             delete_after=10.0)
 
     @rob.command(name='casino', description='Rob a casino vault', extras={"exp_gained": 10})
@@ -5247,7 +5264,7 @@ class Economy(commands.Cog):
             new_bj_win = await self.update_bank_new(interaction.user, conn, 1, "bjw")
             new_total = new_bj_win[0] + bj_lose[0]
 
-            prctnw = round((new_bj_win[0] / new_total) * 100)
+            prctnw = (new_bj_win[0] / new_total) * 100
             new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
             amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
             new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
@@ -5261,7 +5278,7 @@ class Economy(commands.Cog):
                                       f"**Blackjack! You've already won with a total of {sum(player_hand)}!**\n\n"
                                       f"You won {CURRENCY}**{amount_after_multi:,}**. "
                                       f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
-                                      f"You won {prctnw}% of the games."))
+                                      f"You won {prctnw:.2f}% of the games."))
             embed.add_field(name=f"{interaction.user.name} (Player)",
                             value=f"**Cards** - {' '.join(d_fver_p)}\n"
                                   f"**Total** - `{sum(player_hand)}`")
@@ -5270,16 +5287,8 @@ class Economy(commands.Cog):
                                   f"**Total** - {sum(dealer_hand)}")
             return await interaction.response.send_message(embed=embed)
 
-        shallow_pv = []
-        shallow_dv = []
-
-        for number in player_hand:
-            remade = display_user_friendly_card_format(number)
-            shallow_pv.append(remade)
-
-        for number in dealer_hand:
-            remade = display_user_friendly_card_format(number)
-            shallow_dv.append(remade)
+        shallow_pv = [display_user_friendly_card_format(number) for number in player_hand]
+        shallow_dv = [display_user_friendly_card_format(number) for number in dealer_hand]
 
         self.client.games[interaction.user.id] = (deck, player_hand, dealer_hand,
                                                   shallow_dv, shallow_pv, namount)
@@ -5381,12 +5390,12 @@ class Economy(commands.Cog):
                         interaction.user, conn, "betwa", amount_after_multi,
                         "betw", 1, "wallet", amount_after_multi)
 
-                    prcntw = round((updated[1] / (id_lose_amount + updated[1])) * 100, 1)
+                    prcntw = (updated[1] / (id_lose_amount + updated[1])) * 100
 
                     embed = discord.Embed(
                         description=f"**You've rolled higher!** You won {CURRENCY}**{amount_after_multi:,}** robux.\n"
                                     f"Your new `wallet` balance is {CURRENCY}**{updated[2]:,}**.\n"
-                                    f"You've won {prcntw}% of all games.",
+                                    f"You've won {prcntw:.1f}% of all games.",
                         colour=discord.Color.brand_green())
                     embed.set_author(name=f"{interaction.user.name}'s winning gambling game",
                                     icon_url=interaction.user.display_avatar.url)
@@ -5401,11 +5410,11 @@ class Economy(commands.Cog):
                         "betl", 1, "wallet", -amount)
 
                     new_total = id_won_amount + updated[1]
-                    prcntl = round((updated[1] / new_total) * 100, 1)
+                    prcntl = (updated[1] / new_total) * 100
 
                     embed = discord.Embed(description=f"**You've rolled lower!** You lost {CURRENCY}**{amount:,}**.\n"
                                                     f"Your new balance is {CURRENCY}**{updated[2]:,}**.\n"
-                                                    f"You've lost {prcntl}% of all games.",
+                                                    f"You've lost {prcntl:.1f}% of all games.",
                                         colour=discord.Color.brand_red())
                     embed.set_author(name=f"{interaction.user.name}'s losing gambling game",
                                     icon_url=interaction.user.display_avatar.url)
@@ -5427,6 +5436,19 @@ class Economy(commands.Cog):
             for the_chose in chosen if current.lower() in the_chose
         ]
 
+    @add_showcase_item.autocomplete('item_name')
+    @remove_showcase_item.autocomplete('item_name')
+    @sell.autocomplete('item_name')
+    @give_items.autocomplete('item_name')
+    async def showcase_item_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        
+        async with self.client.pool_connection.acquire() as conn:
+            conn: asqlite_Connection
+
+            return [
+                app_commands.Choice(name=item["name"], value=item["name"])
+                for item in SHOP_ITEMS if current.lower() in item["name"].lower() and (await self.get_one_inv_data_new(interaction.user, item["name"], conn))]
+
     @view_servents.autocomplete('servant_name')
     async def servant_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         """Autocomplete callback for the servant menu."""
@@ -5444,8 +5466,6 @@ class Economy(commands.Cog):
                 for item in SHOP_ITEMS if (current.lower() in item["name"].lower() and item["available"])]
 
     @item.autocomplete('item_name')
-    @sell.autocomplete('item_name')
-    @give_items.autocomplete('item_name')
     async def item_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         return [app_commands.Choice(name=item["name"], value=item["name"])
                 for item in SHOP_ITEMS if current.lower() in item["name"].lower()]
