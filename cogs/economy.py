@@ -244,7 +244,7 @@ def plural_for_own(count: int) -> str:
         return "owns"
 
 
-def return_rand_str():
+def generateID() -> str:
     """
     Generate a random string of alphanumeric characters.
 
@@ -265,8 +265,8 @@ def return_rand_str():
     """
 
     all_char = ascii_letters + digits
-    password = "".join(choice(all_char) for _ in range(randint(10, 11)))
-    return password
+    id_u = "".join(choice(all_char) for _ in range(randint(10, 11)))
+    return id_u
 
 
 # Existing code for format_number_short function
@@ -643,16 +643,9 @@ class RememberPosition(discord.ui.View):
         shuffle(removed)
         self.clear_items()
 
-        # for item in removed:  # faster operation
-        #     self.add_item(item)
-
-        for item_iter in range(len(removed)):
-            removed[item_iter].row = 0
-            
-            if (item_iter+1) > 3:
-                removed[item_iter].row = 1
-
-            self.add_item(item=removed[item_iter])
+        for index, btn in enumerate(removed):
+            btn.row = 0 if index < 3 else 1
+            self.add_item(btn)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if self.interaction.user.id != interaction.user.id:
@@ -4297,10 +4290,9 @@ class Economy(commands.Cog):
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(item_name='The name of the item you want to buy.',
                            quantity='The amount of this item to buy. Defaults to 1.')
-    async def buy(self, interaction: discord.Interaction, item_name: str, quantity: int):
+    async def buy(self, interaction: discord.Interaction, item_name: str, quantity: Optional[int] = 1):
         """Buy an item directly from the shop."""
 
-        quantity = quantity or 1
         quantity = abs(quantity)
 
         async with self.client.pool_connection.acquire() as conn:
@@ -4377,9 +4369,8 @@ class Economy(commands.Cog):
     @app_commands.describe(item_name='The name of the item you want to sell.',
                            sell_quantity='The amount of this item to sell. Defaults to 1.')
     async def sell(self, interaction: discord.Interaction,
-                   item_name: str, sell_quantity: Optional[int]):
+                   item_name: str, sell_quantity: Optional[int] = 1):
         """Sell an item you already own."""
-        sell_quantity = sell_quantity or 1
         sell_quantity = abs(sell_quantity)
 
         async with self.client.pool_connection.acquire() as conn:
@@ -4546,7 +4537,6 @@ class Economy(commands.Cog):
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     async def work(self, interaction: discord.Interaction):
         """Work at your current job. You must have one for this to work."""
-        
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
@@ -4564,23 +4554,24 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(
                         embed=membed("You don't have a job, get one first."))
 
-            ncd = string_to_datetime(data[0][0])
-            now = datetime.datetime.now()
+            # ncd = string_to_datetime(data[0][0])
+            # now = datetime.datetime.now()
 
-            diff = ncd - now
-            if diff.total_seconds() > 0:
-                when = now + datetime.timedelta(seconds=diff.total_seconds())
-                return await interaction.response.send_message(
-                    embed=membed(
-                        f"You can work again at {discord.utils.format_dt(when, 't')}"
-                        f" ({discord.utils.format_dt(when, 'R')})."))
+            # diff = ncd - now
+            # if diff.total_seconds() > 0:
+            #     when = now + datetime.timedelta(seconds=diff.total_seconds())
+            #     return await interaction.response.send_message(
+            #         embed=membed(
+            #             f"You can work again at {discord.utils.format_dt(when, 't')}"
+            #             f" ({discord.utils.format_dt(when, 'R')})."))
 
-            async with conn.transaction():
-                ncd = discord.utils.utcnow() + datetime.timedelta(minutes=40)
-                ncd = datetime_to_string(ncd)
-                await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
+            # async with conn.transaction():
+            #     ncd = discord.utils.utcnow() + datetime.timedelta(minutes=40)
+            #     ncd = datetime_to_string(ncd)
+            #     await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
-            possible_minigames = choices((0, 1, 2), k=1, weights=(45, 25, 30))[0]
+            # possible_minigames = choices((0, 1, 2), k=1, weights=(45, 25, 30))[0]
+            possible_minigames = 1
             num_to_func_link = {
                 2: "do_order",
                 1: "do_tiles",
