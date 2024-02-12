@@ -177,65 +177,46 @@ class Administrate(commands.Cog):
     @app_commands.rename(ephemeral='is_hidden', member='user', deposit_mode='medium')
     async def config(self, interaction: discord.Interaction,
                      configuration: Literal["add", "remove", "make"], amount: str,
-                     member: discord.Member,
-                     ephemeral: bool,
-                     deposit_mode: Literal["bank", "wallet"]):
+                     member: Optional[discord.Member],
+                     ephemeral: Optional[bool] = True,
+                     deposit_mode: Optional[str] = "wallet"):
         """Generates or deducts a given amount of robux to the mentioned user."""
-
+        
+        member = member or interaction.user
         real_amount = determine_exponent(amount)
+
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
-            their_bank = await Economy.get_spec_bank_data(member, "bank", conn)
-            their_wallet = await Economy.get_wallet_data_only(member, conn)
-
+            
             embed = discord.Embed(title='Success', 
                                   colour=discord.Colour.random(),
                                   timestamp=discord.utils.utcnow())
-            
-            if configuration == "add":
-                if deposit_mode == "bank":
-                    new_amount = their_bank + int(real_amount)
-                    await Economy.update_bank_new(member, conn, +int(real_amount), deposit_mode)
-                else:
-                    new_amount = their_wallet + int(real_amount)
-                    await Economy.update_bank_new(member, conn, +int(real_amount))
 
-                total = their_bank + their_wallet + int(real_amount)
+            if configuration.startswith("a"):
+                new_amount = await Economy.update_bank_new(member, conn, +int(real_amount), deposit_mode)
+
                 embed.description = (
-                    f"- Added {CURRENCY}{int(real_amount):,} robux to "
-                    f"**{member.display_name}**'s balance.\n"
-                    f"- **{member.display_name}**'s new "
-                    f"**`{deposit_mode}`** balance is {CURRENCY}{new_amount:,}.\n"
-                    f"- **{member.display_name}**'s total balance now "
-                    f"is {CURRENCY}{total:,}"
+                    f"- Added {CURRENCY}{int(real_amount):,} robux to **{member.display_name}**'s balance.\n"
+                    f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY}{new_amount[0]:,}."
                 )
                 embed.set_footer(text="configuration type: ADD_TO")
-            elif configuration == "remove":
-                if deposit_mode == "bank":
-                    new_amount = their_bank - int(real_amount)
-                    await Economy.update_bank_new(member, conn, -int(real_amount), deposit_mode)
-                else:
-                    new_amount = their_wallet - int(real_amount)
-                    await Economy.update_bank_new(member, conn, -int(real_amount))
+            elif configuration.startswith("r"):
 
-                total = their_bank + their_wallet - int(real_amount)
+                new_amount = await Economy.update_bank_new(member, conn, -int(real_amount), deposit_mode)
+
                 embed.description = (
-                    f"- Deducted {CURRENCY}{int(real_amount):,} "
-                    f"robux from **{member.display_name}**'s balance.\n"
-                    f"- **{member.display_name}**'s new "
-                    f"**`{deposit_mode}`** balance is {CURRENCY}{new_amount:,}.\n"
-                    f"- **{member.display_name}**'s total balance now "
-                    f"is {CURRENCY}{total:,}"
+                    f"- Deducted {CURRENCY}{int(real_amount):,} robux from **{member.display_name}**'s balance.\n"
+                    f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY}{new_amount[0]:,}."
                 )
                 embed.set_footer(text="configuration type: REMOVE_FROM")
             else:
-                change = int(real_amount) - their_wallet
-                await Economy.update_bank_new(member, conn, +change, deposit_mode)
+                new_amount = await Economy.change_bank_new(member, conn, real_amount, deposit_mode)
+                
                 embed.description = (
                     f"- \U0000279c **{member.display_name}**'s "
-                    f"**`{deposit_mode}`** balance has been "
-                    f"changed to {CURRENCY}{abs(their_wallet + change):,}."
-                )
+                    f"**`{deposit_mode}`** balance has been changed to {CURRENCY}{real_amount:,}."
+                    f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY}{new_amount[0]:,}.")
+                
                 embed.set_footer(text="configuration type: ALTER_TO")
 
             await conn.commit()
