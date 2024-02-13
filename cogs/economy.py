@@ -154,7 +154,7 @@ SHOP_ITEMS = [
     {"name": "Dynamic Item", "cost": 1_000_000_000,
      "info": "An item that changes use often. Its transformative "
              "functions change to match the seasonality of the year.",
-     "url": "https://i.imgur.com/WX9mbie.png", "rarity": "Rare", "qn": "dynamic_item",
+     "url": "https://i.imgur.com/WX9mbie.png", "rarity": "Rare",
      "emoji": "<:dynamic:1197949814898446478>", "available": True},
 
     {"name": "Resistor", "cost": 750_000_000,
@@ -166,18 +166,18 @@ SHOP_ITEMS = [
     {"name": "Clan License", "cost": 1_250_000_000,
      "info": "Create your own clan. It costs a fortune, but with it brings a lot of "
              "privileges exclusive to clan members.",
-     "url": "https://i.imgur.com/nPcMNk8.png", "rarity": "Godly", "qn": "clan_license",
+     "url": "https://i.imgur.com/nPcMNk8.png", "rarity": "Godly",
      "emoji": "<:clan_license:1165936231922806804>", "available": True},
 
     {"name": "Hyperion", "cost": 3_000_000_000,
      "info": "The `passive` drone that actively helps in increasing the returns in almost everything.",
-     "url": "https://i.imgur.com/bmNyob0.png", "rarity": "Uncommon", "qn": "hyperion_drone",
-     "emoji": "<:DroneHyperion:1171491601726574613>", "available": True},
+     "url": "https://i.imgur.com/bmNyob0.png", "rarity": "Uncommon",
+     "emoji": "<:DroneHyperion:1171491601726574613>", "available": True, "maximum": 1},
 
     {"name": "Crisis", "cost": 1_500_000_000,
      "info": "The `support` drone that can bring status effects into the game, wreaking havoc onto other users!",
-     "url": "https://i.imgur.com/obOJwJm.png", "rarity": "Uncommon", "qn": "crisis_drone",
-     "emoji": "<:DroneCrisis:1171491564258852894>", "available": True},
+     "url": "https://i.imgur.com/obOJwJm.png", 
+     "rarity": "Uncommon", "emoji": "<:DroneCrisis:1171491564258852894>", "available": True, "maximum": 1},
 
     {"name": "Natural Pack", "cost": 1_000_000,
      "info": "Food that is so nutritious it is all you need to fill your apetite. "
@@ -215,6 +215,14 @@ NAME_TO_INDEX = {
     "Suspicious Pack": 8,
     "Odd Eye": 9,
     "Amulet": 10}
+item_handlers = {}
+
+
+def register_item(item):
+    def decorator(func):
+        item_handlers[item] = func
+        return func
+    return decorator
 
 
 def calculate_hand(hand):
@@ -975,11 +983,6 @@ class BlackjackUi(discord.ui.View):
         self.finished = False
         super().__init__(timeout=30)
 
-    async def disable_all_items(self) -> None:
-        """Disable all items within the blackjack interface."""
-        for item in self.children:
-            item.disabled = True
-
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item[Any], /) -> None:
         print_exception(type(error), error, error.__traceback__)
         await interaction.response.send_message("Something went wrong, this game did not work as intended.\n"
@@ -987,7 +990,6 @@ class BlackjackUi(discord.ui.View):
                                                 "and will soon begin looking into the issue.")
 
     async def on_timeout(self) -> None:
-        await self.disable_all_items()
         if not self.finished:
             namount = self.client.games[self.interaction.user.id][-1]
             namount = floor(((130 / 100) * namount))
@@ -1012,7 +1014,7 @@ class BlackjackUi(discord.ui.View):
                              icon_url=self.interaction.user.display_avatar.url)
 
             try:
-                await self.message.edit(content=None, embed=losse, view=self)
+                await self.message.edit(content=None, embed=losse, view=None)
             except discord.NotFound:
                 pass
 
@@ -1030,7 +1032,6 @@ class BlackjackUi(discord.ui.View):
     @discord.ui.button(label='Hit', style=discord.ButtonStyle.blurple)
     async def hit_bj(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button in the interface to hit within blackjack."""
-
         namount = self.client.games[interaction.user.id][-1]
         deck = self.client.games[interaction.user.id][0]
         player_hand = self.client.games[interaction.user.id][1]
@@ -1042,7 +1043,7 @@ class BlackjackUi(discord.ui.View):
 
         if player_sum > 21:
 
-            await self.disable_all_items()
+            self.stop()
             self.finished = True
             dealer_hand = self.client.games[interaction.user.id][2]
             d_fver_p = [num for num in self.client.games[interaction.user.id][-2]]
@@ -1079,9 +1080,8 @@ class BlackjackUi(discord.ui.View):
                 await interaction.response.edit_message(content=None, embed=embed, view=None)
 
         elif sum(player_hand) == 21:
-
+            self.stop()
             self.finished = True
-            await self.disable_all_items()
 
             dealer_hand = self.client.games[interaction.user.id][2]
             d_fver_p = [num for num in self.client.games[interaction.user.id][-2]]
@@ -1149,8 +1149,7 @@ class BlackjackUi(discord.ui.View):
     async def stand_bj(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button interface in blackjack to stand."""
 
-        await self.disable_all_items()
-
+        self.stop()
         deck = self.client.games[interaction.user.id][0]
         player_hand = self.client.games[interaction.user.id][1]
         dealer_hand = self.client.games[interaction.user.id][2]
@@ -1285,8 +1284,8 @@ class BlackjackUi(discord.ui.View):
     async def forfeit_bj(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button for the blackjack interface to forfeit the current match."""
 
+        self.stop()
         self.finished = True
-        await self.disable_all_items()
         namount = self.client.games[interaction.user.id][-1]
         namount //= 2
         dealer_total = sum(self.client.games[interaction.user.id][2])
@@ -2218,7 +2217,7 @@ class Economy(commands.Cog):
                 not_database = []
 
                 for i, member in enumerate(data):
-                    member_name = await self.client.fetch_user(member[0])
+                    member_name = self.client.get_user(member[0])
                     their_badge = UNIQUE_BADGES.get(member_name.id, "")
                     msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
@@ -2252,7 +2251,7 @@ class Economy(commands.Cog):
 
 
                 for i, member in enumerate(data):
-                    member_name = await self.client.fetch_user(member[0])
+                    member_name = self.client.get_user(member[0])
                     their_badge = UNIQUE_BADGES.get(member_name.id, "")
                     msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
@@ -2283,7 +2282,7 @@ class Economy(commands.Cog):
                 not_database = []
 
                 for i, member in enumerate(data):
-                    member_name = await self.client.fetch_user(member[0])
+                    member_name = self.client.get_user(member[0])
                     their_badge = UNIQUE_BADGES.get(member_name.id, "")
                     msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
@@ -2321,7 +2320,7 @@ class Economy(commands.Cog):
                 not_database = []
 
                 for i, member in enumerate(data):
-                    member_name = await self.client.fetch_user(member[0])
+                    member_name = self.client.get_user(member[0])
                     their_badge = UNIQUE_BADGES.get(member_name.id, "")
                     msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
@@ -2357,7 +2356,7 @@ class Economy(commands.Cog):
                 not_database = []
 
                 for i, member in enumerate(data):
-                    member_name = await self.client.fetch_user(member[0])
+                    member_name = self.client.get_user(member[0])
                     their_badge = UNIQUE_BADGES.get(member_name.id, "")
                     msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
@@ -2393,7 +2392,7 @@ class Economy(commands.Cog):
                 not_database = []
 
                 for i, member in enumerate(data):
-                    member_name = await self.client.fetch_user(member[0])
+                    member_name = self.client.get_user(member[0])
                     their_badge = UNIQUE_BADGES.get(member_name.id, "")
                     msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
                     not_database.append(msg1)
@@ -2426,7 +2425,7 @@ class Economy(commands.Cog):
             not_database = []
 
             for i, member in enumerate(data):
-                member_name = await self.client.fetch_user(member[0])
+                member_name = self.client.get_user(member[0])
                 their_badge = UNIQUE_BADGES.get(member_name.id, "")
                 msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
                 not_database.append(msg1)
@@ -3639,6 +3638,37 @@ class Economy(commands.Cog):
                                 'Found an unusual bug on a command? **Report it now to prevent further '
                                 'issues.**', colour=0x2B2D31))
 
+    @register_item('Keycard')
+    async def handle_unusable(interaction, quantity):
+        await interaction.response.send_message(
+            embed=membed("This item cannot be used. The effects are always passively active."))
+
+    @register_item('Trophy')
+    async def handle_trophy(interaction, quantity):
+        if quantity > 1:
+            content = f'\nThey have **{quantity}** of them, WHAT A BADASS'
+        else:
+            content = ''
+        return await interaction.response.send_message(
+            f"{interaction.user.name} is flexing on you all "
+            f"with their <:tr1:1165936712468418591> **~~PEPE~~ TROPHY**{content}")
+
+    @register_item('Crisis')
+    async def handle_drone(interaction: discord.Interaction, quantity: int, conn: asqlite_Connection) -> None:
+        now = datetime.datetime.now()
+        now = datetime_to_string(now)
+        data = await conn.execute("SELECT * FROM drones WHERE userID = ?", (interaction.user.id,))
+        if not data:
+            await conn.execute(
+                "INSERT INTO drones (userID, type, obtained) VALUES (?, ?, ?, ?)",
+                (interaction.user.id, "Crisis", now))
+
+            await conn.commit()
+            return await interaction.response.send_message(embed=membed(
+                "You've unwrapped your Crisis drone. For each upgrade, it will continue to evolve.\n"
+                "Reach step 20 and you'll unlock **Crisis XT**."))
+        await interaction.response.send_message(embed=membed("You already own a Crisis drone."))
+
     @app_commands.command(name="use", description="Use an item you own from your inventory", extras={"exp_gained": 3})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
     @app_commands.describe(item='Select an item.', quantity='Amount of items to use, when possible.')
@@ -3676,26 +3706,15 @@ class Economy(commands.Cog):
 
                 if not quantity:
                     return await interaction.response.send_message(
-                        embed=membed(f"You don't have a {ie} {name} in your inventory."))
+                        embed=membed(f"You don't own a single {ie} {name} in your inventory, therefore cannot use it."))
 
-                match item:
-                    case 'Keycard' | 'Resistor' | 'Hyperion' | 'Crisis':
-                        return await interaction.response.send_message(
-                            content="This item cannot be used. The effects are always passively active!")
-                    case 'Trophy':
-                        if quantity > 1:
-                            content = f'\nThey have **{quantity}** of them, WHAT A BADASS'
-                        else:
-                            content = ''
-                        return await interaction.response.send_message(
-                            f"{interaction.user.name} is flexing on you all "
-                            f"with their <:tr1:1165936712468418591> **~~PEPE~~ TROPHY**{content}")
-                    case _:
-                        return await interaction.response.send_message(
-                            embed=membed("The functions for this item aren't available.\n"
-                                        "If you wish to submit an idea for what these items do, "
-                                        "comment on [this issue on our Github.](https://github.com/SGA-A/c2c/issues/12)")
-                        )
+                handler = item_handlers.get(name)
+                if handler is None:
+                    return await interaction.response.send_message(
+                        embed=membed("This item does not have a use yet. Maybe soon."))
+                if name == "Crisis":
+                    return await handler(interaction, quantity, conn)
+                await handler(interaction, quantity)
 
     @app_commands.command(name="prestige", description="Sacrifice currency stats in exchange for incremental perks")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -3920,7 +3939,7 @@ class Economy(commands.Cog):
                     """,
                     (user.id,))
 
-                procfile = discord.Embed(colour=user.colour, timestamp=discord.utils.utcnow())
+                procfile = discord.Embed(colour=user.colour)
                 inv = 0
                 unique = 0
                 total = 0
@@ -3954,6 +3973,17 @@ class Economy(commands.Cog):
                             nshowcase.append(f"`{qty}x` {SHOP_ITEMS[NAME_TO_INDEX.get(that_item)]['emoji']}")
                     except IndexError:
                         continue
+                
+                their_slays = await conn.fetchall("SELECT slay_name, level FROM slay WHERE userID = ? ORDER BY level DESC", (user.id,))
+                sized = len(their_slays)
+
+                if sized:
+                    first_name, first_level = their_slays[0]
+                    total_slays = (f"**{first_name}** (L{first_level})")
+                    if (sized-1):
+                        total_slays += f"\n+ {sized-1} other(s)"
+                else:
+                    total_slays = "No servants"
 
                 procfile.description = (f"### {user.name}'s Profile - [{data[4]}](https://www.dis.gd/support)\n"
                                         f"{note}"
@@ -3961,8 +3991,8 @@ class Economy(commands.Cog):
                                         f"{UNIQUE_BADGES.setdefault(data[-1], "")}\n"
                                         f"<:bountybag:1195653667135692800> Bounty: \U000023e3 **{data[5]:,}**\n"
                                         f"{get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"}")
-
                 boundary = self.calculate_exp_for(level=data[7])
+
                 procfile.add_field(name='Level',
                                    value=f"Level: `{data[7]:,}`\n"
                                          f"Experience: `{data[8]}/{boundary}`\n"
@@ -3981,8 +4011,8 @@ class Economy(commands.Cog):
                 procfile.add_field(name='Commands',
                                    value=f"Total: `{format_number_short(data[2])}`")
 
-                procfile.add_field(name="Drones",
-                                   value="See [#32](https://github.com/SGA-A/c2c/issues/32)")
+                procfile.add_field(name="Servants",
+                                   value=total_slays)
 
                 procfile.add_field(name="Showcase",
                                    value="\n".join(nshowcase) or "No showcase")
@@ -4347,6 +4377,8 @@ class Economy(commands.Cog):
                 name = item["name"]
                 ie = item["emoji"]
                 cost = item["cost"] * quantity
+                maximum_am = item.get("max")
+
                 wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
                 new_bal = wallet_amt - cost
                 stock = get_stock(name)
@@ -4371,6 +4403,12 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(
                         f"You're short on cash by \U000023e3 **{abs(new_bal):,}** to "
                         f"buy {ie} **{quantity:,}x** {name}, so uh no.")
+                
+                if maximum_am:
+                    their_am = await self.get_one_inv_data_new(interaction.user, name, conn)
+                    if their_am > maximum_am:
+                        return await interaction.response.send_message(
+                            f"You can't make this purchase because you already own {maximum_am}.")
 
                 await self.update_inv_new(interaction.user, quantity, name, conn)
                 modify_stock(item_name, "-", quantity)
@@ -4928,44 +4966,6 @@ class Economy(commands.Cog):
         lb = await self.create_leaderboard_preset(chosen_choice=stat)
         await lb_view.message.edit(content=None, embed=lb, view=lb_view)
 
-    @commands.guild_only()
-    @commands.cooldown(1, 5)
-    @commands.command(name='extend_profile', description='Display misc info on a user',
-                      aliases=('e_p', 'ep', 'extend'))
-    async def extend_profile(self, ctx: commands.Context, username: Optional[discord.Member]):
-        """Display prescence information on a given user."""
-
-        async with ctx.typing():
-            user_stats = {}
-            username = username or ctx.author
-
-            username = ctx.guild.get_member(username.id)
-
-            user_stats["status"] = str(username.status)
-            user_stats["is_on_mobile"] = str(username.is_on_mobile())
-            user_stats["desktop"] = str(username.desktop_status)
-            user_stats["web"] = str(username.web_status)
-            user_stats["voice_status"] = str(username.voice)
-            user_stats["is_bot"] = str(username.bot)
-            user_stats["activity"] = str(username.activity)
-
-            procfile = discord.Embed(title='Profile Summary',
-                                     description=f'This mostly displays {username.display_name}\'s '
-                                                 f'prescence on Discord.',
-                                     colour=0x2F3136)
-            procfile.add_field(name=f'{username.display_name}\'s Extended Information',
-                               value=f"\U0000279c Top role: {username.top_role.mention}\n"
-                                     f"\U0000279c Is a bot: {user_stats['is_bot']}\n"
-                                     f"\U0000279c Current Activity: {user_stats['activity']}\n"
-                                     f"\U0000279c Status: {user_stats['status']}\n"
-                                     f"\U0000279c Desktop Status: {user_stats['desktop']}\n"
-                                     f"\U0000279c Web Status: {user_stats['web']}\n"
-                                     f"\U0000279c Is on Mobile: {user_stats['is_on_mobile']}\n"
-                                     f"\U0000279c Voice State: {user_stats['voice_status'] or 'No voice'}", )
-            procfile.set_thumbnail(url=username.display_avatar.url)
-            procfile.set_footer(text=f"{discord.utils.utcnow().strftime('%A %d %b %Y, %I:%M%p')}")
-            await ctx.send(embed=procfile)
-
     rob = app_commands.Group(name='rob', description='rob different places or people.',
                              guild_only=True, guild_ids=APP_GUILDS_ID)
 
@@ -5200,7 +5200,7 @@ class Economy(commands.Cog):
     @app_commands.command(name="blackjack",
                           description="Test your skills at blackjack", extras={"exp_gained": 3})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
-    @app_commands.checks.cooldown(1, 6)
+    @app_commands.checks.cooldown(1, 4)
     @app_commands.rename(bet_amount='robux')
     @app_commands.describe(bet_amount=ROBUX_DESCRIPTION)
     async def play_blackjack(self, interaction: discord.Interaction, bet_amount: str):
