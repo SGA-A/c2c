@@ -233,11 +233,11 @@ class Miscellaneous(commands.Cog):
         if message.author.bot:
             return
 
-        if ("geo" in message.content) or ("teo" in message.content):
-            await message.add_reaction("<a:StoleThisEmote7:793153800612479017>")
-        if ("0x80" in message.content) or ("cookies" in message.content):
-            await message.add_reaction("<:0x80:1125061332698406923>")
-        if "c2c" in message.content:
+        if message.content in {"geo", "teo"}:
+            return await message.add_reaction("<a:StoleThisEmote7:793153800612479017>")
+        if message.content in {"0x80", "cookies"}:
+            return await message.add_reaction("<:0x80:1125061332698406923>")
+        if "c2c" in message.content.lower():
             await message.add_reaction("<:milady:973571282031484968>")
 
     @commands.command(name='invite', description='Links the invite for c2c')
@@ -264,7 +264,7 @@ class Miscellaneous(commands.Cog):
         duration = (end - start) * 1000
         await message.edit(
             content=f"<:latencye:1195741921482641579> REST: {duration:.2f}ms **\U0000007c** "
-                    f"WS: {self.client.latency * 1000:2f} ms")
+                    f"WS: {self.client.latency * 1000:.2f} ms")
 
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
     async def extract_source(self, interaction: discord.Interaction, message: discord.Message):
@@ -331,8 +331,8 @@ class Miscellaneous(commands.Cog):
                 await interaction.response.send_message(
                     embed=membed("An unsuccessful request was made. Try again later."))
 
-    anime = app_commands.Group(name='anime', description="commands related to anime!", guild_only=True,
-                               guild_ids=APP_GUILDS_ID)
+    anime = app_commands.Group(name='anime', description="commands related to anime!", 
+                               guild_only=True, guild_ids=APP_GUILDS_ID)
 
     @anime.command(name='kona', description='Retrieve NSFW posts from Konachan')
     @app_commands.describe(tags='the tags to base searches upon', page='the page to look through under a tag')
@@ -475,28 +475,26 @@ class Miscellaneous(commands.Cog):
         elif isinstance(api_urls, tuple):
             api_urls = choice(api_urls)
         else:
-            pass
+            async with self.client.session.get(api_urls) as resp:
+                if resp.status != 200:
+                    return await msg.edit(
+                        content=None, embed=membed("The request failed, you should try again later."))
+                embed = discord.Embed(colour=discord.Colour.from_rgb(243, 157, 30))
 
-        async with self.client.session.get(api_urls) as resp:
-            if resp.status != 200:
-                return await msg.edit(
-                    content=None, embed=membed("The request failed, you should try again later."))
-            embed = discord.Embed(colour=discord.Colour.from_rgb(243, 157, 30))
+                data = await resp.json()
+                if (extract_domain(api_urls) == "nekos.pro") and (not api_urls.endswith("ai")):  # ai doesnt have any params
+                    embed.set_author(name=f"{data.setdefault('character_name', 'Unknown Source')}")
+                    embed.set_image(url=data["url"])
+                    embed.set_footer(text=f"ID: {data['id']}")
+                elif extract_domain(api_urls) == "nekos.best":
+                    fm = data["results"][0]
+                    embed.set_author(name=f"{fm['artist_name']}")
+                    embed.set_image(url=fm["url"])
+                else:
+                    embed.set_image(url=data["url"])
+                    embed.set_footer(text=f"ID: {data['id']}")
 
-            data = await resp.json()
-            if (extract_domain(api_urls) == "nekos.pro") and (not api_urls.endswith("ai")):  # ai doesnt have any params
-                embed.set_author(name=f"{data.setdefault('character_name', 'Unknown Source')}")
-                embed.set_image(url=data["url"])
-                embed.set_footer(text=f"ID: {data['id']}")
-            elif extract_domain(api_urls) == "nekos.best":
-                fm = data["results"][0]
-                embed.set_author(name=f"{fm['artist_name']}")
-                embed.set_image(url=fm["url"])
-            else:
-                embed.set_image(url=data["url"])
-                embed.set_footer(text=f"ID: {data['id']}")
-
-            await msg.edit(content=None, embed=embed)
+                await msg.edit(content=None, embed=embed)
 
     @anime.command(name='random', description="Get a completeley random waifu image")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
@@ -859,46 +857,6 @@ class Miscellaneous(commands.Cog):
         if len(msg) > 2000:
             return await interaction.response.send_message('Output too long to display.')
         await interaction.response.send_message(msg, suppress_embeds=True)
-
-    @commands.command(name='spotify', aliases=('sp',), description="Fetch spotify rich prescence information")
-    async def find_spotify_activity(self, ctx: commands.Context, *,
-                                    username: Union[discord.Member, discord.User] = None):
-        """Fetch a given user's spotify rich prescence, return as a simple formatted card."""
-
-        async with ctx.typing():
-            username = username or ctx.author
-            if username.activities:
-                spotify = discord.utils.find(lambda a: isinstance(a, discord.Spotify),
-                                             username.activities)
-
-                if spotify is not None:
-
-                    params = {'title': spotify.title,
-                              'cover_url': spotify.album_cover_url,
-                              'start_timestamp': spotify.start.timestamp(),
-                              'duration_seconds': int(spotify.duration.total_seconds()),
-                              'artists': spotify.artists}
-
-                    headers = {
-                        'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}
-                    api_url = "https://api.jeyy.xyz/v2/discord/spotify"
-
-                    async with self.client.session.get(
-                            api_url, params=params, headers=headers) as response:
-                        if response.status == 200:
-                            buffer = BytesIO(await response.read())
-                            return await ctx.send(
-                                content=f"{username.display_name} is listening to "
-                                        f"[{params['title']}]({spotify.track_url}) on Spotify.",
-                                file=discord.File(buffer, 'sp.png'),
-                                suppress_embeds=True)
-                        else:
-                            return await ctx.send(
-                                content=(
-                                    "The API we are using could not handle your"
-                                    f" request right now. Try again later.\n"
-                                    f"Return code: `{response.status}`."))
-            await ctx.send(f"{username.display_name} has no activity.")
 
     @app_commands.command(name='feedback', description='Send feedback to the c2c developers')
     @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
