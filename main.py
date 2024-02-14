@@ -570,7 +570,27 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
 
 @client.tree.command(name='help', description='The help command for c2c. Shows help for different categories.',
                      guilds=[Object(id=829053898333225010), Object(id=780397076273954886)])
-async def help_command(interaction: Interaction):
+@app_commands.describe(command="The command you want to see more info about (if any)")
+async def help_command(interaction: Interaction, command: Optional[str]):
+    if command:
+        any_command = client.get_command(command)
+        prefix = ">"
+        if any_command is None:
+            glob = {
+                "balance": None
+            }
+            guild_id = glob.get(command, Object(id=interaction.guild.id))
+            any_command = client.tree.get_command(command, type=AppCommandType.chat_input, guild=guild_id)
+            if not any_command:
+                return await interaction.response.send_message("No such command found.")
+            prefix = "/"
+            
+        doc = any_command.extras or "No description available."
+        embed = Embed(
+            title=f"Help: {prefix}{any_command.qualified_name}", 
+            description=doc, colour=0x2B2D31)
+        return await interaction.response.send_message(embed=embed)
+    
     epicker = choice(["<:githubB:1195500626382164119>",
                       "<:githubBF:1195498685296021535>", "<:githubW:1195499565508460634>",
                       "<:githubBlue:1195664427836506212>"])
