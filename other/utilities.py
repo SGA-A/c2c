@@ -50,6 +50,7 @@ def parse_duration(input_duration):
 
     return res_date
 
+
 def datetime_to_string(datetime_obj: datetime) -> str:
     """Convert a datetime object to a string object.
 

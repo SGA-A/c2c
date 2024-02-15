@@ -3706,12 +3706,12 @@ class Economy(commands.Cog):
 
                 if not quantity:
                     return await interaction.response.send_message(
-                        embed=membed(f"You don't own a single {ie} {name} in your inventory, therefore cannot use it."))
+                        embed=membed(f"You don't own a single {ie} {name}, therefore cannot use it."))
 
                 handler = item_handlers.get(name)
                 if handler is None:
                     return await interaction.response.send_message(
-                        embed=membed("This item does not have a use yet. Maybe soon."))
+                        embed=membed("This item does not have a use yet. Please wait for an update."))
                 if name == "Crisis":
                     return await handler(interaction, quantity, conn)
                 await handler(interaction, quantity)
@@ -4412,7 +4412,7 @@ class Economy(commands.Cog):
 
                 await self.update_inv_new(interaction.user, quantity, name, conn)
                 modify_stock(item_name, "-", quantity)
-                new_am = await self.update_bank_new(interaction.user, conn, new_bal)
+                new_am = await self.change_bank_new(interaction.user, conn, new_bal)
                 await conn.commit()
 
                 embed = discord.Embed(
@@ -4470,7 +4470,6 @@ class Economy(commands.Cog):
                 cost = floor((item["cost"] * sell_quantity) / 4)
 
                 quantity = await self.get_one_inv_data_new(interaction.user, name, conn)
-
                 quantity -= sell_quantity
 
                 if quantity < 0:
