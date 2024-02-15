@@ -4,7 +4,7 @@ from other.pagination import Pagination
 from io import BytesIO
 from random import choice
 from github import Github
-from re import compile as compile_it
+from re import compile as compile_it, search
 from psutil import Process, cpu_count
 from time import perf_counter
 from typing import Literal, Union, Optional
@@ -239,6 +239,21 @@ class Miscellaneous(commands.Cog):
             return await message.add_reaction("<:0x80:1125061332698406923>")
         if "c2c" in message.content.lower():
             await message.add_reaction("<:milady:973571282031484968>")
+        
+        if message.content.startswith(".."):
+            match = search(r'\d+$', message.content)
+
+            if not message.channel.permissions_for(message.author).manage_messages:
+                return await message.channel.send(
+                    "You're not able to do this.", delete_after=3.0, silent=True)
+
+            if not match:
+                return await message.channel.send(
+                    "You didn't specify a number.", delete_after=3.0, silent=True)
+
+            ctx = await self.client.get_context(message)
+            cmd = self.client.get_command("purge")
+            await ctx.invoke(cmd, purge_max_amount=int(match.group()))
 
     @commands.command(name='invite', description='Links the invite for c2c')
     async def invite_bot(self, ctx):
