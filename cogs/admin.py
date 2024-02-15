@@ -134,7 +134,7 @@ class PersistentView(discord.ui.View):
                          "\n".join(mentionable_needed)),
             colour=0x2B2D31
         )
-        embed.set_footer("Only colour roles are listed here.")
+        embed.set_footer(text="Only colour roles are listed here.")
 
         await interaction.response.send_message(embed=embed, ephemeral=True, delete_after=5.0, silent=True)
 
