@@ -22,6 +22,141 @@ from cogs.economy import get_profile_key_value
 from cogs.economy import modify_profile
 
 
+class DropdownRoles(discord.ui.RoleSelect):
+    def __init__(self, colour_role_ids: set[int]):
+        self.colour_role_ids = colour_role_ids
+        super().__init__(
+            custom_id="role_select:all", 
+            placeholder="Select a colour role", 
+            row=0,
+            min_values=0)
+
+    async def callback(self, interaction: discord.Interaction) -> Any:
+
+        chosen_role = self.values
+        
+        their_roles = set(interaction.user.roles)
+        their_roles_ids = {role.id for role in their_roles}
+        common_roles = their_roles_ids.intersection(self.colour_role_ids)
+        formatted = {f"<@&{role}>" for role in common_roles}
+        
+        if not chosen_role:
+
+            if len(common_roles):
+                
+                for common_role in common_roles:
+                    await interaction.user.remove_roles(Object(id=common_role), reason="User deselected a colour role.")
+
+                return await interaction.response.send_message(
+                    embed=discord.Embed(
+                        description=f"I have removed these roles from you: {" ".join(formatted)}", 
+                        colour=0x2B2D31), 
+                    ephemeral=True, delete_after=5.0, silent=True)
+            
+            return await interaction.response.send_message(
+                "Could not find any colour roles to remove from you.", ephemeral=True, delete_after=5.0, silent=True)
+        
+        if chosen_role[0].id not in self.colour_role_ids:
+            mentionable = {f"<@&{role}>" for role in self.colour_role_ids}
+            available = discord.Embed(
+                title="Available Roles",
+                description="You did not pick a valid colour role.", 
+                colour=0x2B2D31
+            )
+            available.add_field(
+                name="You can pick these roles..",
+                value=", ".join(mentionable))
+
+            return await interaction.response.send_message(
+                embed=available, ephemeral=True, delete_after=5.0, silent=True)
+        
+        if chosen_role[0] in their_roles:
+            return await interaction.response.send_message(
+                embed=discord.Embed(
+                    colour=0x2B2D31, description="You already have that role."),
+                ephemeral=True, delete_after=5.0, silent=True)
+
+        if common_roles:
+            failure = discord.Embed(
+                title="Could not add role",
+                description=f"You already have these colour roles:\n{'\n'.join(formatted)}", 
+                colour=0x2B2D31
+            )
+            failure.set_footer(text="You'll need to remove these first.")
+
+            return await interaction.response.send_message(
+                embed=failure, ephemeral=True, delete_after=5.0, silent=True)
+
+        await interaction.user.add_roles(Object(id=chosen_role[0].id), reason="User selected a colour role.")
+        
+        success = discord.Embed(
+            title="Your Added Roles",
+            description=f"- {chosen_role[0].mention}",
+            colour=chosen_role[0].colour
+        )
+        
+        await interaction.response.send_message(embed=success, ephemeral=True, delete_after=5.0, silent=True)
+
+class PersistentView(discord.ui.View):
+    def __init__(self):
+        self.colour_role_ids = {
+            1121100838216138773, 1121100959863554048, 1121101033205149828, 1121100623853662319, 
+            1121101101807190056, 1121101829485383780, 1121100228888645753, 1121102278120710300, 
+            1121102092619239475, 1121102175037300787, 1121102453505544302, 1121102518387212449, 
+            1121102654433656832, 1121102707546148905, 1121102761635881012, 1121102853759578132, 
+            1121100064945872957, 1121103026455846973, 1121103142621290557, 1121103213790253057, 
+            1121103343343915038, 1121103457227649024, 1121103592892416101, 1121156355764535426, 
+            1121157330894069851
+        }
+        
+        super().__init__(timeout=None)
+        self.add_item(DropdownRoles(colour_role_ids=self.colour_role_ids))    
+
+
+    @discord.ui.button(label="List current colour roles", custom_id="role_view:current", row=1)
+    async def list_roles(self, interaction: discord.Interaction, button: discord.ui.Button):
+        commonplace = set(interaction.user.roles)
+        commonplace = {role.id for role in commonplace}
+        common_mention = commonplace.intersection(self.colour_role_ids)
+
+        if not common_mention:
+            return await interaction.response.send_message(
+                "You do not have any colour roles.", ephemeral=True, delete_after=5.0, silent=True)
+
+        mentionable = {f"<@&{role}>" for role in common_mention}
+        mentionable_needed = set()
+        for item in mentionable:
+            mentionable_needed.add(f"- {item}")
+
+        embed = discord.Embed(
+            title="Your current colour roles",
+            description=(f"{len(common_mention)} role found\n"
+                         "\n".join(mentionable_needed)),
+            colour=0x2B2D31
+        )
+        embed.set_footer("Only colour roles are listed here.")
+
+        await interaction.response.send_message(embed=embed, ephemeral=True, delete_after=5.0, silent=True)
+
+
+    @discord.ui.button(label="List available colour roles", custom_id="role_view:all", row=1)
+    async def list_available_roles(self, interaction: discord.Interaction, button: discord.ui.Button):
+        mentionable = {f"<@&{role}>" for role in self.colour_role_ids}
+        formatter = set()
+
+        for item in mentionable:
+            formatter.add(f"- {item}")
+
+        available = discord.Embed(
+            title="Available Roles",
+            description="\n".join(formatter),
+            colour=0x2B2D31
+        )
+
+        available.set_footer(text="You can select any one of these roles.")
+        await interaction.response.send_message(embed=available, ephemeral=True, silent=True)
+
+
 class Administrate(commands.Cog):
     """Cog containing commands only executable by the bot owners. Contains debugging tools."""
     def __init__(self, client: commands.Bot):
@@ -41,11 +176,9 @@ class Administrate(commands.Cog):
         return emoji
 
     @staticmethod
-    async def fetch_fst_msg(ctx: commands.Context, *,
-                            channel_id: discord.TextChannel.id) -> discord.Message | None:
+    async def fetch_fst_msg(channel) -> discord.Message | None:
         """Fetch the first message of a given channel"""
 
-        channel = await ctx.guild.fetch_channel(channel_id)
         dtls = None
 
         async for message in channel.history(limit=1, oldest_first=True):
@@ -63,6 +196,34 @@ class Administrate(commands.Cog):
 
         # remove `foo`
         return content.strip('` \n')
+
+    @commands.command(name="roles", description="View and select colour roles")
+    @commands.is_owner()
+    async def colour_roles(self, ctx: commands.Context):
+        """View and select colour roles."""
+        await ctx.message.delete()
+
+        ch = self.client.get_partial_messageable(1121095327806672997)
+        msg = await self.fetch_fst_msg(ch)
+
+        colour_embed = discord.Embed(
+            title="Colour Roles",
+            colour=0xEE9FBF,
+            description=(
+                "**__IMPORTANT: PLEASE READ__**\n"
+                "- You'll need to select a colour role, so the name of the role will also be the colour.\n"
+                "- If you want to remove your current role, you must select (or deselect) the same role again.\n"
+                "- You are limited to assigning only one color role.\n"
+                "- When this bot (<@1047572530422108311>) is offline, you will not be able to select/deselect any roles.\n"
+                "- Not sure which roles you already have? Click the button below to list them.")
+        )
+
+        colour_embed.set_image(
+            url="https://i.imgur.com/BnqTZxG.jpeg")        
+
+        await ch.send(
+            content="This is where you can select a colour role to add to yourself.", 
+            embed=colour_embed, view=PersistentView(), silent=True, reference=msg.to_reference())
 
     @commands.command(name='firstmsg', description='Fetch the first message of a channel')
     async def first_message_fetchit(self, ctx: commands.Context):
@@ -214,7 +375,7 @@ class Administrate(commands.Cog):
                 
                 embed.description = (
                     f"- \U0000279c **{member.display_name}**'s "
-                    f"**`{deposit_mode}`** balance has been changed to {CURRENCY}{real_amount:,}."
+                    f"**`{deposit_mode}`** balance has been changed to {CURRENCY}{real_amount:,}.\n"
                     f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY}{new_amount[0]:,}.")
                 
                 embed.set_footer(text="configuration type: ALTER_TO")
@@ -293,14 +454,14 @@ class Administrate(commands.Cog):
         # Application command synchronization - uncomment stmts when syncing globally
         # ctx.bot.tree.copy_global_to(guild=discord.Object(id=780397076273954886))
         # ctx.bot.tree.copy_global_to(guild=discord.Object(id=829053898333225010))
-
+        
         # ctx.bot.tree.remove_command('balance', guild=discord.Object(id=780397076273954886))
         # ctx.bot.tree.remove_command('balance', guild=discord.Object(id=829053898333225010))
 
-        await ctx.bot.tree.sync(guild=discord.Object(id=780397076273954886))
-        await ctx.bot.tree.sync(guild=discord.Object(id=829053898333225010))
-        
-        # await ctx.bot.tree.sync(guild=None)
+        await self.client.tree.sync(guild=discord.Object(id=780397076273954886))
+        await self.client.tree.sync(guild=discord.Object(id=829053898333225010))
+
+        await self.client.tree.sync(guild=None)
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
     @commands.command(name='eval', description='Evaluates arbitrary code')
@@ -682,6 +843,7 @@ class Administrate(commands.Cog):
                            new_content='The new content to replace it with')
     async def edit_msg(self, interaction: discord.Interaction, msg: str, new_content: str):
         """Edit a message that was sent by the client."""
+        
         await interaction.response.defer(thinking=True)
         a = await self.client.fetch_guild(interaction.guild.id)
         b = await a.fetch_channel(interaction.channel.id)

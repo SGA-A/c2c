@@ -16,6 +16,7 @@ from typing import Dict, Optional, TYPE_CHECKING, Union, List
 from aiohttp import ClientSession
 from asqlite import create_pool
 from logging import INFO as LOGGING_INFO
+from cogs.admin import PersistentView
 
 
 if TYPE_CHECKING:
@@ -220,6 +221,7 @@ class C2C(commands.Bot):
     async def setup_hook(self):
         print("we're in.")
 
+        self.add_view(PersistentView())
         self.pool_connection = await create_pool('C:\\Users\\georg\\Documents\\c2c\\db-shit\\economy.db')
         self.time_launch = datetime.now()
 
