@@ -4470,7 +4470,6 @@ class Economy(commands.Cog):
                 cost = floor((item["cost"] * sell_quantity) / 4)
 
                 quantity = await self.get_one_inv_data_new(interaction.user, name, conn)
-                
                 quantity -= sell_quantity
 
                 if quantity < 0:
@@ -5359,7 +5358,6 @@ class Economy(commands.Cog):
                     else:
                         amount = min(MAX_BET_WITHOUT, wallet_amt)
                 else:
-                    interaction.command.cooldown
                     return await interaction.response.send_message(
                         embed=membed("You need to provide a real amount to bet upon."))
 
