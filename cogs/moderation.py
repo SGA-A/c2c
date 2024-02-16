@@ -1,6 +1,6 @@
 from discord.ext import commands
 from discord import Thread, utils
-from datetime import datetime
+from datetime import timedelta
 
 
 class Moderation(commands.Cog):
@@ -46,7 +46,7 @@ class Moderation(commands.Cog):
     async def purge(self, ctx: commands.Context, purge_max_amount: int):
         """Purge an amount of messages. Pinned messages aren't removed."""
         purge_max_amount = min(purge_max_amount, 300)
-        stop_at = utils.utcnow() - datetime.timedelta(weeks=2)
+        stop_at = utils.utcnow() - timedelta(weeks=2)
         await ctx.channel.purge(limit=purge_max_amount + 1, check=lambda msg: not msg.pinned, bulk=True, after=stop_at)
 
 
