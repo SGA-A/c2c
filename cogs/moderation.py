@@ -45,9 +45,10 @@ class Moderation(commands.Cog):
     @commands.guild_only()
     async def purge(self, ctx: commands.Context, purge_max_amount: int):
         """Purge an amount of messages. Pinned messages aren't removed."""
+        await ctx.message.delete()
         purge_max_amount = min(purge_max_amount, 300)
         stop_at = utils.utcnow() - timedelta(weeks=2)
-        await ctx.channel.purge(limit=purge_max_amount + 1, check=lambda msg: not msg.pinned, bulk=True, after=stop_at)
+        await ctx.channel.purge(limit=purge_max_amount + 1, check=lambda msg: not msg.pinned, bulk=True, after=stop_at, oldest_first=False)
 
 
 async def setup(client):
