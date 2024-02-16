@@ -2490,10 +2490,10 @@ class Economy(commands.Cog):
     @staticmethod
     async def open_bank_new(user: discord.Member, conn_input: asqlite_Connection) -> None:
         """Register the user, if they don't exist. Only use in balance commands (reccommended.)"""
-        ranumber = randint(500_000_000, 3_000_000_000)
+        ranumber = randint(10_000_000, 20_000_000)
 
         await conn_input.execute(
-            f"INSERT INTO `{BANK_TABLE_NAME}`(userID, wallet, job) VALUES (?, ?, ?)",
+            f"INSERT INTO `{BANK_TABLE_NAME}` (userID, wallet, job) VALUES (?, ?, ?)",
             (user.id, ranumber, "None"))
 
     @staticmethod
@@ -2603,7 +2603,7 @@ class Economy(commands.Cog):
     async def open_inv_new(user: discord.Member, conn_input: asqlite_Connection) -> None:
         """Register a new user's inventory records into the db."""
 
-        await conn_input.execute(f"INSERT INTO `{INV_TABLE_NAME}`(userID) VALUES(?)", (user.id,))
+        await conn_input.execute(f"INSERT INTO `{INV_TABLE_NAME}` (userID) VALUES(?)", (user.id,))
 
     @staticmethod
     async def get_one_inv_data_new(user: discord.Member, item: str, conn_input: asqlite_Connection) -> Optional[Any]:
@@ -2651,11 +2651,7 @@ class Economy(commands.Cog):
     @staticmethod
     async def open_cooldowns(user: discord.Member, conn_input: asqlite_Connection):
         """Create a new row in the CD table, adding specified actions for a user in the cooldowns table."""
-        cd_columns = ["slaywork", "casino"]
-        await conn_input.execute(
-            f"""
-            INSERT INTO `{COOLDOWN_TABLE_NAME}` (userID, {', '.join(cd_columns)}) VALUES(?, {', '.join(['0'] * len(cd_columns))})
-            """, (user.id,))
+        await conn_input.execute(f"INSERT INTO `{COOLDOWN_TABLE_NAME}` (userID) VALUES(?)", (user.id,))
 
     @staticmethod
     async def fetch_cooldown(conn_input: asqlite_Connection, *, user: discord.Member, cooldown_type: str):
@@ -4733,6 +4729,45 @@ class Economy(commands.Cog):
                 view = BalanceView(interaction, self.client, nd[0], nd[1], nd[2], user)
                 await interaction.response.send_message(embed=balance, view=view)
                 view.message = await interaction.original_response()
+
+    @app_commands.command(name="weekly", description="Get a weekly injection of robux to your bank")
+    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    async def weekly(self, interaction: discord.Interaction):
+        """Get a weekly injection of robux once per week."""
+
+        async with self.client.pool_connection.acquire() as conn:
+            conn: asqlite_Connection
+
+            if await self.can_call_out(interaction.user, conn):
+                return await interaction.response.send_message(embed=self.not_registered)
+
+            ncd = await conn.fetchone("SELECT weekly FROM cooldowns WHERE userID = ?", (interaction.user.id,))
+            
+            ncd = string_to_datetime(ncd[0])
+            now = datetime.datetime.now()
+
+            diff = ncd - now
+            if diff.total_seconds() > 0:
+                when = now + datetime.timedelta(seconds=diff.total_seconds())
+                return await interaction.response.send_message(
+                    embed=membed(
+                        f"You already got your weekly robux this week, try again {discord.utils.format_dt(when, 'R')}."))
+            
+            success = discord.Embed(colour=0x2B2D31, title=f"{interaction.user.display_name}'s Weekly Robux")
+            success.url = "https://www.youtube.com/watch?v=ue_X8DskUN4"
+            
+            async with conn.transaction():
+                ncd = now + datetime.timedelta(weeks=1)
+                
+                success.description=(
+                    "You just got \U000023e3 **10,000,000** for checking in this week.\n"
+                    f"See you next week ({discord.utils.format_dt(ncd, "R")})!")
+                
+                ncd = datetime_to_string(ncd)
+                await self.update_cooldown(conn, user=interaction.user, cooldown_type="weekly", new_cd=ncd)
+                await self.update_bank_new(interaction.user, conn, 10_000_000)
+
+            await interaction.response.send_message(embed=success)
 
     @app_commands.command(name="resetmydata", description="Opt out of the virtual economy, deleting all of your data")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
