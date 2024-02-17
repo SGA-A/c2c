@@ -634,6 +634,114 @@ class DepositOrWithdraw(discord.ui.Modal):
         await interaction.response.edit_message(embed=embed, view=self.view_children)
 
 
+class ConfirmResetData(discord.ui.View):
+    def __init__(self, interaction: discord.Interaction, client: commands.Bot, user_to_remove: discord.Member):
+        self.interaction: discord.Interaction = interaction
+        self.removing_user: discord.Member = user_to_remove
+        self.client: commands.Bot = client
+        self.count = 0
+        super().__init__(timeout=30.0)
+    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id != self.interaction.user.id:
+            await interaction.response.send_message(
+                embed=membed("This is not your confirmation menu."), ephemeral=True)
+            return False
+        return True
+    
+    async def on_timeout(self) -> Coroutine[Any, Any, None]:
+        for item in self.children:
+            item.disabled = True
+        try:
+            embed = self.message.embeds[0]
+            embed.title = "Timed out"
+            embed.colour = 0x979C9F
+            return await self.message.edit(embed=embed, view=self)
+        except discord.NotFound:
+            pass
+
+    @discord.ui.button(label='RESET', style=discord.ButtonStyle.danger, emoji=discord.PartialEmoji.from_str("<a:rooFireAhh:1208545466132860990>"))
+    async def confirm_button_conf(self, interaction: discord.Interaction, button: discord.ui.Button):
+        
+        embed: discord.Embed = self.message.embeds[0]
+        self.count += 1
+        if self.count < 3:
+            embed.set_footer(text=f"{self.count} attempts remaining")
+            return await interaction.response.edit_message(view=self)
+        
+        for item in self.children:
+            item.disabled = True
+        self.stop()
+        
+        del active_sessions[interaction.user.id]
+        
+        embed.title = "Confirmed"
+        embed.colour = discord.Colour.brand_red()
+        embed.set_footer(text=None)
+
+        tables_to_delete = {BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME}
+        async with self.client.pool_connection.acquire() as conn:
+            for table in tables_to_delete:
+                await conn.execute(f"DELETE FROM `{table}` WHERE userID = ?", (self.removing_user.id,))
+            await conn.commit()
+
+        await interaction.response.edit_message(embed=embed, view=self)
+        whose = "your" if interaction.user.id == self.removing_user.id else f"{self.removing_user.mention}'s"
+        end_note = " Thanks for using the bot." if whose == "your" else ""
+
+        await interaction.followup.send(embed=membed(f"All of {whose} data has been reset.{end_note}"))
+
+    @discord.ui.button(label='CANCEL', style=discord.ButtonStyle.blurple)
+    async def cancel_button_canc(self, interaction: discord.Interaction, button: discord.ui.Button):
+        for item in self.children:
+            item.disabled = True
+        self.stop()
+
+        embed: discord.Embed = self.message.embeds[0]
+        embed.title = "Cancelled"
+        embed.colour = discord.Colour.blurple()
+        await interaction.response.edit_message(embed=embed, view=self)
+
+
+class Confirm(discord.ui.View):
+    def __init__(self, interaction: discord.Interaction):
+        self.interaction = interaction
+        super().__init__(timeout=40.0)
+        self.value = None
+
+    async def interaction_check(self, interaction: discord.Interaction[discord.Client]) -> bool:
+        if self.interaction.user.id == interaction.user.id:
+            return True
+        await interaction.response.send_message("This is not your confirmation menu.", ephemeral=True)       
+        return False
+
+    @discord.ui.button(label='Cancel', style=discord.ButtonStyle.red)
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.children[1].style = discord.ButtonStyle.grey
+        button.style = discord.ButtonStyle.success
+        
+        for item in self.children:
+            item.disabled = True
+
+        await interaction.response.edit_message(view=self)
+        
+        self.value = False
+        self.stop()
+
+    @discord.ui.button(label='Confirm', style=discord.ButtonStyle.green)
+    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.children[0].style = discord.ButtonStyle.grey
+        button.style = discord.ButtonStyle.success
+        
+        for item in self.children:
+            item.disabled = True
+        
+        await interaction.response.edit_message(view=self)
+        
+        self.value = True
+        self.stop()
+
+
 class RememberPosition(discord.ui.View):
     """A minigame to remember the position the tiles shown were on once hidden."""
 
@@ -4406,23 +4514,48 @@ class Economy(commands.Cog):
                         return await interaction.response.send_message(
                             f"You can't make this purchase because you already own {maximum_am}.")
 
-                await self.update_inv_new(interaction.user, quantity, name, conn)
-                modify_stock(item_name, "-", quantity)
-                new_am = await self.change_bank_new(interaction.user, conn, new_bal)
-                await conn.commit()
+                view = Confirm(interaction)
+                confirm = discord.Embed()
+                confirm.title = "Pending Confirmation"
+                confirm.colour = 0x2B2D31
+                confirm.description = f"Are you sure you want to buy **{quantity:,}x {ie} {name}** for **\U000023e3 {cost:,}**?"
 
-                embed = discord.Embed(
-                    title="Successful Purchase",
-                    description=(
-                        f"> You have \U000023e3 {new_am[0]:,} left.\n\n"
-                        "**You bought:**\n"
-                        f"- {quantity}x {ie} {name}\n\n"
-                        "**You paid:**\n"
-                        f"- \U000023e3 {cost:,}"),
-                    colour=0xFFFFFF)
-                embed.set_footer(text="Thanks for your business.")
+                await interaction.response.send_message(embed=confirm, view=view)
+                msg = await interaction.original_response()
 
-                await interaction.response.send_message(embed=embed)
+                await view.wait()
+                embed = msg.embeds[0]
+                if view.value is None:
+                    embed.title = "Timed Out"
+                    embed.description = f"~~{embed.description}~~"
+                    embed.colour = discord.Colour.brand_red()
+                    return await msg.edit(embed=embed, view=view)                    
+                if view.value:
+                    await self.update_inv_new(interaction.user, quantity, name, conn)
+                    modify_stock(item_name, "-", quantity)
+                    new_am = await self.change_bank_new(interaction.user, conn, new_bal)
+                    await conn.commit()
+
+                    embed.title = "Action Confirmed"
+                    embed.colour = discord.Colour.brand_green()
+                    await msg.edit(embed=embed, view=view)
+
+                    embed = discord.Embed(
+                        title="Successful Purchase",
+                        description=(
+                            f"> You have \U000023e3 {new_am[0]:,} left.\n\n"
+                            "**You bought:**\n"
+                            f"- {quantity}x {ie} {name}\n\n"
+                            "**You paid:**\n"
+                            f"- \U000023e3 {cost:,}"),
+                        colour=0xFFFFFF)
+                    embed.set_footer(text="Thanks for your business.")
+
+                    return await interaction.followup.send(embed=embed)
+                
+                embed.title = "Action Cancelled"
+                embed.colour = discord.Colour.brand_red()
+                return await msg.edit(embed=embed, view=view)
 
     @app_commands.command(name='sell', description='Sell an item from your inventory', extras={"exp_gained": 4})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -4682,24 +4815,26 @@ class Economy(commands.Cog):
                 await self.open_cooldowns(user, conn)
                 await conn.commit()
 
-                norer = membed(f"# <:successful:1183089889269530764> You are now registered.\n"
-                               f"Your records have been added in our database, **{user.name}**.\n"
-                               f"From now on, you may use any of the economy commands.\n"
-                               f"Here are some of our top used commands:\n"
-                               f"### 1. Start earning quick robux:\n"
-                               f" - </bet:1172898644622585883>, "
-                               f"</coinflip:1172898644622585882> </slots:1172898644287029332>, "
-                               f"</step:1172898643884380166>, </highlow:1172898644287029331>\n"
-                               f"### 2. Seek out employment:\n "
-                               f" - </getjob:1172898643884380168>, </work:1172898644287029336>\n"
-                               f"### 3. Customize your look:\n"
-                               f" - </editprofile bio:1172898645532749948>, "
-                               f"</editprofile avatar:1172898645532749948>\n"
-                               f"### 4. Manage your Account:\n"
-                               f" - </balance:1172898644287029337>, "
-                               f"</withdraw:1172898644622585876>, </deposit:1172898644622585877>, "
-                               f"</inventory:1172898644287029333>, </shop view:1172898645532749946>, "
-                               f"</buy:1172898644287029334>")
+                norer = membed(
+                    f"# <:successful:1183089889269530764> You are now registered.\n"
+                    f"Your records have been added in our database, **{user.name}**.\n"
+                    f"From now on, you may use any of the economy commands.\n"
+                    f"Here are some of our top used commands:\n"
+                    f"### 1. Start earning quick robux:\n"
+                    f" - </bet:1172898644622585883>, "
+                    f"</coinflip:1172898644622585882> </slots:1172898644287029332>, "
+                    f"</step:1172898643884380166>, </highlow:1172898644287029331>\n"
+                    f"### 2. Seek out employment:\n "
+                    f" - </getjob:1172898643884380168>, </work:1172898644287029336>\n"
+                    f"### 3. Customize your look:\n"
+                    f" - </editprofile bio:1172898645532749948>, "
+                    f"</editprofile avatar:1172898645532749948>\n"
+                    f"### 4. Manage your Account:\n"
+                    f" - </balance:1172898644287029337>, "
+                    f"</withdraw:1172898644622585876>, </deposit:1172898644622585877>, "
+                    f"</inventory:1172898644287029333>, </shop view:1172898645532749946>, "
+                    f"</buy:1172898644287029334>"
+                )
                 
                 return await interaction.response.send_message(embed=norer)
             else:
@@ -4795,45 +4930,15 @@ class Economy(commands.Cog):
             else:
 
                 active_sessions.update({interaction.user.id: 1})
-                embed = discord.Embed(
-                    title="Pending Confirmation",
-                    description=f"Remember, you are about to erase **all** of {member.mention}'s data.\n"
-                                "There's no going back, please be certain.\n"
-                                "Type `y` to confirm this action or `n` to cancel it.",
-                    colour=0x2B2D31)
 
-                await interaction.response.send_message(embed=embed)
-                msg = await interaction.original_response()
-
-                def check(m):
-                    """Requirements that the client has to wait for."""
-                    return ((("n" in m.content.lower()) or ("y" in m.content.lower()))
-                            and m.channel == interaction.channel and m.author == interaction.user)
-
-                try:
-                    their_message = await self.client.wait_for('message', check=check, timeout=15.0)
-                except asyncTE:
-                    del active_sessions[interaction.user.id]
-                    embed.colour = discord.Colour.brand_red()
-                    embed.title = "Action Cancelled"
-                    await msg.edit(embed=embed)
-                else:
-                    del active_sessions[interaction.user.id]
-                    if "y" in their_message.content.lower():
-
-                        tables_to_delete = [BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME]
-
-                        for table in tables_to_delete:
-                            await conn.execute(f"DELETE FROM `{table}` WHERE userID = ?", (interaction.user.id,))
-
-                        await conn.commit()
-                        embed.colour = discord.Colour.brand_green()
-                        embed.title = "Action Confirmed"
-                        return await msg.edit(embed=embed)
-
-                    embed.colour = discord.Colour.brand_red()
-                    embed.title = "Action Cancelled"
-                    await msg.edit(embed=embed)
+                view = ConfirmResetData(interaction=interaction, client=self.client, user_to_remove=member)
+                link = "https://www.youtube.com/shorts/vTrH4paRl90"            
+                await interaction.response.send_message(
+                    embed=membed(
+                        f"This command will reset **[EVERYTHING]({link})**.\n"
+                        "Are you **SURE** you want to do this?\n\n"
+                        "If you do, click `RESET MY DATA` **3** times."), view=view)
+                view.message = await interaction.original_response()
 
     @app_commands.command(name="withdraw", description="Withdraw robux from your account")
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
