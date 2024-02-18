@@ -146,11 +146,10 @@ class C2C(commands.Bot):
 
         # Database and HTTP Connections
         self.pool_connection = None
-        self.WAIFU_API_KEY = None
         self.session = None
-        self.games = dict()
 
         # Misc
+        self.games = dict()
         self.time_launch = None
 
     async def setup_hook(self):
