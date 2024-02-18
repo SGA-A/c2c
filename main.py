@@ -149,7 +149,6 @@ class C2C(commands.Bot):
         self.session = None
 
         # Misc
-        self.WAIFU_API_KEY = None
         self.games = dict()
         self.time_launch = None
 
