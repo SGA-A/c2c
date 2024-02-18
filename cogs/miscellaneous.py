@@ -167,24 +167,33 @@ class InviteButton(discord.ui.View):
         self.client: commands.Bot = client
 
         perms = discord.Permissions.none()
+
+        perms.read_message_history = True
         perms.read_messages = True
-        perms.external_emojis = True
+        perms.send_messages_in_threads = True
         perms.send_messages = True
-        perms.manage_roles = True
+        perms.send_voice_messages = True
+        perms.external_emojis = True
+        
         perms.manage_channels = True
         perms.manage_messages = True
         perms.manage_webhooks = True
+
+        perms.create_instant_invite = True
+
         perms.embed_links = True
-        perms.read_message_history = True
         perms.attach_files = True
         perms.add_reactions = True
-        perms.voice()
-        perms.create_instant_invite = True
-        perms.manage_threads = True
+
+        perms.connect = True
+        perms.move_members = True
+        perms.speak = True
+        perms.use_voice_activation = True
+        perms.priority_speaker = True
+        perms.move_members = True
 
         self.add_item(discord.ui.Button(
             label="Invite Link",
-            emoji="<:addbote:1195744267872768100>",
             url=discord.utils.oauth_url(self.client.user.id, permissions=perms)))
 
 
@@ -266,7 +275,7 @@ class Miscellaneous(commands.Cog):
 
         try:
             result = eval(expression) or "Invalid"
-            await ctx.reply(f'<:resultce:1195746711495249931> **{ctx.author.name}**, the result is `{result}`',
+            await ctx.reply(f'<:resultce:1195746711495249931> **{ctx.author.name}**, the result is `{result:,}`',
                             mention_author=False)
         except Exception as e:
             await ctx.reply(f'<:warning_nr:1195732155544911882> **Error:** {str(e)}', mention_author=False)
@@ -891,7 +900,7 @@ class Miscellaneous(commands.Cog):
         amount += (lenslash + lentxt)
 
         username = 'SGA-A'
-        token = self.client.gitoken
+        token = self.client.GITHUB_TOKEN
         repository_name = 'c2c'
 
         g = Github(username, token)
