@@ -149,6 +149,7 @@ class C2C(commands.Bot):
         self.session = None
 
         # Misc
+        self.WAIFU_API_KEY = None
         self.games = dict()
         self.time_launch = None
 
@@ -181,11 +182,11 @@ print(version)
 
 
 @client.check
-async def globally_block_dms(ctx):
+async def globally_block_dms(ctx) -> bool:
     return ctx.guild is not None
 
 
-async def load_cogs():
+async def load_cogs() -> None:
     for filename in listdir('C:\\Users\\georg\\Documents\\c2c\\cogs'):
         if filename.endswith(".py"):
             await client.load_extension(f"cogs.{filename[:-3]}")
@@ -454,7 +455,7 @@ async def convert_time(ctx, time: TimeConverter):
     await ctx.send(f"Converted time: {time} seconds")
 
 
-@client.command(name='dispatch-webhook', aliases=("dww",))
+@client.command(name='dispatch-webhook', aliases=("dw",))
 async def dispatch_the_webhook_when(ctx: commands.Context):
     await ctx.message.delete()
     embed = Embed(
@@ -528,7 +529,6 @@ async def help_command(interaction: Interaction):
 
 
 async def main():
-    await load_cogs()
     try:
         setup_logging(level=LOGGING_INFO)
 
@@ -540,6 +540,7 @@ async def main():
         client.NINJAS_API_KEY = environ.get("API_KEY")
         client.WAIFU_API_KEY = environ.get("WAIFU_API_KEY")
 
+        await load_cogs()
         await client.start(TOKEN)
     finally:
         await client.close()
