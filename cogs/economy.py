@@ -5146,9 +5146,6 @@ class Economy(commands.Cog):
                     "The command is still active in this channel."))
         active_sessions.update({interaction.channel.id: 1})
 
-                content=None, embed=membed(
-                    "You already have an active confirmation panel somewhere. Finish that first."))
-
         lb = await self.create_leaderboard_preset(chosen_choice=stat)
         await lb_view.message.edit(content=None, embed=lb, view=lb_view)
 
