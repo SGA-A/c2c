@@ -22,7 +22,7 @@ from other.pagination import Pagination
 
 
 def membed(custom_description: str) -> discord.Embed:
-    """Quickly create an embed with a custom description using the preset."""
+    """Quickly construct an embed with a custom description using the preset."""
     membedder = discord.Embed(colour=0x2B2D31,
                               description=custom_description)
     return membedder
@@ -35,17 +35,19 @@ def number_to_ordinal(n):
     else:
         suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
 
-    return str(n) + suffix
+    return f"{n}{suffix}"
 
 
 """ALL VARIABLES AND CONSTANTS FOR THE ECONOMY ENVIRONMENT"""
 
 BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
+INV_TABLE_NAME = "inventory"
+COOLDOWN_TABLE_NAME = "cooldowns"
 MAX_BET_KEYCARD = 15_000_000
 MAX_BET_WITHOUT = 10_000_000
 MIN_BET = 500_000
-COOLDOWN_TABLE_NAME = "cooldowns"
+WARN_FOR_CONCURRENCY = "You are already in the middle of a transaction. Please finish that first."
 ROBUX_DESCRIPTION = 'Can be a constant number like "1234" or a shorthand (max, all, 1e6).'
 APP_GUILDS_ID = [829053898333225010, 780397076273954886]
 DOWN = True
@@ -61,8 +63,7 @@ UNIQUE_BADGES = {
     10: " (MAX)"}
 SERVER_MULTIPLIERS = {
     829053898333225010: 120,
-    780397076273954886: 160,
-    1144923657064419398: 6969}
+    780397076273954886: 160}
 rarity_to_colour = {
                 "Godly": 0xE2104B,
                 "Legendary": 0xDA4B3D,
@@ -71,7 +72,6 @@ rarity_to_colour = {
                 "Uncommon": 0x9EFF8E,
                 "Common": 0x367B70
             }
-INV_TABLE_NAME = "inventory"
 ARROW = "<:arrowe:1180428600625877054>"
 CURRENCY = '<:robux:1146394968882151434>'
 PREMIUM_CURRENCY = '<:robuxpremium:1174417815327998012>'
@@ -650,6 +650,7 @@ class ConfirmResetData(discord.ui.View):
         return True
     
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
+        del active_sessions[self.interaction.user.id]
         for item in self.children:
             item.disabled = True
         try:
@@ -660,13 +661,12 @@ class ConfirmResetData(discord.ui.View):
         except discord.NotFound:
             pass
 
-    @discord.ui.button(label='RESET', style=discord.ButtonStyle.danger, emoji=discord.PartialEmoji.from_str("<a:rooFireAhh:1208545466132860990>"))
-    async def confirm_button_conf(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label='RESET MY DATA', style=discord.ButtonStyle.danger, emoji=discord.PartialEmoji.from_str("<a:rooFireAhh:1208545466132860990>"))
+    async def confirm_button_reset(self, interaction: discord.Interaction, button: discord.ui.Button):
         
         embed: discord.Embed = self.message.embeds[0]
         self.count += 1
         if self.count < 3:
-            embed.set_footer(text=f"{self.count} attempts remaining")
             return await interaction.response.edit_message(view=self)
         
         for item in self.children:
@@ -675,15 +675,14 @@ class ConfirmResetData(discord.ui.View):
         
         del active_sessions[interaction.user.id]
         
-        embed.title = "Confirmed"
-        embed.colour = discord.Colour.brand_red()
-        embed.set_footer(text=None)
-
         tables_to_delete = {BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME}
         async with self.client.pool_connection.acquire() as conn:
             for table in tables_to_delete:
                 await conn.execute(f"DELETE FROM `{table}` WHERE userID = ?", (self.removing_user.id,))
             await conn.commit()
+
+        embed.title = "Confirmed"
+        embed.colour = discord.Colour.brand_red()
 
         await interaction.response.edit_message(embed=embed, view=self)
         whose = "your" if interaction.user.id == self.removing_user.id else f"{self.removing_user.mention}'s"
@@ -692,7 +691,9 @@ class ConfirmResetData(discord.ui.View):
         await interaction.followup.send(embed=membed(f"All of {whose} data has been reset.{end_note}"))
 
     @discord.ui.button(label='CANCEL', style=discord.ButtonStyle.blurple)
-    async def cancel_button_canc(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def cancel_button_reset(self, interaction: discord.Interaction, button: discord.ui.Button):
+        del active_sessions[interaction.user.id]
+
         for item in self.children:
             item.disabled = True
         self.stop()
@@ -717,6 +718,7 @@ class Confirm(discord.ui.View):
 
     @discord.ui.button(label='Cancel', style=discord.ButtonStyle.red)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        del active_sessions[interaction.user.id]
         self.children[1].style = discord.ButtonStyle.grey
         button.style = discord.ButtonStyle.success
         
@@ -732,7 +734,8 @@ class Confirm(discord.ui.View):
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.children[0].style = discord.ButtonStyle.grey
         button.style = discord.ButtonStyle.success
-        
+        del active_sessions.update[interaction.user.id]
+
         for item in self.children:
             item.disabled = True
         
@@ -3354,6 +3357,229 @@ class Economy(commands.Cog):
 
         await Pagination(interaction, get_page_part).navigate()
 
+    @shop.command(name='buy', description='Make a purchase from the shop', extras={"exp_gained": 4})
+    @app_commands.describe(item_name='The name of the item you want to buy.',
+                           quantity='The amount of this item to buy. Defaults to 1.')
+    async def buy(self, interaction: discord.Interaction, item_name: str, quantity: Optional[int] = 1):
+        """Buy an item directly from the shop."""
+
+        quantity = abs(quantity)
+
+        async with self.client.pool_connection.acquire() as conn:
+            conn: asqlite_Connection
+
+            if await self.can_call_out(interaction.user, conn):
+                return await interaction.response.send_message(embed=self.not_registered)
+
+            if active_sessions.get(interaction.user.id):
+                return await interaction.response.send_message(
+                    embed=membed(WARN_FOR_CONCURRENCY))
+            active_sessions.update({interaction.user.id: 1})
+            name_res = self.partial_match_for(item_name)
+
+            if name_res is None:
+                return await interaction.response.send_message(
+                    embed=membed("This item does not exist. Are you trying"
+                                 " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
+                                 "1121094935802822768/1202647997641523241) an item?"))
+
+            elif isinstance(name_res, list):
+
+                suggestions = [item[0] for item in name_res]
+                return await interaction.response.send_message(
+                    content="You have a few options to choose from.",
+                    embed=discord.Embed(
+                        title=f"Found {len(name_res)} results",
+                        description='\n'.join(suggestions),
+                        colour=0x2B2D31
+                    )
+                )
+            else:
+                item = SHOP_ITEMS[name_res]
+                name = item["name"]
+                ie = item["emoji"]
+                cost = item["cost"] * quantity
+                maximum_am = item.get("max")
+
+                wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
+                new_bal = wallet_amt - cost
+                stock = get_stock(name)
+
+                if not item["available"]:
+                    return await interaction.response.send_message(
+                        "You cannot purchase this item, it's not for sale.\n"
+                        "Someone could have it though, maybe they'll give you one."
+                    )
+
+                if stock == 0:
+                    return await interaction.response.send_message(
+                        f"There is literally no {ie} **{item_name}** left for you sorry.")
+
+                if quantity > stock:
+                    return await interaction.response.send_message(
+                        f"We're short on {ie} {name} available, so you "
+                        f"can only buy a maximum of **{stock}x**.\n"
+                        f"Nothing is unlimited in the real world!")
+
+                if new_bal < 0:
+                    return await interaction.response.send_message(
+                        f"You're short on cash by \U000023e3 **{abs(new_bal):,}** to "
+                        f"buy {ie} **{quantity:,}x** {name}, so uh no.")
+                
+                if maximum_am:
+                    their_am = await self.get_one_inv_data_new(interaction.user, name, conn)
+                    if their_am > maximum_am:
+                        return await interaction.response.send_message(
+                            f"You can't make this purchase because you already own {maximum_am}.")
+                
+                active_sessions.update({interaction.user.id: 1})
+                view = Confirm(interaction)
+                confirm = discord.Embed()
+                confirm.title = "Pending Confirmation"
+                confirm.colour = 0x2B2D31
+                confirm.description = f"Are you sure you want to buy **{quantity:,}x {ie} {name}** for **\U000023e3 {cost:,}**?"
+
+                await interaction.response.send_message(embed=confirm, view=view)
+                msg = await interaction.original_response()
+
+                await view.wait()
+
+                embed = msg.embeds[0]
+                if view.value is None:
+                    
+                    for item in view.children:
+                        item.disabled = True
+
+                    del active_sessions[interaction.user.id]
+                    embed.title = "Timed Out"
+                    embed.description = f"~~{embed.description}~~"
+                    embed.colour = discord.Colour.brand_red()
+                    return await msg.edit(embed=embed, view=view)                    
+                if view.value:
+                    await self.update_inv_new(interaction.user, quantity, name, conn)
+                    modify_stock(item_name, "-", quantity)
+                    new_am = await self.change_bank_new(interaction.user, conn, new_bal)
+                    await conn.commit()
+
+                    embed.title = "Action Confirmed"
+                    embed.colour = discord.Colour.brand_green()
+                    await msg.edit(embed=embed, view=view)
+
+                    embed = discord.Embed(
+                        title="Successful Purchase",
+                        description=(
+                            f"> You have \U000023e3 {new_am[0]:,} left.\n\n"
+                            "**You bought:**\n"
+                            f"- {quantity}x {ie} {name}\n\n"
+                            "**You paid:**\n"
+                            f"- \U000023e3 {cost:,}"),
+                        colour=0xFFFFFF)
+                    embed.set_footer(text="Thanks for your business.")
+
+                    return await interaction.followup.send(embed=embed)
+                
+                embed.title = "Action Cancelled"
+                embed.colour = discord.Colour.brand_red()
+                return await msg.edit(embed=embed, view=view)
+
+    @shop.command(name='sell', description='Sell an item from your inventory', extras={"exp_gained": 4})
+    @app_commands.describe(
+        item_name='The name of the item you want to sell.', 
+        sell_quantity='The amount of this item to sell. Defaults to 1.')
+    async def sell(self, interaction: discord.Interaction, item_name: str, sell_quantity: Optional[int] = 1):
+        """Sell an item you already own."""
+        sell_quantity = abs(sell_quantity)
+        async with self.client.pool_connection.acquire() as conn:
+            conn: asqlite_Connection
+
+            if await self.can_call_out(interaction.user, conn):
+                return await interaction.response.send_message(embed=self.not_registered)
+            
+            if active_sessions.get(interaction.user.id):
+                return await interaction.response.send_message(
+                    embed=membed(WARN_FOR_CONCURRENCY))
+            active_sessions.update({interaction.user.id: 1})
+
+            name_res = self.partial_match_for(item_name)
+
+            if name_res is None:
+                return await interaction.response.send_message(
+                    "This item does not exist. Are you trying"
+                    " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
+                    "1121094935802822768/1202647997641523241) an item?")
+
+            elif isinstance(name_res, list):
+
+                suggestions = [item[0] for item in name_res]  # Extract item names from the list
+                return await interaction.response.send_message(
+                    content="You have a few options to choose from.",
+                    embed=discord.Embed(
+                        title=f"Found {len(name_res)} results",
+                        description='\n'.join(suggestions),
+                        colour=0x2B2D31
+                    )
+                )
+            else:
+                # Now, use the index to get the correct item attributes
+                item = SHOP_ITEMS[name_res]
+                name = item["name"]
+                ie = item["emoji"]
+                cost = floor((item["cost"] * sell_quantity) / 4)
+
+                quantity = await self.get_one_inv_data_new(interaction.user, name, conn)
+                quantity -= sell_quantity
+
+                if quantity < 0:
+                    return await interaction.response.send_message(
+                        f"You're **{abs(quantity)}** short on selling {ie} **{sell_quantity:,}x** {name}, so uh no.")
+
+                embed = discord.Embed(
+                    title="Pending Confirmation",
+                    description=f"Are you sure you want to sell **{sell_quantity:,}x {ie} {name}** for **\U000023e3 {cost:,}**?",
+                    colour=0x2B2D31
+                )
+                view = Confirm(interaction)
+                
+                await interaction.response.send_message(embed=embed, view=view)
+                msg = await interaction.original_response()
+
+                await view.wait()
+
+                embed = msg.embeds[0]
+                if view.value is None:
+                    
+                    for item in view.children:
+                        item.disabled = True
+
+                    del active_sessions[interaction.user.id]
+                    embed.title = "Timed Out"
+                    embed.description = f"~~{embed.description}~~"
+                    embed.colour = discord.Colour.brand_red()
+                    return await msg.edit(embed=embed, view=view)
+
+                if view.value:
+                    await self.change_inv_new(interaction.user, quantity, name, conn)
+                    modify_stock(item_name, "+", sell_quantity)
+                    await self.update_bank_new(interaction.user, conn, +cost)
+                    await conn.commit()
+
+                    embed.title = "Action Confirmed"
+                    embed.colour = discord.Colour.brand_green()
+                    await msg.edit(embed=embed, view=view)
+
+                    embed = discord.Embed(
+                        title=f"{interaction.user.global_name}'s Sale Receipt",
+                        description=(
+                            f"{interaction.user.mention} sold **{sell_quantity:,}x {ie} {name}** "
+                            f"and got paid \U000023e3 **{cost:,}**."), colour=0x2B2D31)
+                    embed.set_footer(text="Thanks for your business.")
+
+                    return await interaction.followup.send(embed=embed)
+                
+                embed.title = "Action Cancelled"
+                embed.colour = discord.Colour.brand_red()
+                return await msg.edit(embed=embed, view=view)
+
     @app_commands.command(name='item', description='Get more details on a specific item')
     @app_commands.describe(item_name='Select an item.')
     @app_commands.rename(item_name="name")
@@ -3851,13 +4077,13 @@ class Economy(commands.Cog):
             req_level = (prestige + 1) * 35
 
             if (actual_robux >= req_robux) and (actual_level >= req_level):
-                if active_sessions.setdefault(interaction.user.id, None):
+                if active_sessions.get(interaction.user.id) is None:
                     return await interaction.response.send_message(
-                        embed=membed("I am already waiting for your input."))
+                        embed=membed(WARN_FOR_CONCURRENCY))
                 active_sessions.update({interaction.user.id: 1})
 
                 embed = discord.Embed(
-                    title="Are you sure?",
+                    title="Pending Confirmation",
                     description=(
                         "Prestiging means losing nearly everything you've ever earned in the currency "
                         "system in exchange for increasing your 'Prestige Level' "
@@ -3868,52 +4094,49 @@ class Economy(commands.Cog):
                         "- Your drone(s)\n"
                         "- Your levels and XP\n"
                         "Anything not mentioned in this list will not be lost.\n"
-                        "Are you sure you want to prestige?\n"
-                        "Type `yes` to confirm or `no` to cancel."
-                    ),
+                        "Are you sure you want to prestige?"),
                     colour=0x2B2D31
                 )
-                embed.set_footer(text="This is final and cannot be undone.")
+                embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/955847572059193344.png")
 
-                await interaction.response.send_message(embed=embed)
+                view = Confirm(interaction=interaction)
+                await interaction.response.send_message(embed=embed, view=view)
                 msg = await interaction.original_response()
 
-                def check(m):
-                    """Requirements that the client has to wait for."""
-                    return ((("n" in m.content.lower()) or ("y" in m.content.lower()))
-                            and m.channel == interaction.channel and m.author == interaction.user)
+                await view.wait()
+                embed = msg.embeds[0]
 
-                try:
-                    their_message = await self.client.wait_for('message', check=check, timeout=15.0)
-                except asyncTE:
+                if view.value is None:
+                    
+                    for item in view.children:
+                        item.disabled = True
+
                     del active_sessions[interaction.user.id]
+                    embed.title = "Timed Out"
+                    embed.description = f"~~{embed.description}~~"
                     embed.colour = discord.Colour.brand_red()
-                    embed.title = "Action Cancelled"
-                    await msg.edit(embed=embed)
-                else:
-                    del active_sessions[interaction.user.id]
-                    if "y" in their_message.content.lower():
-
-                        for item in SHOP_ITEMS:
-                            await conn.execute(
-                                f"UPDATE `{INV_TABLE_NAME}` SET `{item["name"]}` = ? WHERE userID = ?",
-                                (0, interaction.user.id,))
-                            
+                    return await msg.edit(embed=embed, view=view)   
+                if view.value:
+                    for item in SHOP_ITEMS:
                         await conn.execute(
-                            f"""
-                            UPDATE `{BANK_TABLE_NAME}` SET wallet = ?, bank = ?, showcase = ?, level = ?, exp = ?, 
-                            prestige = prestige + 1, bankspace = bankspace + ? 
-                            WHERE userID = ?
-                            """, (0, 0, '0 0 0', 1, 0, randint(100_000_000, 500_000_000), interaction.user.id))
+                            f"UPDATE `{INV_TABLE_NAME}` SET `{item["name"]}` = ? WHERE userID = ?",
+                            (0, interaction.user.id,))
                         
-                        await conn.commit()
-                        embed.colour = discord.Colour.brand_green()
-                        embed.title = "Action Confirmed"
-                        return await msg.edit(embed=embed)
-
-                    embed.colour = discord.Colour.brand_red()
-                    embed.title = "Action Cancelled"
-                    await msg.edit(embed=embed)
+                    await conn.execute(
+                        f"""
+                        UPDATE `{BANK_TABLE_NAME}` SET wallet = ?, bank = ?, showcase = ?, level = ?, exp = ?, 
+                        prestige = prestige + 1, bankspace = bankspace + ? 
+                        WHERE userID = ?
+                        """, (0, 0, '0 0 0', 1, 0, randint(100_000_000, 500_000_000), interaction.user.id))
+                    
+                    await conn.commit()
+                    embed.colour = discord.Colour.brand_green()
+                    embed.title = "Action Confirmed"
+                    return await msg.edit(embed=embed)
+                
+                embed.title = "Action Cancelled"
+                embed.colour = discord.Colour.brand_red()
+                return await msg.edit(embed=embed, view=view)
             else:
                 emoji = PRESTIGE_EMOTES.get(prestige + 1)
                 emoji = search(r':(\d+)>', emoji)
@@ -4442,184 +4665,6 @@ class Economy(commands.Cog):
 
             await Pagination(interaction, get_page_part).navigate()
 
-    @app_commands.command(name='buy', description='Make a purchase from the shop', extras={"exp_gained": 4})
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
-    @app_commands.describe(item_name='The name of the item you want to buy.',
-                           quantity='The amount of this item to buy. Defaults to 1.')
-    async def buy(self, interaction: discord.Interaction, item_name: str, quantity: Optional[int] = 1):
-        """Buy an item directly from the shop."""
-
-        quantity = abs(quantity)
-
-        async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
-
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
-
-            name_res = self.partial_match_for(item_name)
-
-            if name_res is None:
-                return await interaction.response.send_message(
-                    embed=membed("This item does not exist. Are you trying"
-                                 " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
-                                 "1121094935802822768/1202647997641523241) an item?"))
-
-            elif isinstance(name_res, list):
-
-                suggestions = [item[0] for item in name_res]
-                return await interaction.response.send_message(
-                    content="You have a few options to choose from.",
-                    embed=discord.Embed(
-                        title=f"Found {len(name_res)} results",
-                        description='\n'.join(suggestions),
-                        colour=0x2B2D31
-                    )
-                )
-            else:
-                item = SHOP_ITEMS[name_res]
-                name = item["name"]
-                ie = item["emoji"]
-                cost = item["cost"] * quantity
-                maximum_am = item.get("max")
-
-                wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
-                new_bal = wallet_amt - cost
-                stock = get_stock(name)
-
-                if not item["available"]:
-                    return await interaction.response.send_message(
-                        "You cannot purchase this item, it's not for sale.\n"
-                        "Someone could have it though, maybe they'll give you one."
-                    )
-
-                if stock == 0:
-                    return await interaction.response.send_message(
-                        f"There is literally no {ie} **{item_name}** left for you sorry.")
-
-                if quantity > stock:
-                    return await interaction.response.send_message(
-                        f"We're short on {ie} {name} available, so you "
-                        f"can only buy a maximum of **{stock}x**.\n"
-                        f"Nothing is unlimited in the real world!")
-
-                if new_bal < 0:
-                    return await interaction.response.send_message(
-                        f"You're short on cash by \U000023e3 **{abs(new_bal):,}** to "
-                        f"buy {ie} **{quantity:,}x** {name}, so uh no.")
-                
-                if maximum_am:
-                    their_am = await self.get_one_inv_data_new(interaction.user, name, conn)
-                    if their_am > maximum_am:
-                        return await interaction.response.send_message(
-                            f"You can't make this purchase because you already own {maximum_am}.")
-
-                view = Confirm(interaction)
-                confirm = discord.Embed()
-                confirm.title = "Pending Confirmation"
-                confirm.colour = 0x2B2D31
-                confirm.description = f"Are you sure you want to buy **{quantity:,}x {ie} {name}** for **\U000023e3 {cost:,}**?"
-
-                await interaction.response.send_message(embed=confirm, view=view)
-                msg = await interaction.original_response()
-
-                await view.wait()
-                embed = msg.embeds[0]
-                if view.value is None:
-                    embed.title = "Timed Out"
-                    embed.description = f"~~{embed.description}~~"
-                    embed.colour = discord.Colour.brand_red()
-                    return await msg.edit(embed=embed, view=view)                    
-                if view.value:
-                    await self.update_inv_new(interaction.user, quantity, name, conn)
-                    modify_stock(item_name, "-", quantity)
-                    new_am = await self.change_bank_new(interaction.user, conn, new_bal)
-                    await conn.commit()
-
-                    embed.title = "Action Confirmed"
-                    embed.colour = discord.Colour.brand_green()
-                    await msg.edit(embed=embed, view=view)
-
-                    embed = discord.Embed(
-                        title="Successful Purchase",
-                        description=(
-                            f"> You have \U000023e3 {new_am[0]:,} left.\n\n"
-                            "**You bought:**\n"
-                            f"- {quantity}x {ie} {name}\n\n"
-                            "**You paid:**\n"
-                            f"- \U000023e3 {cost:,}"),
-                        colour=0xFFFFFF)
-                    embed.set_footer(text="Thanks for your business.")
-
-                    return await interaction.followup.send(embed=embed)
-                
-                embed.title = "Action Cancelled"
-                embed.colour = discord.Colour.brand_red()
-                return await msg.edit(embed=embed, view=view)
-
-    @app_commands.command(name='sell', description='Sell an item from your inventory', extras={"exp_gained": 4})
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
-    @app_commands.describe(item_name='The name of the item you want to sell.',
-                           sell_quantity='The amount of this item to sell. Defaults to 1.')
-    async def sell(self, interaction: discord.Interaction,
-                   item_name: str, sell_quantity: Optional[int] = 1):
-        """Sell an item you already own."""
-        sell_quantity = abs(sell_quantity)
-
-        async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
-
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
-
-            name_res = self.partial_match_for(item_name)
-
-            if name_res is None:
-                return await interaction.response.send_message(
-                    "This item does not exist. Are you trying"
-                    " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
-                    "1121094935802822768/1202647997641523241) an item?")
-
-            elif isinstance(name_res, list):
-
-                suggestions = [item[0] for item in name_res]  # Extract item names from the list
-                return await interaction.response.send_message(
-                    content="You have a few options to choose from.",
-                    embed=discord.Embed(
-                        title=f"Found {len(name_res)} results",
-                        description='\n'.join(suggestions),
-                        colour=0x2B2D31
-                    )
-                )
-            else:
-                # Now, use the index to get the correct item attributes
-                item = SHOP_ITEMS[name_res]
-                name = item["name"]
-                ie = item["emoji"]
-                cost = floor((item["cost"] * sell_quantity) / 4)
-
-                quantity = await self.get_one_inv_data_new(interaction.user, name, conn)
-                quantity -= sell_quantity
-
-                if quantity < 0:
-                    return await interaction.response.send_message(
-                        f"You're **{abs(quantity)}** short on selling {ie} **{sell_quantity:,}x** {name}, so uh no.")
-
-                await self.change_inv_new(interaction.user, quantity, name, conn)
-                modify_stock(item_name, "+", sell_quantity)
-                await self.update_bank_new(interaction.user, conn, +cost)
-                await conn.commit()
-
-                embed = discord.Embed(
-                    title=f"{interaction.user.display_name}'s Receipt",
-                    description=(
-                        f"{interaction.user.display_name} sold {ie} **{sell_quantity:,}x** {name} "
-                        f"and got paid \U000023e3 **{cost:,}**."),
-                    colour=rarity_to_colour.get(item["rarity"]))
-                embed.set_footer(text="Thanks for your business.")
-
-                await interaction.response.send_message(embed=embed)
-
     async def do_order(self, interaction: discord.Interaction, job_name: str):
         possible_words: tuple = job_attrs.get(job_name)[0] 
         list_possible_words = list(possible_words)
@@ -5096,11 +5141,10 @@ class Economy(commands.Cog):
         lb_view = Leaderboard(self.client, stat, channel_id=interaction.channel.id)
         lb_view.message = await interaction.original_response()
 
-        if not active_sessions.setdefault(interaction.channel.id, None):
-            active_sessions.update({interaction.channel.id: 1})
-        else:
-            return await lb_view.message.edit(
-                content=None, embed=membed("This command is still active in this channel."))
+        if not active_sessions.get(interaction.channel.id):
+            return await lb_view.message.edit(content=None, embed=membed(
+                    "The command is still active in this channel."))
+        active_sessions.update({interaction.channel.id: 1})
 
         lb = await self.create_leaderboard_preset(chosen_choice=stat)
         await lb_view.message.edit(content=None, embed=lb, view=lb_view)
