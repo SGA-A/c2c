@@ -5142,9 +5142,10 @@ class Economy(commands.Cog):
         lb_view.message = await interaction.original_response()
 
         if not active_sessions.get(interaction.channel.id):
-            active_sessions.update({interaction.channel.id: 1})
-        else:
-            return await lb_view.message.edit(
+            return await lb_view.message.edit(content=None, embed=membed(
+                    "The command is still active in this channel."))
+        active_sessions.update({interaction.channel.id: 1})
+
                 content=None, embed=membed(
                     "You already have an active confirmation panel somewhere. Finish that first."))
 
