@@ -259,11 +259,11 @@ class SelectMenu(ui.Select):
                 total_cmds_cata += 1
 
                 if cmd_details[-1] == 'txt':
-                    cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
+                    cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
 
                 command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
-                cmd_formatter.add(f"\U0000279c **{command_manage.mention}** - {cmd_details[1]}")
+                cmd_formatter.add(f"\U00002022 **{command_manage.mention}** - {cmd_details[1]}")
 
             embed.add_field(name='About: Owner',
                             value=f'Contains commands that are only able to be utilized by the bot developers, '
@@ -291,7 +291,7 @@ class SelectMenu(ui.Select):
             embed.set_thumbnail(url='https://emoji.discadia.com/emojis/74e65408-2adb-46dc-86a7-363f3096b6b2.PNG')
 
             for cmd, cmd_details in all_cmdss.items():
-                cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
+                cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                 total_cmds_cata += 1
 
             embed.add_field(name='About: Mod',
@@ -319,7 +319,7 @@ class SelectMenu(ui.Select):
             for cmd, cmd_details in all_cmdssss.items():
                 total_cmds_cata += 1
                 if cmd_details[-1] == 'txt':
-                    cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
+                    cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
 
                 command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
@@ -331,9 +331,9 @@ class SelectMenu(ui.Select):
                             if isinstance(option, app_commands.AppCommandGroup):
                                 got_something = True
                                 cmd_formatter.add(
-                                    f"\U0000279c {option.mention} - {option.description}")
+                                    f"\U00002022 {option.mention} - {option.description}")
                     if not got_something:
-                        cmd_formatter.add(f"\U0000279c {command_manage.mention} - {cmd_details[1]}")
+                        cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
                 except AttributeError:
                     continue
 
@@ -361,7 +361,7 @@ class SelectMenu(ui.Select):
             for cmd, cmd_details in all_cmdssss.items():
                 total_cmds_cata += 1
                 if cmd_details[-1] == 'txt':
-                    cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
+                    cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
 
                 command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
@@ -373,11 +373,11 @@ class SelectMenu(ui.Select):
                             if isinstance(option, app_commands.AppCommandGroup):
                                 got_something = True
                                 cmd_formatter.add(
-                                    f"\U0000279c {option.mention} - {option.description}")
+                                    f"\U00002022 {option.mention} - {option.description}")
                     if not got_something:
-                        cmd_formatter.add(f"\U0000279c {command_manage.mention} - {cmd_details[1]}")
+                        cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
                 except AttributeError:
-                    cmd_formatter.add(f"\U0000279c </balance:1192188834134376500> - {cmd_details[1]}")
+                    cmd_formatter.add(f"\U00002022 </balance:1192188834134376500> - {cmd_details[1]}")
 
             embed.description = "\n".join(cmd_formatter)
             embed.add_field(name='About: Economy',
@@ -402,7 +402,7 @@ class SelectMenu(ui.Select):
             all_cmdssss = return_txt_cmds_first(the_dict, "Music")
 
             for cmd, cmd_details in all_cmdssss.items():
-                cmd_formatter.add(f"\U0000279c [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
+                cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                 total_cmds_cata += 1
 
             embed.description = "\n".join(cmd_formatter)
