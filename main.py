@@ -10,8 +10,8 @@ from typing import Literal, Any
 from collections import deque
 from discord.utils import setup_logging, format_dt
 from discord import app_commands, Object, ui, Intents, Status, Embed, Interaction, CustomActivity
-from discord import RawReactionActionEvent, AppCommandType, SelectOption, Colour, Webhook, NotFound
-from asyncio import run, TimeoutError as asyncio_TimeoutError
+from discord import AppCommandType, SelectOption, Colour, Webhook, NotFound
+from asyncio import run
 from typing import Dict, Optional, TYPE_CHECKING, Union, List
 from aiohttp import ClientSession
 from asqlite import create_pool
@@ -26,67 +26,6 @@ if TYPE_CHECKING:
 
 
 # Search for a specific term in this project using Ctrl + Shift + F
-
-class CustomContext(commands.Context):
-    async def prompt(
-            self,
-            message: str,
-            *,
-            timeout=30.0,
-            delete_after=False
-    ) -> Optional[bool]:
-        """Prompt the author with an interactive confirmation message.
-
-        This method will send the `message` content, and wait for max `timeout` seconds
-        (default is `30`) for the author to react to the message.
-
-        If `delete_after` is `True`, the message will be deleted before returning a
-        True, False, or None indicating whether the author confirmed, denied,
-        or didn't interact with the message.
-        """
-        msg = await self.send(message)
-
-        for reaction in ('\U00002705', '\U0000274c'):
-            await msg.add_reaction(reaction)
-
-        confirmation = None
-
-        # This function is a closure because it is defined inside of another
-        # function. This allows the function to access the self and msg
-        # variables defined above.
-
-        def check(payload: RawReactionActionEvent):
-            # 'nonlocal' works almost like 'global' except for functions inside of
-            # functions. This means that when 'confirmation' is changed, that will
-            # apply to the variable above
-            nonlocal confirmation
-
-            if payload.message_id != msg.id or payload.user_id != self.author.id:
-                return False
-
-            emoji = str(payload.emoji)
-
-            if emoji == '✅':
-                confirmation = True
-                return True
-
-            elif emoji == '❌':
-                confirmation = False
-                return True
-
-            # This means that it was neither of the two emojis added, so the author
-            # added some other unrelated reaction.
-            return False
-
-        try:
-            await self.bot.wait_for('raw_reaction_add', check=check, timeout=timeout)
-        except asyncio_TimeoutError:
-            # The 'confirmation' variable is still None in this case
-            pass
-
-        if delete_after:
-            await msg.delete()
-        return confirmation
 
 
 class MyCommandTree(app_commands.CommandTree):
@@ -116,10 +55,8 @@ class MyCommandTree(app_commands.CommandTree):
         return None
 
     def get_app_command(
-            self,
-            value: Union[str, int],
-            guild: Optional[Union[Snowflake, int]] = None,
-    ) -> Optional[app_commands.AppCommand]:
+            self, value: Union[str, int],
+            guild: Optional[Union[Snowflake, int]] = None) -> Optional[app_commands.AppCommand]:
         def search_dict(d: AppCommandStore) -> Optional[app_commands.AppCommand]:
             for cmd_name, cmd in d.items():
                 if value == cmd_name or (str(value).isdigit() and int(value) == cmd.id):
@@ -154,8 +91,7 @@ class MyCommandTree(app_commands.CommandTree):
         return ret
 
     async def _update_cache(
-            self,
-            cmads: List[app_commands.AppCommand],
+            self, cmads: List[app_commands.AppCommand], 
             guild: Optional[Union[Snowflake, int]] = None
     ) -> None:
         # because we support both int and Snowflake
@@ -172,12 +108,16 @@ class MyCommandTree(app_commands.CommandTree):
         else:
             self._global_app_commands = self._unpack_app_commands(cmads)
 
-    async def fetch_command(self, command_id: int, /, *, guild: Optional[Snowflake] = None) -> app_commands.AppCommand:
+    async def fetch_command(
+            self, command_id: int, /, *, 
+            guild: Optional[Snowflake] = None) -> app_commands.AppCommand:
         res = await super().fetch_command(command_id, guild=guild)
         await self._update_cache([res], guild=guild)
         return res
 
-    async def fetch_commands(self, *, guild: Optional[Snowflake] = None) -> List[app_commands.AppCommand]:
+    async def fetch_commands(
+            self, *, 
+            guild: Optional[Snowflake] = None) -> List[app_commands.AppCommand]:
         res = await super().fetch_commands(guild=guild)
         await self._update_cache(res, guild=guild)
         return res
@@ -204,8 +144,6 @@ class C2C(commands.Bot):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-        self.remove_command('help')
-
         # Database and HTTP Connections
         self.pool_connection = None
         self.WAIFU_API_KEY = None
@@ -214,9 +152,6 @@ class C2C(commands.Bot):
 
         # Misc
         self.time_launch = None
-
-    async def get_context(self, message, *, cls=CustomContext):
-        return await super().get_context(message, cls=cls)
 
     async def setup_hook(self):
         print("we're in.")
@@ -238,10 +173,11 @@ intents.guilds = True
 intents.voice_states = True
 
 
-client = C2C(command_prefix='>', intents=intents, case_insensitive=True,
-             owner_ids={992152414566232139, 546086191414509599, 1148206353647669298},
-             activity=CustomActivity(name='Serving cc • /help'),
-             status=Status.idle, tree_cls=MyCommandTree)
+client = C2C(
+    command_prefix='>', intents=intents, case_insensitive=True, help_command=None, 
+    owner_ids={992152414566232139, 546086191414509599, 1148206353647669298},
+    activity=CustomActivity(name='Serving cc • /help'), status=Status.idle, 
+    tree_cls=MyCommandTree, max_messages=100, max_ratelimit_timeout=30.0)
 print(version)
 
 
@@ -305,14 +241,10 @@ class SelectMenu(ui.Select):
         cmd_formatter: set = set()
 
         total_cmds_rough = await total_command_count(interaction)
-
         total_cmds_cata = 0
 
         for option in self.options:
-            if option.value == their_choice:
-                option.default = True
-                continue
-            option.default = False
+            option.default = option.value == their_choice
 
         if their_choice == 'Owner':
 
@@ -420,10 +352,9 @@ class SelectMenu(ui.Select):
             await interaction.response.edit_message(embed=embed, view=self.view)
 
         elif their_choice == 'Economy':
-
+            
             embed = Embed(title='Help: Economy', colour=Colour.from_rgb(255, 215, 0))
-            embed.set_thumbnail(url='https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Robux_2019_'
-                                    'Logo_gold.svg/200px-Robux_2019_Logo_gold.svg.png')
+            embed.set_thumbnail(url='https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Robux_2019_Logo_gold.svg/200px-Robux_2019_Logo_gold.svg.png')
 
             the_dict = {}
             new_dict = return_txt_cmds_first(the_dict, "Economy")
@@ -490,26 +421,16 @@ class SelectMenu(ui.Select):
 
 class Select(ui.View):
     def __init__(self):
-        super().__init__(timeout=40.0)
+        super().__init__(timeout=60.0)
         self.add_item(SelectMenu())
 
     async def on_timeout(self) -> None:
         for item in self.children:
             item.disabled = True
-
         try:
             await self.message.edit(view=self)
         except NotFound:
             pass
-
-
-@client.command(name='confirm')
-async def confirm_panel(ctx: CustomContext):
-    prompt = await ctx.prompt("Are you sure you want to do this?")
-    if prompt:
-        await ctx.send("You accepted.")
-    else:
-        await ctx.send("Cancelled operation.")
 
 
 class TimeConverter(commands.Converter):
@@ -562,7 +483,7 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
 
     embed.set_footer(icon_url=ctx.guild.icon.url, text="That's all for Q1 2024. Next review due: 30 June 2024.")
 
-    webhook = Webhook.from_url(url=client.webhook_url, session=client.session)
+    webhook = Webhook.from_url(url=client.WEBHOOK_URL, session=client.session)
     thread = await ctx.guild.fetch_channel(1190736866308276394)
     rtype = "feature" or "bugfix"
     await webhook.send(f'Patch notes for Q1 2024 / This is mostly a `{rtype}` release', embed=embed,
@@ -578,30 +499,33 @@ async def help_command(interaction: Interaction):
                       "<:githubBF:1195498685296021535>", "<:githubW:1195499565508460634>",
                       "<:githubBlue:1195664427836506212>"])
 
-    embed = Embed(title='Help Menu for c2c',
-                  description='```fix\n[Patch #30]\n'
-                              '- Leaderboard now has numerous filters to sort by\n'
-                              '- Major performance improvements\n'
-                              '- Leveling system has been implemented```\n'
-                              'A few things to note:\n'
-                              '- This help command does not display uncategorized commands.\n'
-                              '- The prefix for this bot is `>` (for text commands)\n'
-                              '- Not all categories are accessible to everyone, check the details prior.',
-                  colour=Colour.from_rgb(138, 175, 255))
-    embed.add_field(name="Who are you?",
-                    value="I'm a bot made by Splint#6019 and Geo#2181. I've been on Discord since <t:1669831154:f> "
-                          f"and joined {interaction.guild.name} on "
-                          f"{format_dt(interaction.guild.me.joined_at, style="f")}.\n\n"
-                          "I have a variety of features such as an advanced economy system, moderation, debugging "
-                          "tools and some other random features that may aid you in this journey. "
-                          "You can get more information on my commands by using the dropdown below.\n\n"
-                          f"I'm also open source. You can see my code on {epicker} "
-                          "[Github](https://github.com/SGA-A/c2c).",
-                    inline=False)
+    embed = Embed(
+        title='Help Menu for c2c', 
+        description=(
+            '```fix\n[Patch #31]\n'
+            '- ON_MESSAGE events (triggers) added\n'
+            '- Buttons are generally available\n'
+            '- Shop command redesign and grouped```\n'
+            'A few things to note:\n'
+            '- This help command does not display uncategorized commands.\n'
+            '- The prefix for this bot is `>` (for text commands)\n'
+            '- Not all categories are accessible to everyone, check the details prior.'), 
+            colour=Colour.from_rgb(138, 175, 255))
+    embed.add_field(
+        name="Who are you?", 
+        value=(
+            "I'm a bot made by Splint#6019 and Geo#2181. "
+            f"I've been on Discord since <t:1669831154:f> and joined {interaction.guild.name} on "
+            f"{format_dt(interaction.guild.me.joined_at, style="f")}.\n\n"
+            "I have a variety of features such as an advanced economy system, moderation, debugging "
+            "tools and some other random features that may aid you in this journey. "
+            "You can get more information on my commands by using the dropdown below.\n\n"
+            f"I'm also open source. You can see my code on {epicker} "
+            "[Github](https://github.com/SGA-A/c2c)."), inline=False)
 
-    my_view = Select()
-    await interaction.response.send_message(embed=embed, view=my_view, ephemeral=True)
-    my_view.message = await interaction.original_response()
+    help_view = Select()
+    await interaction.response.send_message(embed=embed, view=help_view, ephemeral=True)
+    help_view.message = await interaction.original_response()
 
 
 async def main():
@@ -610,14 +534,14 @@ async def main():
         setup_logging(level=LOGGING_INFO)
 
         load_dotenv()
-        token = environ.get("BOT_TOKEN")
-        client.webhook_url = environ.get("WEBHOOK_URL")
-        client.gitoken = environ.get("GITHUB_TOKEN")
+        TOKEN = environ.get("BOT_TOKEN")
+        client.WEBHOOK_URL = environ.get("WEBHOOK_URL")
+        client.GITHUB_TOKEN = environ.get("GITHUB_TOKEN")
         client.JEYY_API_KEY = environ.get("JEYY_API_KEY")
         client.NINJAS_API_KEY = environ.get("API_KEY")
         client.WAIFU_API_KEY = environ.get("WAIFU_API_KEY")
 
-        await client.start(token)
+        await client.start(TOKEN)
     finally:
         await client.close()
 
