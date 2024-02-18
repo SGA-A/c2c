@@ -896,6 +896,4 @@ class Administrate(commands.Cog):
 
 async def setup(client):
     """Setup for cog."""
-
     await client.add_cog(Administrate(client))
-    
