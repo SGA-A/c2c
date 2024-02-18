@@ -4956,9 +4956,7 @@ class Economy(commands.Cog):
         """Opt out of the virtual economy and delete all of the user data associated."""
 
         if active_sessions.setdefault(interaction.user.id, None):
-            return await interaction.response.send_message(
-                "You're already in another interactive menu.\n"
-                "Finish the previous confirmation first.")
+            return await interaction.response.send_message(embed=membed(WARN_FOR_CONCURRENCY))
 
         member = member or interaction.user
         if interaction.user.id not in self.client.owner_ids:
