@@ -734,7 +734,7 @@ class Confirm(discord.ui.View):
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.children[0].style = discord.ButtonStyle.grey
         button.style = discord.ButtonStyle.success
-        del active_sessions.update[interaction.user.id]
+        del active_sessions[interaction.user.id]
 
         for item in self.children:
             item.disabled = True
@@ -1654,10 +1654,12 @@ class HexModal(discord.ui.Modal):
             content=interaction.message.content, embeds=interaction.message.embeds, view=self.the_view)
 
     async def on_error(self, interaction: discord.Interaction, error):
-        return await interaction.response.send_message(
-            embed=membed("The hex colour provided was not valid.\n"
-                         "It needs to be in this format: `#FFFFFF`.\n"
-                         "Note that you do not need to include the hashtag."))
+        warning = membed(("The hex colour provided was not valid.\n"
+                   "It needs to be in this format: `#FFFFFF`.\n"
+                   "Note that you do not need to include the hashtag."))
+        if not interaction.response.is_done():
+            return await interaction.response.send_message(embed=warning)
+        return await interaction.followup.send(embed=warning)
 
 
 class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
@@ -1828,6 +1830,23 @@ class DispatchServantView(discord.ui.View):
         except discord.NotFound:
             pass
 
+#TODO WARNING: the code that follows will make you cry;
+#TODO          a safety pig is provided below for your benefit       
+#TODO                          _ 
+#TODO  _._ _..._ .-',     _.._(`)) 
+#TODO '-. `     '  /-._.-'    ',/ 
+#TODO    )         \            '. 
+#TODO   / _    _    |             \ 
+#TODO  |  a    a    /              | 
+#TODO  \   .-.                     ;   
+#TODO   '-('' ).-'       ,'       ; 
+#TODO      '-;           |      .' 
+#TODO         \           \    / 
+#TODO         | 7  .__  _.-\   \ 
+#TODO         | |  |  ``/  /`  / 
+#TODO        /,_|  |   /,_/   / 
+#TODO           /,_/      '`-' 
+
 
 class Servants(discord.ui.Select):
     def __init__(self, client: commands.Bot, their_slays: list, their_choice: str, owner_id: int, conn):
@@ -1846,18 +1865,20 @@ class Servants(discord.ui.Select):
             option.default = option.value == self.choice
 
     async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+        resp = await interaction.original_response()
 
         self.choice = self.values[0]
-
+        
         for option in self.options:
             option.default = option.value == self.choice
 
-        dtls = await self.conn.fetchone("SELECT * FROM `slay` WHERE userID = ? AND slay_name = ?",
-                                        (self.owner_id, self.choice))
+        dtls = await self.conn.fetchone(
+            "SELECT * FROM `slay` WHERE userID = ? AND slay_name = ?", (self.owner_id, self.choice))
 
         sembed = await Economy.servant_preset(Economy(self.client), self.owner_id, dtls)  # servant embed
 
-        await interaction.response.edit_message(content=None, embed=sembed, view=self.view)
+        await interaction.followup.edit_message(resp.id, content=None, embed=sembed, view=self.view)
 
 
 class SelectTaskMenu(discord.ui.Select):
@@ -2049,7 +2070,6 @@ class ServantsManager(discord.ui.View):
 
     @discord.ui.button(label="Manage", style=discord.ButtonStyle.blurple, row=1)
     async def manage_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
-
         if interaction.user.id != self.child.owner_id:
             return await interaction.response.send_message(
                 "This servant is not yours.", ephemeral=True, delete_after=3.0
@@ -2058,6 +2078,7 @@ class ServantsManager(discord.ui.View):
         self.remove_item(button)
         for item in self.removed_items:
             self.add_item(item)
+        
         await interaction.response.edit_message(view=self)
 
     @discord.ui.button(label='Feed', style=discord.ButtonStyle.blurple, row=1)
@@ -3842,7 +3863,7 @@ class Economy(commands.Cog):
 
             view = ServantsManager(client=self.client, their_choice=servant_name, owner_id=user_id,
                                    owner_slays=[(slay[0], slay[1], slay[2], slay[-1]) for slay in sep], conn=conn)
-            sembed = await self.servant_preset(user_id, dtls, children=view.children)  # servant embed
+            sembed = await self.servant_preset(user_id, dtls)  # servant embed
 
             await interaction.response.send_message(embed=sembed, view=view)
             view.message = await interaction.original_response()
@@ -4077,7 +4098,7 @@ class Economy(commands.Cog):
             req_level = (prestige + 1) * 35
 
             if (actual_robux >= req_robux) and (actual_level >= req_level):
-                if active_sessions.get(interaction.user.id) is None:
+                if active_sessions.get(interaction.user.id):
                     return await interaction.response.send_message(
                         embed=membed(WARN_FOR_CONCURRENCY))
                 active_sessions.update({interaction.user.id: 1})
@@ -4955,7 +4976,7 @@ class Economy(commands.Cog):
     async def discontinue_bot(self, interaction: discord.Interaction, member: Optional[discord.Member]):
         """Opt out of the virtual economy and delete all of the user data associated."""
 
-        if active_sessions.setdefault(interaction.user.id, None):
+        if active_sessions.get(interaction.user.id):
             return await interaction.response.send_message(embed=membed(WARN_FOR_CONCURRENCY))
 
         member = member or interaction.user
@@ -5139,7 +5160,7 @@ class Economy(commands.Cog):
         lb_view = Leaderboard(self.client, stat, channel_id=interaction.channel.id)
         lb_view.message = await interaction.original_response()
 
-        if not active_sessions.get(interaction.channel.id):
+        if active_sessions.get(interaction.channel.id):
             return await lb_view.message.edit(content=None, embed=membed(
                     "The command is still active in this channel."))
         active_sessions.update({interaction.channel.id: 1})
@@ -5240,14 +5261,17 @@ class Economy(commands.Cog):
                 cooldown = string_to_datetime(cooldown[0])
                 now = datetime.datetime.now()
                 diff = cooldown - now
-                if diff.total_seconds > 0:
+                if diff.total_seconds() > 0:
                         minutes, seconds = divmod(diff.total_seconds(), 60)
                         hours, minutes = divmod(minutes, 60)
                         days, hours = divmod(hours, 24)
-                        await interaction.followup.send(
-                            f"# Not yet.\nThe casino is not ready. It will be available for "
-                            f"you in **{int(days)}**, **{int(hours)}** hours, **{int(minutes)}** minutes "
-                            f"and **{int(seconds)}** seconds.")
+                        return await interaction.followup.send(
+                            embed=membed(
+                                f"The casino is not ready.\n"
+                                f"It will be available in "
+                                f"**{int(days)}** days, **{int(hours)}** "
+                                f"hours, **{int(minutes)}** minutes "
+                                f"and **{int(seconds)}** seconds."))
 
             channel = interaction.channel
             ranint = randint(1000, 1999)
@@ -5284,13 +5308,13 @@ class Economy(commands.Cog):
                 
                 async with conn.transaction():
                     if hp <= 5:
-                        await self.update_bank_new(interaction.user, conn, )
                         timeout = randint(5, 12)
                         await messages.edit(
-                            embed=membed(f"## <:rwarning:1165960059260518451> Critical HP Reached.\n"
-                                            f"- Your items and robux will not be lost.\n"
-                                            f"- Police forces were alerted and escorted you out of the building.\n"
-                                            f"- You may not enter the casino for another **{timeout}** hours."))
+                            embed=membed(
+                                f"## <:rwarning:1165960059260518451> Critical HP Reached.\n"
+                                f"- Your items and robux will not be lost.\n"
+                                f"- Police forces were alerted and escorted you out of the building.\n"
+                                f"- You may not enter the casino for another **{timeout}** hours."))
                         ncd = datetime.datetime.now() + datetime.timedelta(hours=timeout)
                         ncd = datetime_to_string(ncd)
                         await self.update_cooldown(conn, user=interaction.user, cooldown_type="casino", new_cd=ncd)
@@ -5301,14 +5325,14 @@ class Economy(commands.Cog):
                         new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
 
                         for _ in range(recuperate_amt):
-                            fill_by = randint(212999999, 286999999)
+                            fill_by = randint(500_000, 1_000_000)
                             total += fill_by
                             extra += floor(((new_multi / 100) * fill_by))
                             await messages.edit(
                                 embed=membed(
                                     f"> \U0001f4b0 **{interaction.user.name}'s "
-                                    f"Duffel Bag**: {total:,} / 3,000,000,000\n"
-                                    f"> {PREMIUM_CURRENCY} **Bonus**: {extra:,} / 5,000,000,0000"))
+                                    f"Duffel Bag**: {total:,} / 100,000,000\n"
+                                    f"> {PREMIUM_CURRENCY} **Bonus**: {extra:,} / 500,000,000"))
                             await sleep(0.9)
 
                         overall = total + extra
@@ -5318,7 +5342,7 @@ class Economy(commands.Cog):
                         ncd = datetime.datetime.now() + datetime.timedelta(hours=timeout)
                         ncd = datetime_to_string(ncd)
                         await self.update_cooldown(conn, user=interaction.user, cooldown_type="casino", new_cd=ncd)
-                        bounty = randint(12500000, 105_000_000)
+                        bounty = randint(1_250_000, 2_500_000)
                         nb = await self.update_bank_new(interaction.user, conn, +bounty, "bounty")
                         await messages.edit(
                             content=(
@@ -5326,9 +5350,9 @@ class Economy(commands.Cog):
                                 f"**{bounty:,}**, to \U000023e3 **{nb[0]:,}**!"),
                             embed=membed(
                                 f"> \U0001f4b0 **{interaction.user.name}'s "
-                                f"Duffel Bag**: \U000023e3 {total:,} / \U000023e3 10,000,000,000\n"
+                                f"Duffel Bag**: \U000023e3 {total:,} / \U000023e3 100,000,000\n"
                                 f"> {PREMIUM_CURRENCY} **Bonus**: \U000023e3 {extra:,} "
-                                f"/ \U000023e3 50,000,000,0000\n"
+                                f"/ \U000023e3 500,000,000\n"
                                 f"> [\U0001f4b0 + {PREMIUM_CURRENCY}] **Total**: \U000023e3 **{overall:,}"
                                 "**\n\nYou escaped without a scratch.\n"
                                 f"Your new `wallet` balance is \U000023e3 {wllt[0]:,}"))
