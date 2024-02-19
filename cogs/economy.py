@@ -1783,10 +1783,7 @@ class DropdownLB(discord.ui.Select):
         chosen_choice = self.values[0]
 
         for option in self.options:
-            if option.value == chosen_choice:
-                option.default = True
-                continue
-            option.default = False
+            option.default = option.value == chosen_choice
 
         lb = await Economy.create_leaderboard_preset(Economy(self.client), chosen_choice=chosen_choice)
 
@@ -1940,13 +1937,12 @@ class SelectTaskMenu(discord.ui.Select):
         chosen = self.values[0]
 
         for option in self.options:
-            if option.label == chosen:
-                option.default = True
+            option.default = option.label == chosen
+            if option.default:
                 uri = option.emoji.url
                 emoji = option.emoji.id
                 description = option.description
-            option.default = False
-            
+
         if energy < self.attrs[emoji][1]:
             return await interaction.response.send_message(
                 embed=membed(f"{self.worker.title()} is too tired to do this task."), delete_after=3.0)
