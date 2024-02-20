@@ -1952,9 +1952,11 @@ class SelectTaskMenu(discord.ui.Select):
                 embed=membed(f"{self.worker.title()} is malnourished and cannot be dispatched.\n"
                              "Give them something to eat first."), delete_after=3.0)        
 
-        if self.skill_lvl < self.attrs[emoji][0]:
+        required_skill_level = self.attrs[emoji][0]
+        if self.skill_lvl < required_skill_level:
             return await interaction.response.send_message(
-                embed=membed(f"{self.worker.title()} hasn't attained the minimum skill level required."), 
+                embed=membed(
+                    f"{self.worker.title()} needs to acquire Skill Level **{required_skill_level}** first."), 
                 delete_after=3.0)
 
         # ! This is where you clear the view and must not listen any longer to it
