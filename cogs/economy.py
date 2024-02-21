@@ -1721,44 +1721,6 @@ class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
                          "The developers have been notified and will resolve the issue soon."))
 
 
-class UpdateInfo(discord.ui.Modal, title="Update Bio"):
-
-    bio = discord.ui.TextInput(
-        style=discord.TextStyle.paragraph,
-        label='Bio',
-        required=False,
-        placeholder="Insert your bio here.. (type 'delete' to remove your existent bio).",
-        min_length=1,
-        max_length=250
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-
-        if self.bio.value == "delete":
-            res = modify_profile("delete", f"{interaction.user.id} bio", "placeholder")
-            if not res:
-                return await interaction.response.send_message(
-                    embed=membed("<:warning_nr:1195732155544911882> You don't have a bio yet. Add one first."))
-            return await interaction.response.send_message(
-                embed=membed('## <:trim:1195732275283894292> Your bio has been removed.\n'
-                             'The changes have taken effect immediately.'))
-
-        phrases = "updated your" if get_profile_key_value(f"{interaction.user.id} bio") is not None else "created a new"
-        modify_profile("update", f"{interaction.user.id} bio", self.bio.value)
-
-        return await interaction.response.send_message(
-            embed=membed(
-                f"## <:overwrite:1195729262729240666> Successfully {phrases} bio.\n"
-                "It is now:\n"
-                f"> {self.bio.value or 'Empty: It should be removed, no input was given.'}\n"
-                "The changes have taken effect immediatley."))
-
-    async def on_error(self, interaction: discord.Interaction, error):
-
-        return await interaction.response.send_message(
-            embed=membed(f"Something went wrong.\n\n> {error.__cause__}"))
-
-
 class DropdownLB(discord.ui.Select):
     def __init__(self, client: commands.Bot, their_choice: str):
         self.client: commands.Bot = client
@@ -3184,7 +3146,8 @@ class Economy(commands.Cog):
     @app_commands.checks.cooldown(1, 10)
     @app_commands.describe(item_name="Select an item.",
                            position="The position of this item in your showcase.")
-    async def add_showcase_item(self, interaction: discord.Interaction, position: int, item_name: str):
+    async def add_showcase_item(self, interaction: discord.Interaction, 
+                                position: app_commands.Range[int, 1, 3] , item_name: str):
         """This is a subcommand. Adds an item to your showcase."""
 
         async with self.client.pool_connection.acquire() as conn:
@@ -3219,13 +3182,6 @@ class Economy(commands.Cog):
 
                 showcase: str = await self.get_spec_bank_data(interaction.user, "showcase", conn)
                 showcase: list = showcase.split(" ")
-
-                if not (1 <= position <= 3):
-                    return await interaction.response.send_message(
-                    embed=membed("Invalid position.\n"
-                                "There are only 3 slots available.\n"
-                                "It must be one of the following: `1`, `2` or `3`.")
-                    )
                 
                 if len(showcase) > 3 and (showcase.count("0") == 0):
                     return await interaction.response.send_message(
@@ -3664,7 +3620,8 @@ class Economy(commands.Cog):
     @profile.command(name='title', description='Add a title to your profile')
     @app_commands.checks.cooldown(1, 30)
     @app_commands.describe(text="The name of your desired title. Maximum 32 characters.")
-    async def update_title_profile(self, interaction: discord.Interaction, text: str):
+    async def update_title_profile(
+        self, interaction: discord.Interaction, text: app_commands.Range[str, 1, 32]):
         """This is a subcommand. Change your current title, which is displayed on your profile."""
 
         async with self.client.pool_connection.acquire() as conn:
@@ -3673,10 +3630,6 @@ class Economy(commands.Cog):
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(
                     embed=self.not_registered)
-
-            if len(text) > 32:
-                return await interaction.response.send_message(
-                    embed=membed("Title cannot exceed 32 characters."))
 
             text = sub(r'[\n\t]', '', text)
             await self.change_bank_new(interaction.user, conn, text, "title")
@@ -3688,14 +3641,27 @@ class Economy(commands.Cog):
 
     @profile.command(name='bio', description='Add a bio to your profile')
     @app_commands.checks.cooldown(1, 30)
-    async def update_bio_profile(self, interaction: discord.Interaction):
+    async def update_bio_profile(
+        self, interaction: discord.Interaction, bio: app_commands.Range[str, None, 200]):
         """This is a subcommand. Add a bio to your profile, or update an existing one."""
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
+            
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
-            await interaction.response.send_modal(UpdateInfo())
+            
+            if bio is None:
+                res = modify_profile("delete", f"{interaction.user.id} bio", "placeholder")
+                if not res:
+                    return await interaction.response.send_message(
+                        embed=membed("You don't have a bio yet."))
+                return await interaction.response.send_message(
+                    embed=membed("I've removed your bio."))
+
+            modify_profile("update", f"{interaction.user.id} bio", bio)
+            return await interaction.response.send_message(
+                embed=membed("I've changed your bio."))
 
     @profile.command(name='avatar', description='Change your profile avatar')
     @app_commands.describe(url='The URL of your new avatar. Leave blank to remove.')
@@ -3775,9 +3741,9 @@ class Economy(commands.Cog):
             servants = await conn.fetchall("SELECT slay_name FROM slay WHERE userID = ?", (interaction.user.id,))
             size = len(servants)
 
-            # if size >= 6:
-            #     return await interaction.response.send_message(
-            #         embed=membed("You cannot have more than 6 servants."))
+            if size >= 6:
+                return await interaction.response.send_message(
+                    embed=membed("You cannot have more than 6 servants."))
 
             dupe_check_result = await conn.fetchone("SELECT slay_name FROM slay WHERE LOWER(slay_name) = LOWER(?)", name)
             
@@ -5202,10 +5168,6 @@ class Economy(commands.Cog):
 
                 result = choices([0, 1], weights=(29, 71), k=1)
 
-                if (prim_d[1] == "Police") or (host_d[1] == "Police"):
-                    return await interaction.response.send_message(
-                        embed=membed("Either the host is a police officer and/or you are working as one.\n"
-                                     "In any case, you would risk losing your bounty and your job."))
                 async with conn.transaction():
                     if not result[0]:
                         fine = randint(1, prim_d[0])
