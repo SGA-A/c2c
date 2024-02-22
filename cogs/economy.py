@@ -2932,8 +2932,9 @@ class Economy(commands.Cog):
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
-    pmulti = app_commands.Group(name='multi', description='No description.',
-                                guild_only=True, guild_ids=APP_GUILDS_ID)
+    pmulti = app_commands.Group(
+        name='multi', description='Manage multipliers and their sources.', 
+        guild_only=True, guild_ids=APP_GUILDS_ID)
 
     @pmulti.command(name='view', description='Check personal and global multipliers')
     @app_commands.describe(user_name="The user whose multipliers you want to see. Defaults to your own.")
@@ -2955,40 +2956,45 @@ class Economy(commands.Cog):
                 rand = randint(30, 90)
                 await Economy.change_pmulti_new(user_name, conn, rand)
                 await conn.commit()
-                multi_own = discord.Embed(colour=0x2F3136,
-                                          description=f'# Your new personal multiplier has been created.\n'
-                                                      f'- Starting now, your new personal multiplier is **{rand}**%\n'
-                                                      f' - You cannot change this multiplier, it is fixed and unique '
-                                                      f'to your account.\n'
-                                                      f' - Your personal multiplier will be used to determine the incre'
-                                                      f'ase bonus rewards you receive when claiming rewards, gambling, '
-                                                      f'and receiving robux (indicated by a <:robuxpremium:11744178153'
-                                                      f'27998012>).\n'
-                                                      f' - That means under these given conditions, you will receive '
-                                                      f'**{rand}**% more of an asset/robux depending on the case.\n\n'
-                                                      f'If you\'ve received a low roll, there is a very *small chance* '
-                                                      f'you can request for a buff (in very unfortunate cases).')
+                multi_own = discord.Embed(
+                    colour=0x2F3136, 
+                    description=f'# Your new personal multiplier has been created.\n'
+                                f'- Starting now, your new personal multiplier is **{rand}**%\n'
+                                f' - You cannot change this multiplier, it is fixed and unique '
+                                f'to your account.\n'
+                                f' - Your personal multiplier will be used to determine the incre'
+                                f'ase bonus rewards you receive when claiming rewards, gambling, '
+                                f'and receiving robux (indicated by a <:robuxpremium:11744178153'
+                                f'27998012>).\n'
+                                f' - That means under these given conditions, you will receive '
+                                f'**{rand}**% more of an asset/robux depending on the case.\n\n'
+                                f'If you\'ve received a low roll, there is a very *small chance* '
+                                f'you can request for a buff (in very unfortunate cases).')
             elif (their_multi[0] == 0) and (user_name.id != interaction.user.id):
                 multi_own = discord.Embed(colour=0x2F3136, description="No multipliers found for this user.")
-                multi_own.set_author(name=f'Viewing {user_name.name}\'s multipliers',
-                                     icon_url=user_name.display_avatar.url)
+                multi_own.set_author(
+                    name=f'Viewing {user_name.name}\'s multipliers', 
+                    icon_url=user_name.display_avatar.url)
             else:
                 server_bs = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0)
-                multi_own = discord.Embed(colour=0x2F3136,
-                                          description=f'{sticky_msg}'
-                                                      f'Personal multiplier: **{their_multi[0]:,}**%\n'
-                                                      f'*A multiplier that is unique to a user and is usually a fixed '
-                                                      f'amount.*\n\n'
-                                                      f'Global multiplier: **{server_bs:,}**%\n'
-                                                      f'*A multiplier that changes based on the server you are calling'
-                                                      f' commands in.*')
-                multi_own.set_author(name=f'Viewing {user_name.name}\'s multipliers',
-                                     icon_url=user_name.display_avatar.url)
+                multi_own = discord.Embed(
+                    colour=0x2F3136, 
+                    description=f'{sticky_msg}'
+                                f'Personal multiplier: **{their_multi[0]:,}**%\n'
+                                f'*A multiplier that is unique to a user and is usually a fixed '
+                                f'amount.*\n\n'
+                                f'Global multiplier: **{server_bs:,}**%\n'
+                                f'*A multiplier that changes based on the server you are calling'
+                                f' commands in.*')
+                multi_own.set_author(
+                    name=f'Viewing {user_name.name}\'s multipliers', 
+                    icon_url=user_name.display_avatar.url)
 
             await interaction.response.send_message(embed=multi_own)
 
-    share = app_commands.Group(name='share', description='share different assets with others.',
-                               guild_only=True, guild_ids=APP_GUILDS_ID)
+    share = app_commands.Group(
+        name='share', description='share different assets with others.', 
+        guild_only=True, guild_ids=APP_GUILDS_ID)
 
     @share.command(name="robux", description="Share robux with another user", extras={"exp_gained": 5})
     @app_commands.describe(recipient='The user receiving the robux shared.',
@@ -3088,8 +3094,9 @@ class Economy(commands.Cog):
                                 description=f"Shared **{quantity}x {ie} {item_name}** with {recipient.mention}!",
                                 colour=rarity_to_colour.setdefault(rarity, 0x2B2D31)))
 
-    showcase = app_commands.Group(name="showcase", description="manage your showcased items.", guild_only=True,
-                                  guild_ids=APP_GUILDS_ID)
+    showcase = app_commands.Group(
+        name="showcase", description="manage your showcased items.", guild_only=True, 
+        guild_ids=APP_GUILDS_ID)
 
     @showcase.command(name="view", description="View your item showcase")
     @app_commands.checks.cooldown(1, 5)
@@ -3287,8 +3294,9 @@ class Economy(commands.Cog):
                 await interaction.response.send_message(
                     embed=membed("Could not find that item in your showcase. Sorry."))
 
-    shop = app_commands.Group(name='shop', description='view items available for purchase.', guild_only=True,
-                              guild_ids=APP_GUILDS_ID)
+    shop = app_commands.Group(
+        name='shop', description='view items available for purchase.', 
+        guild_only=True, guild_ids=APP_GUILDS_ID)
 
     @shop.command(name='view', description='View all the shop items')
     @app_commands.describe(sort_by='The custom order to sort by. Defaults to Name.')
@@ -3374,7 +3382,6 @@ class Economy(commands.Cog):
                 name = item["name"]
                 ie = item["emoji"]
                 cost = item["cost"] * quantity
-                maximum_am = item.get("max")
 
                 wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
                 new_bal = wallet_amt - cost
@@ -3401,11 +3408,12 @@ class Economy(commands.Cog):
                         f"You're short on cash by \U000023e3 **{abs(new_bal):,}** to "
                         f"buy {ie} **{quantity:,}x** {name}, so uh no.")
                 
+                maximum_am = item.get("max")
                 if maximum_am:
                     their_am = await self.get_one_inv_data_new(interaction.user, name, conn)
                     if their_am > maximum_am:
                         return await interaction.response.send_message(
-                            f"You can't make this purchase because you already own {maximum_am}.")
+                            f"You can't make this purchase because you already own **{maximum_am}x {ie} {name}**.")
                 
                 active_sessions.update({interaction.user.id: 1})
                 view = Confirm(interaction)
@@ -3499,7 +3507,6 @@ class Economy(commands.Cog):
                 item = SHOP_ITEMS[name_res]
                 name = item["name"]
                 ie = item["emoji"]
-                cost = floor((item["cost"] * sell_quantity) / 4)
 
                 quantity = await self.get_one_inv_data_new(interaction.user, name, conn)
                 quantity -= sell_quantity
@@ -3508,6 +3515,7 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(
                         f"You're **{abs(quantity)}** short on selling {ie} **{sell_quantity:,}x** {name}, so uh no.")
 
+                cost = floor((item["cost"] * sell_quantity) / 4)
                 embed = discord.Embed(
                     title="Pending Confirmation",
                     description=f"Are you sure you want to sell **{sell_quantity:,}x {ie} {name}** for **\U000023e3 {cost:,}**?",
@@ -3614,8 +3622,9 @@ class Economy(commands.Cog):
             em.set_footer(text=f"This is {rarity.lower()}!")
             return await interaction.response.send_message(embed=em)
 
-    profile = app_commands.Group(name='editprofile', description='custom-profile-orientated commands for use.',
-                                 guild_only=True, guild_ids=APP_GUILDS_ID)
+    profile = app_commands.Group(
+        name='editprofile', description='custom-profile-orientated commands for use.', 
+        guild_only=True, guild_ids=APP_GUILDS_ID)
 
     @profile.command(name='title', description='Add a title to your profile')
     @app_commands.checks.cooldown(1, 30)
@@ -3640,6 +3649,7 @@ class Economy(commands.Cog):
                             f"Your title has been changed. A preview is shown above."))
 
     @profile.command(name='bio', description='Add a bio to your profile')
+    @app_commands.describe(bio='The text of your bio. Maximum 200 characters. Leave blank to remove.')
     @app_commands.checks.cooldown(1, 30)
     async def update_bio_profile(
         self, interaction: discord.Interaction, bio: app_commands.Range[str, None, 200]):
@@ -3684,10 +3694,13 @@ class Economy(commands.Cog):
                     res = "<:overwrite:1195729262729240666> Your avatar was removed."
             return await interaction.response.send_message(embed=membed(res))
 
-        successful = discord.Embed(colour=0x2B2D31,
-                                   description="## <:overwrite:1195729262729240666> Your custom has been added.\n"
-                                               "- If valid, it will look like this ----->\n"
-                                               "- If you can't see it, change it!")
+        successful = discord.Embed(
+            colour=0x2B2D31, 
+            description=(
+                "## <:overwrite:1195729262729240666> Your custom has been added.\n"
+                "- If valid, it will look like this ----->\n"
+                "- If you can't see it, change it!"))
+        
         successful.set_thumbnail(url=url)
         modify_profile("update", f"{interaction.user.id} avatar_url", url)
         await interaction.response.send_message(embed=successful)
@@ -3724,8 +3737,9 @@ class Economy(commands.Cog):
         await interaction.response.send_message(f"{cemoji} Your profile is now {mode}.",
                                                 ephemeral=True, delete_after=7.5)
 
-    servant = app_commands.Group(name='servant', description='manage your servant.', guild_only=True,
-                                 guild_ids=APP_GUILDS_ID)
+    servant = app_commands.Group(
+        name='servant', description='manage your servant.', guild_only=True, 
+        guild_ids=APP_GUILDS_ID)
 
     @servant.command(name='hire', description='Hire your own servant')
     @app_commands.describe(name='The name of your new servant.', gender="The gender of your new servant.")
@@ -5132,8 +5146,9 @@ class Economy(commands.Cog):
         lb = await self.create_leaderboard_preset(chosen_choice=stat)
         await lb_view.message.edit(content=None, embed=lb, view=lb_view)
 
-    rob = app_commands.Group(name='rob', description='rob different places or people.',
-                             guild_only=True, guild_ids=APP_GUILDS_ID)
+    rob = app_commands.Group(
+        name='rob', description='rob different places or people.', 
+        guild_only=True, guild_ids=APP_GUILDS_ID)
 
     @rob.command(name="user", description="Rob robux from another user", extras={"exp_gained": 1})
     @app_commands.describe(other='The player you want to rob from.')
