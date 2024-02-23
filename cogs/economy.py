@@ -5146,31 +5146,29 @@ class Economy(commands.Cog):
         lb = await self.create_leaderboard_preset(chosen_choice=stat)
         await lb_view.message.edit(content=None, embed=lb, view=lb_view)
 
-    rob = app_commands.Group(
-        name='rob', description='rob different places or people.', 
-        guild_only=True, guild_ids=APP_GUILDS_ID)
-
-    @rob.command(name="user", description="Rob robux from another user", extras={"exp_gained": 1})
-    @app_commands.describe(other='The player you want to rob from.')
+    @app_commands.command(name='rob', description='Rob robux from another user', extras={"exp_gained": 4})
+    @app_commands.rename(other="user")
+    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.describe(other='The user you want to rob money from.')
     @app_commands.checks.cooldown(1, 6)
     async def rob_the_user(self, interaction: discord.Interaction, other: discord.Member):
         """Rob someone else."""
         primary_id = str(interaction.user.id)
         other_id = str(other.id)
 
-        async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
+        if other_id == primary_id:
+            embed = membed('Seems pretty foolish to steal from yourself.')
+            return await interaction.response.send_message(embed=embed)
+        elif other.bot:
+            embed = membed('You are not allowed to steal from bots, back off my kind')
+            return await interaction.response.send_message(embed=embed)
+        else:
+            async with self.client.pool_connection.acquire() as conn:
+                if not (await self.can_call_out_either(interaction.user, other, conn)):
+                    return await interaction.response.send_message(
+                        embed=membed(f'Either you or {other.mention} are not registered.')
+                    )
 
-            if other_id == primary_id:
-                embed = membed('Seems pretty foolish to steal from yourself.')
-                return await interaction.response.send_message(embed=embed)
-            elif other.bot:
-                embed = membed('You are not allowed to steal from bots, back off my kind')
-                return await interaction.response.send_message(embed=embed)
-            elif not (await self.can_call_out_either(interaction.user, other, conn)):
-                embed = membed(f'Either you or {other.name} are not registered.')
-                return await interaction.response.send_message(embed=embed)
-            else:
                 prim_d = await conn.execute("SELECT wallet, job, bounty from `bank` WHERE userID = ?",
                                             (interaction.user.id,))
                 prim_d = await prim_d.fetchone()
@@ -5188,9 +5186,9 @@ class Economy(commands.Cog):
                     if not result[0]:
                         emote = choice(
                             ["<a:kekRealize:970295657233539162>", "<:smhlol:1160157952410386513>", 
-                             "<:z_HaH:783399959068016661>", "<:lmao:784308818418728972>", 
-                             "<:lamaww:789865027007414293>", "<a:StoleThisEmote5:791327136296075327>", 
-                             "<:jerryLOL:792239708364341258>", "<:dogkekw:797946573144850432>"])
+                                "<:z_HaH:783399959068016661>", "<:lmao:784308818418728972>", 
+                                "<:lamaww:789865027007414293>", "<a:StoleThisEmote5:791327136296075327>", 
+                                "<:jerryLOL:792239708364341258>", "<:dogkekw:797946573144850432>"])
                         
                         fine = randint(1, prim_d[0])
                         embed.description = (
@@ -5239,124 +5237,6 @@ class Economy(commands.Cog):
                     embed.set_footer(text=f"You stole \U000023e3 {total:,} in total")
                     return await interaction.response.send_message(embed=embed)
 
-    @rob.command(name='casino', description='Rob a casino vault', extras={"exp_gained": 10})
-    async def rob_the_casino(self, interaction: discord.Interaction):
-        """This a subcommand. Rob the buil"""
-
-        await interaction.response.defer()
-
-        async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
-
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.followup.send(embed=self.not_registered)
-
-            cooldown = await self.fetch_cooldown(conn, user=interaction.user, cooldown_type="casino")
-
-            if await self.get_job_data_only(interaction.user, conn) == "Police":
-                return await interaction.followup.send(
-                    embed=membed("You cannot rob the casino as a police officer.")
-                )
-            
-            if cooldown != "0":
-                cooldown = string_to_datetime(cooldown[0])
-                now = datetime.datetime.now()
-                diff = cooldown - now
-                if diff.total_seconds() > 0:
-                        minutes, seconds = divmod(diff.total_seconds(), 60)
-                        hours, minutes = divmod(minutes, 60)
-                        days, hours = divmod(hours, 24)
-                        return await interaction.followup.send(
-                            embed=membed(
-                                f"The casino is not ready.\n"
-                                f"It will be available in "
-                                f"**{int(days)}** days, **{int(hours)}** "
-                                f"hours, **{int(minutes)}** minutes "
-                                f"and **{int(seconds)}** seconds."))
-
-            channel = interaction.channel
-            ranint = randint(1000, 1999)
-            await channel.send(
-                embed=membed(f'A 4-digit PIN is required to enter the casino.\n'
-                                f'Here are the first 3 digits: {str(ranint)[:3]}'))
-
-            def check(m):
-                """Requirements that the client has to wait for."""
-                return m.content == f'{str(ranint)}' and m.channel == channel and m.author == interaction.user
-
-            try:
-                await self.client.wait_for('message', check=check, timeout=30.0)
-            except asyncTE:
-                await interaction.followup.send(
-                    embed=membed(f"Too many seconds passed. Access denied. (The code was {ranint})"))
-            else:
-                msg = await interaction.followup.send(
-                    embed=membed('You cracked the code and got access. Good luck escaping unscathed.'),
-                    wait=True)
-                hp = 100
-                messages = await channel.send(
-                    embed=membed("Passing through security forces.. (HP: 100/100)"),
-                    reference=msg.to_reference(fail_if_not_exists=False))
-                
-                hp -= randint(16, 40)
-                await sleep(0.9)
-                await messages.edit(embed=membed(f"Disabling security on security floor.. (HP {hp}/100)"))
-                hp -= randint(15, 59)
-                await sleep(0.9)
-                await messages.edit(embed=membed(f"Entering the vault.. (HP {hp}/100)"))
-                hp -= randint(1, 25)
-                await sleep(1.5)
-                
-                async with conn.transaction():
-                    if hp <= 5:
-                        timeout = randint(5, 12)
-                        await messages.edit(
-                            embed=membed(
-                                f"## <:rwarning:1165960059260518451> Critical HP Reached.\n"
-                                f"- Your items and robux will not be lost.\n"
-                                f"- Police forces were alerted and escorted you out of the building.\n"
-                                f"- You may not enter the casino for another **{timeout}** hours."))
-                        ncd = datetime.datetime.now() + datetime.timedelta(hours=timeout)
-                        ncd = datetime_to_string(ncd)
-                        await self.update_cooldown(conn, user=interaction.user, cooldown_type="casino", new_cd=ncd)
-                    else:
-                        recuperate_amt = randint(6, 21)
-                        total, extra = 0, 0
-                        pmulti = await self.get_pmulti_data_only(interaction.user, conn)
-                        new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
-
-                        for _ in range(recuperate_amt):
-                            fill_by = randint(500_000, 1_000_000)
-                            total += fill_by
-                            extra += floor(((new_multi / 100) * fill_by))
-                            await messages.edit(
-                                embed=membed(
-                                    f"> \U0001f4b0 **{interaction.user.name}'s "
-                                    f"Duffel Bag**: {total:,} / 100,000,000\n"
-                                    f"> {PREMIUM_CURRENCY} **Bonus**: {extra:,} / 500,000,000"))
-                            await sleep(0.9)
-
-                        overall = total + extra
-                        wllt = await self.update_bank_new(interaction.user, conn, +overall)
-
-                        timeout = randint(18, 24)
-                        ncd = datetime.datetime.now() + datetime.timedelta(hours=timeout)
-                        ncd = datetime_to_string(ncd)
-                        await self.update_cooldown(conn, user=interaction.user, cooldown_type="casino", new_cd=ncd)
-                        bounty = randint(1_250_000, 2_500_000)
-                        nb = await self.update_bank_new(interaction.user, conn, +bounty, "bounty")
-                        await messages.edit(
-                            content=(
-                                "Your bounty has increased by \U000023e3 "
-                                f"**{bounty:,}**, to \U000023e3 **{nb[0]:,}**!"),
-                            embed=membed(
-                                f"> \U0001f4b0 **{interaction.user.name}'s "
-                                f"Duffel Bag**: \U000023e3 {total:,} / \U000023e3 100,000,000\n"
-                                f"> {PREMIUM_CURRENCY} **Bonus**: \U000023e3 {extra:,} "
-                                f"/ \U000023e3 500,000,000\n"
-                                f"> [\U0001f4b0 + {PREMIUM_CURRENCY}] **Total**: \U000023e3 **{overall:,}"
-                                "**\n\nYou escaped without a scratch.\n"
-                                f"Your new `wallet` balance is \U000023e3 {wllt[0]:,}"))
 
     @app_commands.command(name='coinflip', description='Bet your robux on a coin flip', extras={"exp_gained": 3})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
