@@ -5133,18 +5133,16 @@ class Economy(commands.Cog):
                                   "Bank + Wallet", "Wallet", "Bank", "Inventory Net", "Bounty", "Commands", "Level"]):
         """View the leaderboard and filter the results based on different stats inputted."""
 
-        await interaction.response.send_message(
-            content="Crunching the latest data just for you, give us a mo'..")
-        lb_view = Leaderboard(self.client, stat, channel_id=interaction.channel.id)
-        lb_view.message = await interaction.original_response()
-
         if active_sessions.get(interaction.channel.id):
-            return await lb_view.message.edit(content=None, embed=membed(
-                    "The command is still active in this channel."))
+            return await interaction.response.send_message(
+                embed=membed("The command is still active in this channel."))
         active_sessions.update({interaction.channel.id: 1})
 
+        lb_view = Leaderboard(self.client, stat, channel_id=interaction.channel.id)
         lb = await self.create_leaderboard_preset(chosen_choice=stat)
-        await lb_view.message.edit(content=None, embed=lb, view=lb_view)
+
+        await interaction.response.send_message(embed=lb, view=lb_view)
+        lb_view.message = await interaction.original_response()
 
     @app_commands.command(name='rob', description='Rob robux from another user', extras={"exp_gained": 4})
     @app_commands.rename(other="user")
