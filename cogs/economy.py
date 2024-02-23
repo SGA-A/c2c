@@ -5162,17 +5162,13 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             if other_id == primary_id:
-                embed = membed('You cannot rob yourself, everyone knows that.')
+                embed = membed('Seems pretty foolish to steal from yourself.')
                 return await interaction.response.send_message(embed=embed)
             elif other.bot:
                 embed = membed('You are not allowed to steal from bots, back off my kind')
                 return await interaction.response.send_message(embed=embed)
-            elif other_id == "992152414566232139":
-                embed = membed('You are not allowed to rob the developer of this bot.')
-                return await interaction.response.send_message(embed=embed)
             elif not (await self.can_call_out_either(interaction.user, other, conn)):
-                embed = membed(f'- Either you or {other.name} does not have an account.\n'
-                               f' - </balance:1179817617435926686> to register.')
+                embed = membed(f'Either you or {other.name} are not registered.')
                 return await interaction.response.send_message(embed=embed)
             else:
                 prim_d = await conn.execute("SELECT wallet, job, bounty from `bank` WHERE userID = ?",
@@ -5181,37 +5177,67 @@ class Economy(commands.Cog):
                 host_d = await conn.execute("SELECT wallet, job from `bank` WHERE userID = ?", (other.id,))
                 host_d = await host_d.fetchone()
 
-                result = choices([0, 1], weights=(29, 71), k=1)
+                if host_d[0] < 1_000_000:
+                    return await interaction.response.send_message(
+                        embed=membed("The victim doesn't even have \U000023e3 **1,000,000**, not worth it."))
 
+                result = choices([0, 1], weights=(49, 51), k=1)
+                
+                embed = discord.Embed(colour=0x2F3136)
                 async with conn.transaction():
                     if not result[0]:
+                        emote = choice(
+                            ["<a:kekRealize:970295657233539162>", "<:smhlol:1160157952410386513>", 
+                             "<:z_HaH:783399959068016661>", "<:lmao:784308818418728972>", 
+                             "<:lamaww:789865027007414293>", "<a:StoleThisEmote5:791327136296075327>", 
+                             "<:jerryLOL:792239708364341258>", "<:dogkekw:797946573144850432>"])
+                        
                         fine = randint(1, prim_d[0])
-                        prcf = (fine / prim_d[0]) * 100
-                        conte = (f'- You were caught stealing now you paid {other.name} \U000023e3 **{fine:,}**.\n'
-                                 f'- **{prcf:.1f}**% of your money was handed over to the victim.')
+                        embed.description = (
+                            f'You were caught lol {emote}\n'
+                            f'You paid {other.mention} \U000023e3 **{fine:,}**.')
 
                         b = prim_d[-1]
                         if b:
                             fine += b
-                            conte += ("\n- **You're on the bounty board!**\n"
-                                      f" - {other.mention} handed you over to"
-                                      f" the police and your bounty of **\U000023e3 {b:,}**"
-                                      " was given to them.")
+                            embed.description += (
+                                "\n\n**Bounty Status:**\n"
+                                f"{other.mention} was also given your bounty of **\U000023e3 {b:,}**."
+                                )
 
+                            await self.update_bank_new(other, conn, +fine)
+                            await self.update_bank_multiple_new(
+                                interaction.user, conn, "wallet", -fine, "bounty", 0)
+                            return await interaction.response.send_message(embed=embed)
+                        
                         await self.update_bank_new(interaction.user, conn, -fine)
                         await self.update_bank_new(other, conn, +fine)
-                        return await interaction.response.send_message(embed=membed(conte))
+                        return await interaction.response.send_message(embed=embed)
+
+                    amt_stolen = randint(1_000_000, host_d[0])
+                    lost = floor((25 / 100) * amt_stolen)
+                    total = amt_stolen - lost
+                    percent_stolen = floor((total/amt_stolen) * 100)
+
+                    await self.update_bank_new(interaction.user, conn, +total)
+                    await self.update_bank_new(other, conn, -total)
+                    
+                    if percent_stolen >= 75:
+                        embed.title = "You stole BASICALLY EVERYTHING YOU POSSIBLY COULD!"
+                        embed.set_thumbnail(url="https://i.imgur.com/jY3PzTv.png")
+                    if percent_stolen >= 50:
+                        embed.title = "You stole a fairly decent chunk!"
+                        embed.set_thumbnail(url="https://i.imgur.com/eNIT8qw.png")
                     else:
-                        steal_amount = randint(1, host_d[0])
-                        await self.update_bank_new(interaction.user, conn, +steal_amount)
-                        await self.update_bank_new(other, conn, -steal_amount)
-
-                        prcf = (steal_amount / host_d[0]) * 100
-
-                        return await interaction.response.send_message(
-                            embed=membed(f"You managed to steal \U000023e3 **{steal_amount:,}** from {other.name}.\n"
-                                         f"You took a dandy **{prcf:.1f}**% of {other.name}."),
-                            delete_after=10.0)
+                        embed.title = "You stole a TINY portion!"
+                        embed.set_thumbnail(url="https://i.imgur.com/nZmHhJX.png")
+                    
+                    embed.description = (
+                        "**You managed to get:**\n"
+                        f"\U000023e3 {amt_stolen:,} (but dropped {lost:,} while escaping)"
+                    )
+                    embed.set_footer(text=f"You stole \U000023e3 {total:,} in total")
+                    return await interaction.response.send_message(embed=embed)
 
     @rob.command(name='casino', description='Rob a casino vault', extras={"exp_gained": 10})
     async def rob_the_casino(self, interaction: discord.Interaction):
