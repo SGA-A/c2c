@@ -242,12 +242,15 @@ class Miscellaneous(commands.Cog):
         if message.author.bot:
             return
 
-        if message.content in {"geo", "teo"}:
-            return await message.add_reaction("<a:StoleThisEmote7:793153800612479017>")
-        if message.content in {"0x80", "cookies"}:
-            return await message.add_reaction("<:0x80:1125061332698406923>")
-        if "c2c" in message.content.lower():
-            await message.add_reaction("<:milady:973571282031484968>")
+        try:
+            if message.content in {"geo", "teo"}:
+                return await message.add_reaction("<a:StoleThisEmote7:793153800612479017>")
+            if message.content in {"0x80", "cookies"}:
+                return await message.add_reaction("<:0x80:1125061332698406923>")
+            if "c2c" in message.content.lower():
+                await message.add_reaction("<:milady:973571282031484968>")
+        except discord.NotFound:
+            pass
         
         if message.content.startswith(".."):
             match = search(r'\d+$', message.content)
