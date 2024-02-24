@@ -1,0 +1,22 @@
+On PC, hitting your up arrow will re-type the last slash command you sent as long as you have not chatted in between.
+At every 100 days in your /daily streak, you get a special item!
+Gambling is not a consistent way to make money, and you should make sure you cut your losses if you go on a losing streak!
+During bankrobs, you can die or be fined. Beware when entering!
+There is a 48 hour long cooldown to changing your job. Remember to pick wisely.
+Own a Shop Coupon? You can use it when you Shop buy an item from the shop, simply set the coupon option as true to apply it to your purchase.
+Make sure to check /multi view to see what your current multi is before you use the /shop sell command. The higher the multiplier you have, the more money you can get for sellable type items!
+You can flex on others by adding items in your showcase with the </showcase add:1197895802387968090> command. Just type the item name and it's position (1-3).
+</highlow:1179817617435926680> is a fun guessing game to bet your money on, use it to flex your skills!
+Have you tried out all our gambling commands? Here's a list of all of them: </highlow:1179817617435926680>, </bet:1179817617603711000>, </slots:1179817617435926681>, </blackjack:1191457992076447784>, </coinflip:1179817617603710999>. Those with a <:lanyard:1165935243140796487> Keycard have higher chances of winning!
+Manage your own servant by calling </servant lookup:1201982950498107412>. Feeding your servant also gives you an immediate XP bump!
+You can view your own gambling stats in </profile:1179817617435926679> by setting the `category` option to Gambling Stats. The details are also displayed nicely on a pie chart.
+If you right-click on someone's message and go to apps, you can extract the source of the image just by clicking the associated option!
+You can add a bio onto your </profile:1179817617435926679>! Use the </editprofile bio:1179817617251369077> to add one. There is more to customize through the /editprofile group commands.
+You can view specific details about an item with </item:1202694890471956521>. It allows you to see how many people own the item, the description, the art, and sometimes more!
+Prestiging is the first step into endgame with </prestige:1199683661432361001>
+Don't want to work for your coins? Rob someone else with </rob:1179817617603710998>!
+Scope out who has the highest net worth, pocket balance, and more with </leaderboard:1179817617603710997>.
+Some drones are available for purchase in the shop. Use them to help add reward buffs or perform other nefarious activity.
+Work consistently enough each day and you can get promoted! This increases your pay and the chance for a job specific item to drop!
+You can search through commands within a category </help:1185851353520676914> and find every command supported currently.
+Your servants have the possibility to fund billions towards your name. Use them to your advantage, unlock new skill levels and gain more power!
