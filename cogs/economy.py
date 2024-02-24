@@ -1929,7 +1929,7 @@ class SelectTaskMenu(discord.ui.Select):
         payout = reverse_format_number_short(payout)
 
         res_duration = self.calculate_time(skill_level=self.skill_lvl, emoji_id=emoji)
-        res_duration = datetime.datetime.now() + datetime.timedelta(hours=res_duration)
+        res_duration = discord.utils.utcnow() + datetime.timedelta(hours=res_duration)
     
         embed = discord.Embed(
             title="Task Started",
@@ -2216,7 +2216,7 @@ class Economy(commands.Cog):
                                                         "### Already Registered?\n"
                                                         "Find out what could've happened by calling the command "
                                                         "[`>reasons`](https://www.google.com/).", colour=0x2F3136,
-                                            timestamp=datetime.datetime.now(datetime.UTC))
+                                            timestamp=discord.utils.utcnow())
         self.batch_update.start()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -3781,7 +3781,7 @@ class Economy(commands.Cog):
                 color=0x00FF7F)
 
             slaye.set_footer(text=f"{size + 1}/6 slay slots consumed")
-            await self.open_slay(conn, interaction.user, name, gender, datetime_to_string(datetime.datetime.now()))
+            await self.open_slay(conn, interaction.user, name, gender, datetime_to_string(discord.utils.utcnow()))
             await conn.commit()
             await interaction.response.send_message(content=None, embed=slaye)
 
@@ -3806,7 +3806,7 @@ class Economy(commands.Cog):
                     continue
                 since_arrival = string_to_datetime(servant[-1])
 
-                if (datetime.datetime.now() - since_arrival).total_seconds() < 172_800:
+                if (discord.utils.utcnow() - since_arrival).total_seconds() < 172_800:
                     time_required = since_arrival + datetime.timedelta(days=2)
                     return await interaction.response.send_message(
                         embed=membed(
@@ -3878,21 +3878,16 @@ class Economy(commands.Cog):
 
                     if work_until != "0":
                         work_until = string_to_datetime(work_until)
-                        diff = work_until - datetime.datetime.now()
+                        diff = work_until - discord.utils.utcnow()
 
                         if diff.total_seconds() > 0:
-                            when = datetime.datetime.now() + datetime.timedelta(seconds=diff.total_seconds())
+                            when = discord.utils.utcnow() + datetime.timedelta(seconds=diff.total_seconds())
                             relative = discord.utils.format_dt(when, style="R")
                             when = discord.utils.format_dt(when)
 
-                            embed = discord.Embed(
-                                title=f"{slay_name}'s Progression",
-                                description="ETA: {when} ({relative}).\n"
-                                            "")
-
                             return await interaction.response.send_message(
                                 embed=membed(f"{slay_name} is still working.\n"
-                                            f"They'll be back on {when} ({relative})."))
+                                            f"They'll be back at {when} ({relative})."))
                         
                         # TODO some stuff beneath here if the servant is done working
 
@@ -3984,7 +3979,7 @@ class Economy(commands.Cog):
 
     @register_item('Crisis')
     async def handle_drone(interaction: discord.Interaction, quantity: int, conn: asqlite_Connection) -> None:
-        now = datetime.datetime.now()
+        now = discord.utils.utcnow()
         now = datetime_to_string(now)
         data = await conn.execute("SELECT * FROM drones WHERE userID = ?", (interaction.user.id,))
         if not data:
@@ -4184,10 +4179,10 @@ class Economy(commands.Cog):
 
             if cooldown[0] != "0":
                 cooldown = string_to_datetime(cooldown[0])
-                now = datetime.datetime.now()
+                now = discord.utils.utcnow()
                 diff = cooldown - now
                 if diff.total_seconds() > 0:
-                    when = datetime.datetime.now() + datetime.timedelta(seconds=diff.total_seconds())
+                    when = now + datetime.timedelta(seconds=diff.total_seconds())
                     
                     embed = discord.Embed(
                         title="Cannot perform this action", 
@@ -4204,9 +4199,9 @@ class Economy(commands.Cog):
                 if job_name.startswith("I"):
                     if current_job == "None":
                         return await interaction.response.send_message(
-                            embed=membed("You're already unemployed!?"))
+                            embed=membed("You're already unemployed!"))
                     
-                    ncd = datetime.datetime.now() + datetime.timedelta(days=2)
+                    ncd = discord.utils.utcnow() + datetime.timedelta(days=2)
                     ncd = datetime_to_string(ncd)
                     await self.update_cooldown(
                         conn, user=interaction.user, cooldown_type="job_change", new_cd=ncd)
@@ -4216,15 +4211,17 @@ class Economy(commands.Cog):
                         embed=membed("Alright, I've removed you from your job.\n"
                                      "You cannot apply to another job for the next **48 hours**."))
 
-                ncd = datetime.datetime.now() + datetime.timedelta(days=2)
+                ncd = discord.utils.utcnow() + datetime.timedelta(days=2)
                 ncd = datetime_to_string(ncd)
                 await self.update_cooldown(
                     conn, user=interaction.user, cooldown_type="job_change", new_cd=ncd)
                 
                 await self.change_job_new(interaction.user, conn, job_name=job_name)
-                return await interaction.response.send_message(
-                    embed=membed("Congratulations, you've been hired.\n"
-                                 f"Starting today, you are working as a {job_name.lower()}."))
+                embed = discord.Embed()
+                embed.title = f"Congratulations, you are now working as a {job_name}"
+                embed.description = "You can start working now for every 40 minutes."
+                embed.colour = 0x2B2D31
+                await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='profile', description='View user information and other stats')
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -4797,7 +4794,7 @@ class Economy(commands.Cog):
                         embed=membed("You don't have a job, get one first."))
 
             ncd = string_to_datetime(data[0][0])
-            now = datetime.datetime.now()
+            now = discord.utils.utcnow()
 
             diff = ncd - now
             if diff.total_seconds() > 0:
@@ -4923,7 +4920,7 @@ class Economy(commands.Cog):
             ncd = await conn.fetchone("SELECT weekly FROM cooldowns WHERE userID = ?", (interaction.user.id,))
             
             ncd = string_to_datetime(ncd[0])
-            now = datetime.datetime.now()
+            now = discord.utils.utcnow()
 
             diff = ncd - now
             if diff.total_seconds() > 0:
