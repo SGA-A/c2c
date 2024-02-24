@@ -5232,6 +5232,30 @@ class Economy(commands.Cog):
                     embed.set_footer(text=f"You stole \U000023e3 {total:,} in total")
                     return await interaction.response.send_message(embed=embed)
 
+    @app_commands.command(name='bankrob', description="Gather people to rob someone's bank")
+    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.describe(user='The user to attempt to bankrob.')
+    @app_commands.checks.cooldown(1, 60)
+    async def bankrob_the_user(self, interaction: discord.Interaction, user: discord.Member):
+        """Rob someone else's bank."""
+        starter_id = interaction.user.id
+        user_id = user.id
+
+        if user_id == starter_id:
+            return await interaction.response.send_message(
+                embed=membed("You can't bankrob yourself."))
+        elif user.bot:
+            return await interaction.response.send_message(
+                embed=membed("You can't bankrob bots."))
+        else:
+            async with self.client.pool_connection.acquire() as conn:
+                if not (await self.can_call_out_either(interaction.user, user, conn)):
+                    return await interaction.response.send_message(
+                        embed=membed(f"Either you or {user.mention} are not registered.")
+                    )
+
+                return await interaction.response.send_message(
+                    embed=membed("This command is currently under construction. Please try again later."))
 
     @app_commands.command(name='coinflip', description='Bet your robux on a coin flip', extras={"exp_gained": 3})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
