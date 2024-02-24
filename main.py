@@ -300,8 +300,26 @@ class SelectMenu(ui.Select):
             embed.set_thumbnail(url='https://emoji.discadia.com/emojis/74e65408-2adb-46dc-86a7-363f3096b6b2.PNG')
 
             for cmd, cmd_details in all_cmdss.items():
-                cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                 total_cmds_cata += 1
+
+                if cmd_details[-1] == 'txt':
+                    cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
+                    continue
+
+                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
+                
+                try:
+                    got_something = False
+                    if command_manage.options:
+                        for option in command_manage.options:
+                            if isinstance(option, app_commands.AppCommandGroup):
+                                got_something = True
+                                cmd_formatter.add(
+                                    f"\U00002022 {option.mention} - {option.description}")
+                    if not got_something:
+                        cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
+                except AttributeError:
+                    pass
 
             embed.add_field(
                 name='About: Mod', 
@@ -460,9 +478,9 @@ class TimeConverter(commands.Converter):
             try:
                 time += self.time_dict[k]*float(v)
             except KeyError:
-                raise commands.BadArgument("{} is an invalid time-key! h/m/s/d are valid!".format(k))
+                raise commands.BadArgument(f"{k} is an invalid time-key! h/m/s/d are valid!")
             except ValueError:
-                raise commands.BadArgument("{} is not a number!".format(v))
+                raise commands.BadArgument(f"{v} is not a number!")
         return time
 
 
