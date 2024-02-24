@@ -1,7 +1,7 @@
 from random import choices
 import re
 from datetime import datetime, timedelta
-
+from pytz import timezone
 
 def labour_productivity_via(*, investment):
     """Find a suitable productivity level of a slave based on the investment"""
@@ -66,8 +66,11 @@ def string_to_datetime(string_obj: str) -> datetime:
     String must be in this format: %Y-%m-%d %H:%M:%S
 
     :param string_obj: the input string representing a date and time.
+    :param timezone: the timezone to attach to the datetime object.
     :returns: A datetime object."""
 
     date_format = "%Y-%m-%d %H:%M:%S"
     my_datetime = datetime.strptime(string_obj, date_format)
+    my_datetime = my_datetime.replace(tzinfo=timezone("UTC"))
     return my_datetime
+    
