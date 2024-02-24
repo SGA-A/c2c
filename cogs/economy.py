@@ -2285,12 +2285,12 @@ class Economy(commands.Cog):
     @staticmethod
     def calculate_exp_for(*, level: int):
         """Calculate the experience points required for a given level."""
-        return ceil((level / 0.9) ** 2)
+        return 12 + ceil((0.25 * level / 90.8) ** 2)
 
     @staticmethod
     def calculate_serv_exp_for(*, level: int):
         """Calculate the experience points required for a given level."""
-        return int((level / 0.59) ** 3)
+        return 10 + ceil((0.75 * level / 817.9) ** 2)
 
     async def create_leaderboard_preset(self, chosen_choice: str):
         """A single reused function used to map the chosen leaderboard made by the user to the associated query."""
@@ -4244,15 +4244,11 @@ class Economy(commands.Cog):
         if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id == user.id):
             ephemerality = True
 
-        await interaction.response.send_message(
-            "Crunching the latest data just for you, give us a mo'..", ephemeral=ephemerality, silent=True)
-        msg = await interaction.original_response()
-
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
             if await self.can_call_out(user, conn):
-                return await msg.edit(content=None, embed=NOT_REGISTERED)
+                return await interaction.response.send_message(embed=NOT_REGISTERED)
 
             if category == "Main Profile":
 
@@ -4350,7 +4346,7 @@ class Economy(commands.Cog):
                         procfile.set_thumbnail(url=user.display_avatar.url)
                 else:
                     procfile.set_thumbnail(url=user.display_avatar.url)
-                return await msg.edit(content=None, embed=procfile)
+                return await interaction.response.send_message(embed=procfile, ephemeral=ephemerality)
             else:
 
                 data = await conn.fetchone(
@@ -4397,7 +4393,8 @@ class Economy(commands.Cog):
                                       f"Win: {winbl:.0f}% ({data[4]})")
                 stats.set_footer(text="The number next to the name is how many matches are recorded")
 
-                await msg.edit(content=None, embed=stats)
+                await interaction.response.send_message(embed=stats, ephemeral=ephemerality)
+                msg = await interaction.original_response()
                 try:
                     its_sum = total_bets + total_slots + total_blackjacks
                     pie = (ImageCharts()
@@ -4958,7 +4955,7 @@ class Economy(commands.Cog):
         if interaction.user.id not in self.client.owner_ids:
             if (member is not None) and (member != interaction.user):
                 return await interaction.response.send_message(
-                    embed=membed("You are forbidden from performing this action."))
+                    embed=membed("You are not allowed to do this."))
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
@@ -5268,20 +5265,21 @@ class Economy(commands.Cog):
 
         user = interaction.user
 
+        amount = determine_exponent(str(amount))
+
+        bet_on = "heads" if "h" in bet_on.lower() else "tails"
+        if (amount < MIN_BET) or (amount > MAX_BET_KEYCARD):
+            return await interaction.response.send_message(
+                embed=membed(
+                    f"*As per-policy*, the minimum bet is \U000023e3 "
+                    f"**{MAX_BET_KEYCARD:,}**, the maximum is {CURRENCY}**200,000,000**."))
+        
         async with self.client.pool_connection.acquire() as conn:
-
-            amount = determine_exponent(str(amount))
-
-            bet_on = "heads" if "h" in bet_on.lower() else "tails"
-            if (amount < MIN_BET) or (amount > MAX_BET_KEYCARD):
-                return await interaction.response.send_message(
-                    embed=membed(
-                        f"*As per-policy*, the minimum bet is \U000023e3 "
-                        f"**{MAX_BET_KEYCARD:,}**, the maximum is {CURRENCY}**200,000,000**."))
-
             conn: asqlite_Connection
+
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
+            
             wallet_amt = await self.get_wallet_data_only(user, conn)
             if wallet_amt < amount:
                 return await interaction.response.send_message(
