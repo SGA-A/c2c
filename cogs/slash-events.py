@@ -1,7 +1,7 @@
-from discord.utils import format_dt
+from discord.utils import format_dt, utcnow
 from random import choice
 from traceback import print_exception
-from discord import Embed, Interaction, utils
+from discord import Embed, Interaction
 from discord.ext import commands
 from discord.app_commands import AppCommandError, CheckFailure, MissingRole, MissingPermissions
 from discord.app_commands import CommandOnCooldown, CommandNotFound, CommandAlreadyRegistered, CommandInvokeError
@@ -48,7 +48,7 @@ class SlashExceptionHandler(commands.Cog):
                 
                 exception.set_thumbnail(url=None)
                 exception.colour = 0x2B2D31
-                after_cd = utils.utcnow() + datetime.timedelta(seconds=error.retry_after)
+                after_cd = utcnow() + datetime.timedelta(seconds=error.retry_after)
                 exception.description = f"You can run this command again {format_dt(after_cd, style='R')}."
             else:
                 exception.description = "Conditions needed to call this command were not met."
