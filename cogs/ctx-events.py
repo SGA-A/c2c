@@ -66,12 +66,6 @@ class ContextCommandHandler(commands.Cog):
                 exception.add_field(name='Required Role', value=f"<@&{err.missing_role}>",
                                     inline=False)
                 await ctx.reply(embed=exception, mention_author=False)
-            else:
-
-                await ctx.reply(
-                    embed=membed("## Checks Failed\n"
-                                 "You have not met a prerequisite before executing this command."),
-                    mention_author=False)
 
         elif isinstance(err, errors.CommandOnCooldown):
             exception = membed("You're on cooldown to avoid overloading the bot.\n"
@@ -79,7 +73,7 @@ class ContextCommandHandler(commands.Cog):
             await ctx.reply(embed=exception)
 
         elif isinstance(err, errors.CommandNotFound):
-            await ctx.reply("The command requested for was not found.", mention_author=False)
+            await ctx.reply("Could not find what you were looking for.", mention_author=False)
 
         else:
             await ctx.reply(
