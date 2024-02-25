@@ -3978,21 +3978,22 @@ class Economy(commands.Cog):
             f"{interaction.user.name} is flexing on you all "
             f"with their <:tr1:1165936712468418591> **~~PEPE~~ TROPHY**{content}")
 
-    @register_item('Crisis')
-    async def handle_drone(interaction: discord.Interaction, quantity: int, conn: asqlite_Connection) -> None:
-        now = discord.utils.utcnow()
-        now = datetime_to_string(now)
-        data = await conn.execute("SELECT * FROM drones WHERE userID = ?", (interaction.user.id,))
-        if not data:
-            await conn.execute(
-                "INSERT INTO drones (userID, type, obtained) VALUES (?, ?, ?, ?)",
-                (interaction.user.id, "Crisis", now))
+    # @register_item('Crisis')
+    # async def handle_drone(interaction: discord.Interaction, quantity: int, conn: asqlite_Connection) -> None:
+        
+        # now = discord.utils.utcnow()
+        # now = datetime_to_string(now)
+        # data = await conn.execute("SELECT * FROM drones WHERE userID = ?", (interaction.user.id,))
+        # if not data:
+        #     await conn.execute(
+        #         "INSERT INTO drones (userID, type, obtained) VALUES (?, ?, ?, ?)",
+        #         (interaction.user.id, "Crisis", now))
 
-            await conn.commit()
-            return await interaction.response.send_message(embed=membed(
-                "You've unwrapped your Crisis drone. For each upgrade, it will continue to evolve.\n"
-                "Reach step 20 and you'll unlock **Crisis XT**."))
-        await interaction.response.send_message(embed=membed("You already own a Crisis drone."))
+        #     await conn.commit()
+        #     return await interaction.response.send_message(embed=membed(
+        #         "You've unwrapped your Crisis drone. For each upgrade, it will continue to evolve.\n"
+        #         "Reach step 20 and you'll unlock **Crisis XT**."))
+        # await interaction.response.send_message(embed=membed("You already own a Crisis drone."))
 
     @app_commands.command(name="use", description="Use an item you own from your inventory", extras={"exp_gained": 3})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
