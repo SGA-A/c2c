@@ -5218,13 +5218,16 @@ class Economy(commands.Cog):
                     if percent_stolen >= 50:
                         embed.title = "You stole a fairly decent chunk!"
                         embed.set_thumbnail(url="https://i.imgur.com/eNIT8qw.png")
+                    if percent_stolen >= 25:
+                        embed.title = "You stole a small portion!"
+                        embed.set_thumbnail(url="https://i.imgur.com/148ClcS.png")
                     else:
                         embed.title = "You stole a TINY portion!"
                         embed.set_thumbnail(url="https://i.imgur.com/nZmHhJX.png")
                     
                     embed.description = (
                         "**You managed to get:**\n"
-                        f"\U000023e3 {amt_stolen:,} (but dropped {lost:,} while escaping)"
+                        f"\U000023e3 {amt_stolen:,} (but dropped \U000023e3 {lost:,} while escaping)"
                     )
                     embed.set_footer(text=f"You stole \U000023e3 {total:,} in total")
                     return await interaction.response.send_message(embed=embed)
