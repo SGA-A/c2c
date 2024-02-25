@@ -385,6 +385,7 @@ def determine_exponent(rinput: str) -> str | int:
         actual_value = before_e * (10 ** ten_exponent)
     else:
         try:
+            rinput = rinput.translate(str.maketrans('', '', ','))
             actual_value = int(rinput)
         except ValueError:
             return rinput
@@ -3977,21 +3978,22 @@ class Economy(commands.Cog):
             f"{interaction.user.name} is flexing on you all "
             f"with their <:tr1:1165936712468418591> **~~PEPE~~ TROPHY**{content}")
 
-    @register_item('Crisis')
-    async def handle_drone(interaction: discord.Interaction, quantity: int, conn: asqlite_Connection) -> None:
-        now = discord.utils.utcnow()
-        now = datetime_to_string(now)
-        data = await conn.execute("SELECT * FROM drones WHERE userID = ?", (interaction.user.id,))
-        if not data:
-            await conn.execute(
-                "INSERT INTO drones (userID, type, obtained) VALUES (?, ?, ?, ?)",
-                (interaction.user.id, "Crisis", now))
+    # @register_item('Crisis')
+    # async def handle_drone(interaction: discord.Interaction, quantity: int, conn: asqlite_Connection) -> None:
+        
+        # now = discord.utils.utcnow()
+        # now = datetime_to_string(now)
+        # data = await conn.execute("SELECT * FROM drones WHERE userID = ?", (interaction.user.id,))
+        # if not data:
+        #     await conn.execute(
+        #         "INSERT INTO drones (userID, type, obtained) VALUES (?, ?, ?, ?)",
+        #         (interaction.user.id, "Crisis", now))
 
-            await conn.commit()
-            return await interaction.response.send_message(embed=membed(
-                "You've unwrapped your Crisis drone. For each upgrade, it will continue to evolve.\n"
-                "Reach step 20 and you'll unlock **Crisis XT**."))
-        await interaction.response.send_message(embed=membed("You already own a Crisis drone."))
+        #     await conn.commit()
+        #     return await interaction.response.send_message(embed=membed(
+        #         "You've unwrapped your Crisis drone. For each upgrade, it will continue to evolve.\n"
+        #         "Reach step 20 and you'll unlock **Crisis XT**."))
+        # await interaction.response.send_message(embed=membed("You already own a Crisis drone."))
 
     @app_commands.command(name="use", description="Use an item you own from your inventory", extras={"exp_gained": 3})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
@@ -5218,13 +5220,16 @@ class Economy(commands.Cog):
                     if percent_stolen >= 50:
                         embed.title = "You stole a fairly decent chunk!"
                         embed.set_thumbnail(url="https://i.imgur.com/eNIT8qw.png")
+                    if percent_stolen >= 25:
+                        embed.title = "You stole a small portion!"
+                        embed.set_thumbnail(url="https://i.imgur.com/148ClcS.png")
                     else:
                         embed.title = "You stole a TINY portion!"
                         embed.set_thumbnail(url="https://i.imgur.com/nZmHhJX.png")
                     
                     embed.description = (
                         "**You managed to get:**\n"
-                        f"\U000023e3 {amt_stolen:,} (but dropped {lost:,} while escaping)"
+                        f"\U000023e3 {amt_stolen:,} (but dropped \U000023e3 {lost:,} while escaping)"
                     )
                     embed.set_footer(text=f"You stole \U000023e3 {total:,} in total")
                     return await interaction.response.send_message(embed=embed)
