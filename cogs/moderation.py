@@ -1,15 +1,46 @@
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 from time import perf_counter
 import discord
-from datetime import timedelta
+from pytz import timezone
+from datetime import timedelta, datetime
+from re import compile
 from other.pagination import Pagination
 from cogs.economy import membed, Confirm, active_sessions, APP_GUILDS_ID
+
+
+class TimeConverter(app_commands.Transformer):
+    time_regex = compile(r"(\d{1,5}(?:[.,]?\d{1,5})?)([smhd])")
+    time_dict = {"h": 3600, "s": 1, "m": 60, "d": 86400}
+
+    async def transform(self, interaction: discord.Interaction, argument: str) -> int:
+        matches = self.time_regex.findall(argument.lower())
+        time = 0
+        for v, k in matches:
+            try:
+                time += self.time_dict[k]*float(v)
+            except KeyError:
+                continue
+            except ValueError:
+                continue
+        return time
 
 
 class Moderation(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.guild_permissions.manage_guild:
+            return True
+        await interaction.response.send_message("You are not allowed to use these commands.")
+        return False
+    
+    async def cog_check(self, ctx: commands.Context) -> bool:
+        if ctx.author.guild_permissions.manage_guild:
+            return True
+        await ctx.send("You are not allowed to use these commands.")
+        return False
 
     async def bulk_add_roles(
             self, interaction: discord.Interaction, users_without_it: set, role: discord.Role, how_many: int) -> str | None:
@@ -20,7 +51,7 @@ class Moderation(commands.Cog):
             for member in users_without_it:
                 await member.add_roles(discord.Object(id=role.id), atomic=True)
         except discord.Forbidden:
-            return "I don't have the required permissions to add roles to members."
+            return "Missing required permissions to add roles to members."
         except discord.HTTPException:
             return "We are being rate-limited. Try again later"
         finally:
@@ -44,7 +75,7 @@ class Moderation(commands.Cog):
             for member in targets:
                 await member.remove_roles(discord.Object(id=new_role.id), atomic=True)
         except discord.Forbidden:
-            return "I don't have the required permissions to remove roles from members."
+            return "Missing required permissions to remove roles from members."
         except discord.HTTPException:
             return "We are being rate-limited. Try again later."
         finally:
@@ -57,9 +88,7 @@ class Moderation(commands.Cog):
                 content=f"Took {end_time - start_time:.2f}s", embed=success)
             return None
     
-    async def do_boilerplate_role_checks(self, interaction: discord.Interaction, role: discord.Role, guild: discord.Guild, my_top: discord.Role) -> str | None:
-        if not interaction.user.guild_permissions.manage_roles:
-            return "You don't have permission to do this."
+    async def do_boilerplate_role_checks(self, role: discord.Role, guild: discord.Guild, my_top: discord.Role) -> str | None:
 
         if role.managed:
             return f"The role {role.name} is managed and cannot be assigned or removed."
@@ -75,33 +104,57 @@ class Moderation(commands.Cog):
                 f"{'\n'.join(roles_beneath) + '\n' if roles_beneath else ''}"
                 f"{my_top.name} **<-- The bot's highest role**")
 
+    @tasks.loop()
+    async def check_for_role(self):
+        # fetch the task with the lowest/earliest `end_time`
+        async with self.client.pool_connection.acquire() as conn:
+            next_task = await conn.fetchone('SELECT * FROM tasks ORDER BY end_time ASC LIMIT 1')
+
+            # if no remaining tasks, stop the loop
+            if next_task is None:
+                self.check_for_role.cancel()
+                return
+            
+            # sleep until the task should be done
+            # if the time is before now, this should return immediately
+            
+            mod_to, role_id, end_time, in_guild = next_task
+            timestamp = datetime.fromtimestamp(end_time, tz=timezone("UTC"))
+            await discord.utils.sleep_until(timestamp)
+
+            # do your actual task stuff here
+            guild = self.client.get_guild(in_guild)
+            
+            try:
+                mem: discord.Member = guild.get_member(mod_to)
+                guild = await mem.remove_roles(discord.Object(id=role_id))
+            except discord.Forbidden:
+                pass
+            except discord.HTTPException:
+                pass
+            finally:
+                # delete the task we just completed
+                await conn.execute('DELETE FROM tasks WHERE mod_to = $1', mod_to)
+                await conn.commit()
+
     @commands.command(name="close", description="Close the invocation thread")
     @commands.guild_only()
     async def close_thread(self, ctx: commands.Context):
         await ctx.message.delete()
         if isinstance(ctx.channel, discord.Thread):
-            permissions = ctx.channel.permissions_for(ctx.author)
-
-            if permissions.manage_threads or (ctx.channel.owner_id == ctx.author.id):
-
-                await ctx.send("<:padlocke:1195739398323581011> This thread has been auto-archived "
-                               "and locked due to lack of use.\nIt may be re-opened if needed by contacting an admin.")
-                await ctx.channel.edit(
-                    locked=True,
-                    archived=True,
-                    reason=f'Marked as closed by {ctx.author} (ID: {ctx.author.id})'
-                )
-                return
-            return await ctx.reply(
-                "<:warning_nr:1195732155544911882> You don't have the required permissions.",
-                mention_author=False)
+            await ctx.send(
+                "<:padlocke:1195739398323581011> This thread is now locked due to lack of use.\n"
+                "It may be re-opened if needed by contacting an admin.")
+            return await ctx.channel.edit(
+                locked=True,
+                archived=True,
+                reason=f'Marked as closed by {ctx.author} (ID: {ctx.author.id})')
         else:
-            await ctx.reply("<:warning_nr:1195732155544911882> This is not a thread.", mention_author=False)
+            await ctx.reply("This is not a thread.", mention_author=False)
 
     @commands.command(name='delay', description='Sets a slowmode for the invoker channel', aliases=('d',))
-    @commands.has_permissions(manage_channels=True)
     async def set_delay(self, ctx: commands.Context, slowmode_in_seconds: int):
-        """Sets a delay to which users can send messages. You must have the appropriate permissions."""
+        """Sets a delay to which users can send messages."""
         slowmode_in_seconds = abs(slowmode_in_seconds)
         await ctx.channel.edit(slowmode_delay=slowmode_in_seconds)
         if slowmode_in_seconds:
@@ -109,7 +162,6 @@ class Moderation(commands.Cog):
         await ctx.send("<:normale:1195740534703136921> Disabled slowmode.")
 
     @commands.command(name="purge", description="Bulk-remove messages, excluding pins")
-    @commands.has_permissions(manage_messages=True)
     @commands.guild_only()
     async def purge(self, ctx: commands.Context, purge_max_amount: int):
         """Purge an amount of messages. Pinned messages aren't removed."""
@@ -128,7 +180,7 @@ class Moderation(commands.Cog):
             return await interaction.response.send_message("That member already has this role.")
 
         guild = interaction.guild
-        resp = await self.do_boilerplate_role_checks(interaction, role, guild, guild.me.top_role)
+        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
             return await interaction.response.send_message(resp)
         
@@ -136,7 +188,7 @@ class Moderation(commands.Cog):
             await user.add_roles(discord.Object(id=role.id))
             await interaction.response.send_message(embed=membed(f"Added {role.mention} to {user.mention}."))
         except discord.Forbidden:
-            await interaction.response.send_message("I don't have the required permissions to do this.")
+            await interaction.response.send_message("Missing required permissions to do this.")
 
     @roles.command(name="remove", description="Removes a role from the specified member")
     @app_commands.describe(user="The user to remove the role from.", role="The role to remove from this user.")
@@ -146,7 +198,7 @@ class Moderation(commands.Cog):
             return await interaction.response.send_message("That member doesn't have this role.")
 
         guild = interaction.guild
-        resp = await self.do_boilerplate_role_checks(interaction, role, guild, guild.me.top_role)
+        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
         
         if resp:
             return await interaction.response.send_message(resp)
@@ -155,7 +207,7 @@ class Moderation(commands.Cog):
             await user.remove_roles(discord.Object(id=role.id))
             await interaction.response.send_message(embed=membed(f"Removed {role.mention} from {user.mention}."))
         except discord.Forbidden:
-            await interaction.response.send_message("I don't have the required permissions to remove roles from members.")
+            await interaction.response.send_message("Missing required permissions to remove roles from members.")
 
     @roles.command(name="all", description="Adds a role to all members")
     @app_commands.describe(role="The role to add to all members.")
@@ -169,7 +221,7 @@ class Moderation(commands.Cog):
         if not how_many:
             return await interaction.followup.send("Everybody has this role already.")
 
-        resp = await self.do_boilerplate_role_checks(interaction, role, guild, guild.me.top_role)
+        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
             return await interaction.followup.send(resp)
         
@@ -199,7 +251,7 @@ class Moderation(commands.Cog):
                 for member in users_without_it:
                     await member.add_roles(discord.Object(id=role.id), atomic=True)
             except discord.Forbidden:
-                await msg.edit(content="I don't have the required permissions to add roles to members.", embed=None)
+                await msg.edit(content="Missing required permissions to add roles to members.", embed=None)
                 return
             except discord.HTTPException:
                 await msg.edit(content="We are being rate-limited. Try again later.", embed=None)
@@ -228,7 +280,7 @@ class Moderation(commands.Cog):
         if not how_many:
             return await interaction.followup.send("Nobody has this role already.")
 
-        resp = await self.do_boilerplate_role_checks(interaction, role, guild, guild.me.top_role)
+        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp: 
             return await interaction.followup.send(resp)
 
@@ -258,7 +310,7 @@ class Moderation(commands.Cog):
                 for member in users_without_it:
                     await member.remove_roles(discord.Object(id=role.id), atomic=True)
             except discord.Forbidden:
-                return await msg.edit(content="I don't have the required permissions to remove roles to members.", embed=None, view=None)
+                return await msg.edit(content="Missing required permissions to remove roles from members.", embed=None, view=None)
             except discord.HTTPException:
                 return await msg.edit(content="We are being rate-limited. Try again later.", embed=None, view=None)
             finally:
@@ -349,7 +401,7 @@ class Moderation(commands.Cog):
         if not count:
             return await interaction.followup.send("No bots have this role.")
 
-        resp = await self.do_boilerplate_role_checks(interaction, role, guild, guild.me.top_role)
+        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
             return await interaction.followup.send(resp)
 
@@ -369,7 +421,7 @@ class Moderation(commands.Cog):
         if not count:
             return await interaction.followup.send("All humans have this role already.")
 
-        resp = await self.do_boilerplate_role_checks(interaction, role, guild, guild.me.top_role)
+        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
             return await interaction.followup.send(resp)
 
@@ -389,7 +441,7 @@ class Moderation(commands.Cog):
         if not how_many:
             return await interaction.followup.send("No humans have this role.")
 
-        resp = await self.do_boilerplate_role_checks(interaction, role, guild, guild.me.top_role)
+        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
             return await interaction.followup.send(resp)
 
@@ -413,7 +465,7 @@ class Moderation(commands.Cog):
             return await interaction.followup.send("Nobody in the base role doesn't have the new role already.")
         
         guild = interaction.guild
-        resp = await self.do_boilerplate_role_checks(interaction, new_role, guild, guild.me.top_role)
+        resp = await self.do_boilerplate_role_checks(new_role, guild, guild.me.top_role)
         if resp:
             return await interaction.followup.send(resp)
 
@@ -435,7 +487,7 @@ class Moderation(commands.Cog):
             return await interaction.followup.send("Nobody in the base role has the new role.")
 
         guild = interaction.guild
-        resp = await self.do_boilerplate_role_checks(interaction, new_role, guild, guild.me.top_role)
+        resp = await self.do_boilerplate_role_checks(new_role, guild, guild.me.top_role)
         if resp:
             return await interaction.followup.send(resp)
     
@@ -443,6 +495,57 @@ class Moderation(commands.Cog):
         if resp:
             return await interaction.followup.send(resp)
 
+    temprole = app_commands.Group(name="temprole", description="Role management commands but with an expiry attribute", guild_only=True, guild_ids=APP_GUILDS_ID)
+
+    @temprole.command(name="add", description="Adds a temporary role")
+    @app_commands.rename(time="duration")
+    @app_commands.describe(user="The user to add the role to.", role="The role to add to this user.", time="When this role is removed e.g. 1d 7h 19m 4s.")
+    async def add_temp_role(self, interaction: discord.Interaction, user: discord.Member, time: app_commands.Transform[int, TimeConverter], role: discord.Role):
+        
+        if not time:
+            return await interaction.response.send_message("Invalid delay provided. Use a valid format e.g. 1d 7h 19m 4s.")
+        
+        if role in user.roles:
+            return await interaction.response.send_message("That member already has this role.")
+
+        guild = interaction.guild
+        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
+        if resp:
+            return await interaction.response.send_message(resp)
+        
+        try:
+            # ! SEND THE MESSAGE HERE
+            minutes, seconds = divmod(time, 60)
+            hours, minutes = divmod(minutes, 60)
+            days, hours = divmod(hours, 24)
+
+            success = discord.Embed()
+            success.colour = 0x70DEAA
+            success.title = "Temporary role added"
+
+            success.description = (
+                f"Granted {user.mention} the {role.mention} role for:\n"
+                f"- {int(days)} days, {int(hours)} hours, {int(minutes)} minutes and {int(seconds)} seconds.")
+
+            await user.add_roles(discord.Object(id=role.id))
+            await interaction.response.send_message(embed=success)
+
+            # ! SCHEDULE THE TASK HERE
+            timestamp = (discord.utils.utcnow() + timedelta(seconds=time)).timestamp()
+
+            conn = await self.client.pool_connection.acquire()
+            await conn.execute(
+                'INSERT INTO tasks (mod_to, role_id, end_time, in_guild) VALUES ($0, $1, $2, $3)', user.id, role.id, timestamp, guild.id)
+            await conn.commit()
+            await self.client.pool_connection.release(conn)
+
+            if self.check_for_role.is_running():
+                self.check_for_role.restart()
+            else:
+                self.check_for_role.start()
+
+        except discord.Forbidden:
+            await interaction.response.send_message("Missing required permissions to do this.")
 
 async def setup(client):
     await client.add_cog(Moderation(client))
