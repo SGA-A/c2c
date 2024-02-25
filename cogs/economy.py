@@ -385,6 +385,7 @@ def determine_exponent(rinput: str) -> str | int:
         actual_value = before_e * (10 ** ten_exponent)
     else:
         try:
+            rinput = rinput.translate(str.maketrans('', '', ','))
             actual_value = int(rinput)
         except ValueError:
             return rinput
