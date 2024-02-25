@@ -220,23 +220,23 @@ class SelectMenu(ui.Select):
         optionss = [
             SelectOption(
                 label='Owner', 
-                description='commands accessible by the bot owners.', 
+                description='Commands available to bot owners.', 
                 emoji='<a:e1_butterflyB:1124677894275338301>'),
             SelectOption(
                 label='Moderation', 
-                description='commands accessible by those with further permissions.', 
+                description='Commands available to moderators.', 
                 emoji='<a:e1_starR:1124677520038567946>'),
             SelectOption(
                 label='Utility', 
-                description='generic commands that may serve useful.', 
+                description='Other helpful commands and resources.', 
                 emoji='<a:e1_starG:1124677658500927488>'),
             SelectOption(
                 label='Economy', 
-                description='commands related to the virtual economy.', 
+                description='Commands for our virtual economy.', 
                 emoji='<a:e1_starY:1124677741980176495>'),
             SelectOption(
                 label='Music', 
-                description='commands for listening to music on discord.', 
+                description='Commands for a music experience.', 
                 emoji='<a:e1_starPur:1125040539943837738>')
         ]
         super().__init__(placeholder="Name of category", options=optionss)
@@ -272,6 +272,9 @@ class SelectMenu(ui.Select):
                 command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
                 cmd_formatter.add(f"\U00002022 **{command_manage.mention}** - {cmd_details[1]}")
 
+            proportion = (total_cmds_cata / total_cmds_rough) * 100
+            
+            embed.description = "\n".join(cmd_formatter)
             embed.add_field(
                 name='About: Owner', 
                 value=(
@@ -281,31 +284,28 @@ class SelectMenu(ui.Select):
                     f'for later release.\n'
                     f'__Interesting Stats__\n'
                     f'- There are **{total_cmds_cata}** commands in this category\n'
-                    f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%**'
-                    f' of all commands\n'
+                    f'- Accounts for **{proportion:.2f}%** of all commands\n'
                     f'- Last modified: <t:1702722548:D> (**<t:1702722548:R>**)\n'
                     f'- Status: **READY**'))
-
-            embed.description = "\n".join(cmd_formatter)
 
             await interaction.response.edit_message(embed=embed, view=self.view)
 
         elif their_choice == 'Moderation':
 
             the_dict = {}
-            new_dict = return_txt_cmds_first(the_dict, their_choice)
-            all_cmdss: dict = return_interaction_cmds_last(new_dict, their_choice)
+            new_dict = return_txt_cmds_first(the_dict, "Moderation")
+            all_cmds: dict = return_interaction_cmds_last(new_dict, "Moderation")
 
             embed = Embed(title='Help: Moderation', colour=Colour.from_rgb(247, 14, 115))
             embed.set_thumbnail(url='https://emoji.discadia.com/emojis/74e65408-2adb-46dc-86a7-363f3096b6b2.PNG')
 
-            for cmd, cmd_details in all_cmdss.items():
+            for cmd, cmd_details in all_cmds.items():
                 total_cmds_cata += 1
 
                 if cmd_details[-1] == 'txt':
                     cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
-
+                
                 command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
                 
                 try:
@@ -314,13 +314,17 @@ class SelectMenu(ui.Select):
                         for option in command_manage.options:
                             if isinstance(option, app_commands.AppCommandGroup):
                                 got_something = True
+                                total_cmds_cata += 1
                                 cmd_formatter.add(
                                     f"\U00002022 {option.mention} - {option.description}")
                     if not got_something:
                         cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
                 except AttributeError:
-                    pass
-
+                    continue
+            
+            proportion = (total_cmds_cata / total_cmds_rough) * 100
+            
+            embed.description = "\n".join(cmd_formatter)
             embed.add_field(
                 name='About: Mod', 
                 value=(
@@ -328,11 +332,9 @@ class SelectMenu(ui.Select):
                     f' commands require invokers to have higher levels of permissions to utilize these.\n'
                     f'__Interesting Stats__\n'
                     f'- There are **{total_cmds_cata}** commands in this category\n'
-                    f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%**'
-                    f' of all commands\n'
+                    f'- Accounts for **{proportion:.2f}%** of all commands\n'
                     f'- Last modified: <t:1698856225:D> (**<t:1698856225:R>**)\n'
                     f'- Status: **READY**'))
-            embed.description = "\n".join(cmd_formatter)
 
             await interaction.response.edit_message(embed=embed, view=self.view)
 
@@ -340,12 +342,12 @@ class SelectMenu(ui.Select):
 
             the_dict = {}
             new_dict = return_txt_cmds_first(the_dict, "Miscellaneous")
-            all_cmdssss: dict = return_interaction_cmds_last(new_dict, "Miscellaneous")
+            all_cmds: dict = return_interaction_cmds_last(new_dict, "Miscellaneous")
 
             embed = Embed(title='Help: Utility', colour=Colour.from_rgb(15, 255, 135))
             embed.set_thumbnail(url='https://i.imgur.com/YHBLgVx.png')
 
-            for cmd, cmd_details in all_cmdssss.items():
+            for cmd, cmd_details in all_cmds.items():
                 total_cmds_cata += 1
                 if cmd_details[-1] == 'txt':
                     cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
@@ -359,13 +361,17 @@ class SelectMenu(ui.Select):
                         for option in command_manage.options:
                             if isinstance(option, app_commands.AppCommandGroup):
                                 got_something = True
+                                total_cmds_cata += 1
                                 cmd_formatter.add(
                                     f"\U00002022 {option.mention} - {option.description}")
                     if not got_something:
                         cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
                 except AttributeError:
                     continue
-
+            
+            proportion = (total_cmds_cata / total_cmds_rough) * 100
+            
+            embed.description = "\n".join(cmd_formatter)
             embed.add_field(
                 name='About: Utility', 
                 value=(
@@ -373,11 +379,10 @@ class SelectMenu(ui.Select):
                     f'especially to some of the geeks out there.\n'
                     f'__Interesting Stats__\n'
                     f'- There are **{total_cmds_cata}** commands in this category\n'
-                    f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%**'
+                    f'- Accounts for **{proportion:.2f}%**'
                     f' of all commands\n'
                     f'- Last modified: <t:1702722548:D> (**<t:1702722548:R>**)\n'
                     f'- Status: **READY**'))
-            embed.description = "\n".join(cmd_formatter)
 
             await interaction.response.edit_message(embed=embed, view=self.view)
 
@@ -388,8 +393,8 @@ class SelectMenu(ui.Select):
 
             the_dict = {}
             new_dict = return_txt_cmds_first(the_dict, "Economy")
-            all_cmdssss: dict = return_interaction_cmds_last(new_dict, "Economy")
-            for cmd, cmd_details in all_cmdssss.items():
+            all_cmds: dict = return_interaction_cmds_last(new_dict, "Economy")
+            for cmd, cmd_details in all_cmds.items():
                 total_cmds_cata += 1
                 if cmd_details[-1] == 'txt':
                     cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
@@ -403,12 +408,15 @@ class SelectMenu(ui.Select):
                         for option in command_manage.options:
                             if isinstance(option, app_commands.AppCommandGroup):
                                 got_something = True
+                                total_cmds_cata += 1
                                 cmd_formatter.add(
                                     f"\U00002022 {option.mention} - {option.description}")
                     if not got_something:
                         cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
                 except AttributeError:
                     cmd_formatter.add(f"\U00002022 </balance:1192188834134376500> - {cmd_details[1]}")
+
+            proportion = (total_cmds_cata / total_cmds_rough) * 100
 
             embed.description = "\n".join(cmd_formatter)
             embed.add_field(
@@ -417,10 +425,8 @@ class SelectMenu(ui.Select):
                     f'Contains commands that can be used by anybody, and relate to the virtual economy '
                     f'system of the client.\n'
                     f'__Interesting Stats__\n'
-                    f'- There are **{total_cmds_cata}** commands in this '
-                    f'category (excluding subcommands)\n'
-                    f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%**'
-                    f' of all commands\n'
+                    f'- There are **{total_cmds_cata}** commands in this category\n'
+                    f'- Accounts for **{proportion:.2f}%** of all commands\n'
                     f'- Last modified: <t:1702722548:D> (**<t:1702722548:R>**)\n'
                     f'- Status: **LOCKED**'))
 
@@ -432,11 +438,13 @@ class SelectMenu(ui.Select):
             embed.set_thumbnail(url="https://i.imgur.com/nFZTMFl.png")
 
             the_dict: dict = {}
-            all_cmdssss = return_txt_cmds_first(the_dict, "Music")
+            all_cmds = return_txt_cmds_first(the_dict, "Music")
 
-            for cmd, cmd_details in all_cmdssss.items():
+            for cmd, cmd_details in all_cmds.items():
                 cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                 total_cmds_cata += 1
+
+            proportion = (total_cmds_cata / total_cmds_rough) * 100
 
             embed.description = "\n".join(cmd_formatter)
             embed.add_field(
@@ -446,8 +454,7 @@ class SelectMenu(ui.Select):
                     f'and its functions. Use these commands to play music on Discord.\n'
                     f'__Interesting Stats__\n'
                     f'- There are **{total_cmds_cata}** commands in this category\n'
-                    f'- Accounts for **{round((total_cmds_cata / total_cmds_rough) * 100, ndigits=2)}%**'
-                    f' of all commands\n'
+                    f'- Accounts for **{proportion:.2f}%** of all commands\n'
                     f'- Last modified: <t:1703857689:D> (**<t:1703857689:R>**)\n'
                     f'- Status: **READY**'))
             await interaction.response.edit_message(embed=embed, view=self.view)
