@@ -458,7 +458,7 @@ def generate_progress_bar(percentage):
 def get_profile_key_value(key: str) -> Any:
     """Fetch a profile key (attribute) from the database. Returns None if no key is found."""
     with open_shelve("C:\\Users\\georg\\Documents\\c2c\\db-shit\\profile_mods") as dbmr:
-        return dbmr.setdefault(key, None)
+        return dbmr.get(key)
 
 
 def display_user_friendly_deck_format(deck: list, /):
@@ -1188,7 +1188,7 @@ class BlackjackUi(discord.ui.View):
                 new_total = new_bj_win[0] + bj_lose[0]
                 prctnw = (new_bj_win[0] / new_total) * 100
                 pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
-                new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
+                new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
                 
                 amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
                 await Economy.update_bank_new(interaction.user, conn, amount_after_multi, "bjwa")
@@ -1271,7 +1271,7 @@ class BlackjackUi(discord.ui.View):
                 prctnw = (new_bj_win[0] / new_total) * 100
 
                 pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
-                new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
+                new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
                 amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
                 await Economy.update_bank_new(interaction.user, conn, amount_after_multi, "bjwa")
                 new_amount_balance = await Economy.update_bank_new(interaction.user, conn, amount_after_multi)
@@ -1331,7 +1331,7 @@ class BlackjackUi(discord.ui.View):
                 prctnw = (new_bj_win[0] / new_total) * 100
 
                 pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
-                new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
+                new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
                 amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
                 new_amount_balance = await Economy.update_bank_new(interaction.user, conn, amount_after_multi)
                 await Economy.update_bank_new(interaction.user, conn, amount_after_multi, "bjwa")
@@ -1452,7 +1452,7 @@ class HighLow(discord.ui.View):
                 if self.true_value < self.hint_provided:
 
                     pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
-                    new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
+                    new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
                     total = floor((new_multi / 100) * self.their_bet)
                     total += self.their_bet
                     new_amount = await Economy.update_bank_new(interaction.user, conn, total)
@@ -1490,7 +1490,7 @@ class HighLow(discord.ui.View):
                 if self.hint_provided == self.true_value:
 
                     pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
-                    new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
+                    new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
                     total = floor((new_multi + 1000 / 100) * self.their_bet)
                     total += self.their_bet
                     new_balance = await Economy.update_bank_new(interaction.user, conn, total)
@@ -1530,7 +1530,7 @@ class HighLow(discord.ui.View):
                 if self.true_value > self.hint_provided:
 
                     pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
-                    new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
+                    new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
                     total = floor((new_multi / 100) * self.their_bet)
                     total += self.their_bet
                     new_bal = await Economy.update_bank_new(interaction.user, conn, total)
@@ -2528,7 +2528,7 @@ class Economy(commands.Cog):
             description=f"Currently: {"*Awaiting orders*" if status else "*Working*"}\n"
                         f"**Investment:** \U000023e3 {investment:,}\n"
                         f"**Productivity:** `{productivity}x`",
-            color=hexx or gend.setdefault(gender, 0x2B2D31))
+            color=hexx or gend.get(gender, 0x2B2D31))
 
         sdetails.add_field(name="Hunger", value=f"{generate_progress_bar(hunger)} ({hunger}%)")
         sdetails.add_field(name="Energy", value=f"{generate_progress_bar(energy)} ({energy}%)")
@@ -2847,7 +2847,7 @@ class Economy(commands.Cog):
                         ephemeral=True
                     )
 
-                exp_gainable = command.extras.setdefault("exp_gained", None)
+                exp_gainable = command.extras.get("exp_gained")
                 
                 if not exp_gainable:
                     return
@@ -2940,7 +2940,7 @@ class Economy(commands.Cog):
                     name=f'Viewing {user_name.name}\'s multipliers', 
                     icon_url=user_name.display_avatar.url)
             else:
-                server_bs = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0)
+                server_bs = SERVER_MULTIPLIERS.get(interaction.guild.id, 0)
                 multi_own = discord.Embed(
                     colour=0x2F3136, 
                     description=f'{sticky_msg}'
@@ -3056,7 +3056,7 @@ class Economy(commands.Cog):
                         await interaction.response.send_message(
                             embed=discord.Embed(
                                 description=f"Shared **{quantity}x {ie} {item_name}** with {recipient.mention}!",
-                                colour=rarity_to_colour.setdefault(rarity, 0x2B2D31)))
+                                colour=rarity_to_colour.get(rarity, 0x2B2D31)))
 
     showcase = app_commands.Group(
         name="showcase", description="manage your showcased items.", guild_only=True, 
@@ -3576,7 +3576,7 @@ class Economy(commands.Cog):
                             f"**{data}** {make_plural("person", data)} "
                             f"{plural_for_own(data)} this item.\n"
                             f"You own **{their_count}**.", 
-                colour=rarity_to_colour.setdefault(rarity, 0x2B2D31), 
+                colour=rarity_to_colour.get(rarity, 0x2B2D31), 
                 url="https://www.youtube.com")
             
             em.set_thumbnail(url=attrs.get("url"))
@@ -3864,7 +3864,7 @@ class Economy(commands.Cog):
                                 (interaction.user.id, slay_name))
                         data = await data.fetchone()
 
-                        hex = data[1] or gend.setdefault(data[2], 0x2B2D31)
+                        hex = data[1] or gend.get(data[2], 0x2B2D31)
 
                         embed = discord.Embed(
                             title="Task Complete",
@@ -4271,8 +4271,8 @@ class Economy(commands.Cog):
 
                 procfile.description = (f"### {user.name}'s Profile - [{data[4]}](https://www.dis.gd/support)\n"
                                         f"{note}"
-                                        f"{PRESTIGE_EMOTES.setdefault(data[6], "")} Prestige Level **{data[6]}**"
-                                        f"{UNIQUE_BADGES.setdefault(data[-1], "")}\n"
+                                        f"{PRESTIGE_EMOTES.get(data[6], "")} Prestige Level **{data[6]}**"
+                                        f"{UNIQUE_BADGES.get(data[-1], "")}\n"
                                         f"<:bountybag:1195653667135692800> Bounty: \U000023e3 **{data[5]:,}**\n"
                                         f"{get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"}")
                 boundary = self.calculate_exp_for(level=data[7])
@@ -4499,7 +4499,7 @@ class Economy(commands.Cog):
         async with conn.transaction():
             if emoji_outcome.count(freq1) > 1:
 
-                new_multi = (SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) +
+                new_multi = (SERVER_MULTIPLIERS.get(interaction.guild.id, 0) +
                             BONUS_MULTIPLIERS[f'{freq1 * emoji_outcome.count(freq1)}'])
                 amount_after_multi = floor(((new_multi / 100) * amount) + amount)
                 updated = await self.update_bank_three_new(
@@ -4521,7 +4521,7 @@ class Economy(commands.Cog):
 
             elif emoji_outcome.count(freq2) > 1:
 
-                new_multi = (SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) +
+                new_multi = (SERVER_MULTIPLIERS.get(interaction.guild.id, 0) +
                             BONUS_MULTIPLIERS[f'{freq2 * emoji_outcome.count(freq2)}'])
                 amount_after_multi = floor(
                     ((new_multi / 100) * amount) + amount)
@@ -5289,7 +5289,7 @@ class Economy(commands.Cog):
                 )
             )
 
-        if self.client.games.setdefault(interaction.user.id, None) is not None:
+        if self.client.games.get(interaction.user.id) is not None:
             return await interaction.response.send_message(
                 "You already have an ongoing game taking place.")
 
@@ -5355,7 +5355,7 @@ class Economy(commands.Cog):
             new_total = new_bj_win[0] + bj_lose[0]
 
             prctnw = (new_bj_win[0] / new_total) * 100
-            new_multi = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti[0]
+            new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
             amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
             new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
             await conn.commit()
@@ -5470,7 +5470,7 @@ class Economy(commands.Cog):
                                  f"You also can't bet anything more than \U000023e3 **{MAX_BET_WITHOUT:,}**."))
 
             # --------------------------------------------------------
-            smulti = SERVER_MULTIPLIERS.setdefault(interaction.guild.id, 0) + pmulti
+            smulti = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti
             badges = set()
             id_won_amount, id_lose_amount = data[2], data[3]
             if pmulti > 0:
