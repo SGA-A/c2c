@@ -1067,7 +1067,8 @@ class BalanceView(discord.ui.View):
             space = (nd[1] / nd[2]) * 100
 
             balance = discord.Embed(
-                title=f"{self.viewing.name}'s balances", color=0x2F3136, timestamp=discord.utils.utcnow(),
+                title=f"{self.viewing.name}'s balances", 
+                color=0x2F3136, timestamp=discord.utils.utcnow(),
                 url="https://dis.gd/support")
             balance.add_field(name="Wallet", value=f"\U000023e3 {nd[0]:,}")
             balance.add_field(name="Bank", value=f"\U000023e3 {nd[1]:,}")
@@ -1097,9 +1098,8 @@ class BlackjackUi(discord.ui.View):
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item[Any], /) -> None:
         print_exception(type(error), error, error.__traceback__)
-        await interaction.response.send_message("Something went wrong, this game did not work as intended.\n"
-                                                "The developers have received a traceback detailing what happened, "
-                                                "and will soon begin looking into the issue.")
+        await interaction.response.send_message(
+            "Uh oh, that's an error. Not to worry, the problem will eventually resolve itself.")
 
     async def on_timeout(self) -> None:
         if not self.finished:
@@ -4455,7 +4455,8 @@ class Economy(commands.Cog):
                         embed=membed("You need to provide a real amount to bet upon."))
             
             check = is_valid(abs(int(real_amount)), wallet_amt)
-            if not check[0]:
+            
+            if isinstance(check, tuple):
                 return await interaction.response.send_message(
                     embed=membed(check[1]))
 
