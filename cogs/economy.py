@@ -225,13 +225,13 @@ def register_item(item):
     return decorator
 
 
-def calculate_hand(hand):
+def calculate_hand(hand: list) -> int:
     """Calculate the value of a hand in a blackjack game, accounting for possible aces."""
 
     aces = hand.count(11)
     total = sum(hand)
 
-    while total > 21 and aces > 0:
+    while total > 21 and aces:
         total -= 10
         aces -= 1
 
@@ -465,10 +465,11 @@ def display_user_friendly_deck_format(deck: list, /):
     """Convert a deck view into a more user-friendly view of the deck."""
     remade = list()
     suits = ["\U00002665", "\U00002666", "\U00002663", "\U00002660"]
-    ranks = {10: ["K", "Q", "J"], 1: "A"}
+    ranks = {10: ["K", "Q", "J"], 11: "A"}
+
     chosen_suit = choice(suits)
     for number in deck:
-        conversion_letter = ranks.setdefault(number, None)
+        conversion_letter = ranks.get(number)
         if conversion_letter:
             unfmt = choice(conversion_letter)
             fmt = f"[`{chosen_suit} {unfmt}`](https://www.youtube.com)"
@@ -485,9 +486,10 @@ def display_user_friendly_deck_format(deck: list, /):
 def display_user_friendly_card_format(number: int, /):
     """Convert a single card into the user-friendly card version linked and ranked."""
     suits = ["\U00002665", "\U00002666", "\U00002663", "\U00002660"]
-    ranks = {10: ["K", "Q", "J"]}
+    ranks = {10: ["K", "Q", "J"], 11: "A"}
+
     chosen_suit = choice(suits)
-    conversion_letter = ranks.setdefault(number, None)
+    conversion_letter = ranks.get(number)
     if conversion_letter:
         unfmt = choice(conversion_letter)
         fmt = f"[`{chosen_suit} {unfmt}`](https://www.youtube.com)"
@@ -1099,47 +1101,23 @@ class BlackjackUi(discord.ui.View):
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item[Any], /) -> None:
         print_exception(type(error), error, error.__traceback__)
         await interaction.response.send_message(
-            "Uh oh, that's an error. Not to worry, the problem will eventually resolve itself.")
+            "Uh oh, that's an error. Not to worry, the problem should eventually resolve itself.")
 
     async def on_timeout(self) -> None:
         if not self.finished:
-            namount = self.client.games[self.interaction.user.id][-1]
-            namount = floor(((130 / 100) * namount))
-            del self.client.games[self.interaction.user.id]
-
-            async with self.client.pool_connection.acquire() as conn:
-                conn: asqlite_Connection
-
-                await Economy.update_bank_new(self.interaction.guild.me, conn, namount)
-                new_amount_balance = await Economy.update_bank_new(self.interaction.user, conn, -namount)
-                await conn.commit()
-                
-            losse = discord.Embed(
-                colour=0x2B2D31,
-                description=f"## No response detected.\n"
-                            f"- {self.interaction.user.mention} was fined \U000023e3 {namount:,} for unpunctuality.\n"
-                            f" - The dealer received {self.interaction.user.display_name}'s bet in full.\n"
-                            f" - An additional 30% tax was as included as part of a gambling duty.\n"
-                            f"- {self.interaction.user.mention} now has \U000023e3 {new_amount_balance[0]:,}."
-            )
-            losse.set_author(name=f"{self.interaction.user.name}'s timed-out blackjack game",
-                             icon_url=self.interaction.user.display_avatar.url)
-
+            
             try:
-                await self.message.edit(content=None, embed=losse, view=None)
+                await self.message.edit(
+                    content=None, embed=membed("You backed off so the game ended."), view=None)
             except discord.NotFound:
                 pass
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user == self.interaction.user:
             return True
-        else:
-            emb = discord.Embed(
-                description="This game is not held under your name.",
-                color=0x2F3136
-            )
-            await interaction.response.send_message(embed=emb, ephemeral=True)
-            return False
+        await interaction.response.send_message(
+            embed=membed("This is not your game."), ephemeral=True)
+        return False
 
     @discord.ui.button(label='Hit', style=discord.ButtonStyle.blurple)
     async def hit_bj(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1151,7 +1129,7 @@ class BlackjackUi(discord.ui.View):
         player_hand.append(deck.pop())
         self.client.games[interaction.user.id][-2].append(
             display_user_friendly_card_format(player_hand[-1]))
-        player_sum = sum(player_hand)
+        player_sum = calculate_hand(player_hand)
 
         if player_sum > 21:
 
@@ -1185,13 +1163,13 @@ class BlackjackUi(discord.ui.View):
                 
                 embed.add_field(name=f"{interaction.guild.me.name} (Dealer)",
                                 value=f"**Cards** - {' '.join(d_fver_d)}\n"
-                                      f"**Total** - `{sum(dealer_hand)}`")
+                                      f"**Total** - `{calculate_hand(dealer_hand)}`")
 
                 embed.set_author(name=f"{interaction.user.name}'s losing blackjack game",
                                  icon_url=interaction.user.display_avatar.url)
                 await interaction.response.edit_message(content=None, embed=embed, view=None)
 
-        elif sum(player_hand) == 21:
+        elif player_sum == 21:
             self.stop()
             self.finished = True
 
@@ -1226,24 +1204,22 @@ class BlackjackUi(discord.ui.View):
                 win.add_field(name=f"{interaction.user.name} (Player)", value=f"**Cards** - {' '.join(d_fver_p)}\n"
                                                                               f"**Total** - `{player_sum}`")
                 win.add_field(name=f"{interaction.guild.me.name} (Dealer)", value=f"**Cards** - {' '.join(d_fver_d)}\n"
-                                                                                  f"**Total** - `{sum(dealer_hand)}`")
+                                                                                  f"**Total** - `{calculate_hand(dealer_hand)}`")
                 win.set_author(name=f"{interaction.user.name}'s winning blackjack game",
                                icon_url=interaction.user.display_avatar.url)
                 await interaction.response.edit_message(content=None, embed=win, view=None)
 
         else:
 
-            player_hand = self.client.games[interaction.user.id][1]
             d_fver_p = [number for number in self.client.games[interaction.user.id][-2]]
             necessary_show = self.client.games[interaction.user.id][-3][0]
-            ts = sum(player_hand)
 
             prg = discord.Embed(colour=0x2B2D31,
-                                description=f"**Your move. Your hand is now {ts}**.")
+                                description=f"**Your move. Your hand is now {player_sum}**.")
             prg.add_field(
                 name=f"{interaction.user.name} (Player)", 
                 value=f"**Cards** - {' '.join(d_fver_p)}\n"
-                      f"**Total** - `{ts}`")
+                      f"**Total** - `{player_sum}`")
             
             prg.add_field(
                 name=f"{interaction.guild.me.name} (Dealer)",
@@ -1260,14 +1236,16 @@ class BlackjackUi(discord.ui.View):
     @discord.ui.button(label='Stand', style=discord.ButtonStyle.blurple)
     async def stand_bj(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button interface in blackjack to stand."""
-
         self.stop()
+        self.finished = True
+
         deck = self.client.games[interaction.user.id][0]
         player_hand = self.client.games[interaction.user.id][1]
         dealer_hand = self.client.games[interaction.user.id][2]
         namount = self.client.games[interaction.user.id][-1]
 
         dealer_total = calculate_hand(dealer_hand)
+        player_sum = calculate_hand(player_hand)
 
         while dealer_total < 17:
             popped = deck.pop()
@@ -1278,13 +1256,11 @@ class BlackjackUi(discord.ui.View):
 
             dealer_total = calculate_hand(dealer_hand)
 
-        player_sum = sum(player_hand)
         d_fver_p = self.client.games[interaction.user.id][-2]
         d_fver_d = self.client.games[interaction.user.id][-3]
         del self.client.games[interaction.user.id]
 
         if dealer_total > 21:
-            self.finished = True
             async with self.client.pool_connection.acquire() as conn:
                 conn: asqlite_Connection
 
@@ -1316,8 +1292,7 @@ class BlackjackUi(discord.ui.View):
                            name=f"{interaction.user.name}'s winning blackjack game")
             await interaction.response.edit_message(content=None, embed=win, view=None)
 
-        elif dealer_total > sum(player_hand):
-            self.finished = True
+        elif dealer_total > player_sum:
             async with self.client.pool_connection.acquire() as conn:
                 conn: asqlite_Connection
 
@@ -1345,8 +1320,7 @@ class BlackjackUi(discord.ui.View):
                              name=f"{interaction.user.name}'s losing blackjack game")
             await interaction.response.edit_message(content=None, embed=loser, view=None)
 
-        elif dealer_total < sum(player_hand):
-            self.finished = True
+        elif dealer_total < player_sum:
             async with self.client.pool_connection.acquire() as conn:
                 conn: asqlite_Connection
 
@@ -1377,7 +1351,6 @@ class BlackjackUi(discord.ui.View):
                            name=f"{interaction.user.name}'s winning blackjack game")
             await interaction.response.edit_message(content=None, embed=win, view=None)
         else:
-            self.finished = True
             async with self.client.pool_connection.acquire() as conn:
                 conn: asqlite_Connection
                 wallet_amt = await Economy.get_wallet_data_only(interaction.user, conn)
@@ -1398,10 +1371,12 @@ class BlackjackUi(discord.ui.View):
 
         self.stop()
         self.finished = True
+
         namount = self.client.games[interaction.user.id][-1]
         namount //= 2
-        dealer_total = sum(self.client.games[interaction.user.id][2])
-        player_sum = sum(self.client.games[interaction.user.id][1])
+
+        dealer_total = calculate_hand(self.client.games[interaction.user.id][2])
+        player_sum = calculate_hand(self.client.games[interaction.user.id][1])
         d_fver_p = self.client.games[interaction.user.id][-2]
         d_fver_d = self.client.games[interaction.user.id][-3]
 
@@ -2565,18 +2540,6 @@ class Economy(commands.Cog):
         sdetails.set_footer(text=f"Belongs to {owner_name.name}", icon_url=owner_name.display_avatar.url)
         sdetails.set_image(url=img)
         return sdetails
-
-    @staticmethod
-    def calculate_hand(hand):
-        """Calculate the value of a hand in a blackjack game, accounting for possible aces."""
-        aces = hand.count(11)
-        total = sum(hand)
-
-        while total > 21 and aces > 0:
-            total -= 10
-            aces -= 1
-
-        return total
 
     # ------------------ BANK FUNCS ------------------ #
 
@@ -5337,7 +5300,7 @@ class Economy(commands.Cog):
 
         # ----------------- Game setup ---------------------------------
 
-        deck = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10] * 4
+        deck = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 11] * 4
         shuffle(deck)
 
         player_hand = [deck.pop(), deck.pop()]
@@ -5382,7 +5345,10 @@ class Economy(commands.Cog):
                                  f"You also can't bet anything more than \U000023e3 **{MAX_BET_WITHOUT:,}**."))
 
         # ------------ In the case where the user already won --------------
-        if self.calculate_hand(player_hand) == 21:
+        player_sum = calculate_hand(player_hand)
+        dealer_sum = calculate_hand(dealer_hand)
+
+        if player_sum == 21:
             bj_lose = await conn.execute('SELECT bjl FROM bank WHERE userID = ?', (interaction.user.id,))
             bj_lose = await bj_lose.fetchone()
             new_bj_win = await self.update_bank_new(interaction.user, conn, 1, "bjw")
@@ -5397,19 +5363,31 @@ class Economy(commands.Cog):
             d_fver_p = display_user_friendly_deck_format(player_hand)
             d_fver_d = display_user_friendly_deck_format(dealer_hand)
 
-            embed = discord.Embed(colour=discord.Colour.brand_green(),
-                                  description=(
-                                      f"**Blackjack! You've already won with a total of {sum(player_hand)}!**\n\n"
-                                      f"You won {CURRENCY}**{amount_after_multi:,}**. "
-                                      f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
-                                      f"You won {prctnw:.2f}% of the games."))
-            embed.add_field(name=f"{interaction.user.name} (Player)",
-                            value=f"**Cards** - {' '.join(d_fver_p)}\n"
-                                  f"**Total** - `{sum(player_hand)}`")
-            embed.add_field(name=f"{interaction.guild.me.name} (Dealer)",
-                            value=f"**Cards** - {' '.join(d_fver_d)}\n"
-                                  f"**Total** - {sum(dealer_hand)}")
-            return await interaction.response.send_message(embed=embed)
+            winner = discord.Embed()
+            winner.colour = discord.Colour.brand_green()
+            winner.description = (
+                f"**Blackjack! You've already won with a total of {player_sum}!**\n"
+                f"You won {CURRENCY}**{amount_after_multi:,}**. "
+                f"You now have {CURRENCY}**{new_amount_balance[0]:,}**.\n"
+                f"You won {prctnw:.2f}% of the games.")
+            
+            winner.add_field(
+                name=f"{interaction.user.name} (Player)", 
+                value=(
+                    f"**Cards** - {d_fver_p}\n"
+                    f"**Total** - `{player_sum}`"))
+            
+            winner.add_field(
+                name=f"{interaction.guild.me.name} (Dealer)", 
+                value=(
+                    f"**Cards** - {d_fver_d}\n"
+                    f"**Total** - `{dealer_sum}`"))
+            
+            winner.set_author(
+                name=f"{interaction.user.name}'s winning blackjack game", 
+                icon_url=interaction.user.display_avatar.url)
+            
+            return await interaction.response.send_message(embed=winner)
 
         shallow_pv = [display_user_friendly_card_format(number) for number in player_hand]
         shallow_dv = [display_user_friendly_card_format(number) for number in dealer_hand]
@@ -5417,24 +5395,28 @@ class Economy(commands.Cog):
         self.client.games[interaction.user.id] = (deck, player_hand, dealer_hand,
                                                   shallow_dv, shallow_pv, namount)
 
-        start = discord.Embed(colour=0x2B2D31,
-                              description=f"The game has started. May the best win.\n"
-                                          f"`\U000023e3 ~{format_number_short(namount)}` is up for grabs on the table.")
-
-        start.add_field(name=f"{interaction.user.name} (Player)",
-                        value=f"**Cards** - {' '.join(shallow_pv)}\n"
-                              f"**Total** - `{sum(player_hand)}`")
-        start.add_field(name=f"{interaction.guild.me.name} (Dealer)",
-                        value=f"**Cards** - {shallow_dv[0]} `?`\n"
-                              f"**Total** - ` ? `")
-        start.set_author(icon_url=interaction.user.display_avatar.url, name=f"{interaction.user.name}'s blackjack game")
-        start.set_footer(text="K, Q, J = 10  |  A = 1 or 11")
-        my_view = BlackjackUi(interaction, self.client)
+        initial = discord.Embed()
+        initial.colour = 0x2B2D31
+        initial.description = (
+            f"The game has started. May the best win.\n"
+            f"`\U000023e3 ~{format_number_short(namount)}` is up for grabs on the table.")
+        
+        initial.add_field(
+            name=f"{interaction.user.name} (Player)", 
+            value=f"**Cards** - {' '.join(shallow_pv)}\n**Total** - `{player_sum}`")
+        initial.add_field(
+            name=f"{interaction.guild.me.name} (Dealer)", 
+            value=f"**Cards** - {shallow_dv[0]} `?`\n**Total** - ` ? `")
+        
+        initial.set_author(icon_url=interaction.user.display_avatar.url, name=f"{interaction.user.name}'s blackjack game")
+        initial.set_footer(text="K, Q, J = 10  |  A = 1 or 11")
+        bj_view = BlackjackUi(interaction, self.client)
+        
         await interaction.response.send_message(
             content="What do you want to do?\nPress **Hit** to to request an additional card, **Stand** to finalize "
                     "your deck or **Forfeit** to end your hand prematurely, sacrificing half of your original bet.",
-            embed=start, view=my_view)
-        my_view.message = await interaction.original_response()
+            embed=initial, view=bj_view)
+        bj_view.message = await interaction.original_response()
 
     @app_commands.command(name="bet",
                           description="Bet your robux on a dice roll", extras={"exp_gained": 3})
