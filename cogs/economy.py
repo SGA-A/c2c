@@ -1089,6 +1089,16 @@ class BalanceView(discord.ui.View):
         await interaction.response.edit_message(view=None)
 
 
+class BankRobView(discord.ui.View):
+    """View for the bankrob command and its associated functions."""
+
+    def __init__(self, interaction: discord.Interaction, client: commands.Bot):
+        self.interaction = interaction
+        self.client: commands.Bot = client
+        self.finished = False
+        super().__init__(timeout=30)
+
+
 class BlackjackUi(discord.ui.View):
     """View for the blackjack command and its associated functions."""
 
@@ -1414,8 +1424,9 @@ class BlackjackUi(discord.ui.View):
 class HighLow(discord.ui.View):
     """View for the Highlow command and its associated functions."""
 
-    def __init__(self, interaction: discord.Interaction, client: commands.Bot, hint_provided: int, bet: int,
-                 value: int):
+    def __init__(
+            self, interaction: discord.Interaction, client: commands.Bot, 
+            hint_provided: int, bet: int, value: int):
         self.interaction = interaction
         self.client = client
         self.true_value = value
@@ -1431,15 +1442,57 @@ class HighLow(discord.ui.View):
                 clicked_button.style = discord.ButtonStyle.blurple
                 continue
             item.style = discord.ButtonStyle.gray
+        self.stop()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user == self.interaction.user:
             return True
-
-        await interaction.response.send_message(
-            content=f"This is not your highlow game {interaction.user.display_name}! Make one yourself.",
-            ephemeral=True, delete_after=5.5)
+        
+        warning = membed("This is not your highlow game")
+        await interaction.response.send_message(embed=warning, ephemeral=True)
         return False
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+        await self.message.edit(embed=membed("The game ended because you didn't answer in time."), view=None)
+
+    async def send_win(self, interaction: discord.Interaction, button: discord.ui.Button, conn: asqlite_Connection):
+        pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
+        new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
+        total = floor((new_multi / 100) * self.their_bet)
+        total += self.their_bet
+        new_balance = await Economy.update_bank_new(interaction.user, conn, total)
+        await self.make_clicked_blurple_only(button)
+
+        win = discord.Embed()
+        win.description = (
+            f'**You won \U000023e3 {total:,}!**\n'
+            f'Your hint was **{self.hint_provided}**. '
+            f'The hidden number was **{self.true_value}**.\n'
+            f'Your new balance is \U000023e3 **{new_balance[0]:,}**.')
+
+        win.colour = discord.Colour.brand_green()
+        win.set_author(name=f"{interaction.user.name}'s winning high-low game",
+                    icon_url=interaction.user.display_avatar.url)
+        await interaction.response.edit_message(embed=win, view=self)
+
+    async def send_loss(self, interaction: discord.Interaction, button: discord.ui.Button, conn: asqlite_Connection):
+        new_amount = await Economy.update_bank_new(interaction.user, conn, -self.their_bet)
+        await self.make_clicked_blurple_only(button)
+
+        lose = discord.Embed()
+        lose.description = (
+            f'**You lost \U000023e3 {self.their_bet:,}!**\n'
+            f'Your hint was **{self.hint_provided}**. '
+            f'The hidden number was **{self.true_value}**.\n'
+            f'Your new balance is \U000023e3 **{new_amount[0]:,}**.')
+        
+        lose.colour = discord.Colour.brand_red()
+        lose.set_author(
+            name=f"{interaction.user.name}'s losing high-low game", 
+            icon_url=interaction.user.display_avatar.url)
+        await interaction.response.edit_message(embed=lose, view=self)
 
     @discord.ui.button(label='Lower', style=discord.ButtonStyle.blurple)
     async def low(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1450,34 +1503,8 @@ class HighLow(discord.ui.View):
             async with conn.transaction():
 
                 if self.true_value < self.hint_provided:
-
-                    pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
-                    new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
-                    total = floor((new_multi / 100) * self.their_bet)
-                    total += self.their_bet
-                    new_amount = await Economy.update_bank_new(interaction.user, conn, total)
-                    await self.make_clicked_blurple_only(button)
-
-                    win = discord.Embed(description=f'**You won \U000023e3 {total:,}!**\n'
-                                                    f'Your hint was **{self.hint_provided}**. '
-                                                    f'The hidden number was **{self.true_value}**.\n'
-                                                    f'Your new balance is \U000023e3 **{new_amount[0]:,}**.',
-                                        colour=discord.Color.brand_green())
-                    win.set_author(name=f"{interaction.user.name}'s winning high-low game",
-                                icon_url=interaction.user.display_avatar.url)
-                    await interaction.response.edit_message(embed=win, view=self)
-                else:
-                    new_amount = await Economy.update_bank_new(interaction.user, conn, -self.their_bet)
-                    await self.make_clicked_blurple_only(button)
-
-                    lose = discord.Embed(description=f'**You lost \U000023e3 {self.their_bet:,}!**\n'
-                                                    f'Your hint was **{self.hint_provided}**. '
-                                                    f'The hidden number was **{self.true_value}**.\n'
-                                                    f'Your new balance is \U000023e3 **{new_amount[0]:,}**.',
-                                        colour=discord.Color.brand_red())
-                    lose.set_author(name=f"{interaction.user.name}'s losing high-low game",
-                                    icon_url=interaction.user.display_avatar.url)
-                    await interaction.response.edit_message(embed=lose, view=self)
+                    return await self.send_win(interaction, button, conn)
+                await self.send_loss(interaction, button, conn)
 
     @discord.ui.button(label='JACKPOT!', style=discord.ButtonStyle.blurple)
     async def jackpot(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1488,74 +1515,22 @@ class HighLow(discord.ui.View):
 
             async with conn.transaction():
                 if self.hint_provided == self.true_value:
-
-                    pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
-                    new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
-                    total = floor((new_multi + 1000 / 100) * self.their_bet)
-                    total += self.their_bet
-                    new_balance = await Economy.update_bank_new(interaction.user, conn, total)
-                    await self.make_clicked_blurple_only(button)
-
-                    win = discord.Embed(description=f'**\U0001f929 You won \U000023e3 {total:,}! Jackpot! \U0001f929**\n'
-                                                    f'Your hint was **{self.hint_provided}**. '
-                                                    f'The hidden number was **{self.true_value}**\n'
-                                                    f'Your new balance is \U000023e3 **{new_balance[0]:,}**.',
-                                        colour=discord.Color.brand_green())
-                    win.set_author(name=f"{interaction.user.name}'s winning high-low game",
-                                icon_url=interaction.user.display_avatar.url)
-                    await interaction.response.edit_message(embed=win, view=self)
-                else:
-                    new_bal = await Economy.update_bank_new(interaction.user, conn, -self.their_bet)
-                    await self.make_clicked_blurple_only(button)
-
-                    lose = discord.Embed(description=f'**You lost \U000023e3 {self.their_bet:,}!**\n'
-                                                    f'Your hint was **{self.hint_provided}**. '
-                                                    f'The hidden number was **{self.true_value}**.\n'
-                                                    f'Your new balance is \U000023e3 **{new_bal[0]:,}**.',
-                                        colour=discord.Color.brand_red())
-                    lose.set_author(name=f"{interaction.user.name}'s losing high-low game",
-                                    icon_url=interaction.user.display_avatar.url)
-
-                    await interaction.response.edit_message(embed=lose, view=self)
+                    await self.send_win(interaction, button, conn)
+                    return await self.message.add_reaction("\U0001f911")
+                await self.send_loss(interaction, button, conn)
 
     @discord.ui.button(label='Higher', style=discord.ButtonStyle.blurple)
     async def high(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button for highlow interface to allow users to guess higher."""
-
+        
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
             async with conn.transaction():
 
                 if self.true_value > self.hint_provided:
-
-                    pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
-                    new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
-                    total = floor((new_multi / 100) * self.their_bet)
-                    total += self.their_bet
-                    new_bal = await Economy.update_bank_new(interaction.user, conn, total)
-                    await self.make_clicked_blurple_only(button)
-
-                    win = discord.Embed(description=f'**You won \U000023e3 {total:,}!**\n'
-                                                    f'Your hint was **{self.hint_provided}**. '
-                                                    f'The hidden number was **{self.true_value}**.\n'
-                                                    f'Your new balance is \U000023e3 **{new_bal[0]:,}**.',
-                                        colour=discord.Color.brand_green())
-                    win.set_author(name=f"{interaction.user.name}'s winning high-low game",
-                                icon_url=interaction.user.display_avatar.url)
-                    await interaction.response.edit_message(embed=win, view=self)
-                else:
-                    new_bal = await Economy.update_bank_new(interaction.user, conn, -self.their_bet)
-                    await self.make_clicked_blurple_only(button)
-
-                    lose = discord.Embed(description=f'**You lost \U000023e3 {self.their_bet:,}!**\n'
-                                                    f'Your hint was **{self.hint_provided}**. '
-                                                    f'The hidden number was **{self.true_value}**.\n'
-                                                    f'Your new balance is \U000023e3 **{new_bal[0]:,}**.',
-                                        colour=discord.Color.brand_red())
-                    lose.set_author(name=f"{interaction.user.name}'s losing high-low game",
-                                    icon_url=interaction.user.display_avatar.url)
-                    await interaction.response.edit_message(embed=lose, view=self)
+                    return await self.send_win(interaction, button, conn)
+                await self.send_loss(interaction, button, conn)
 
 
 class ImageModal(discord.ui.Modal):
@@ -4420,21 +4395,23 @@ class Economy(commands.Cog):
             check = is_valid(abs(int(real_amount)), wallet_amt)
             
             if isinstance(check, tuple):
-                return await interaction.response.send_message(
-                    embed=membed(check[1]))
+                return await interaction.response.send_message(embed=membed(check[1]))
 
             number = randint(1, 100)
             hint = randint(1, 100)
 
-            query = discord.Embed(colour=0x2B2D31,
-                                  description=f"I just chose a secret number between 0 and 100.\n"
-                                              f"Is the secret number *higher* or *lower* than {hint}?")
+            query = discord.Embed()
+            query.colour = 0x2B2D31
+            query.description = (
+                "I just chose a secret number between 0 and 100.\n"
+                f"Is the secret number *higher* or *lower* than {hint}?")
             query.set_author(name=f"{interaction.user.name}'s high-low game",
                              icon_url=interaction.user.display_avatar.url)
             query.set_footer(text="The jackpot button is if you think it is the same!")
-            await interaction.response.send_message(
-                view=HighLow(interaction, self.client, hint_provided=hint, bet=real_amount, value=number),
-                embed=query)
+            
+            hl_view = HighLow(interaction, self.client, hint_provided=hint, bet=real_amount, value=number)
+            await interaction.response.send_message(view=hl_view, embed=query)
+            hl_view.message = await interaction.original_response()
 
     @app_commands.command(name='slots',
                           description='Try your luck on a slot machine', extras={"exp_gained": 3})
@@ -5217,7 +5194,7 @@ class Economy(commands.Cog):
             async with self.client.pool_connection.acquire() as conn:
                 if not (await self.can_call_out_either(interaction.user, user, conn)):
                     return await interaction.response.send_message(
-                        embed=membed(f"Either you or {user.mention} are not registered.")
+                        embed=membed(f"Either you or {user.mention} aren't registered.")
                     )
 
                 return await interaction.response.send_message(
@@ -5473,7 +5450,7 @@ class Economy(commands.Cog):
             smulti = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti
             badges = set()
             id_won_amount, id_lose_amount = data[2], data[3]
-            if pmulti > 0:
+            if pmulti:
                 badges.add(PREMIUM_CURRENCY)
 
             if has_keycard:
