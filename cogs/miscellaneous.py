@@ -898,10 +898,9 @@ class Miscellaneous(commands.Cog):
     async def about_the_bot(self, interaction: discord.Interaction):
 
         await interaction.response.defer(thinking=True)
-        amount = 0
         lenslash = len(await self.client.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1
         lentxt = len(self.client.commands)
-        amount += (lenslash + lentxt)
+        amount = (lenslash + lentxt)
 
         username = 'SGA-A'
         token = self.client.GITHUB_TOKEN
