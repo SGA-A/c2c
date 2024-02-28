@@ -503,7 +503,7 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
         colour=Colour.from_rgb(3, 102, 214),
         title='Changes for 2024 Q1',
         description="Changes that have taken place in the period between January 1 - March 31 are noted here.\n\n"
-                    "- **Linked Roles**: Integrate your Github account to Discord and claim your linked role "
+                    "- **Linked Roles**: Integrate your GitHub account to Discord and claim your linked role "
                     "in the 'Linked Roles' tab.\n"
                     " - Once claimed, you receive <@&1190772742409158667> and a badge next "
                     "to your name in most channels.\n"
@@ -562,7 +562,7 @@ async def help_command(interaction: Interaction):
             "tools and some other random features that may aid you in this journey. "
             "You can get more information on my commands by using the dropdown below.\n\n"
             f"I'm also open source. You can see my code on {epicker} "
-            "[Github](https://github.com/SGA-A/c2c)."), inline=False)
+            "[GitHub](https://github.com/SGA-A/c2c)."), inline=False)
 
     help_view = Select()
     await interaction.response.send_message(embed=embed, view=help_view, ephemeral=True)
