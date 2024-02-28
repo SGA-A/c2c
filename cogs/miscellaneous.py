@@ -609,14 +609,12 @@ class Miscellaneous(commands.Cog):
                                 description="> This is a command that fetches **all** of the emojis found"
                                             " in the client's internal cache and their associated atributes.\n",
                                 colour=0x2F3136)
-            emb.set_thumbnail(url=self.client.user.avatar.url)
             offset = (page - 1) * length
             for user in emotes_all[offset:offset + length]:
                 emb.description += f"{user}\n"
             emb.set_author(name=interaction.user.name,
                            icon_url=interaction.user.display_avatar.url)
             n = Pagination.compute_total_pages(len(emotes_all), length)
-            emb.set_footer(text=f"This is page {page} of {n}")
             return emb, n
 
         await Pagination(interaction, get_page_part).navigate()
