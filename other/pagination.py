@@ -44,7 +44,7 @@ class Pagination(discord.ui.View):
         """Make sure only original user that invoked interaction can interact"""
         if interaction.user == self.interaction.user:
             return True
-        emb = membed("You have not created this interaction.")
+        emb = membed("You cannot interact with this paginator")
         await interaction.response.send_message(embed=emb, ephemeral=True)
         return False
 
