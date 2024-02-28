@@ -6,6 +6,7 @@ from re import sub, search
 from ImageCharts import ImageCharts
 from discord.ext import commands, tasks
 from math import floor, ceil
+from pytz import timezone
 from random import randint, choices, choice, sample, shuffle
 from pluralizer import Pluralizer
 from discord import app_commands, SelectOption
@@ -1087,16 +1088,6 @@ class BalanceView(discord.ui.View):
         """Close the balance view."""
         self.stop()
         await interaction.response.edit_message(view=None)
-
-
-class BankRobView(discord.ui.View):
-    """View for the bankrob command and its associated functions."""
-
-    def __init__(self, interaction: discord.Interaction, client: commands.Bot):
-        self.interaction = interaction
-        self.client: commands.Bot = client
-        self.finished = False
-        super().__init__(timeout=30)
 
 
 class BlackjackUi(discord.ui.View):
@@ -2653,6 +2644,24 @@ class Economy(commands.Cog):
         return data
 
     @staticmethod
+    async def kill_the_user(user: discord.Member, conn_input: asqlite_Connection) -> None:
+        """Define what it means to kill a user."""
+
+        await conn_input.execute(
+            f"UPDATE `{BANK_TABLE_NAME}` SET wallet = 0, bank = 0, showcase = ?, job = ?, bounty = 0 WHERE userID = ?", 
+            ("0 0 0", "None", user.id))
+        
+        await conn_input.execute(f"DELETE FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
+        await conn_input.execute(f"INSERT INTO `{INV_TABLE_NAME}` (userID) VALUES(?)", (user.id,))
+        
+        await conn_input.execute(f"DELETE FROM `{SLAY_TABLE_NAME}` WHERE userID = ?", (user.id,))
+
+        await conn_input.execute(f"DELETE FROM `{COOLDOWN_TABLE_NAME}` WHERE userID = ?", (user.id,))
+        await conn_input.execute(f"INSERT INTO `{COOLDOWN_TABLE_NAME}` (userID) VALUES(?)", (user.id,))
+
+        await conn_input.execute(f"INSERT INTO `{SLAY_TABLE_NAME}` (userID) VALUES(?)", (user.id,))
+
+    @staticmethod
     async def change_inv_new(user: discord.Member, amount: Union[float, int, None], mode: str,
                              conn_input: asqlite_Connection) -> Optional[Any]:
         """Change a specific attribute in the user's inventory data and return the updated value."""
@@ -2685,11 +2694,18 @@ class Economy(commands.Cog):
         await conn_input.execute(f"INSERT INTO `{COOLDOWN_TABLE_NAME}` (userID) VALUES(?)", (user.id,))
 
     @staticmethod
-    async def fetch_cooldown(conn_input: asqlite_Connection, *, user: discord.Member, cooldown_type: str):
-        """Fetch a cooldown from the cooldowns table. Requires indexing."""
-        data = await conn_input.execute(f"SELECT `{cooldown_type}` FROM `{'cooldowns'}` WHERE userID = ?", (user.id,))
-        data = await data.fetchone()
-        return data
+    def is_no_cooldown(cooldown_value: float, mode="t"):
+        """Check if a user has no cooldowns."""
+        if not cooldown_value:
+            return True
+        current_time = discord.utils.utcnow()
+        timestamp_to_dt = datetime.datetime.fromtimestamp(cooldown_value, tz=timezone('UTC'))
+        time_left = (timestamp_to_dt - current_time).total_seconds()
+        
+        if time_left:
+            when = timestamp_to_dt + datetime.timedelta(seconds=time_left)
+            return discord.utils.format_dt(when, style=mode), discord.utils.format_dt(when, style="R")
+        return True
 
     @staticmethod
     async def update_cooldown(conn_input: asqlite_Connection, *, user: discord.Member, cooldown_type: str, new_cd: str):
@@ -2698,7 +2714,7 @@ class Economy(commands.Cog):
         Use this func to reset and create a cooldown."""
 
         data = await conn_input.execute(
-            f"UPDATE `{'cooldowns'}` SET `{cooldown_type}` = ? WHERE userID = ? RETURNING `{cooldown_type}`",
+            f"UPDATE `cooldowns` SET `{cooldown_type}` = ? WHERE userID = ? RETURNING `{cooldown_type}`",
             (new_cd, user.id))
         data = await data.fetchone()
         return data
@@ -3794,90 +3810,86 @@ class Economy(commands.Cog):
         The command has to be called again to receive the money gained from this action.
         """
 
-        try:
-            async with self.client.pool_connection.acquire() as conn:
-                conn: asqlite_Connection
+        async with self.client.pool_connection.acquire() as conn:
+            conn: asqlite_Connection
 
-                if await self.can_call_out(interaction.user, conn):
-                    return await interaction.response.send_message(content=None, embed=self.not_registered)
+            if await self.can_call_out(interaction.user, conn):
+                return await interaction.response.send_message(content=None, embed=self.not_registered)
 
-                data = await conn.fetchone(
-                    """
-                    SELECT slay_name, work_until, skillL FROM slay
-                    WHERE userID = ? AND LOWER(slay_name) = LOWER(?)
-                    """, (interaction.user.id, servant_name))
+            data = await conn.fetchone(
+                """
+                SELECT slay_name, work_until, skillL FROM slay
+                WHERE userID = ? AND LOWER(slay_name) = LOWER(?)
+                """, (interaction.user.id, servant_name))
+            
+            if data is None:
+                return await interaction.response.send_message(
+                    embed=membed("We could not find a servant with that name."), ephemeral=True)
+            
+            slay_name, work_until, skill_level = data
+
+            async with conn.transaction():
                 
-                if data is None:
-                    return await interaction.response.send_message(
-                        embed=membed("We could not find a servant with that name."), ephemeral=True)
-                
-                slay_name, work_until, skill_level = data
-
-                async with conn.transaction():
-
-                    if work_until != "0":
-                        work_until = string_to_datetime(work_until)
-                        diff = work_until - discord.utils.utcnow()
-
-                        if diff.total_seconds() > 0:
-                            when = discord.utils.utcnow() + datetime.timedelta(seconds=diff.total_seconds())
-                            relative = discord.utils.format_dt(when, style="R")
-                            when = discord.utils.format_dt(when)
-
-                            return await interaction.response.send_message(
-                                embed=membed(f"{slay_name} is still working.\n"
-                                            f"They'll be back at {when} ({relative})."))
-                        
-                        # TODO some stuff beneath here if the servant is done working
-
-                        data = await conn.execute(
-                                """
-                                UPDATE `slay` set tasks_completed = tasks_completed + 1,
-                                status = 1, energy = CASE WHEN energy - toreduce < 0 THEN 0 ELSE energy - toreduce END, 
-                                work_until = 0 WHERE userID = ? AND slay_name = ? RETURNING toadd, hex, gender
-                                """,
-                                (interaction.user.id, slay_name))
-                        data = await data.fetchone()
-
-                        hex = data[1] or gend.get(data[2], 0x2B2D31)
-
-                        embed = discord.Embed(
-                            title="Task Complete",
-                            description=f"**{slay_name} has given you:**\n"
-                                        f"- \U000023e3 {data[0]:,}", 
-                            colour=hex)
-                        embed.set_footer(text="No taxes!")
-
-                        res = choices([0, 1], weights=(0.85, 0.15), k=1)
-                        await self.update_bank_new(interaction.user, conn, data[0])
-                        
-                        if res[0]:
-                            qty, ranitem = randint(1, 3), choice(SHOP_ITEMS)
-                            await self.update_inv_new(interaction.user, qty, ranitem["name"], conn)
-                            embed.description += f"\n- {qty}x {ranitem['emoji']} {ranitem['name']} (bonus)\n"
-                        
-                        await interaction.response.send_message(embed=embed)
-                        msg = await interaction.original_response()
-                        return await msg.add_reaction("<a:owoKonataDance:1205288135861473330>")
-
+                if not work_until:
                     prompt = DispatchServantView(self.client, conn, slay_name, skill_level, interaction)
-                    await interaction.response.send_message(
-                        embed=discord.Embed(
-                            title="Task Menu",
-                            description=f"What would you like {slay_name.title()} to do?\n"
-                                        "Some tasks require your servant to attain a certain skill level.\n"
-                                        "- 25 energy points are required for <:battery_green:1203056234731671683>\n"
-                                        "- 50 energy points are required for <:battery_yellow:1203056272396648558>\n"
-                                        "- 75 energy points are required for <:battery_red:1203056297310822411>\n"
-                                        f"You can only pick 1 task for {slay_name.title()} to complete.",
-                            color=0x2B2D31
-                        ),
-                        view=prompt)
+                    embed = discord.Embed()
+                    embed.title = "Task Menu"
+                    embed.description = (
+                        f"What would you like {slay_name.title()} to do?\n"
+                        "Some tasks require your servant to attain a certain skill level.\n"
+                        "- 25 energy points are required for <:battery_green:1203056234731671683>\n"
+                        "- 50 energy points are required for <:battery_yellow:1203056272396648558>\n"
+                        "- 75 energy points are required for <:battery_red:1203056297310822411>\n"
+                        f"You can only pick 1 task for {slay_name.title()} to complete."
+                    )
+                    embed.colour = 0x2B2D31
                     
+                    await interaction.response.send_message(embed=embed, view=prompt)
                     prompt.message = await interaction.original_response()
+                    return
 
-        except ValueError as veer:
-            await interaction.response.send_message(content=f"{veer}")
+                current_time = discord.utils.utcnow()
+                timestamp_to_dt = datetime.datetime.fromtimestamp(work_until, tz=timezone('UTC'))
+                time_left = (timestamp_to_dt - current_time).total_seconds()
+                
+                if time_left:
+                    when = timestamp_to_dt + datetime.timedelta(seconds=time_left)
+                    relative = discord.utils.format_dt(when, style="R")
+                    when = discord.utils.format_dt(when)
+                    return await interaction.response.send_message(
+                        embed=membed(
+                            f"{slay_name} is still working.\n"
+                            f"They'll be back at {when} ({relative})."))
+
+                data = await conn.execute(
+                        """
+                        UPDATE `slay` set tasks_completed = tasks_completed + 1,
+                        status = 1, energy = CASE WHEN energy - toreduce < 0 THEN 0 ELSE energy - toreduce END, 
+                        work_until = 0 WHERE userID = ? AND slay_name = ? RETURNING toadd, hex, gender
+                        """,
+                        (interaction.user.id, slay_name))
+                data = await data.fetchone()
+
+                hexclr = data[1] or gend.get(data[2], 0x2B2D31)
+                embed = discord.Embed()
+                embed.title = "Task Complete"
+                embed.description = (
+                    f"**{slay_name} has given you:**\n"
+                    f"- \U000023e3 {data[0]:,}")
+                embed.colour = hexclr
+                embed.set_footer(text="No taxes!")
+
+                res = choices([0, 1], weights=(0.85, 0.15), k=1)
+                await self.update_bank_new(interaction.user, conn, data[0])
+                
+                if res[0]:
+                    qty, ranitem = randint(1, 3), choice(SHOP_ITEMS)
+                    await self.update_inv_new(interaction.user, qty, ranitem["name"], conn)
+                    embed.description += f"\n- {qty}x {ranitem['emoji']} {ranitem['name']} (bonus)\n"
+                
+                await interaction.response.send_message(embed=embed)
+                msg = await interaction.original_response()
+                return await msg.add_reaction("<a:owoKonataDance:1205288135861473330>")
 
     @commands.command(name='reasons', description='Identify causes of registration errors')
     @commands.cooldown(1, 6)
@@ -4113,23 +4125,23 @@ class Economy(commands.Cog):
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
             
-            cooldown = await self.fetch_cooldown(conn, user=interaction.user, cooldown_type="job_change")
-            current_job = await self.get_job_data_only(interaction.user, conn)
+            data = await conn.fetchall(
+                """
+                SELECT job_change FROM cooldowns WHERE userID = $0 UNION ALL SELECT job FROM bank WHERE userID = $0
+                """, interaction.user.id
+            )
+            cooldown = data[0][0]
+            current_job = data[1][0]
+            has_cd = await self.is_no_cooldown(cooldown_value=cooldown)
             
-
-            if cooldown[0] != "0":
-                cooldown = string_to_datetime(cooldown[0])
-                now = discord.utils.utcnow()
-                diff = cooldown - now
-                if diff.total_seconds() > 0:
-                    when = now + datetime.timedelta(seconds=diff.total_seconds())
+            if isinstance(has_cd, tuple):
+   
+                embed = discord.Embed(
+                    title="Cannot perform this action", 
+                    description=f"You can change your job {has_cd[1]}.", 
+                    colour=0x2B2D31)
                     
-                    embed = discord.Embed(
-                        title="Cannot perform this action", 
-                        description=f"You can change your job {discord.utils.format_dt(when, 'R')}.", 
-                        colour=0x2B2D31)
-                    
-                    return await interaction.response.send_message(embed=embed)
+                return await interaction.response.send_message(embed=embed)
 
             async with conn.transaction():
                 if current_job == job_name:
@@ -4141,18 +4153,17 @@ class Economy(commands.Cog):
                         return await interaction.response.send_message(
                             embed=membed("You're already unemployed!"))
                     
-                    ncd = discord.utils.utcnow() + datetime.timedelta(days=2)
-                    ncd = datetime_to_string(ncd)
+                    ncd = (discord.utils.utcnow() + datetime.timedelta(days=2)).timestamp()
                     await self.update_cooldown(
                         conn, user=interaction.user, cooldown_type="job_change", new_cd=ncd)
 
                     await self.change_job_new(interaction.user, conn, job_name='None')
                     return await interaction.response.send_message(
-                        embed=membed("Alright, I've removed you from your job.\n"
-                                     "You cannot apply to another job for the next **48 hours**."))
+                        embed=membed(
+                            "Alright, I've removed you from your job.\n"
+                            "You cannot apply to another job for the next **48 hours**."))
 
-                ncd = discord.utils.utcnow() + datetime.timedelta(days=2)
-                ncd = datetime_to_string(ncd)
+                ncd = (discord.utils.utcnow() + datetime.timedelta(days=2)).timestamp()
                 await self.update_cooldown(
                     conn, user=interaction.user, cooldown_type="job_change", new_cd=ncd)
                 
@@ -4733,35 +4744,30 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(
                         embed=membed("You don't have a job, get one first."))
 
-            ncd = string_to_datetime(data[0][0])
-            now = discord.utils.utcnow()
-
-            diff = ncd - now
-            if diff.total_seconds() > 0:
-                when = now + datetime.timedelta(seconds=diff.total_seconds())
+            has_cd = self.is_no_cooldown(data[0][0])
+            if isinstance(has_cd, tuple):  # ! when there is a cooldown
                 return await interaction.response.send_message(
                     embed=membed(
-                        f"You can work again at {discord.utils.format_dt(when, 't')}"
-                        f" ({discord.utils.format_dt(when, 'R')})."))
+                        f"You can work again at {has_cd[0]}"
+                        f" ({has_cd[1]})."))
 
             async with conn.transaction():
                 ncd = discord.utils.utcnow() + datetime.timedelta(minutes=40)
-                ncd = datetime_to_string(ncd)
+                ncd = ncd.timestamp()
                 await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
             possible_minigames = choices((0, 1, 2), k=1, weights=(45, 25, 30))[0]
-
             num_to_func_link = {
                 2: "do_order",
                 1: "do_tiles",
                 0: "do_fill_up_word"
             }
 
-            method_name = num_to_func_link[possible_minigames]  # Get the method name from the dict
-            method = getattr(self, method_name)  # Get the method from the class
-            if method_name == "do_order":  
+            method_name = num_to_func_link[possible_minigames]
+            method = getattr(self, method_name)
+            if method_name == "do_order": 
                 return await method(interaction, job_name)
-            await method(interaction, job_name, conn)  # Call the method with connection as well
+            await method(interaction, job_name, conn)
 
     @app_commands.command(name="balance", description="Get someone's balance. Wallet, bank, and net worth.")
     @app_commands.describe(user='The user to find the balance of.',
@@ -4858,28 +4864,22 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=self.not_registered)
 
             ncd = await conn.fetchone("SELECT weekly FROM cooldowns WHERE userID = ?", (interaction.user.id,))
-            
-            ncd = string_to_datetime(ncd[0])
-            now = discord.utils.utcnow()
+            has_cd = await self.is_no_cooldown(ncd[0])
 
-            diff = ncd - now
-            if diff.total_seconds() > 0:
-                when = now + datetime.timedelta(seconds=diff.total_seconds())
+            if isinstance(has_cd, tuple):
                 return await interaction.response.send_message(
-                    embed=membed(
-                        f"You already got your weekly robux this week, try again {discord.utils.format_dt(when, 'R')}."))
+                    embed=membed(f"You already got your weekly robux this week, try again {has_cd[1]}."))
             
             success = discord.Embed(colour=0x2B2D31, title=f"{interaction.user.display_name}'s Weekly Robux")
             success.url = "https://www.youtube.com/watch?v=ue_X8DskUN4"
             
             async with conn.transaction():
-                ncd = now + datetime.timedelta(weeks=1)
+                ncd = (discord.utils.utcnow() + datetime.timedelta(weeks=1)).timestamp()
                 
                 success.description=(
                     "You just got \U000023e3 **10,000,000** for checking in this week.\n"
                     f"See you next week ({discord.utils.format_dt(ncd, "R")})!")
                 
-                ncd = datetime_to_string(ncd)
                 await self.update_cooldown(conn, user=interaction.user, cooldown_type="weekly", new_cd=ncd)
                 await self.update_bank_new(interaction.user, conn, 10_000_000)
 
@@ -5196,9 +5196,13 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(
                         embed=membed(f"Either you or {user.mention} aren't registered.")
                     )
-
-                return await interaction.response.send_message(
-                    embed=membed("This command is currently under construction. Please try again later."))
+                wallet = await self.get_wallet_data_only(interaction.user, conn)
+                if wallet < 10_000:
+                    return await interaction.response.send_message(
+                        embed=membed("You need at least \U000023e3 **1,000,000** in your wallet to start a bankrob.")
+                    )
+                
+            
 
     @app_commands.command(name='coinflip', description='Bet your robux on a coin flip', extras={"exp_gained": 3})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
