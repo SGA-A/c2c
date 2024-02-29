@@ -1562,7 +1562,6 @@ class ImageModal(discord.ui.Modal):
 
 
 class HexModal(discord.ui.Modal):
-
     def __init__(self, conn, client, their_choice, the_view):
         self.conn = conn
         self.client = client
@@ -3075,29 +3074,41 @@ class Economy(commands.Cog):
             nshowcase = []
 
             should_warn_user = False
+            changes_were_made = False
+
             for i in range(1, 4):
                 try:
                     item = showcase[i - 1]
 
                     if item == "0":
                         should_warn_user = True
-                        nshowcase.append(f"`{i}`. Empty slot")
+                        nshowcase.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
                         continue
 
                     item = item.replace("_", " ")
                     emoji = SHOP_ITEMS[NAME_TO_INDEX[item]]["emoji"]
                     qty = await self.get_one_inv_data_new(interaction.user, item, conn)
                     if qty >= 1:
-                        nshowcase.append(f"`{i}`. **{qty}x** {emoji} {item}")
+                        nshowcase.append(f"[**`{i}.`**](https://www.google.com) **{qty}x** {emoji} {item}")
                         continue
-                    nshowcase.append(f"[**`{i}`**](https://www.google.com). **Requires replacement.**")
+                    
+                    item = "0"
+                    changes_were_made = True
+                    should_warn_user = True
+                    nshowcase.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
                 except IndexError:
-                    nshowcase.append(f"`{i}`. Empty slot")
+                    nshowcase.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
 
             showbed.description += "\n".join(nshowcase)
             if should_warn_user:
                 showbed.set_footer(text="You can add more items to your showcase.")
-
+            
+            if changes_were_made:
+                async with conn.transaction():
+                    showcase_shadow = " ".join(nshowcase)
+                    await self.change_bank_new(interaction.user, conn, showcase_shadow, "showcase")
+                    await conn.commit()
+    
             await interaction.response.send_message(embed=showbed)
 
     @showcase.command(name="add", description="Add an item to your showcase", extras={"exp_gained": 1})
