@@ -6,6 +6,7 @@ from re import sub, search
 from ImageCharts import ImageCharts
 from discord.ext import commands, tasks
 from math import floor, ceil
+from discord.ui.item import Item
 from pytz import timezone
 from random import randint, choices, choice, sample, shuffle
 from pluralizer import Pluralizer
@@ -2145,6 +2146,112 @@ class ServantsManager(discord.ui.View):
         self.add_item(self.manage_button)
         await interaction.response.edit_message(view=self)
 
+class ShowcaseDropdown(discord.ui.Select):
+    def __init__(self, showcase_list: list):
+        self.showcase_list = showcase_list 
+        self.current_item = self.showcase_list[0]
+        options = []
+        for i in range(1, 7):
+            try:
+                item = self.showcase_list[i - 1]
+
+                if item == "0":
+                    options.append(discord.SelectOption(label=f"Slot {i}", default=i==1, value=f"0{i}"))
+                    continue
+                
+                item_ui = item.replace("_", " ")
+                emoji = SHOP_ITEMS[NAME_TO_INDEX[item_ui]]["emoji"]
+                options.append(discord.SelectOption(label=item_ui, emoji=emoji, default=i==1, value=item))
+
+            except IndexError:
+                options.append(discord.SelectOption(label=f"Slot {i}", default=i==1, value=f"0{i}"))
+        super().__init__(options=options, row=0)
+    
+    async def callback(self, interaction: discord.Interaction):
+        self.current_item = self.values[0]
+        for option in self.options:
+            option.default = option.value == self.current_item
+        await interaction.response.edit_message(view=self.view)
+        
+
+class ShowcaseView(discord.ui.View):
+    def __init__(self, interaction: discord.Interaction, client: commands.Bot, showcase_list: list):
+        self.interaction: discord.Interaction = interaction
+        self.client: commands.Bot = client
+        self.showcase_list: list = showcase_list
+        super().__init__(timeout=45.0)
+        
+        self.select_item = ShowcaseDropdown(showcase_list=self.showcase_list)
+        self.add_item(self.select_item)
+    
+    async def on_error(self, interaction: discord.Interaction[discord.Client], error: Exception, item: Item[Any]) -> None:
+        print_exception(type(error), error, error.__traceback__)
+        await interaction.response.send_message("Something fucked up")
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+        try:
+            await self.message.edit(view=self)
+        except discord.NotFound:
+            pass
+    
+    async def interaction_check(self, interaction: discord.Interaction[discord.Client]) -> bool:
+        if interaction.user == self.interaction.user:
+            return True
+        await interaction.response.send_message(
+            embed=membed("This is not your showcase."), ephemeral=True)
+        return False
+
+    @discord.ui.button(emoji="<:move_up:1213223442241818705>", row=1)
+    async def move_up(self, interaction: discord.Interaction, button: discord.ui.Button):
+        fmtt = self.select_item.values or self.select_item.current_item
+        fmtt = fmtt[0][0] if fmtt.startswith("0") else fmtt
+        pos_we_are_on = self.showcase_list.index(fmtt)
+        item_above = self.showcase_list[pos_we_are_on - 1]
+        self.showcase_list[pos_we_are_on - 1] = self.select_item.current_item
+        self.showcase_list[pos_we_are_on] = item_above
+
+        none_left = False
+        try:
+            none_left = self.showcase_list[pos_we_are_on-2] == "0"
+        except IndexError:
+            none_left = True
+
+        button.disabled = (pos_we_are_on == 1) or none_left
+
+        async with self.client.pool_connection.acquire() as conn:
+            conn: asqlite_Connection
+            showcase = " ".join(self.showcase_list)
+            await Economy.change_bank_new(interaction.user, conn, showcase, "showcase")
+            await conn.commit()
+        await interaction.response.edit_message(view=self)
+
+    @discord.ui.button(emoji="<:move_down:1213223440669085756>", row=1)
+    async def move_down(self, interaction: discord.Interaction, button: discord.ui.Button):
+        fmtt = self.select_item.values or self.select_item.current_item
+        fmtt = fmtt[0][0] if fmtt.startswith("0") else fmtt
+        
+        pos_we_are_on = self.showcase_list.index(fmtt)
+        item_below = self.showcase_list[pos_we_are_on + 1]
+        self.showcase_list[pos_we_are_on + 1] = self.select_item.current_item
+        self.showcase_list[pos_we_are_on] = item_below
+        
+        none_left = False
+        try:
+            none_left = self.showcase_list[pos_we_are_on+2] == "0"
+        except IndexError:
+            none_left = True
+
+        button.disabled = (pos_we_are_on == 5) or none_left
+
+        async with self.client.pool_connection.acquire() as conn:
+            conn: asqlite_Connection
+            showcase = " ".join(self.showcase_list)
+            await Economy.change_bank_new(interaction.user, conn, showcase, "showcase")
+            await conn.commit()
+        await interaction.response.edit_message(view=self)
+
 
 class Economy(commands.Cog):
 
@@ -2226,6 +2333,7 @@ class Economy(commands.Cog):
     @staticmethod
     def calculate_exp_for(*, level: int):
         """Calculate the experience points required for a given level."""
+        # return ((level ** 2) + (level ** 2)) * 2
         return 12 + ceil((0.25 * level / 90.8) ** 2)
 
     @staticmethod
@@ -3076,7 +3184,7 @@ class Economy(commands.Cog):
             should_warn_user = False
             changes_were_made = False
 
-            for i in range(1, 4):
+            for i in range(1, 7):
                 try:
                     item = showcase[i - 1]
 
@@ -3097,6 +3205,7 @@ class Economy(commands.Cog):
                     should_warn_user = True
                     nshowcase.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
                 except IndexError:
+                    showcase.append("0")
                     nshowcase.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
 
             showbed.description += "\n".join(nshowcase)
@@ -3105,18 +3214,18 @@ class Economy(commands.Cog):
             
             if changes_were_made:
                 async with conn.transaction():
-                    showcase_shadow = " ".join(nshowcase)
-                    await self.change_bank_new(interaction.user, conn, showcase_shadow, "showcase")
+                    nshowcase = " ".join(nshowcase)
+                    await self.change_bank_new(interaction.user, conn, nshowcase, "showcase")
                     await conn.commit()
-    
-            await interaction.response.send_message(embed=showbed)
+
+            showcase_view = ShowcaseView(interaction, self.client, showcase)
+            await interaction.response.send_message(embed=showbed, view=showcase_view)
+            showcase_view.message = await interaction.original_response()
 
     @showcase.command(name="add", description="Add an item to your showcase", extras={"exp_gained": 1})
     @app_commands.checks.cooldown(1, 10)
-    @app_commands.describe(item_name="Select an item.",
-                           position="The position of this item in your showcase.")
-    async def add_showcase_item(self, interaction: discord.Interaction, 
-                                position: app_commands.Range[int, 1, 3] , item_name: str):
+    @app_commands.describe(item_name="Select an item.")
+    async def add_showcase_item(self, interaction: discord.Interaction, item_name: str):
         """This is a subcommand. Adds an item to your showcase."""
 
         async with self.client.pool_connection.acquire() as conn:
@@ -3145,6 +3254,7 @@ class Economy(commands.Cog):
             else:
                 attrs = SHOP_ITEMS[name_res]
                 name = attrs["name"]
+                ie = attrs["emoji"]
                 item_name_fmt = name.replace(" ", "_")  # the format of the item name in the db
 
                 item_qty = await self.get_one_inv_data_new(interaction.user, name, conn)
@@ -3152,46 +3262,24 @@ class Economy(commands.Cog):
                 showcase: str = await self.get_spec_bank_data(interaction.user, "showcase", conn)
                 showcase: list = showcase.split(" ")
                 
-                if len(showcase) > 3 and (showcase.count("0") == 0):
+                if len(showcase) > 6 and (showcase.count("0") == 0):
                     return await interaction.response.send_message(
-                        embed=membed("You already have the maximum of 3 showcase slots."))
+                        embed=membed("You reached the maximum showcase slots."))
 
                 if not item_qty:
                     return await interaction.response.send_message(
-                        embed=membed("You cannot flex on someone with something you don't even have."))
+                        embed=membed("You don't have this item, so you can't showcase it. "))
 
                 if item_name_fmt in showcase:
-                    item_index = showcase.index(item_name_fmt)
-                    if item_index == position - 1:
-                        return await interaction.response.send_message(
-                            embed=membed("You already have this item in this slot."))
+                    return await interaction.response.send_message(
+                        embed=membed("You already have this item in your showcase."))
 
-                    showcase[item_index] = "0"
-                    await interaction.channel.send(
-                        embed=membed("**Warning:** You already had this item in your showcase.\n"
-                                    "I have removed it from it's previous location.\n"
-                                    "Your preview may not be accurate as a result."))
-
-                if showcase[position - 1] != "0":
-                    await interaction.channel.send(
-                        embed=membed("**Warning:** Another item was already in the specified position.\n"
-                                    "Under your request, it has been replaced with a new item."))
-
-                showcase[position - 1] = item_name_fmt
-                showcase_shadow = " ".join(showcase)
-                showcase_view = await self.change_bank_new(interaction.user, conn, showcase_shadow, "showcase")
+                showcase.append(item_name_fmt)
+                showcase = " ".join(showcase)
+                await self.change_bank_new(interaction.user, conn, showcase, "showcase")
                 await conn.commit()
-                
-                success = discord.Embed(title="Changes to showcase",
-                                        description="Okay, that item was **added** into your showcase.\n"
-                                                    "Here is a quick preview:```py\n"
-                                                    f"{showcase_view[0].split(' ')}```\n"
-                                                    f"`0` is used here to indicate that slot position is empty.\n"
-                                                    f"This is not what it will look like on your profile!",
-                                        colour=discord.Colour.brand_green())
-                success.set_footer(text="What a flex.")
 
-                return await interaction.response.send_message(embed=success)
+                return await interaction.response.send_message(embed=membed(f"Added {ie} **{name}** to your showcase!"))
 
     @showcase.command(name="remove", description="Remove an item from your showcase", extras={"exp_gained": 1})
     @app_commands.checks.cooldown(1, 10)
@@ -3230,31 +3318,17 @@ class Economy(commands.Cog):
                 showcase: str = await self.get_spec_bank_data(interaction.user, "showcase", conn)
                 showcase: list = showcase.split(" ")
 
-                for item in showcase:
-                    if item == "0":
-                        continue
-                    if item == item_name:
-                        item_index = showcase.index(item)
-                        showcase[item_index] = "0"
-                        showcase_shadow = " ".join(showcase)
-                        showcase_view = await self.change_bank_new(
-                            interaction.user, conn, showcase_shadow, "showcase")
-                        await conn.commit()
+                if item_name not in showcase:
+                    return await interaction.response.send_message(
+                        embed=membed("You don't have this item in your showcase."))
+                showcase.remove(item_name)
 
-                        success = discord.Embed(
-                            title="Changes to showcase",
-                            description="Okay, that item was **deleted** from your showcase.\n"
-                                        "Here is a quick preview:```py\n"
-                                        f"- {showcase_view[0].split(' ')}```\n"
-                                        f"`0` is used here to indicate that slot position is empty.\n"
-                                        f"This is not what it will look like on your profile!",
-                            colour=discord.Colour.brand_red())
-
-                        success.set_footer(text="How humble of you.")
-                        return await interaction.response.send_message(embed=success)
+                showcase = " ".join(showcase)
+                await self.change_bank_new(interaction.user, conn, showcase, "showcase")
+                await conn.commit()
 
                 await interaction.response.send_message(
-                    embed=membed("Could not find that item in your showcase. Sorry."))
+                    embed=membed(f"Removed {attrs["emoji"]} **{item_name}** from your showcase!"))
 
     shop = app_commands.Group(
         name='shop', description='view items available for purchase.', 
@@ -5258,12 +5332,10 @@ class Economy(commands.Cog):
                         embed=membed(f"Either you or {user.mention} aren't registered.")
                     )
                 wallet = await self.get_wallet_data_only(interaction.user, conn)
-                if wallet < 10_000:
-                    return await interaction.response.send_message(
-                        embed=membed("You need at least \U000023e3 **1,000,000** in your wallet to start a bankrob.")
-                    )
                 
-            
+                if wallet < 1e6:
+                    return await interaction.response.send_message(
+                        embed=membed("You need at least \U000023e3 **1,000,000** in your wallet to start a bankrob."))
 
     @app_commands.command(name='coinflip', description='Bet your robux on a coin flip', extras={"exp_gained": 3})
     @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
