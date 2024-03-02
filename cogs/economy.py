@@ -44,6 +44,8 @@ def number_to_ordinal(n):
 
 BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
+NAME_TO_INDEX = 1
+SHOP_ITEMS = 0
 INV_TABLE_NAME = "inventory"
 COOLDOWN_TABLE_NAME = "cooldowns"
 MAX_BET_KEYCARD = 15_000_000
@@ -142,81 +144,18 @@ PRESTIGE_EMOTES = {
     11: "<:Xrne:1164937391514062848>"
 }
 
-SHOP_ITEMS = [
-    {"name": "Keycard", "cost": 10_000_000,
-     "info": "Allows you to bypass certain restrictions, and you get more returns from certain activities!",
-     "url": "https://i.imgur.com/WZOWysT.png", "rarity": "Epic",
-     "emoji": "<:lanyard:1165935243140796487>", "available": False},
-
-    {"name": "Trophy", "cost": 500_000_000,
-     "info": "Flex on your friends with this trophy! There are also some hidden side effects..",
-     "url": "https://i.imgur.com/32iEaMb.png", "rarity": "Luxurious",
-     "emoji": "<:tr1:1165936712468418591>", "available": True},
-
-    {"name": "Dynamic Item", "cost": 1_000_000_000,
-     "info": "An item that changes use often. Its transformative "
-             "functions change to match the seasonality of the year.",
-     "url": "https://i.imgur.com/WX9mbie.png", "rarity": "Rare",
-     "emoji": "<:dynamic:1197949814898446478>", "available": True},
-
-    {"name": "Resistor", "cost": 750_000_000,
-     "info": "No one knows how this works because no one has ever purchased "
-             "this item. May cause distress to certain individuals upon purchase.",
-     "url": "https://i.imgur.com/ggO9QbL.png", "rarity": "Godly",
-     "emoji": "<:resistor:1165934607447887973>", "available": False},
-
-    {"name": "Clan License", "cost": 1_250_000_000,
-     "info": "Create your own clan. It costs a fortune, but with it brings a lot of "
-             "privileges exclusive to clan members.",
-     "url": "https://i.imgur.com/nPcMNk8.png", "rarity": "Godly",
-     "emoji": "<:clan_license:1165936231922806804>", "available": True},
-
-    {"name": "Hyperion", "cost": 3_000_000_000,
-     "info": "The `passive` drone that actively helps in increasing the returns in almost everything.",
-     "url": "https://i.imgur.com/bmNyob0.png", "rarity": "Uncommon",
-     "emoji": "<:DroneHyperion:1171491601726574613>", "available": True, "maximum": 1},
-
-    {"name": "Crisis", "cost": 1_500_000_000,
-     "info": "The `support` drone that can bring status effects into the game, wreaking havoc onto other users!",
-     "url": "https://i.imgur.com/obOJwJm.png", 
-     "rarity": "Uncommon", "emoji": "<:DroneCrisis:1171491564258852894>", "available": True, "maximum": 1},
-
-    {"name": "Natural Pack", "cost": 1_000_000,
-     "info": "Food that is so nutritious it is all you need to fill your apetite. "
-             "Hunger is virtually non-existent after consumption.",
-     "url": "https://i.imgur.com/YbqaM0d.png", "rarity": "Common",
-     "emoji": "<:servant_food:1202726866943873045>", "available": True},
-
-    {"name": "Suspicious Pack", "cost": 500_000,
-     "info": "A combination of food taken from the forest. It seems to have been tampered with "
-             "at some point, frowned upon by most people for its ill-effects.",
-     "url": "https://i.imgur.com/3ITIcbo.png", "rarity": "Common",
-     "emoji": "<:sus_servant_food:1202730354952110141>", "available": False},
-
-    {"name": "Odd Eye", "cost": 3_000_000_000,
-     "info": "An eye that may prove advantageous during certain events. It may even become a pet with time..",
-     "url": "https://i.imgur.com/rErrYrH.gif", "rarity": "Rare",
-     "qn": "odd_eye", "emoji": "<a:eyeOdd:1166465357142298676>", "available": True},
-
-    {"name": "Amulet", "cost": 4_500_000_000,
-     "info": "Found from a black market, it is said that it contains an extract found only from the ancient relics "
-             "lost millions of years ago.",
-     "url": "https://i.imgur.com/m8jRWk5.png", "rarity": "Godly",
-     "emoji": "<:amuletrccc:1196529299847643198>", "available": True},
-]
-
-NAME_TO_INDEX = {
-    "Keycard": 0,
-    "Trophy": 1,
-    "Dynamic Item": 2,
-    "Resistor": 3,
-    "Clan License": 4,
-    "Hyperion": 5,
-    "Crisis": 6,
-    "Natural Pack": 7,
-    "Suspicious Pack": 8,
-    "Odd Eye": 9,
-    "Amulet": 10}
+NAME_TO_ITEM_ID = {
+    "Keycard": 1,
+    "Trophy": 2,
+    "Dynamic Item": 3,
+    "Resistor": 4,
+    "Clan License": 5,
+    "Hyperion": 6,
+    "Crisis": 7,
+    "Natural Pack": 8,
+    "Suspicious Pack": 9,
+    "Odd Eye": 10,
+    "Amulet": 11}
 item_handlers = {}
 
 
@@ -1057,12 +996,16 @@ class BalanceView(discord.ui.View):
         """Refresh the current message to display the user's latest balance."""
 
         async with self.client.pool_connection.acquire() as conn:
-            nd = await conn.execute("SELECT wallet, bank, bankspace FROM `bank` WHERE userID = ?", (self.viewing.id,))
+            nd = await conn.execute(
+                """
+                SELECT wallet, bank, bankspace FROM `bank` WHERE userID = $0
+                """, self.viewing.id)
+
             nd = await nd.fetchone()
             bank = nd[0] + nd[1]
             inv = 0
-
-            for item in SHOP_ITEMS:
+            shop_items = await conn.execute("SELECT cost FROM shop")
+            for item in shop_items:
                 name = item["name"]
                 cost = item["cost"]
                 data = await Economy.get_one_inv_data_new(self.viewing, name, conn)
