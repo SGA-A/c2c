@@ -44,8 +44,8 @@ def number_to_ordinal(n):
 
 BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
-NAME_TO_INDEX = 1
-SHOP_ITEMS = 0
+NAME_TO_INDEX = 0
+SHOP_ITEMS = 1
 INV_TABLE_NAME = "inventory"
 COOLDOWN_TABLE_NAME = "cooldowns"
 MAX_BET_KEYCARD = 15_000_000
