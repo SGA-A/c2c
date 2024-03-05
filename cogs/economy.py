@@ -144,7 +144,7 @@ PRESTIGE_EMOTES = {
     11: "<:Xrne:1164937391514062848>"
 }
 
-NAME_TO_ITEM_ID = {
+NAME_TO_ID = {
     "Keycard": 1,
     "Trophy": 2,
     "Dynamic Item": 3,
