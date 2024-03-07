@@ -156,6 +156,8 @@ NAME_TO_ID = {
     "Suspicious Pack": 9,
     "Odd Eye": 10,
     "Amulet": 11}
+ID_TO_NAME = {value: key for key, value in NAME_TO_ID.items()}
+
 item_handlers = {}
 
 
@@ -2211,9 +2213,9 @@ class Economy(commands.Cog):
         self.batch_update.start()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        role = interaction.guild.get_role(1168204249096785980)
-        if (role in interaction.user.roles) or (role is None):
+        if interaction.user.id in self.client.owner_ids:
             return True
+        await interaction.response.send_message("This command is disabled.")
         return False
 
     async def cog_check(self, ctx: commands.Context) -> bool:
@@ -2283,6 +2285,18 @@ class Economy(commands.Cog):
     def calculate_serv_exp_for(*, level: int):
         """Calculate the experience points required for a given level."""
         return 10 + ceil((0.75 * level / 817.9) ** 2)
+
+    async def calculate_inventory_value(self, user: discord.abc.User, conn: asqlite_Connection):
+        """A reusable funtion to calculate the net value of a user's inventory"""
+
+        res = await conn.execute("""
+            SELECT COALESCE(SUM(shop.cost * inventory.qty), 0) AS NetValue
+            FROM shop
+            LEFT JOIN inventory ON shop.itemID = inventory.itemID AND inventory.userID = ?
+            """, (user.id,))
+
+        res = await res.fetchone()
+        return res[0]
 
     async def create_leaderboard_preset(self, chosen_choice: str):
         """A single reused function used to map the chosen leaderboard made by the user to the associated query."""
@@ -4528,29 +4542,20 @@ class Economy(commands.Cog):
 
             em = discord.Embed(color=0x2F3136)
             length = 8
-            value, svalue = 0, 0
-            total_items = 0
-            owned_items = []
 
-            for item in SHOP_ITEMS:
-                name = item["name"]
-                cost = item["cost"]
-                item_emoji = item["emoji"]
-                data = await self.update_inv_new(member, 0, name, conn)
-                if data[0] >= 1:
-                    value += int(cost) * data[0]
-                    svalue += int(cost / 4) * data[0]
-                    total_items += data[0]
-                    owned_items.append(f"{item_emoji} **{name}** \U00002500 {data[0]}")
+            owned_items = await conn.execute("""
+                SELECT shop.ItemID, shop.emoji, inventory.qty
+                FROM shop
+                INNER JOIN inventory ON shop.itemID = inventory.itemID
+                WHERE inventory.userID = ?
+            """, (member.id,))
+            owned_items = await owned_items.fetchall()
 
-            if len(owned_items) == 0:
-                em.set_author(name=f"{member.name}'s Inventory", icon_url=member.display_avatar.url)
-                em.description = (f"{member.name} currently has **no items** in their inventory.\n"
-                                  f"**Net Value:** <:robux:1146394968882151434> 0\n"
-                                  f"**Sell Value:** <:robux:1146394968882151434> 0")
-
-                em.add_field(
-                    name="Nothingness.", value="No items were found from this user.", inline=False)
+            if not owned_items:
+                if member.id == interaction.user.id:
+                    em.description = "You don't own any items yet. Go to the shop and buy some."
+                else:
+                    em.description = f"{member.name} has nothing for you to see."
                 return await interaction.response.send_message(embed=em)
 
             async def get_page_part(page: int):
@@ -4560,12 +4565,11 @@ class Economy(commands.Cog):
 
                 offset = (page - 1) * length
                 em.timestamp = discord.utils.utcnow()
-                em.description = (f"Total: **`{total_items}`** item(s).\n"
-                                  f"**Net Value:** \U000023e3 {value:,}\n"
-                                  f"**Sell Value:** \U000023e3 {svalue:,}\n\n")
-
-                for itemm in owned_items[offset:offset + length]:
-                    em.description += f"{itemm}\n"
+                em.description = ""
+                
+                for item in owned_items[offset:offset + length]:
+                    name = ID_TO_NAME[item[0]]
+                    em.description += f"{item[1]} **{name}** \U00002500 {item[2]}"
 
                 n = Pagination.compute_total_pages(len(owned_items), length)
                 return em, n
@@ -4904,13 +4908,7 @@ class Economy(commands.Cog):
                 nd = await conn.execute("SELECT wallet, bank, bankspace FROM `bank` WHERE userID = ?", (user.id,))
                 nd = await nd.fetchone()
                 bank = nd[0] + nd[1]
-                inv = 0
-
-                for item in SHOP_ITEMS:
-                    name = item["name"]
-                    cost = item["cost"]
-                    data = await self.get_one_inv_data_new(user, name, conn)
-                    inv += int(cost) * data
+                inv = await self.calculate_inventory_value(user, conn)
 
                 space = (nd[1] / nd[2]) * 100
 
