@@ -30,6 +30,12 @@ def membed(custom_description: str) -> discord.Embed:
     return membedder
 
 
+def swap_elements(lst, index1, index2):
+    """Swap two elements in a list given their indices."""
+    lst[index1], lst[index2] = lst[index2], lst[index1]
+    return lst
+
+
 def number_to_ordinal(n):
     """Convert 01 to 1st, 02 to 2nd etc."""
     if 10 <= n % 100 <= 20:
@@ -44,8 +50,6 @@ def number_to_ordinal(n):
 
 BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
-NAME_TO_INDEX = 0
-SHOP_ITEMS = 1
 INV_TABLE_NAME = "inventory"
 COOLDOWN_TABLE_NAME = "cooldowns"
 MAX_BET_KEYCARD = 15_000_000
@@ -143,20 +147,6 @@ PRESTIGE_EMOTES = {
     10: "<:xrn:1195469408806637578>",
     11: "<:Xrne:1164937391514062848>"
 }
-
-NAME_TO_ID = {
-    "Keycard": 1,
-    "Trophy": 2,
-    "Dynamic Item": 3,
-    "Resistor": 4,
-    "Clan License": 5,
-    "Hyperion": 6,
-    "Crisis": 7,
-    "Natural Pack": 8,
-    "Suspicious Pack": 9,
-    "Odd Eye": 10,
-    "Amulet": 11}
-ID_TO_NAME = {value: key for key, value in NAME_TO_ID.items()}
 
 item_handlers = {}
 
@@ -2103,9 +2093,7 @@ class ShowcaseDropdown(discord.ui.Select):
                 if item == "0":
                     options.append(discord.SelectOption(label=f"Slot {i}", default=i==1, value=f"0{i}"))
                     continue
-                
-                item_ui = item.replace("_", " ")
-                emoji = SHOP_ITEMS[NAME_TO_INDEX[item_ui]]["emoji"]
+
                 options.append(discord.SelectOption(label=item_ui, emoji=emoji, default=i==1, value=item))
 
             except IndexError:
@@ -2120,12 +2108,12 @@ class ShowcaseDropdown(discord.ui.Select):
         
 
 class ShowcaseView(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction, client: commands.Bot, showcase_list: list):
+    def __init__(self, interaction: discord.Interaction, client: commands.Bot, showcase_list_backend: list):
         self.interaction: discord.Interaction = interaction
         self.client: commands.Bot = client
-        self.showcase_list: list = showcase_list
+        self.showcase_list: list = showcase_list_backend
         super().__init__(timeout=45.0)
-        
+
         self.select_item = ShowcaseDropdown(showcase_list=self.showcase_list)
         self.add_item(self.select_item)
     
@@ -2150,52 +2138,12 @@ class ShowcaseView(discord.ui.View):
 
     @discord.ui.button(emoji="<:move_up:1213223442241818705>", row=1)
     async def move_up(self, interaction: discord.Interaction, button: discord.ui.Button):
-        fmtt = self.select_item.values or self.select_item.current_item
-        fmtt = fmtt[0][0] if fmtt.startswith("0") else fmtt
-        pos_we_are_on = self.showcase_list.index(fmtt)
-        item_above = self.showcase_list[pos_we_are_on - 1]
-        self.showcase_list[pos_we_are_on - 1] = self.select_item.current_item
-        self.showcase_list[pos_we_are_on] = item_above
-
-        none_left = False
-        try:
-            none_left = self.showcase_list[pos_we_are_on-2] == "0"
-        except IndexError:
-            none_left = True
-
-        button.disabled = (pos_we_are_on == 1) or none_left
-
-        async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
-            showcase = " ".join(self.showcase_list)
-            await Economy.change_bank_new(interaction.user, conn, showcase, "showcase")
-            await conn.commit()
-        await interaction.response.edit_message(view=self)
+        button.disabled = 
+        pass
 
     @discord.ui.button(emoji="<:move_down:1213223440669085756>", row=1)
     async def move_down(self, interaction: discord.Interaction, button: discord.ui.Button):
-        fmtt = self.select_item.values or self.select_item.current_item
-        fmtt = fmtt[0][0] if fmtt.startswith("0") else fmtt
-        
-        pos_we_are_on = self.showcase_list.index(fmtt)
-        item_below = self.showcase_list[pos_we_are_on + 1]
-        self.showcase_list[pos_we_are_on + 1] = self.select_item.current_item
-        self.showcase_list[pos_we_are_on] = item_below
-        
-        none_left = False
-        try:
-            none_left = self.showcase_list[pos_we_are_on+2] == "0"
-        except IndexError:
-            none_left = True
-
-        button.disabled = (pos_we_are_on == 5) or none_left
-
-        async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
-            showcase = " ".join(self.showcase_list)
-            await Economy.change_bank_new(interaction.user, conn, showcase, "showcase")
-            await conn.commit()
-        await interaction.response.edit_message(view=self)
+        pass
 
 
 class Economy(commands.Cog):
@@ -2249,19 +2197,17 @@ class Economy(commands.Cog):
         self.batch_update.stop()
 
     @staticmethod
-    def partial_match_for(item_input: str):
+    async def partial_match_for(item_input: str, conn: asqlite_Connection):
         """If the user types part of an item name, get that item name indicated.
 
         This is known as partial matching for item names."""
+        res = await conn.execute("SELECT itemName FROM shop WHERE itemName LIKE ?", item_input)
 
-        matching_keys = [(item_name, item_index) for item_name, item_index in NAME_TO_INDEX.items() if
-                         item_input.lower() in item_name.lower()]
-
-        if not matching_keys:
-            return None
-        if len(matching_keys) == 1:
-            return matching_keys[0][1]
-        return matching_keys
+        if isinstance(res, list):
+            return res
+        if res:
+            return res[0]
+        return None
 
     @staticmethod
     async def send_return_interaction_orginal_response(interaction: discord.Interaction):
@@ -2302,17 +2248,29 @@ class Economy(commands.Cog):
         """A single reused function used to map the chosen leaderboard made by the user to the associated query."""
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection = conn
+            
+            lb = discord.Embed(
+                title=f"Leaderboard: {chosen_choice}",
+                color=0x2F3136,
+                timestamp=discord.utils.utcnow())
+
+            lb.set_footer(
+                text="Ranked globally",
+                icon_url=self.client.user.avatar.url)            
+
+            not_database = []
+
             if chosen_choice == 'Bank + Wallet':
 
                 data = await conn.execute(
                     f"""
-                    SELECT `userID`, SUM(`wallet` + `bank`) as 
-                    total_balance FROM `{BANK_TABLE_NAME}` GROUP BY `userID` ORDER BY total_balance DESC
+                    SELECT `userID`, SUM(`wallet` + `bank`) as total_balance 
+                    FROM `{BANK_TABLE_NAME}` 
+                    GROUP BY `userID` 
+                    ORDER BY total_balance DESC
                     """,
                     ())
                 data = await data.fetchall()
-
-                not_database = []
 
                 for i, member in enumerate(data):
                     member_name = self.client.get_user(member[0])
@@ -2320,26 +2278,14 @@ class Economy(commands.Cog):
                     msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
 
-                msg = "\n".join(not_database)
-
-                lb = discord.Embed(
-                    title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{len(data)}` users.\n\n"
-                                f"{msg}",
-                    color=0x2F3136,
-                    timestamp=discord.utils.utcnow()
-                )
-                lb.set_footer(
-                    text="Ranked globally",
-                    icon_url=self.client.user.avatar.url)
-
-                return lb
             elif chosen_choice == 'Wallet':
 
                 data = await conn.execute(
                     f"""
-                    SELECT `userID`, `wallet` as total_balance FROM `{BANK_TABLE_NAME}` 
-                    GROUP BY `userID` ORDER BY total_balance DESC
+                    SELECT `userID`, `wallet` as total_balance 
+                    FROM `{BANK_TABLE_NAME}` 
+                    GROUP BY `userID` 
+                    ORDER BY total_balance DESC
                     """,
                     ())
 
@@ -2354,25 +2300,13 @@ class Economy(commands.Cog):
                     msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
 
-                msg = "\n".join(not_database)
-
-                lb = discord.Embed(
-                    title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{len(data)}` users.\n\n"
-                                f"{msg}",
-                    color=0x2F3136,
-                    timestamp=discord.utils.utcnow()
-                )
-                lb.set_footer(
-                    text="Ranked globally",
-                    icon_url=self.client.user.avatar.url)
-
-                return lb
             elif chosen_choice == 'Bank':
                 data = await conn.execute(
                     f"""
                     SELECT `userID`, `bank` as total_balance 
-                    FROM `{BANK_TABLE_NAME}` GROUP BY `userID` ORDER BY total_balance DESC
+                    FROM `{BANK_TABLE_NAME}` 
+                    GROUP BY `userID` 
+                    ORDER BY total_balance DESC
                     """,
                     ())
 
@@ -2385,33 +2319,15 @@ class Economy(commands.Cog):
                     msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
 
-                msg = "\n".join(not_database)
-
-                lb = discord.Embed(
-                    title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{len(data)}` users.\n\n"
-                                f"{msg}",
-                    color=0x2F3136,
-                    timestamp=discord.utils.utcnow()
-                )
-                lb.set_footer(
-                    text="Ranked globally",
-                    icon_url=self.client.user.avatar.url)
-
-                return lb
             elif chosen_choice == 'Inventory Net':
 
-                item_costs = [item["cost"] for item in SHOP_ITEMS]
-                total_net_sql = " + ".join([f"`{item['name']}` * ?" for item in SHOP_ITEMS])
-
-                data = await conn.execute(
-                    f"""
-                    SELECT `userID`, 
-                    SUM({total_net_sql}) as total_net 
-                    FROM `{INV_TABLE_NAME}` GROUP BY `userID` ORDER BY total_net DESC
-                    """,
-                    tuple(item_costs)
-                )
+                data = await conn.execute("""
+                    SELECT inventory.userID, SUM(shop.cost * inventory.qty) AS NetValue
+                    FROM inventory
+                    INNER JOIN shop ON shop.itemID = inventory.itemID
+                    GROUP BY inventory.userID
+                    ORDER BY NetValue DESC
+                """)
 
                 data = await data.fetchall()
 
@@ -2422,20 +2338,6 @@ class Economy(commands.Cog):
                     their_badge = UNIQUE_BADGES.get(member_name.id, "")
                     msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
-
-                msg = "\n".join(not_database)
-
-                lb = discord.Embed(
-                    title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{len(data)}` users.\n\n"
-                                f"{msg}",
-                    color=0x2F3136,
-                    timestamp=discord.utils.utcnow()
-                )
-                lb.set_footer(
-                    text="Ranked globally",
-                    icon_url=self.client.user.avatar.url)
-                return lb
 
             elif chosen_choice == 'Bounty':
 
@@ -2459,20 +2361,6 @@ class Economy(commands.Cog):
                     msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
                     not_database.append(msg1)
 
-                lb = discord.Embed(
-                    title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{len(data)}` users.\n"
-                                f"Users without a bounty aren't displayed.\n\n"
-                                f"{'\n'.join(not_database) or 'No data.'}",
-                    color=0x2F3136,
-                    timestamp=discord.utils.utcnow()
-                )
-                lb.set_footer(
-                    text="Ranked globally",
-                    icon_url=self.client.user.avatar.url)
-
-                return lb
-
             elif chosen_choice == 'Commands':
 
                 data = await conn.execute(
@@ -2494,52 +2382,31 @@ class Economy(commands.Cog):
                     their_badge = UNIQUE_BADGES.get(member_name.id, "")
                     msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
                     not_database.append(msg1)
+            else:
+                data = await conn.execute(
+                    f"""
+                    SELECT `userID`, `level` as lvl 
+                    FROM `{BANK_TABLE_NAME}` 
+                    GROUP BY `userID` 
+                    HAVING lvl > 0
+                    ORDER BY lvl DESC
+                    """,
+                    ())
 
-                lb = discord.Embed(
-                    title=f"Leaderboard: {chosen_choice}",
-                    description=f"Displaying the top `{len(data)}` users.\n\n"
-                                f"{'\n'.join(not_database) or 'No data.'}",
-                    color=0x2F3136,
-                    timestamp=discord.utils.utcnow()
-                )
-                lb.set_footer(
-                    text="Ranked globally",
-                    icon_url=self.client.user.avatar.url)
+                data = await data.fetchall()
 
-                return lb
+                not_database = []
 
-            data = await conn.execute(
-                f"""
-                SELECT `userID`, `level` as lvl 
-                FROM `{BANK_TABLE_NAME}` 
-                GROUP BY `userID` 
-                HAVING lvl > 0
-                ORDER BY lvl DESC
-                """,
-                ())
-
-            data = await data.fetchall()
-
-            not_database = []
-
-            for i, member in enumerate(data):
-                member_name = self.client.get_user(member[0])
-                their_badge = UNIQUE_BADGES.get(member_name.id, "")
-                msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
-                not_database.append(msg1)
-
-            lb = discord.Embed(
-                title=f"Leaderboard: {chosen_choice}",
-                description=f"Displaying the top `{len(data)}` users.\n\n"
-                            f"{'\n'.join(not_database) or 'No data.'}",
-                color=0x2F3136,
-                timestamp=discord.utils.utcnow())
-
-            lb.set_footer(
-                text="Ranked globally",
-                icon_url=self.client.user.avatar.url)
-
-            return lb
+                for i, member in enumerate(data):
+                    member_name = self.client.get_user(member[0])
+                    their_badge = UNIQUE_BADGES.get(member_name.id, "")
+                    msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
+                    not_database.append(msg1)
+            
+            lb.description = (
+                f"Displaying the top [__`{len(data)}`__](https://www.quora.com/) users.\n\n"
+                f"{'\n'.join(not_database) or 'No data.'}")
+            return lb   
 
     async def servant_preset(self, owner_id: int, dtls):
         """Get servant details from the given owner ID, return it in a unique servant card."""
@@ -3083,11 +2950,6 @@ class Economy(commands.Cog):
                     )
             )
         else:
-            attrs = SHOP_ITEMS[name_res]
-            name = attrs["name"]
-            ie = attrs["emoji"]
-            rarity = attrs["rarity"]
-
             async with self.client.pool_connection.acquire() as conn:
                 conn: asqlite_Connection
 
@@ -3095,22 +2957,31 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(
                         embed=membed("Either you or the recipient are not registered."))
                 else:
-                    their_quantity = await self.get_one_inv_data_new(primm, item_name, conn,)
-                    if quantity > their_quantity:
+
+                    attrs = await conn.fetchone("""
+                        SELECT qty, emoji, rarity 
+                        FROM inventory
+                        WHERE userID = ? AND itemName = ?
+                        """, (primm.id, item_name))
+                    
+                    if attrs is None:
                         return await interaction.response.send_message(
-                            embed=membed(f"You only have **{their_quantity:,}x {ie} {name}** to share, so uh no."))
+                            embed=membed("You haven't got this item, it can't come out of thin air."))
                     else:
+                        if quantity > attrs[0]:
+                            return await interaction.response.send_message(
+                                embed=membed(f"You don't have that many {attrs[1]} **{item_name}** to share."))
                         await self.update_inv_new(recipient, +quantity, item_name, conn)
                         await self.update_inv_new(primm, -quantity, item_name, conn)
                         await conn.commit()
 
                         await interaction.response.send_message(
                             embed=discord.Embed(
-                                description=f"Shared **{quantity}x {ie} {item_name}** with {recipient.mention}!",
-                                colour=rarity_to_colour.get(rarity, 0x2B2D31)))
+                                description=f"Shared **{quantity}x {attrs[1]} {item_name}** with {recipient.mention}!",
+                                colour=rarity_to_colour.get(attrs[-1], 0x2B2D31)))
 
     showcase = app_commands.Group(
-        name="showcase", description="manage your showcased items.", guild_only=True, 
+        name="showcase", description="Manage your showcased items.", guild_only=True, 
         guild_ids=APP_GUILDS_ID)
 
     @showcase.command(name="view", description="View your item showcase")
@@ -3135,45 +3006,42 @@ class Economy(commands.Cog):
 
             showcase: str = await self.get_spec_bank_data(interaction.user, "showcase", conn)
             showcase: list = showcase.split(" ")
-
-            nshowcase = []
+            showcase_dtls = await conn.fetchall(
+                """
+                SELECT itemName, emoji, qty FROM inventory WHERE itemID = $0
+                """, showcase
+            )
+            showcase_ui = showcase or ["0"] * 6
 
             should_warn_user = False
             changes_were_made = False
 
-            for i in range(1, 7):
-                try:
-                    item = showcase[i - 1]
-
-                    if item == "0":
-                        should_warn_user = True
-                        nshowcase.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
-                        continue
-
-                    item = item.replace("_", " ")
-                    emoji = SHOP_ITEMS[NAME_TO_INDEX[item]]["emoji"]
-                    qty = await self.get_one_inv_data_new(interaction.user, item, conn)
-                    if qty >= 1:
-                        nshowcase.append(f"[**`{i}.`**](https://www.google.com) **{qty}x** {emoji} {item}")
-                        continue
-                    
-                    item = "0"
-                    changes_were_made = True
+            for i, showcase_item in enumerate(showcase):
+                if showcase_item == "0":
                     should_warn_user = True
-                    nshowcase.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
-                except IndexError:
-                    showcase.append("0")
-                    nshowcase.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
+                    showcase_ui.append(f"[**`{i+1}.`**](https://www.google.com) Empty slot")
+                    continue
+                
+                name, emoji, qty = showcase_dtls[i]
+                
+                if qty:
+                    showcase_ui.append(
+                        f"[**`{i+1}.`**](https://www.google.com) **{qty}x** {emoji} {name}")
+                    continue
+                
+                showcase[i] = "0"
+                changes_were_made = True
+                should_warn_user = True
+                showcase_ui.append(f"[**`{i+1}.`**](https://www.google.com) Empty slot")
 
-            showbed.description += "\n".join(nshowcase)
+            showbed.description += "\n".join(showcase_ui)
             if should_warn_user:
                 showbed.set_footer(text="You can add more items to your showcase.")
             
             if changes_were_made:
-                async with conn.transaction():
-                    nshowcase = " ".join(nshowcase)
-                    await self.change_bank_new(interaction.user, conn, nshowcase, "showcase")
-                    await conn.commit()
+                nshowcase = " ".join(showcase)
+                await self.change_bank_new(interaction.user, conn, nshowcase, "showcase")
+                await conn.commit()
 
             showcase_view = ShowcaseView(interaction, self.client, showcase)
             await interaction.response.send_message(embed=showbed, view=showcase_view)
@@ -3188,9 +3056,6 @@ class Economy(commands.Cog):
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
-
             name_res = self.partial_match_for(item_name)
 
             if name_res is None:
@@ -3201,42 +3066,40 @@ class Economy(commands.Cog):
 
                 suggestions = [item[0] for item in name_res]  # Extract item names from the list
                 return await interaction.response.send_message(
-                    content="There is more than one item with that name. Select one of the following options.",
-                    embed=discord.Embed(
-                        title=f"Found {len(name_res)} results",
-                        description='\n'.join(suggestions),
-                        colour=0x2B2D31
-                    )
-                )
+                    content="There is more than one item with that name pattern.\nSelect one of the following options:",
+                    embed=membed('\n'.join(suggestions)))
             else:
-                attrs = SHOP_ITEMS[name_res]
-                name = attrs["name"]
-                ie = attrs["emoji"]
-                item_name_fmt = name.replace(" ", "_")  # the format of the item name in the db
-
-                item_qty = await self.get_one_inv_data_new(interaction.user, name, conn)
-
-                showcase: str = await self.get_spec_bank_data(interaction.user, "showcase", conn)
-                showcase: list = showcase.split(" ")
+                data = await conn.fetchone(
+                    """
+                    SELECT itemID, emoji FROM inventory 
+                    WHERE itemName = $0 AND userID = $1 
+                    UNION ALL 
+                    SELECT showcase FROM bank
+                    WHERE userID = $1""", name_res, interaction.user.id)
                 
+                if len(data) < 2:
+                    return await interaction.response.send_message(
+                        embed=membed("Either you don't have this item or you're not registered."))
+
+                showcase: str = data[1][0]
+                showcase: list = showcase.split(" ")
+
                 if len(showcase) > 6 and (showcase.count("0") == 0):
                     return await interaction.response.send_message(
                         embed=membed("You reached the maximum showcase slots."))
 
-                if not item_qty:
-                    return await interaction.response.send_message(
-                        embed=membed("You don't have this item, so you can't showcase it. "))
-
-                if item_name_fmt in showcase:
+                item_id = str(data[0][0])
+                if item_id in showcase:
                     return await interaction.response.send_message(
                         embed=membed("You already have this item in your showcase."))
+                placeholder = showcase.index("0")
+                showcase[placeholder] = item_id
 
-                showcase.append(item_name_fmt)
                 showcase = " ".join(showcase)
                 await self.change_bank_new(interaction.user, conn, showcase, "showcase")
                 await conn.commit()
 
-                return await interaction.response.send_message(embed=membed(f"Added {ie} **{name}** to your showcase!"))
+                return await interaction.response.send_message(embed=membed(f"Added {data[0][1]} **{name_res}** to your showcase!"))
 
     @showcase.command(name="remove", description="Remove an item from your showcase", extras={"exp_gained": 1})
     @app_commands.checks.cooldown(1, 10)
@@ -3261,31 +3124,38 @@ class Economy(commands.Cog):
 
                 suggestions = [item[0] for item in name_res]
                 return await interaction.response.send_message(
-                    embed=discord.Embed(
-                        title=f"Found {len(name_res)} results",
-                        description='\n'.join(suggestions),
-                        colour=0x2B2D31
-                    )
-                )
+                    content="There is more than one item with that name pattern.\nSelect one of the following options:",
+                    embed=membed('\n'.join(suggestions)))
             else:
-                attrs = SHOP_ITEMS[name_res]
-                item_name = attrs["name"]
-                item_name = item_name.replace(" ", "_")
+                data = await conn.fetchone(
+                    """
+                    SELECT itemID, emoji FROM inventory 
+                    WHERE itemName = $0 AND userID = $1 
+                    UNION ALL 
+                    SELECT showcase FROM bank
+                    WHERE userID = $1""", name_res, interaction.user.id)
+                
+                if len(data) < 2:
+                    return await interaction.response.send_message(
+                        embed=membed("Either you don't have this item or you're not registered."))
 
-                showcase: str = await self.get_spec_bank_data(interaction.user, "showcase", conn)
+                showcase: str = data[1][0]
                 showcase: list = showcase.split(" ")
 
-                if item_name not in showcase:
+                item_id = str(data[0][0])
+                if item_id not in showcase:
                     return await interaction.response.send_message(
                         embed=membed("You don't have this item in your showcase."))
-                showcase.remove(item_name)
+                
+                initial = showcase.index(item_id)
+                showcase[initial] = "0"
 
                 showcase = " ".join(showcase)
                 await self.change_bank_new(interaction.user, conn, showcase, "showcase")
                 await conn.commit()
 
                 await interaction.response.send_message(
-                    embed=membed(f"Removed {attrs["emoji"]} **{item_name}** from your showcase!"))
+                    embed=membed(f"Removed {data[0][1]} **{item_name}** from your showcase!"))
 
     shop = app_commands.Group(
         name='shop', description='view items available for purchase.', 
@@ -4530,9 +4400,9 @@ class Economy(commands.Cog):
 
         member = member or interaction.user
 
-        if member.bot and member.id != self.client.user.id:
+        if (member.bot) and (member.id != self.client.user.id):
             return await interaction.response.send_message(
-                embed=membed("Bots do not have accounts."), delete_after=5.0)
+                embed=membed("Bots do not have accounts."))
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
@@ -4543,8 +4413,9 @@ class Economy(commands.Cog):
             em = discord.Embed(color=0x2F3136)
             length = 8
 
-            owned_items = await conn.execute("""
-                SELECT shop.ItemID, shop.emoji, inventory.qty
+            owned_items = await conn.execute(
+                """
+                SELECT shop.itemName, shop.emoji, inventory.qty
                 FROM shop
                 INNER JOIN inventory ON shop.itemID = inventory.itemID
                 WHERE inventory.userID = ?
@@ -4561,15 +4432,14 @@ class Economy(commands.Cog):
             async def get_page_part(page: int):
                 """Helper function to determine what page of the paginator we're on."""
 
-                em.set_author(name=f"{member.name}'s Inventory", icon_url=member.display_avatar.url)
+                em.set_author(name=f"{member.display_name}'s Inventory", icon_url=member.display_avatar.url)
 
                 offset = (page - 1) * length
                 em.timestamp = discord.utils.utcnow()
                 em.description = ""
                 
                 for item in owned_items[offset:offset + length]:
-                    name = ID_TO_NAME[item[0]]
-                    em.description += f"{item[1]} **{name}** \U00002500 {item[2]}"
+                    em.description += f"{item[1]} **{item[0]}** \U00002500 {item[2]}\n"
 
                 n = Pagination.compute_total_pages(len(owned_items), length)
                 return em, n
@@ -5605,11 +5475,8 @@ class Economy(commands.Cog):
     async def showcase_item_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         
         async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
-
-            return [
-                app_commands.Choice(name=item["name"], value=item["name"])
-                for item in SHOP_ITEMS if current.lower() in item["name"].lower() and (await self.get_one_inv_data_new(interaction.user, item["name"], conn))]
+            res = await conn.fetchall("SELECT itemName FROM inventory where userID = ?", (interaction.user.id,))
+        return [app_commands.Choice(name=iterable, value=iterable) for iterable in res if current.lower() in iterable.lower()]
 
     @view_servents.autocomplete('servant_name')
     async def servant_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
@@ -5624,13 +5491,15 @@ class Economy(commands.Cog):
 
     @buy.autocomplete('item_name')
     async def buy_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
-        return [app_commands.Choice(name=item["name"], value=item["name"])
-                for item in SHOP_ITEMS if (current.lower() in item["name"].lower() and item["available"])]
+        async with self.client.pool_connection.acquire() as conn:
+            res = await conn.fetchall("SELECT itemName FROM SHOP WHERE available = 1")
+        return [app_commands.Choice(name=iterable, value=iterable) for iterable in res if current.lower() in iterable.lower()]
 
     @item.autocomplete('item_name')
     async def item_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
-        return [app_commands.Choice(name=item["name"], value=item["name"])
-                for item in SHOP_ITEMS if current.lower() in item["name"].lower()]
+        async with self.client.pool_connection.acquire() as conn:
+            res = await conn.fetchall("SELECT itemName FROM SHOP")
+        return [app_commands.Choice(name=iterable, value=iterable) for iterable in res if current.lower() in iterable.lower()]
 
 
 async def setup(client: commands.Bot):
