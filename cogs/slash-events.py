@@ -76,14 +76,8 @@ class SlashExceptionHandler(commands.Cog):
 
             print_exception(type(error), error, error.__traceback__)
 
-            await interaction.channel.send(content=f"If you're interested, here is the traceback:\n{error.__cause__}")
-            return await interaction.followup.send(
-                embed=Embed(description="An invalid process took place for this command.\n"
-                                        "50% chance its a issue on your end, 50% chance on our end.\n"
-                                        "**The bot developers were notified.** "
-                                        "[See their progress.](https://github.com/SGA-A/c2c/issues)",
-                            colour=0x2B2D31).set_thumbnail(url="https://i.imgur.com/zGtq4Dp.png"))
-
+            await interaction.channel.send(f"{error.__cause__}")
+            return await interaction.followup.send("Something fucked up")
         else:
             print_exception(type(error), error, error.__traceback__)
             cause = error.__cause__ or error

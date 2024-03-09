@@ -76,9 +76,7 @@ class ContextCommandHandler(commands.Cog):
             await ctx.reply("Could not find what you were looking for.", mention_author=False)
 
         else:
-            await ctx.reply(
-                embed=membed("## Something went wrong\n"
-                             "An error was encountered. The developers have been notified."))
+            await ctx.reply("Something fucked up", mention_author=False)
             print_exception(type(err), err, err.__traceback__)
 
 
