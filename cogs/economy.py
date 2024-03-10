@@ -2616,16 +2616,40 @@ class Economy(commands.Cog):
         return 0
 
     @staticmethod
+    async def user_has_item(user_id: int, item_name: str, conn: asqlite_Connection) -> bool:
+        """Check if a user has a specific item based on its name."""
+        query = """
+        SELECT EXISTS (
+            SELECT 1
+            FROM inventory
+            INNER JOIN shop ON inventory.itemID = shop.itemID
+            WHERE inventory.userID = ? AND shop.itemName = ?
+        )
+        """
+        result = await conn.fetchone(query, (user_id, item_name))
+        return bool(result[0]) if result else False
+
+    @staticmethod
     async def update_inv_new(user: discord.Member, amount: Union[float, int], item_name: str,
                          conn: asqlite_Connection) -> Optional[Any]:
         """Modify a user's inventory."""
-        # Retrieve the item ID based on the item name
+
         item_row = await conn.fetchone(
             "SELECT itemID FROM shop WHERE itemName = ?", (item_name,))
         
-        item_id = item_row[0] if item_row else None  # Extract the item ID from the result if found
+        item_id = item_row[0] if item_row else None
 
-        # Update or insert the item into the user's inventory
+        check_result = await conn.fetchone(
+            """
+            SELECT qty + ? <= 0
+            FROM inventory
+            WHERE userID = ? AND itemID = ?
+            """, (amount, user.id, item_id))
+        
+        if check_result and check_result[0]:
+            # If the resulting quantity would be <= 0, delete the row
+            await conn.execute("DELETE FROM inventory WHERE userID = ? AND itemID = ?", (user.id, item_id))
+            return
         await conn.execute("""
             INSERT INTO inventory (userID, itemID, qty)
             VALUES (?, ?, ?)
@@ -2969,7 +2993,7 @@ class Economy(commands.Cog):
     @app_commands.describe(recipient='The user receiving the robux shared.',
                            amount=ROBUX_DESCRIPTION)
     @app_commands.checks.cooldown(1, 6)
-    async def give_robux(self, interaction: discord.Interaction, recipient: discord.Member, amount: str):
+    async def share_robux(self, interaction: discord.Interaction, recipient: discord.Member, amount: str):
         """"Give an amount of robux to another user."""
 
         inter_user = interaction.user
@@ -3011,7 +3035,7 @@ class Economy(commands.Cog):
                            quantity='The amount of this item to share.', 
                            recipient='The user receiving the item.')
     @app_commands.checks.cooldown(1, 5)
-    async def give_items(self, interaction: discord.Interaction,
+    async def share_items(self, interaction: discord.Interaction,
                          item_name: str,
                          quantity: int, recipient: discord.Member):
         """Give an amount of items to another user."""
@@ -3035,32 +3059,36 @@ class Economy(commands.Cog):
                     content="There is more than one item with that name pattern.\nSelect one of the following options:",
                     embed=membed('\n'.join(suggestions)))
             else:
+                name_res = name_res[0]
+
                 if not (await self.can_call_out_either(primm, recipient, conn)):
                     return await interaction.response.send_message(
                         embed=membed("Either you or the recipient are not registered."))
                 else:
 
-                    attrs = await conn.fetchone("""
-                        SELECT qty, emoji, rarity 
+                    attrs = await conn.fetchone(
+                        """
+                        SELECT inventory.qty, shop.emoji, shop.rarity
                         FROM inventory
-                        WHERE userID = ? AND itemName = ?
-                        """, (primm.id, item_name))
+                        INNER JOIN shop ON inventory.itemID = shop.itemID
+                        WHERE inventory.userID = ? AND shop.itemName = ?
+                        """, (primm.id, name_res))
                     
                     if attrs is None:
                         return await interaction.response.send_message(
-                            embed=membed("You haven't got this item, it can't come out of thin air."))
+                            embed=membed(f"You don't own a single **{name_res}**."))
                     else:
-                        if quantity > attrs[0]:
+                        if attrs[0] < quantity:
                             return await interaction.response.send_message(
-                                embed=membed(f"You don't have that many {attrs[1]} **{item_name}** to share."))
+                                embed=membed(f"You don't have **{quantity}x {attrs[1]} {name_res}**."))
                         
-                        await self.update_inv_new(recipient, +quantity, item_name, conn)
-                        await self.update_inv_new(primm, -quantity, item_name, conn)
+                        await self.update_inv_new(recipient, +quantity, name_res, conn)
+                        await self.update_inv_new(primm, -quantity, name_res, conn)
                         await conn.commit()
 
                         await interaction.response.send_message(
                             embed=discord.Embed(
-                                description=f"Shared **{quantity}x {attrs[1]} {item_name}** with {recipient.mention}!",
+                                description=f"Shared **{quantity}x {attrs[1]} {name_res}** with {recipient.mention}!",
                                 colour=rarity_to_colour.get(attrs[-1], 0x2B2D31)))
 
     showcase = app_commands.Group(
@@ -4353,7 +4381,7 @@ class Economy(commands.Cog):
             query.colour = 0x2B2D31
             query.description = (
                 "I just chose a secret number between 0 and 100.\n"
-                f"Is the secret number *higher* or *lower* than {hint}?")
+                f"Is the secret number *higher* or *lower* than **{hint}**?")
             query.set_author(name=f"{interaction.user.name}'s high-low game",
                              icon_url=interaction.user.display_avatar.url)
             query.set_footer(text="The jackpot button is if you think it is the same!")
@@ -4507,14 +4535,13 @@ class Economy(commands.Cog):
             em = discord.Embed(color=0x2F3136)
             length = 8
 
-            owned_items = await conn.execute(
+            owned_items = await conn.fetchall(
                 """
                 SELECT shop.itemName, shop.emoji, inventory.qty
                 FROM shop
                 INNER JOIN inventory ON shop.itemID = inventory.itemID
                 WHERE inventory.userID = ?
             """, (member.id,))
-            owned_items = await owned_items.fetchall()
 
             if not owned_items:
                 if member.id == interaction.user.id:
@@ -5277,10 +5304,9 @@ class Economy(commands.Cog):
         player_hand = [deck.pop(), deck.pop()]
         dealer_hand = [deck.pop(), deck.pop()]
 
-        keycard_amt = await self.get_one_inv_data_new(interaction.user, "Keycard", conn)
+        has_keycard = await self.user_has_item(interaction.user.id, "Keycard", conn)
         wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
         pmulti = await self.get_pmulti_data_only(interaction.user, conn)
-        has_keycard = keycard_amt >= 1
         # ----------- Check what the bet amount is, converting where necessary -----------
 
         expo = determine_exponent(bet_amount)
@@ -5408,7 +5434,7 @@ class Economy(commands.Cog):
                                       (interaction.user.id,))
             pmulti, wallet_amt = data[0], data[1]
 
-            has_keycard = await self.get_one_inv_data_new(interaction.user, "Keycard", conn) >= 1
+            has_keycard = await self.user_has_item(interaction.user.id, "Keycard", conn)
             expo = determine_exponent(exponent_amount)
 
             try:
@@ -5517,17 +5543,18 @@ class Economy(commands.Cog):
     @remove_showcase_item.autocomplete('item_name')
     @sell.autocomplete('item_name')
     @use_item.autocomplete('item')
-    @give_items.autocomplete('item_name')
+    @share_items.autocomplete('item_name')
     async def owned_items_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         
         async with self.client.pool_connection.acquire() as conn:
             options = await conn.fetchall(
                 """
-                SELECT shop.itemName, inventory.qty
-                FROM inventory
+                SELECT shop.itemName, shop.emoji, inventory.qty
+                FROM shop
                 INNER JOIN inventory ON shop.itemID = inventory.itemID
-                WHERE inventory.userID = ?
-            """, (interaction.user.id,))
+                WHERE inventory.userID = $0
+            """, interaction.user.id)
+
             return [app_commands.Choice(name=option[0], value=option[0]) for option in options if current.lower() in option[0].lower()]
 
     @view_servents.autocomplete('servant_name')
