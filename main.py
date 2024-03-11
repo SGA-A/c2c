@@ -169,14 +169,13 @@ intents.guild_reactions = True
 intents.guilds = True
 intents.voice_states = True
 
- 
-# Serving cc • /help
+
 client = C2C(
     command_prefix='>', intents=intents, case_insensitive=True, help_command=None, 
     owner_ids={992152414566232139, 546086191414509599, 1148206353647669298},
-    activity=CustomActivity(name='I am being rewritten..'), status=Status.dnd, 
+    activity=CustomActivity(name='Serving cc • /help'), status=Status.idle, 
     tree_cls=MyCommandTree, max_messages=100, max_ratelimit_timeout=30.0)
-print(version)  
+print(version)
 
 
 @client.check
