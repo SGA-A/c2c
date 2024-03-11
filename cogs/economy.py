@@ -1538,12 +1538,13 @@ class HexModal(discord.ui.Modal):
 
 class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
 
-    def __init__(self, conn, client, their_choice, the_view):
+    def __init__(self, conn, client: commands.Bot, their_choice, the_view):
         super().__init__()
         self.conn = conn
         self.client = client
         self.choice = their_choice
         self.the_view = the_view
+        self.economy = client.get_cog("Economy")
 
     investa = discord.ui.TextInput(
         style=discord.TextStyle.short,
@@ -1585,19 +1586,19 @@ class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
         await self.conn.commit()
         dtls = await dtls.fetchone()
 
-        sembed = await Economy.servant_preset(Economy(self.client), interaction.user.id, dtls)
+        sembed = await self.economy.servant_preset(interaction.user.id, dtls)
         await interaction.response.edit_message(content=None, embed=sembed, view=self.the_view)
 
     async def on_error(self, interaction: discord.Interaction, error):
         print_exception(type(error), error, error.__traceback__)
         return await interaction.response.send_message(
-            embed=membed("Something went wrong. Errors like this happen from time to time.\n"
-                         "The developers have been notified and will resolve the issue soon."))
+            embed=membed("Something fucked up."))
 
 
 class DropdownLB(discord.ui.Select):
     def __init__(self, client: commands.Bot, their_choice: str):
         self.client: commands.Bot = client
+        self.economy = client.get_cog("Economy")
 
         options = [
             SelectOption(label='Bank + Wallet', description='Sort by the sum of bank and wallet.'),
@@ -1621,7 +1622,7 @@ class DropdownLB(discord.ui.Select):
         for option in self.options:
             option.default = option.value == chosen_choice
 
-        lb = await Economy.create_leaderboard_preset(Economy(self.client), chosen_choice=chosen_choice)
+        lb = await self.economy.create_leaderboard_preset(chosen_choice=chosen_choice)
 
         await interaction.response.edit_message(content=None, embed=lb, view=self.view)
 
@@ -1691,6 +1692,7 @@ class Servants(discord.ui.Select):
         self.owner_id = owner_id
         self.conn = conn
         self.choice = their_choice
+        self.economy = client.get_cog("Economy")
 
         super().__init__(options=options, placeholder="Select Servant Name", row=0)
 
@@ -1709,7 +1711,7 @@ class Servants(discord.ui.Select):
         dtls = await self.conn.fetchone(
             "SELECT * FROM `slay` WHERE userID = ? AND slay_name = ?", (self.owner_id, self.choice))
 
-        sembed = await Economy.servant_preset(Economy(self.client), self.owner_id, dtls)  # servant embed
+        sembed = await self.economy.servant_preset(self.owner_id, dtls)  # servant embed
 
         await interaction.followup.edit_message(resp.id, content=None, embed=sembed, view=self.view)
 
@@ -1839,6 +1841,7 @@ class ServantsManager(discord.ui.View):
         self.manage_button = None
         self.child = Servants(client, owner_slays, their_choice, owner_id, conn)
         self.add_item(self.child)
+        self.economy = client.get_cog("Economy")
 
         for item in self.children:
             if isinstance(item, Servants):
@@ -1899,7 +1902,7 @@ class ServantsManager(discord.ui.View):
 
             dtls = await dtls.fetchone()
 
-            sembed = await Economy.servant_preset(Economy(self.child.client), self.child.owner_id, dtls) 
+            sembed = await self.economy.servant_preset(self.child.owner_id, dtls) 
             await interaction.response.edit_message(content=None, embed=sembed, view=self)
 
     @discord.ui.button(label="Manage", style=discord.ButtonStyle.blurple, row=1)
@@ -2008,7 +2011,7 @@ class ServantsManager(discord.ui.View):
         if dtls is not None:
             await self.child.conn.commit()
 
-            sembed = await Economy.servant_preset(Economy(self.child.client), self.child.owner_id, dtls)
+            sembed = await self.economy.servant_preset(self.child.owner_id, dtls)
             await interaction.message.edit(content=None, embed=sembed, view=self)
         await interaction.response.send_message(embed=membed(selection), delete_after=5.0)
 
@@ -2041,10 +2044,10 @@ class ServantsManager(discord.ui.View):
             "UPDATE `slay` SET love = love + 35 WHERE slay_name = ? AND userID = ? AND love <= 100 RETURNING *",
             (self.child.choice, self.child.owner_id))
         dtls = await dtls.fetchone()
-
+        
         if dtls is not None:
             await self.child.conn.commit()
-            sembed = await Economy.servant_preset(Economy(self.child.client), self.child.owner_id, dtls)
+            sembed = await self.economy.servant_preset(self.child.owner_id, dtls)
             await interaction.message.edit(content=None, embed=sembed, view=self)
         await interaction.response.send_message(embed=membed(selection), delete_after=5.0)
 
@@ -2202,9 +2205,9 @@ class Economy(commands.Cog):
         self.batch_update.start()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id in self.client.owner_ids:
+        role = interaction.guild.get_role(1168204249096785980)
+        if (role in interaction.user.roles) or (role is None):
             return True
-        await interaction.response.send_message("This command is disabled.")
         return False
 
     async def cog_check(self, ctx: commands.Context) -> bool:
@@ -3548,7 +3551,7 @@ class Economy(commands.Cog):
     @app_commands.command(name='item', description='Get more details on a specific item')
     @app_commands.describe(item_name='Select an item.')
     @app_commands.rename(item_name="name")
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     async def item(self, interaction: discord.Interaction, item_name: str):
         """This is a subcommand. Look up a particular item within the shop to get more information about it."""
 
@@ -3968,7 +3971,7 @@ class Economy(commands.Cog):
         # await interaction.response.send_message(embed=membed("You already own a Crisis drone."))
 
     @app_commands.command(name="use", description="Use an item you own from your inventory", extras={"exp_gained": 3})
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(item='Select an item.', quantity='Amount of items to use, when possible.')
     @app_commands.checks.cooldown(1, 6)
     async def use_item(self, interaction: discord.Interaction, item: str, quantity: Optional[int] = 1):
@@ -4020,7 +4023,7 @@ class Economy(commands.Cog):
                 await handler(interaction, quantity)
 
     @app_commands.command(name="prestige", description="Sacrifice currency stats in exchange for incremental perks")
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 6)
     async def prestige(self, interaction: discord.Interaction):
         """Sacrifice a portion of your currency stats in exchange for incremental perks."""
@@ -4135,7 +4138,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='profile', description='View user information and other stats')
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(user='The user whose profile you want to see.', 
                            category='What type of data you want to view.')
     @app_commands.checks.cooldown(1, 6)
@@ -4329,7 +4332,7 @@ class Economy(commands.Cog):
                         content=f"Looks like {user.display_name} hasn't got enough data yet to form a pie chart.")
 
     @app_commands.command(name='highlow', description='Guess the number. Jackpot wins big!', extras={"exp_gained": 3})
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 6)
     @app_commands.describe(robux=ROBUX_DESCRIPTION)
     async def highlow(self, interaction: discord.Interaction, robux: str):
@@ -4392,7 +4395,7 @@ class Economy(commands.Cog):
 
     @app_commands.command(name='slots',
                           description='Try your luck on a slot machine', extras={"exp_gained": 3})
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 2)
     @app_commands.rename(amount='robux')
     @app_commands.describe(amount=ROBUX_DESCRIPTION)
@@ -4515,7 +4518,7 @@ class Economy(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='inventory', description='View your currently owned items')
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(member='The user whose inventory you want to see.')
     async def inventory(self, interaction: discord.Interaction, member: Optional[discord.Member]):
         """View your inventory or another player's inventory."""
@@ -4870,7 +4873,7 @@ class Economy(commands.Cog):
                 view.message = await interaction.original_response()
 
     @app_commands.command(name="weekly", description="Get a weekly injection of robux to your bank")
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     async def weekly(self, interaction: discord.Interaction):
         """Get a weekly injection of robux once per week."""
 
@@ -4905,7 +4908,7 @@ class Economy(commands.Cog):
             await interaction.response.send_message(embed=success)
 
     @app_commands.command(name="resetmydata", description="Opt out of the virtual economy, deleting all of your data")
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(member='The player to remove all of the data of. Defaults to the user calling the command.')
     async def discontinue_bot(self, interaction: discord.Interaction, member: Optional[discord.Member]):
         """Opt out of the virtual economy and delete all of the user data associated."""
@@ -4939,7 +4942,7 @@ class Economy(commands.Cog):
                 view.message = await interaction.original_response()
 
     @app_commands.command(name="withdraw", description="Withdraw robux from your account")
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(robux=ROBUX_DESCRIPTION)
     async def withdraw(self, interaction: discord.Interaction, robux: str):
         """Withdraw a given amount of robux from your bank."""
@@ -5003,7 +5006,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='deposit', description="Deposit robux into your bank account")
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(robux=ROBUX_DESCRIPTION)
     async def deposit(self, interaction: discord.Interaction, robux: str):
         """Deposit an amount of robux into your bank."""
@@ -5081,7 +5084,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='leaderboard', description='Rank users based on various stats')
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 6)
     @app_commands.describe(stat="The stat you want to see.")
     async def get_leaderboard(self, interaction: discord.Interaction,
@@ -5102,7 +5105,7 @@ class Economy(commands.Cog):
 
     @app_commands.command(name='rob', description='Rob robux from another user', extras={"exp_gained": 4})
     @app_commands.rename(other="user")
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(other='The user you want to rob money from.')
     @app_commands.checks.cooldown(1, 6)
     async def rob_the_user(self, interaction: discord.Interaction, other: discord.Member):
@@ -5195,7 +5198,7 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='bankrob', description="Gather people to rob someone's bank")
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(user='The user to attempt to bankrob.')
     @app_commands.checks.cooldown(1, 60)
     async def bankrob_the_user(self, interaction: discord.Interaction, user: discord.Member):
@@ -5222,7 +5225,7 @@ class Economy(commands.Cog):
                         embed=membed("You need at least \U000023e3 **1,000,000** in your wallet to start a bankrob."))
 
     @app_commands.command(name='coinflip', description='Bet your robux on a coin flip', extras={"exp_gained": 3})
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(bet_on='The side of the coin you bet it will flip on.',
                            amount=ROBUX_DESCRIPTION)
     @app_commands.checks.cooldown(1, 6)
@@ -5269,7 +5272,7 @@ class Economy(commands.Cog):
 
     @app_commands.command(name="blackjack",
                           description="Test your skills at blackjack", extras={"exp_gained": 3})
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 4)
     @app_commands.rename(bet_amount='robux')
     @app_commands.describe(bet_amount=ROBUX_DESCRIPTION)
@@ -5417,7 +5420,7 @@ class Economy(commands.Cog):
 
     @app_commands.command(name="bet",
                           description="Bet your robux on a dice roll", extras={"exp_gained": 3})
-    @app_commands.guilds(discord.Object(id=829053898333225010), discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 6)
     @app_commands.rename(exponent_amount='robux')
     @app_commands.describe(exponent_amount=ROBUX_DESCRIPTION)
