@@ -2205,9 +2205,9 @@ class Economy(commands.Cog):
         self.batch_update.start()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id in self.client.owner_ids:
+        role = interaction.guild.get_role(1168204249096785980)
+        if (role in interaction.user.roles) or (role is None):
             return True
-        await interaction.response.send_message("This command is disabled.")
         return False
 
     async def cog_check(self, ctx: commands.Context) -> bool:
