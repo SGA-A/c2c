@@ -11,13 +11,13 @@ import asyncio
 import io
 
 import discord
-from discord import Object, app_commands
+from discord import app_commands
 from discord.ext import commands
 
 from asqlite import Connection as asqlite_Connection
 
 from cogs.economy import CURRENCY, determine_exponent
-from cogs.economy import Economy
+from cogs.economy import APP_GUILDS_ID
 from cogs.economy import get_profile_key_value
 from cogs.economy import modify_profile
 
@@ -117,23 +117,24 @@ class Administrate(commands.Cog):
             async with self.client.pool_connection.acquire() as conn:
                 conn: asqlite_Connection
                 payouts = {}
+                economy = self.client.get_cog("Economy")
 
                 async with conn.transaction():
                     for member in activated_members:  # activated member rewards
-                        if await Economy.can_call_out(member, conn):
+                        if await economy.can_call_out(member, conn):
                             continue
                         amt_activated = randint(1_100_000_000, 2_100_000_000)
-                        await Economy.update_bank_new(member, conn, amt_activated)
+                        await economy.update_bank_new(member, conn, amt_activated)
                         payouts.update(
                             {f"{member.mention}": (amt_activated,
                                                 ctx.guild.get_role(1190772182591209492).mention)})
                         actual += 1
 
                     for member in active_members:  # active member rewards
-                        if await Economy.can_call_out(member, conn):
+                        if await economy.can_call_out(member, conn):
                             continue
                         amt_active = randint(200000000, 1100000000)
-                        await Economy.update_bank_new(member, conn, amt_active)
+                        await economy.update_bank_new(member, conn, amt_active)
                         payouts.update(
                             {f"{member.mention}": (amt_active,
                                                 ctx.guild.get_role(1190772029830471781).mention)})
@@ -164,8 +165,7 @@ class Administrate(commands.Cog):
             await ctx.send("This command is to be called only within **cc**.")
 
     @app_commands.command(name="config", description="Adjust a user's robux directly")
-    @app_commands.guilds(discord.Object(id=829053898333225010),
-                         discord.Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(configuration='the type of mode used for modifying robux',
                            amount=('the amount of robux to modify. '
                                    'Supports Shortcuts (exponents only).'),
@@ -189,9 +189,10 @@ class Administrate(commands.Cog):
             embed = discord.Embed(title='Success', 
                                   colour=discord.Colour.random(),
                                   timestamp=discord.utils.utcnow())
+            economy = self.client.get_cog("Economy")
 
             if configuration.startswith("a"):
-                new_amount = await Economy.update_bank_new(member, conn, +int(real_amount), deposit_mode)
+                new_amount = await economy.update_bank_new(member, conn, +int(real_amount), deposit_mode)
 
                 embed.description = (
                     f"- Added {CURRENCY}{int(real_amount):,} robux to **{member.display_name}**'s balance.\n"
@@ -200,7 +201,7 @@ class Administrate(commands.Cog):
                 embed.set_footer(text="configuration type: ADD_TO")
             elif configuration.startswith("r"):
 
-                new_amount = await Economy.update_bank_new(member, conn, -int(real_amount), deposit_mode)
+                new_amount = await economy.update_bank_new(member, conn, -int(real_amount), deposit_mode)
 
                 embed.description = (
                     f"- Deducted {CURRENCY}{int(real_amount):,} robux from **{member.display_name}**'s balance.\n"
@@ -208,7 +209,7 @@ class Administrate(commands.Cog):
                 )
                 embed.set_footer(text="configuration type: REMOVE_FROM")
             else:
-                new_amount = await Economy.change_bank_new(member, conn, real_amount, deposit_mode)
+                new_amount = await economy.change_bank_new(member, conn, real_amount, deposit_mode)
                 
                 embed.description = (
                     f"- \U0000279c **{member.display_name}**'s "
@@ -224,7 +225,7 @@ class Administrate(commands.Cog):
             await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @app_commands.command(name='pin', description='Pin a message in any channel')
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(message_id='the ID of the message to be pinned',
                            channel_name="the channel to fetch the pinned message from")
     async def pin_it(self, interaction: discord.Interaction,
@@ -272,7 +273,7 @@ class Administrate(commands.Cog):
 
     @app_commands.command(name='react',
                           description='Force-react to messages with any reaction')
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(message_id='the ID of the message to react to:',
                            emote='the name of the emoji to react with, e.g., KarenLaugh')
     async def react(self, interaction: discord.Interaction, message_id: str, emote: str):
@@ -675,7 +676,7 @@ class Administrate(commands.Cog):
                        "be disabled by an Administrator without notice.", silent=True)
 
     @app_commands.command(name='edit', description='Edit a message from me')
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(msg='The ID of the message to edit',
                            new_content='The new content to replace it with')
     async def edit_msg(self, interaction: discord.Interaction, msg: str, new_content: str):
@@ -699,7 +700,7 @@ class Administrate(commands.Cog):
         await self.client.close()
 
     @commands.hybrid_command(name='repeat', description='Repeat what you typed', aliases=('say',))
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(message='what you want me to say',
                            channel='what channel i should send in')
     async def repeat(self, ctx: commands.Context,
