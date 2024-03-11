@@ -2,7 +2,7 @@ from PyDictionary import PyDictionary
 from xml.etree.ElementTree import fromstring
 from other.pagination import Pagination
 from io import BytesIO
-from random import choice
+from random import choice, choices
 from github import Github
 from re import compile as compile_it, search
 from psutil import Process, cpu_count
@@ -294,7 +294,7 @@ class Miscellaneous(commands.Cog):
             content=f"<:latencye:1195741921482641579> REST: {duration:.2f}ms **\U0000007c** "
                     f"WS: {self.client.latency * 1000:.2f} ms")
 
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     async def extract_source(self, interaction: discord.Interaction, message: discord.Message):
 
         await interaction.response.send_message("Looking into it..")
@@ -318,7 +318,7 @@ class Miscellaneous(commands.Cog):
             return await msg.edit(content=None, embed=embed)
         await msg.edit(content="Could not find anything. Sorry.")
 
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     async def embed_colour(self, interaction: discord.Interaction, message: discord.Message):
 
         await interaction.response.send_message("Looking into it..")
@@ -340,7 +340,7 @@ class Miscellaneous(commands.Cog):
         await msg.edit(content="No embeds were found within this message.")
 
     @app_commands.command(name='bored', description="Find something to do if you're bored")
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(activity_type='the type of activity to think of')
     async def prompt_act(self, interaction: discord.Interaction,
                          activity_type: Optional[Literal[
@@ -591,8 +591,12 @@ class Miscellaneous(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
+    @commands.command(name="random", description="Sends a random sticker")
+    async def send_random_sticker(self, ctx: commands.Context):
+        await ctx.send(stickers=choices(ctx.guild.stickers, k=1))
+
     @app_commands.command(name='emojis', description='Fetch all the emojis c2c can access')
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     async def emojis_paginator(self, interaction: discord.Interaction):
         length = 10
         emotes_all = []
@@ -605,15 +609,15 @@ class Miscellaneous(commands.Cog):
             emotes_all.append(needed)
 
         async def get_page_part(page: int):
-            emb = discord.Embed(title="Emojis: c2c",
+            emb = discord.Embed(title="Emojis",
                                 description="> This is a command that fetches **all** of the emojis found"
-                                            " in the client's internal cache and their associated atributes.\n",
+                                            " in the client's internal cache and their associated atributes.\n\n",
                                 colour=0x2F3136)
             offset = (page - 1) * length
             for user in emotes_all[offset:offset + length]:
                 emb.description += f"{user}\n"
-            emb.set_author(name=interaction.user.name,
-                           icon_url=interaction.user.display_avatar.url)
+            emb.set_author(name=interaction.guild.me.name,
+                           icon_url=interaction.guild.me.display_avatar.url)
             n = Pagination.compute_total_pages(len(emotes_all), length)
             return emb, n
 
@@ -669,7 +673,7 @@ class Miscellaneous(commands.Cog):
             await ctx.send(embed=embed)
 
     @app_commands.command(name='inviter', description='Creates a server invite link')
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.has_permissions(create_instant_invite=True)
     @app_commands.describe(invite_lifespan='the duration of which the invite should last, must be > 0.',
                            maximum_uses='how many uses the invite could be used for. 0 for unlimited uses.')
@@ -703,7 +707,7 @@ class Miscellaneous(commands.Cog):
         await interaction.response.send_message(embed=success)
 
     @app_commands.command(name='define', description='Define any word of choice')
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 3, key=lambda i: i.user.id)
     @app_commands.describe(word='the term that is to be defined for you')
     async def define_word(self, interaction: discord.Interaction, word: str):
@@ -734,7 +738,7 @@ class Miscellaneous(commands.Cog):
                 content='Try again, but this time input an actual word.')
 
     @app_commands.command(name='randomfact', description='Queries a random fact')
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
     async def random_fact(self, interaction: Interaction):
         limit = 1
@@ -748,7 +752,7 @@ class Miscellaneous(commands.Cog):
     @app_commands.command(name="image", description="Manipulate a user's avatar")
     @app_commands.describe(user="the user to apply the manipulation to",
                            endpoint="what kind of manipulation sorcery to use")
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     async def image_manip(self, interaction: discord.Interaction,
                           user: Optional[discord.User],
                           endpoint: Optional[
@@ -778,7 +782,7 @@ class Miscellaneous(commands.Cog):
     @app_commands.command(name="image2", description="Manipulate a user's avatar further")
     @app_commands.describe(user="the user to apply the manipulation to",
                            endpoint="what kind of manipulation sorcery to use")
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     async def image2_manip(self, interaction: discord.Interaction,
                            user: Optional[discord.User],
                            endpoint: Optional[
@@ -805,7 +809,7 @@ class Miscellaneous(commands.Cog):
 
     @app_commands.command(name="locket", description="Insert people into a heart-shaped locket")
     @app_commands.describe(user="the user to add to the locket", user2="the second user to add to the locket")
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     async def locket_manip(self, interaction: discord.Interaction,
                            user: Optional[discord.User], user2: discord.User):
         start = perf_counter()
@@ -828,7 +832,7 @@ class Miscellaneous(commands.Cog):
             await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
 
     @app_commands.command(name='com', description='Finds most common letters in a sentences')
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(word='the sentence(s) to find the frequent letters of')
     async def common(self, interaction: Interaction, word: str):
 
@@ -865,7 +869,7 @@ class Miscellaneous(commands.Cog):
         await interaction.response.send_message(embed=membed(f'The most common letter is {answer}.'))
 
     @app_commands.command(name='charinfo', description='Show you info about character. Maximum 25 at once.')
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(characters='any written letters or symbols')
     async def charinfo(self, interaction: Interaction, *, characters: str):
         """Shows you information about a number of characters.
@@ -885,13 +889,13 @@ class Miscellaneous(commands.Cog):
         await interaction.response.send_message(msg, suppress_embeds=True)
 
     @app_commands.command(name='feedback', description='Send feedback to the c2c developers')
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     async def feedback(self, interaction: discord.Interaction):
         feedback_modal = FeedbackModal()
         await interaction.response.send_modal(feedback_modal)
 
     @app_commands.command(name='about', description='Tells you information about the bot itself')
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 10, key=lambda i: i.guild.id)
     async def about_the_bot(self, interaction: discord.Interaction):
 
@@ -1007,7 +1011,7 @@ class Miscellaneous(commands.Cog):
                 await ctx.send(resp.url)
 
     @app_commands.command(name='tn', description="Get the time now in your chosen format")
-    @app_commands.guilds(Object(id=829053898333225010), Object(id=780397076273954886))
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.rename(spec="mode")
     @app_commands.describe(spec='the mode of displaying the current time now')
     async def tn(self, interaction: discord.Interaction, spec: Optional[
