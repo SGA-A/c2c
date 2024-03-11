@@ -2652,12 +2652,15 @@ class Economy(commands.Cog):
         if check_result and check_result[0]:
             # If the resulting quantity would be <= 0, delete the row
             await conn.execute("DELETE FROM inventory WHERE userID = ? AND itemID = ?", (user.id, item_id))
-            return
-        await conn.execute("""
+            return (0,)
+        val = await conn.execute("""
             INSERT INTO inventory (userID, itemID, qty)
             VALUES (?, ?, ?)
-            ON CONFLICT(userID, itemID) DO UPDATE SET qty = qty + ?
+            ON CONFLICT(userID, itemID) DO UPDATE SET qty = qty + ? 
+            RETURNING qty
         """, (user.id, item_id, amount, amount))
+        val = await val.fetchone()
+        return val
 
     @staticmethod
     async def update_user_inventory_with_random_item(user_id: int, conn: asqlite_Connection, qty: int) -> None:
@@ -3937,11 +3940,32 @@ class Economy(commands.Cog):
                                 '- The command hasn\'t acquired a pool connection (devs know why).\n\n'
                                 'Found an unusual bug on a command? **Report it now to prevent further '
                                 'issues.**', colour=0x2B2D31))
+            
 
-    @register_item('Keycard')
-    async def handle_unusable(interaction, quantity):
-        await interaction.response.send_message(
-            embed=membed("This item cannot be used. The effects are always passively active."))
+    @register_item('Bank Note')
+    async def increase_bank_space(interaction, quantity: int, conn: asqlite_Connection):
+        expansion = randint(1_600_000, 6_000_000)
+        expansion *= quantity
+        new_bankspace = await conn.execute(
+            "UPDATE bank SET bankspace = bankspace + ? WHERE userID = ? RETURNING bankspace", 
+            (expansion, interaction.user.id))
+        new_bankspace = await new_bankspace.fetchone()
+
+        new_amt = await Economy.update_inv_new(interaction.user, -quantity, "Bank Note", conn)
+        
+        embed = discord.Embed(colour=0x2B2D31)
+        embed.add_field(
+            name="Used", 
+            value=f"{quantity}x <:BankNote:1216429670908694639> Bank Note")
+        embed.add_field(
+            name="Added Bank Space", 
+            value=f"\U000023e3 {expansion:,}")
+        embed.add_field(
+            name="Total Bank Space", 
+            value=f"\U000023e3 {new_bankspace[0]:,}")
+        embed.set_footer(text=f"{new_amt[0]:,}x bank note left")
+        await conn.commit()
+        await interaction.response.send_message(embed=embed)
 
     @register_item('Trophy')
     async def handle_trophy(interaction, quantity):
@@ -3952,23 +3976,6 @@ class Economy(commands.Cog):
         return await interaction.response.send_message(
             f"{interaction.user.name} is flexing on you all "
             f"with their <:tr1:1165936712468418591> **~~PEPE~~ TROPHY**{content}")
-
-    # @register_item('Crisis')
-    # async def handle_drone(interaction: discord.Interaction, quantity: int, conn: asqlite_Connection) -> None:
-        
-        # now = discord.utils.utcnow()
-        # now = datetime_to_string(now)
-        # data = await conn.execute("SELECT * FROM drones WHERE userID = ?", (interaction.user.id,))
-        # if not data:
-        #     await conn.execute(
-        #         "INSERT INTO drones (userID, type, obtained) VALUES (?, ?, ?, ?)",
-        #         (interaction.user.id, "Crisis", now))
-
-        #     await conn.commit()
-        #     return await interaction.response.send_message(embed=membed(
-        #         "You've unwrapped your Crisis drone. For each upgrade, it will continue to evolve.\n"
-        #         "Reach step 20 and you'll unlock **Crisis XT**."))
-        # await interaction.response.send_message(embed=membed("You already own a Crisis drone."))
 
     @app_commands.command(name="use", description="Use an item you own from your inventory", extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -4018,9 +4025,9 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(
                         embed=membed(f"{ie} **{name_res}** does not have a use yet."))
                 
-                if name_res == "Crisis":
+                if name_res == "Bank Note":
                     return await handler(interaction, quantity, conn)
-                await handler(interaction, quantity)
+                await handler(interaction, qty)
 
     @app_commands.command(name="prestige", description="Sacrifice currency stats in exchange for incremental perks")
     @app_commands.guilds(*APP_GUILDS_ID)
