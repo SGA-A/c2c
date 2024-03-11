@@ -1039,7 +1039,7 @@ class BlackjackUi(discord.ui.View):
 
     async def on_timeout(self) -> None:
         if not self.finished:
-            
+            del self.client.games[self.interaction.user.id]
             try:
                 await self.message.edit(
                     content=None, embed=membed("You backed off so the game ended."), view=None)
