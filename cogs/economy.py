@@ -2080,7 +2080,7 @@ class ServantsManager(discord.ui.View):
 class ShowcaseDropdown(discord.ui.Select):
     def __init__(self, showcase_list: list, showcase_details):
         self.showcase_list = showcase_list
-        self.current_item = self.showcase_list[0]
+        self.current_item = "0" if self.showcase_list[0][0] == "0" else self.showcase_list[0]
         self.showcase_dtls = showcase_details
 
         options = []
@@ -2102,7 +2102,7 @@ class ShowcaseDropdown(discord.ui.Select):
         for option in self.options:
             option.default = option.value == self.current_item
         
-        current_item_index = self.showcase_list.index(self.current_item[0])
+        current_item_index = self.showcase_list.index(self.current_item)
 
         if self.current_item[0] == "0":
             for item in self.view.children:
@@ -2111,7 +2111,10 @@ class ShowcaseDropdown(discord.ui.Select):
                 item.disabled = True
         else:
             self.view.children[0].disabled = (current_item_index - 1) < 0
-            self.view.children[1].disabled = (self.showcase_list[current_item_index+1] == "0")
+            try:
+                self.view.children[1].disabled = (self.showcase_list[current_item_index+1] == "0")
+            except IndexError:
+                self.view.children[1].disabled = True
 
         await interaction.response.edit_message(view=self.view)
 
@@ -2126,9 +2129,10 @@ class ShowcaseView(discord.ui.View):
         super().__init__(timeout=45.0)
 
         self.select_item = ShowcaseDropdown(showcase_list=self.showcase_list, showcase_details=self.showcase_details)
+        
         self.add_item(self.select_item)
         self.children[0].disabled = True
-        self.children[1].disabled = self.showcase_list[self.showcase_list.index(self.select_item.current_item[0])+1] == "0"
+        self.children[1].disabled = self.showcase_list[self.showcase_list.index(self.select_item.current_item)+1] == "0"
     
     async def on_error(self, interaction: discord.Interaction, error: Exception, _) -> None:
         print_exception(type(error), error, error.__traceback__)
@@ -2154,7 +2158,10 @@ class ShowcaseView(discord.ui.View):
         self.children[0].disabled = previous_item_index < 0
         
         next_item_index = current_item_index + 1
-        self.children[1].disabled = self.showcase_list[next_item_index] == "0"
+        try:
+            self.children[1].disabled = self.showcase_list[next_item_index] == "0"
+        except IndexError:
+            self.children[1].disabled = True
 
     async def start_updating_order(self, user: discord.Member, interaction: discord.Interaction) -> None:
         async with self.client.pool_connection.acquire() as conn:
@@ -3219,9 +3226,9 @@ class Economy(commands.Cog):
                 showcase: str = data[-1]
                 showcase: list = showcase.split(" ")
 
-                if len(showcase) > 6 and (showcase.count("0") == 0):
+                if showcase.count("0") == 0:
                     return await interaction.response.send_message(
-                        embed=membed("You reached the maximum showcase slots."))
+                        embed=membed("You can only have 6 items to showcase."))
 
                 item_id = str(data[1])
                 if item_id in showcase:
@@ -3607,7 +3614,7 @@ class Economy(commands.Cog):
 
                 net = await self.calculate_inventory_value(interaction.user, conn)
 
-                if net:
+                if their_count:
                     amt = ((their_count*data[0])/net)*100
                     dynamic_text += f" ({amt:.1f}% of your net worth)"
 
