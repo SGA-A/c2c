@@ -912,11 +912,7 @@ class BalanceView(discord.ui.View):
         self.viewing = viewing
         super().__init__(timeout=120.0)
         
-        if viewing.id != interaction.user.id:
-            self.children[1].disabled = True
-            self.children[0].disabled = True
-        else:    
-            self.checks(self.their_bank, self.their_wallet, self.their_bankspace-self.their_bank)
+        self.checks(self.their_bank, self.their_wallet, self.their_bankspace-self.their_bank)
 
     def checks(self, new_bank, new_wallet, any_new_bankspace_left):
         """Check if the buttons should be disabled or not."""
@@ -2105,15 +2101,18 @@ class ShowcaseDropdown(discord.ui.Select):
         self.current_item = self.values[0]  # the current item being clicked on (its ID)
         for option in self.options:
             option.default = option.value == self.current_item
+        
+        current_item_index = self.showcase_list.index(self.current_item[0])
 
-        self.view.children[0].disabled = (self.showcase_list.index(self.current_item[0]) - 1) < 0
-        self.view.children[1].disabled = (self.showcase_list.index(self.current_item[0]) + 1 == 6)
+        if self.current_item[0] == "0":
+            for item in self.view.children:
+                if not hasattr(item, "label"):
+                    continue
+                item.disabled = True
+        else:
+            self.view.children[0].disabled = (current_item_index - 1) < 0
+            self.view.children[1].disabled = (self.showcase_list[current_item_index+1] == "0")
 
-        check = self.current_item[0] == "0"  # stored so reuse
-        for item in self.view.children:
-            if not hasattr(item, "label"):
-                continue
-            item.disabled = check
         await interaction.response.edit_message(view=self.view)
 
 
@@ -2129,7 +2128,7 @@ class ShowcaseView(discord.ui.View):
         self.select_item = ShowcaseDropdown(showcase_list=self.showcase_list, showcase_details=self.showcase_details)
         self.add_item(self.select_item)
         self.children[0].disabled = True
-        self.children[1].disabled = self.select_item.current_item[0] == "0"
+        self.children[1].disabled = self.showcase_list[self.showcase_list.index(self.select_item.current_item[0])+1] == "0"
     
     async def on_error(self, interaction: discord.Interaction, error: Exception, _) -> None:
         print_exception(type(error), error, error.__traceback__)
@@ -2150,44 +2149,56 @@ class ShowcaseView(discord.ui.View):
             embed=membed("This is not your showcase"), ephemeral=True)
         return False
     
-    async def start_updating_order(self, user: discord.Member) -> None:
+    def do_button_checks(self, current_item_index: int):
+        previous_item_index = current_item_index - 1
+        self.children[0].disabled = previous_item_index < 0
+        
+        next_item_index = current_item_index + 1
+        self.children[1].disabled = self.showcase_list[next_item_index] == "0"
+
+    async def start_updating_order(self, user: discord.Member, interaction: discord.Interaction) -> None:
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
+            
             changedShowcase = " ".join(self.showcase_list)
             await Economy.change_bank_new(user, conn, changedShowcase, "showcase")    
             await conn.commit()
+            showcase_ui_new = []
+
+            showbed = self.message.embeds[0]
+            showbed.description = "You can reorder your showcase here.\n\n"
+
+            for i, showcase_item in enumerate(self.showcase_list, start=1):
+                
+                if showcase_item == "0":
+                    showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
+                    continue
+
+                item_data = self.showcase_details[showcase_item]
+                name, emoji, _ = item_data
+                
+                showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) {emoji} {name}")
+
+            showbed.description += "\n".join(showcase_ui_new)
+            await interaction.response.edit_message(embed=showbed, view=self)
 
     @discord.ui.button(emoji="<:move_up:1213223442241818705>", row=1)
-    async def move_up(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def move_up(self, interaction: discord.Interaction, _: discord.ui.Button):
 
         current_item_index = self.showcase_list.index(self.select_item.current_item)
-        previous_item_index = current_item_index - 1
-        if previous_item_index < 0:
-            return await interaction.response.send_message(
-                embed=membed("There's nothing above this item!"), 
-                ephemeral=True, silent=True, delete_after=5.0)
-        
-        swap_elements(self.showcase_list, current_item_index, previous_item_index)
-        await self.start_updating_order(interaction.user)
-        await interaction.response.send_message(
-            "**Moved the item up.** Call the command again to see the changes.", 
-            delete_after=5.0, ephemeral=True, silent=True)
+        swap_elements(self.showcase_list, current_item_index, current_item_index-1)
+        self.do_button_checks(current_item_index-1)
+
+        await self.start_updating_order(interaction.user, interaction)
 
     @discord.ui.button(emoji="<:move_down:1213223440669085756>", row=1)
-    async def move_down(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def move_down(self, interaction: discord.Interaction, _: discord.ui.Button):
+        
         current_item_index = self.showcase_list.index(self.select_item.current_item)
-        next_item_index = current_item_index+1
-        
-        if self.showcase_list[next_item_index] == "0":
-            return await interaction.response.send_message(
-                embed=membed("There's nothing beneath this item!"), 
-                ephemeral=True, silent=True, delete_after=5.0)
-        
-        swap_elements(self.showcase_list, current_item_index, next_item_index)
-        await self.start_updating_order(interaction.user)
-        await interaction.response.send_message(
-            "**Moved the item down.** Call the command again to see the changes.",
-            delete_after=5.0, ephemeral=True, silent=True)
+        swap_elements(self.showcase_list, current_item_index, current_item_index+1)
+        self.do_button_checks(current_item_index+1)
+
+        await self.start_updating_order(interaction.user, interaction)
 
 
 class Economy(commands.Cog):
@@ -3114,12 +3125,11 @@ class Economy(commands.Cog):
 
             showbed = discord.Embed(
                 colour=0x2B2D31,
-                description="All items that you add to your showcase are displayed on your profile.\n\n"
+                title=f"{interaction.user.global_name}'s Showcase",
+                description="You can reorder your showcase here.\n\n"
             )
-            showbed.set_author(
-                name=f"{interaction.user.global_name}'s Showcase",
-                icon_url=interaction.user.display_avatar.url
-            )
+            
+            showbed.set_thumbnail(url=interaction.user.display_avatar.url)
 
             showcase: str = await self.get_spec_bank_data(interaction.user, "showcase", conn)
             showcase: list = showcase.split(" ")
@@ -3139,31 +3149,25 @@ class Economy(commands.Cog):
                 id_details.update({item_id: (showdata[0], showdata[1], showdata[2])})
 
             showcase_ui_new = []
-            should_warn_user = False
             changes_were_made = False
 
-            for i, showcase_item in enumerate(showcase):
+            for i, showcase_item in enumerate(showcase, start=1):
                 if showcase_item == "0":
-                    should_warn_user = True
-                    showcase_ui_new.append(f"[**`{i+1}.`**](https://www.google.com) Empty slot")
+                    showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
                     continue
                 item_data = id_details[showcase_item]
                 name, emoji, qty = item_data
                 
                 if qty:
                     showcase_ui_new.append(
-                        f"[**`{i+1}.`**](https://www.google.com) {emoji} {name}")
+                        f"[**`{i}.`**](https://www.google.com) {emoji} {name}")
                     continue
                 
                 showcase[i] = "0"
                 changes_were_made = True
-                should_warn_user = True
-                showcase_ui_new.append(f"[**`{i+1}.`**](https://www.google.com) Empty slot")
+                showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
 
             showbed.description += "\n".join(showcase_ui_new)
-
-            if should_warn_user:
-                showbed.set_footer(text="You can add more items to your showcase.")
             
             if changes_were_made:
                 changedShowcase = " ".join(showcase)
@@ -3196,29 +3200,33 @@ class Economy(commands.Cog):
                     content="There is more than one item with that name pattern.\nSelect one of the following options:",
                     embed=membed('\n'.join(suggestions)))
             else:
+                name_res = name_res[0]
+
                 data = await conn.fetchone(
                     """
-                    SELECT itemID, emoji FROM inventory 
-                    WHERE itemName = $0 AND userID = $1 
-                    UNION ALL 
-                    SELECT showcase FROM bank
-                    WHERE userID = $1""", name_res, interaction.user.id)
+                    SELECT shop.emoji, shop.itemID, inventory.qty, bank.showcase
+                    FROM shop
+                    INNER JOIN inventory ON shop.itemID = inventory.itemID
+                    INNER JOIN bank ON bank.userID = inventory.userID
+                    WHERE shop.itemName = ? AND inventory.userID = ?
+                    """, (name_res, interaction.user.id)
+                )
                 
-                if len(data) < 2:
+                if data is None:
                     return await interaction.response.send_message(
-                        embed=membed("Either you don't have this item or you're not registered."))
+                        embed=membed(f"You don't have a single **{name_res}**."))
 
-                showcase: str = data[1][0]
+                showcase: str = data[-1]
                 showcase: list = showcase.split(" ")
 
                 if len(showcase) > 6 and (showcase.count("0") == 0):
                     return await interaction.response.send_message(
                         embed=membed("You reached the maximum showcase slots."))
 
-                item_id = str(data[0][0])
+                item_id = str(data[1])
                 if item_id in showcase:
                     return await interaction.response.send_message(
-                        embed=membed("You already have this item in your showcase."))
+                        embed=membed(f"You already have a {data[0]} **{name_res}** in your showcase."))
                 
                 placeholder = showcase.index("0")
                 showcase[placeholder] = item_id
@@ -3227,7 +3235,8 @@ class Economy(commands.Cog):
                 await self.change_bank_new(interaction.user, conn, showcase, "showcase")
                 await conn.commit()
 
-                return await interaction.response.send_message(embed=membed(f"Added {data[0][1]} **{name_res}** to your showcase!"))
+                return await interaction.response.send_message(
+                    embed=membed(f"Added {data[0]} **{name_res}** to your showcase!"))
 
     @showcase.command(name="remove", description="Remove an item from your showcase", extras={"exp_gained": 1})
     @app_commands.checks.cooldown(1, 10)
@@ -3255,25 +3264,29 @@ class Economy(commands.Cog):
                     content="There is more than one item with that name pattern.\nSelect one of the following options:",
                     embed=membed('\n'.join(suggestions)))
             else:
+                name_res = name_res[0]
+
                 data = await conn.fetchone(
                     """
-                    SELECT itemID, emoji FROM inventory 
-                    WHERE itemName = $0 AND userID = $1 
-                    UNION ALL 
-                    SELECT showcase FROM bank
-                    WHERE userID = $1""", name_res, interaction.user.id)
+                    SELECT shop.emoji, shop.itemID, inventory.qty, bank.showcase
+                    FROM shop
+                    INNER JOIN inventory ON shop.itemID = inventory.itemID
+                    INNER JOIN bank ON bank.userID = inventory.userID
+                    WHERE shop.itemName = ? AND inventory.userID = ?
+                    """, (name_res, interaction.user.id)
+                )
                 
-                if len(data) < 2:
+                if data is None:
                     return await interaction.response.send_message(
-                        embed=membed("Either you don't have this item or you're not registered."))
+                        embed=membed(f"You don't have a single **{name_res}**."))
 
-                showcase: str = data[1][0]
+                showcase: str = data[-1]
                 showcase: list = showcase.split(" ")
 
-                item_id = str(data[0][0])
+                item_id = str(data[1])
                 if item_id not in showcase:
                     return await interaction.response.send_message(
-                        embed=membed("You don't have this item in your showcase."))
+                        embed=membed(f"You don't have a {data[0]} **{name_res}** in your showcase."))
                 
                 initial = showcase.index(item_id)
                 showcase[initial] = "0"
@@ -3283,7 +3296,7 @@ class Economy(commands.Cog):
                 await conn.commit()
 
                 await interaction.response.send_message(
-                    embed=membed(f"Removed {data[0][1]} **{item_name}** from your showcase!"))
+                    embed=membed(f"Removed {data[0]} **{name_res}** from your showcase!"))
 
     shop = app_commands.Group(
         name='shop', description='view items available for purchase.', 
@@ -3591,6 +3604,12 @@ class Economy(commands.Cog):
                 
                 their_count = await self.get_one_inv_data_new(interaction.user, name_res, conn)
                 dynamic_text += f"You own **{their_count}**."
+
+                net = await self.calculate_inventory_value(interaction.user, conn)
+
+                if net:
+                    amt = ((their_count*data[0])/net)*100
+                    dynamic_text += f" ({amt:.1f}% of your net worth)"
 
                 em = discord.Embed(
                     title=name_res,
@@ -4011,11 +4030,11 @@ class Economy(commands.Cog):
                     WHERE shop.itemName = ? AND inventory.userID = ?
                 """, (name_res, interaction.user.id))
 
-                ie, qty = data
-
-                if not qty:
+                if not data:
                     return await interaction.response.send_message(
-                        embed=membed(f"You don't own a single {ie} **{name_res}**, therefore cannot use it."))
+                        embed=membed(f"You don't own a single {name_res}, therefore cannot use it."))
+                
+                ie, qty = data
                 if qty < quantity:
                     return await interaction.response.send_message(
                         embed=membed(f"You don't own **{quantity}x {ie} {name_res}**, therefore cannot use this many."))
@@ -5142,6 +5161,9 @@ class Economy(commands.Cog):
                 if host_d[0] < 1_000_000:
                     return await interaction.response.send_message(
                         embed=membed("The victim doesn't even have \U000023e3 **1,000,000**, not worth it."))
+                if prim_d[0] < 10_000_000:
+                    return await interaction.response.send_message(
+                        embed=membed("You need at least \U000023e3 **10,000,000** in your wallet to rob someone."))
 
                 result = choices([0, 1], weights=(49, 51), k=1)
                 
@@ -5149,7 +5171,8 @@ class Economy(commands.Cog):
                 async with conn.transaction():
                     if not result[0]:
                         emote = choice(
-                            ["<a:kekRealize:970295657233539162>", "<:smhlol:1160157952410386513>", 
+                            [
+                                "<a:kekRealize:970295657233539162>", "<:smhlol:1160157952410386513>", 
                                 "<:z_HaH:783399959068016661>", "<:lmao:784308818418728972>", 
                                 "<:lamaww:789865027007414293>", "<a:StoleThisEmote5:791327136296075327>", 
                                 "<:jerryLOL:792239708364341258>", "<:dogkekw:797946573144850432>"])
