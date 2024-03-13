@@ -593,7 +593,7 @@ class ConfirmResetData(discord.ui.View):
             item.disabled = True
         try:
             embed = self.message.embeds[0]
-            embed.title = "Timed out"
+            embed.title = "Timed Out"
             embed.colour = 0x979C9F
             return await self.message.edit(embed=embed, view=self)
         except discord.NotFound:
@@ -4210,7 +4210,7 @@ class Economy(commands.Cog):
 
                 net_attrs = await conn.fetchone(
                     """
-                    SELECT COUNT(DISTINCT inventory.itemID), SUM(qty), SUM(qty * cost)
+                    SELECT COALESCE(COUNT(DISTINCT inventory.itemID), 0), COALESCE(SUM(qty), 0), COALESCE(SUM(qty * cost), 0)
                     FROM inventory
                     JOIN shop ON inventory.itemID = shop.itemID
                     WHERE userID = $0
@@ -4929,13 +4929,14 @@ class Economy(commands.Cog):
             success.url = "https://www.youtube.com/watch?v=ue_X8DskUN4"
             
             async with conn.transaction():
-                ncd = discord.utils.format_dt(discord.utils.utcnow() + datetime.timedelta(weeks=1), style="R")
+                next_week = discord.utils.utcnow() + datetime.timedelta(weeks=1)
+                ncd = discord.utils.format_dt(next_week, style="R")
                 
                 success.description=(
                     "You just got \U000023e3 **10,000,000** for checking in this week.\n"
                     f"See you next week ({ncd})!")
                 
-                await self.update_cooldown(conn, user=interaction.user, cooldown_type="weekly", new_cd=ncd)
+                await self.update_cooldown(conn, user=interaction.user, cooldown_type="weekly", new_cd=next_week.timestamp())
                 await self.update_bank_new(interaction.user, conn, 10_000_000)
 
             await interaction.response.send_message(embed=success)
@@ -5250,6 +5251,9 @@ class Economy(commands.Cog):
             return await interaction.response.send_message(
                 embed=membed("You can't bankrob bots."))
         else:
+            return await interaction.response.send_message(
+                embed=membed("This command is under construction."))
+        
             async with self.client.pool_connection.acquire() as conn:
                 if not (await self.can_call_out_either(interaction.user, user, conn)):
                     return await interaction.response.send_message(
