@@ -1637,7 +1637,7 @@ class DispatchServantView(discord.ui.View):
     def __init__(self, client: commands.Bot, conn, chosen_slay: str, skill_lvl, interaction: discord.Interaction):
         super().__init__(timeout=40.0)
         self.interaction = interaction
-        self.add_item(SelectTaskMenu(client, conn, chosen_slay, skill_lvl))
+        self.add_item(SelectTaskMenu(conn, chosen_slay, skill_lvl))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user == self.interaction.user:
