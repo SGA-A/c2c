@@ -1345,10 +1345,9 @@ class HighLow(discord.ui.View):
     """View for the Highlow command and its associated functions."""
 
     def __init__(
-            self, interaction: discord.Interaction, client: commands.Bot, 
+            self, interaction: discord.Interaction, 
             hint_provided: int, bet: int, value: int):
         self.interaction = interaction
-        self.client = client
         self.true_value = value
         self.hint_provided = hint_provided
         self.their_bet = bet
@@ -1417,7 +1416,7 @@ class HighLow(discord.ui.View):
     @discord.ui.button(label='Lower', style=discord.ButtonStyle.blurple)
     async def low(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button for highlow interface to allow users to guess lower."""
-        async with self.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
             async with conn.transaction():
@@ -1430,7 +1429,7 @@ class HighLow(discord.ui.View):
     async def jackpot(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button for highlow interface to guess jackpot, meaning the guessed number is the actual number."""
 
-        async with self.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
             async with conn.transaction():
@@ -1443,7 +1442,7 @@ class HighLow(discord.ui.View):
     async def high(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button for highlow interface to allow users to guess higher."""
         
-        async with self.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
             async with conn.transaction():
@@ -1455,9 +1454,8 @@ class HighLow(discord.ui.View):
 
 class ImageModal(discord.ui.Modal):
 
-    def __init__(self, conn, client, their_choice, the_view):
+    def __init__(self, conn, their_choice, the_view):
         self.conn = conn
-        self.client = client
         self.choice: str = their_choice
         self.the_view = the_view
         super().__init__(title=f"Change Photo of {self.choice.title()}", timeout=60.0)
@@ -1491,9 +1489,8 @@ class ImageModal(discord.ui.Modal):
 
 
 class HexModal(discord.ui.Modal):
-    def __init__(self, conn, client, their_choice, the_view):
+    def __init__(self, conn, their_choice, the_view):
         self.conn = conn
-        self.client = client
         self.choice: str = their_choice
         self.the_view = the_view
         super().__init__(title=f"Change Embed Hex Colour for {self.choice.title()}", timeout=60.0)
@@ -1537,7 +1534,6 @@ class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
     def __init__(self, conn, client: commands.Bot, their_choice, the_view):
         super().__init__()
         self.conn = conn
-        self.client = client
         self.choice = their_choice
         self.the_view = the_view
         self.economy = client.get_cog("Economy")
@@ -1593,7 +1589,6 @@ class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
 
 class DropdownLB(discord.ui.Select):
     def __init__(self, client: commands.Bot, their_choice: str):
-        self.client: commands.Bot = client
         self.economy = client.get_cog("Economy")
 
         options = [
@@ -1713,10 +1708,9 @@ class Servants(discord.ui.Select):
 
 
 class SelectTaskMenu(discord.ui.Select):
-    def __init__(self, client: commands.Bot, conn, servant_name: str, skill_lvl: int):
+    def __init__(self, conn, servant_name: str, skill_lvl: int):
 
         self.conn = conn
-        self.client = client
         self.worker = servant_name
         self.skill_lvl = skill_lvl
 
@@ -2056,7 +2050,7 @@ class ServantsManager(discord.ui.View):
             )
 
         await interaction.response.send_modal(
-            ImageModal(self.child.conn, self.child.client, self.child.choice, self))
+            ImageModal(self.child.conn, self.child.choice, self))
 
     @discord.ui.button(emoji="\U00002728", label="Add Colour", style=discord.ButtonStyle.green, row=3)
     async def hex_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2067,7 +2061,7 @@ class ServantsManager(discord.ui.View):
             )
 
         await interaction.response.send_modal(
-            HexModal(self.child.conn, self.child.client, self.child.choice, self))
+            HexModal(self.child.conn, self.child.choice, self))
 
     @discord.ui.button(label="Go back", style=discord.ButtonStyle.blurple, row=4)
     async def go_back(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -2120,9 +2114,8 @@ class ShowcaseDropdown(discord.ui.Select):
 
 
 class ShowcaseView(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction, client: commands.Bot, showcase_list_backend: list, showcase_details: dict):
+    def __init__(self, interaction: discord.Interaction, showcase_list_backend: list, showcase_details: dict):
         self.interaction: discord.Interaction = interaction
-        self.client: commands.Bot = client
         self.showcase_list: list = showcase_list_backend  # the actual backend contents of the showcase ["1", "10", "5"] etc
         self.showcase_details = showcase_details  # the details of each individual showcase item, excluding free slots
 
@@ -2164,7 +2157,7 @@ class ShowcaseView(discord.ui.View):
             self.children[1].disabled = True
 
     async def start_updating_order(self, user: discord.Member, interaction: discord.Interaction) -> None:
-        async with self.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
             
             changedShowcase = " ".join(self.showcase_list)
@@ -3181,7 +3174,7 @@ class Economy(commands.Cog):
                 await self.change_bank_new(interaction.user, conn, changedShowcase, "showcase")
                 await conn.commit()
 
-            showcase_view = ShowcaseView(interaction, self.client, showcase, id_details)
+            showcase_view = ShowcaseView(interaction, showcase, id_details)
             await interaction.response.send_message(embed=showbed, view=showcase_view)
             showcase_view.message = await interaction.original_response()
 
@@ -4422,7 +4415,7 @@ class Economy(commands.Cog):
                              icon_url=interaction.user.display_avatar.url)
             query.set_footer(text="The jackpot button is if you think it is the same!")
             
-            hl_view = HighLow(interaction, self.client, hint_provided=hint, bet=real_amount, value=number)
+            hl_view = HighLow(interaction, hint_provided=hint, bet=real_amount, value=number)
             await interaction.response.send_message(view=hl_view, embed=query)
             hl_view.message = await interaction.original_response()
 
@@ -5605,7 +5598,7 @@ class Economy(commands.Cog):
     async def servant_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         """Autocomplete callback for the servant menu."""
 
-        async with self.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool_connection.acquire() as conn:
             options = await conn.fetchall("SELECT slay_name FROM slay")
 
             return [
@@ -5614,13 +5607,13 @@ class Economy(commands.Cog):
 
     @buy.autocomplete('item_name')
     async def buy_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
-        async with self.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool_connection.acquire() as conn:
             options = await conn.fetchall("SELECT itemName FROM shop WHERE available = $0", 1)
             return [app_commands.Choice(name=option[0], value=option[0]) for option in options if current.lower() in option[0].lower()]
 
     @item.autocomplete('item_name')
     async def item_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
-        async with self.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool_connection.acquire() as conn:
             res = await conn.fetchall("SELECT itemName FROM shop")
             return [app_commands.Choice(name=iterable[0], value=iterable[0]) for iterable in res if current.lower() in iterable[0].lower()]
 
