@@ -1,10 +1,12 @@
-from discord.ext import commands, tasks
-from discord import app_commands
 from time import perf_counter
-import discord
 from pytz import timezone
 from datetime import timedelta, datetime
 from re import compile
+
+from discord.ext import commands, tasks
+from discord import app_commands
+import discord
+
 from other.pagination import Pagination
 from cogs.economy import membed, Confirm, active_sessions, APP_GUILDS_ID
 
@@ -30,17 +32,42 @@ class Moderation(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
 
+        self.purge_from_here_cmd = app_commands.ContextMenu(
+            name='Purge Up To Here',
+            callback=self.purge_from_here)
+        
+        self.client.tree.add_command(self.purge_from_here_cmd)
+
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.guild_permissions.manage_guild:
             return True
-        await interaction.response.send_message("You are not allowed to use these commands.")
+        await interaction.response.send_message(
+            embed=membed("You are not allowed to use these commands."))
         return False
     
     async def cog_check(self, ctx: commands.Context) -> bool:
         if ctx.author.guild_permissions.manage_guild:
             return True
-        await ctx.send("You are not allowed to use these commands.")
+        await ctx.send(
+            embed=membed("You are not allowed to use these commands."))
         return False
+
+    @app_commands.guilds(*APP_GUILDS_ID)
+    async def purge_from_here(self, interaction: discord.Interaction, message: discord.Message):
+        
+        if not interaction.user.guild_permissions.manage_messages:
+            return await interaction.response.send_message(
+                embed=membed("You are not allowed to use this command."))
+
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        diff = message.created_at - discord.utils.utcnow()
+        
+        if diff.total_seconds() > 1_209_600:
+            return await interaction.response.send_message(
+                embed=membed("This message was created more than 14 days ago."))
+        
+        count = await interaction.channel.purge(after=discord.Object(id=message.id))
+        await interaction.followup.send(embed=membed(f"Deleted **{len(count)}** messages."))
 
     async def bulk_add_roles(
             self, interaction: discord.Interaction, users_without_it: set, role: discord.Role, how_many: int) -> str | None:
@@ -162,7 +189,6 @@ class Moderation(commands.Cog):
         await ctx.send("<:normale:1195740534703136921> Disabled slowmode.")
 
     @commands.command(name="purge", description="Bulk-remove messages, excluding pins")
-    @commands.guild_only()
     async def purge(self, ctx: commands.Context, purge_max_amount: int):
         """Purge an amount of messages. Pinned messages aren't removed."""
         await ctx.message.delete()
@@ -504,7 +530,7 @@ class Moderation(commands.Cog):
         
         if not time:
             return await interaction.response.send_message("Invalid delay provided. Use a valid format e.g. 1d 7h 19m 4s.")
-        
+
         if role in user.roles:
             return await interaction.response.send_message("That member already has this role.")
 
