@@ -500,8 +500,8 @@ class DepositOrWithdraw(discord.ui.Modal):
     amount = discord.ui.TextInput(label="Amount", min_length=1, max_length=30)
 
     def checks(self, bank, wallet, any_bankspace_left):
-        self.view_children.children[0].disabled = not(bool(bank))
-        self.view_children.children[1].disabled = not((bool(wallet) and bool(any_bankspace_left)))
+        self.view_children.children[0].disabled = (bank == 0)
+        self.view_children.children[1].disabled = (wallet == 0) or (any_bankspace_left == 0)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         val = determine_exponent(self.amount.value.replace(",", ""))
@@ -915,15 +915,19 @@ class BalanceView(discord.ui.View):
         self.viewing = viewing
         super().__init__(timeout=120.0)
         
+        print(self.their_bank, self.their_wallet, self.their_bankspace, sep=" | ")
+
         self.checks(self.their_bank, self.their_wallet, self.their_bankspace-self.their_bank)
 
     def checks(self, new_bank, new_wallet, any_new_bankspace_left):
         """Check if the buttons should be disabled or not."""
-
-        self.children[0].disabled = not(bool(new_bank))
-        self.children[1].disabled = not((bool(new_wallet) and bool(any_new_bankspace_left)))
-        self.children[0].disabled = self.viewing.id != self.interaction.user.id
-        self.children[1].disabled = self.viewing.id != self.interaction.user.id
+        if self.viewing.id != self.interaction.user.id:
+            self.children[0].disabled = True
+            self.children[1].disabled = True
+            return
+        
+        self.children[0].disabled = (new_bank == 0)
+        self.children[1].disabled = (new_wallet == 0) or (any_new_bankspace_left == 0)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if self.interaction.user.id != interaction.user.id:
@@ -955,8 +959,10 @@ class BalanceView(discord.ui.View):
                 embed=membed("You have nothing to withdraw."), 
                 ephemeral=True, delete_after=3.0)
 
-        await interaction.response.send_modal(DepositOrWithdraw(title=button.label, default_val=bank_amt,
-                                                                 conn=conn, message=self.message, view_children=self))
+        await interaction.response.send_modal(
+            DepositOrWithdraw(
+                title=button.label, default_val=bank_amt, 
+                conn=conn, message=self.message, view_children=self))
 
     @discord.ui.button(label="Deposit", disabled=True)
     async def deposit_money_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -981,8 +987,10 @@ class BalanceView(discord.ui.View):
 
         available_bankspace = min(data[0], available_bankspace)
         
-        await interaction.response.send_modal(DepositOrWithdraw(title=button.label, default_val=available_bankspace,
-                                                                 conn=conn, message=self.message, view_children=self))
+        await interaction.response.send_modal(
+            DepositOrWithdraw(
+                title=button.label, default_val=available_bankspace, 
+                conn=conn, message=self.message, view_children=self))
     
     @discord.ui.button(emoji="<:refreshicon:1205432056369389590>")
     async def refresh_balance(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1483,8 +1491,7 @@ class ImageModal(discord.ui.Modal):
         embed = interaction.message.embeds[0]
         embed.set_image(url=self.image.value)
 
-        await interaction.response.edit_message(
-            content=interaction.message.content, embeds=interaction.message.embeds, view=self.the_view)
+        await interaction.response.edit_message(view=self.the_view)
 
     async def on_error(self, interaction: discord.Interaction, error):
         return await interaction.response.send_message(
@@ -1519,9 +1526,7 @@ class HexModal(discord.ui.Modal):
             (stored_hex_repr, interaction.user.id, self.choice)
         )
         await self.conn.commit()
-
-        await interaction.response.edit_message(
-            content=interaction.message.content, embeds=interaction.message.embeds, view=self.the_view)
+        await interaction.response.edit_message(view=self.the_view)
 
     async def on_error(self, interaction: discord.Interaction, error):
         warning = membed(("The hex colour provided was not valid.\n"
@@ -1618,7 +1623,7 @@ class DropdownLB(discord.ui.Select):
 
         lb = await self.economy.create_leaderboard_preset(chosen_choice=chosen_choice)
 
-        await interaction.response.edit_message(content=None, embed=lb, view=self.view)
+        await interaction.response.edit_message(embed=lb, view=self.view)
 
 
 class Leaderboard(discord.ui.View):
@@ -1656,24 +1661,7 @@ class DispatchServantView(discord.ui.View):
         try:
             await self.message.edit(view=self)
         except discord.NotFound:
-            pass
-
-#TODO WARNING: the code that follows will make you cry;
-#TODO          a safety pig is provided below for your benefit       
-#TODO                          _ 
-#TODO  _._ _..._ .-',     _.._(`)) 
-#TODO '-. `     '  /-._.-'    ',/ 
-#TODO    )         \            '. 
-#TODO   / _    _    |             \ 
-#TODO  |  a    a    /              | 
-#TODO  \   .-.                     ;   
-#TODO   '-('' ).-'       ,'       ; 
-#TODO      '-;           |      .' 
-#TODO         \           \    / 
-#TODO         | 7  .__  _.-\   \ 
-#TODO         | |  |  ``/  /`  / 
-#TODO        /,_|  |   /,_/   / 
-#TODO           /,_/      '`-' 
+            pass 
 
 
 class Servants(discord.ui.Select):
@@ -1923,7 +1911,8 @@ class ServantsManager(discord.ui.View):
                                                         (self.child.owner_id, self.child.choice))
         if current_hunger[0] >= 90:
             return await interaction.response.send_message(
-                content="Your servant is not hungry!", ephemeral=True, delete_after=5.0)
+                embed=membed("Your servant is not hungry!"), 
+                ephemeral=True, delete_after=5.0)
 
         await self.add_exp_handle_interactions(interaction, mode="hunger")
 
@@ -1940,7 +1929,7 @@ class ServantsManager(discord.ui.View):
 
         if current_hygiene[0] >= 90:
             return await interaction.response.send_message(
-                content="You can't wash them just yet, they are looking pretty clean already!", 
+                embed=membed("You can't wash them just yet, they are looking pretty clean already!"), 
                 ephemeral=True, delete_after=3.0)
 
         possible = choice(
@@ -2230,9 +2219,6 @@ class Economy(commands.Cog):
             return True
         return False
 
-    def cog_unload(self):
-        self.batch_update.cancel()
-
     @tasks.loop(hours=1)
     async def batch_update(self):
         async with self.client.pool_connection.acquire() as conn:
@@ -2266,18 +2252,6 @@ class Economy(commands.Cog):
                 return res[0]
             return res
         return None
-
-    @staticmethod
-    async def send_return_interaction_orginal_response(interaction: discord.Interaction):
-        """Pass the interaction to the function, sends a response and returns it, allowing you to make edits.
-
-        This is good for commands that have a lot of background processing or overhead, for commands that
-        cannot neccesarily meet the 3 second limit threshold to respond.
-        """
-
-        await interaction.response.send_message(
-            content="Crunching the latest data just for you, give us a mo'..")
-        return await interaction.original_response()
 
     @staticmethod
     def calculate_exp_for(*, level: int):
@@ -3198,7 +3172,7 @@ class Economy(commands.Cog):
 
             elif isinstance(name_res, list):
 
-                suggestions = [item[0] for item in name_res]  # Extract item names from the list
+                suggestions = [item[0] for item in name_res]
                 return await interaction.response.send_message(
                     content="There is more than one item with that name pattern.\nSelect one of the following options:",
                     embed=membed('\n'.join(suggestions)))
@@ -3788,7 +3762,7 @@ class Economy(commands.Cog):
             slaye.set_footer(text=f"{size + 1}/6 slay slots consumed")
             await self.open_slay(conn, interaction.user, name, gender, datetime_to_string(discord.utils.utcnow()))
             await conn.commit()
-            await interaction.response.send_message(content=None, embed=slaye)
+            await interaction.response.send_message(embed=slaye)
 
     @servant.command(name='abandon', description='Abandon a servant you own')
     @app_commands.describe(servant_name='The name of your servant. Must be exact, case-insensitive.')
@@ -3864,7 +3838,7 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(content=None, embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered)
 
             data = await conn.fetchone(
                 """
@@ -4344,21 +4318,28 @@ class Economy(commands.Cog):
 
                 await interaction.response.send_message(embed=stats, ephemeral=ephemerality)
                 msg = await interaction.original_response()
+                
                 try:
+                    piee = discord.Embed(title="Games played")
+                    piee.colour = 0x2B2D31
+
                     its_sum = total_bets + total_slots + total_blackjacks
                     pie = (ImageCharts()
                            .chd(
                         f"t:{(total_bets / its_sum) * 100},"
-                        f"{(total_slots / its_sum) * 100},{(total_blackjacks / its_sum) * 100}")
+                        f"{(total_slots / its_sum)* 100},{(total_blackjacks / its_sum) * 100}")
                            .chco("EA469E|03A9F4|FFC00C").chl(
                         f"BET ({total_bets})|SLOTS ({total_slots})|BJ ({total_blackjacks})")
                            .chdl("Total bet games|Total slot games|Total blackjack games").chli(f"{its_sum}").chs(
                         "600x480")
                            .cht("pd").chtt(f"{user.name}'s total games played"))
-                    await msg.reply(content=pie.to_url())
+                    piee.set_image(url=pie.to_url())
+                    
+                    await msg.reply(embed=piee)
                 except ZeroDivisionError:
                     await msg.reply(
-                        content=f"Looks like {user.display_name} hasn't got enough data yet to form a pie chart.")
+                        embed=membed(
+                            f"{user.mention} hasn't got enough data yet to form a pie chart."))
 
     @app_commands.command(name='highlow', description='Guess the number. Jackpot wins big!', extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -5195,8 +5176,9 @@ class Economy(commands.Cog):
                                 )
 
                             await self.update_bank_new(other, conn, +fine)
-                            await self.update_bank_multiple_new(
-                                interaction.user, conn, "wallet", -fine, "bounty", 0)
+                            await self.update_bank_new(interaction.user, conn, -fine)
+                            await conn.execute("UPDATE `bank` SET bounty = 0 WHERE userID = ?", (interaction.user.id,))
+                            
                             return await interaction.response.send_message(embed=embed)
                         
                         await self.update_bank_new(interaction.user, conn, -fine)
@@ -5317,19 +5299,15 @@ class Economy(commands.Cog):
         """Play a round of blackjack with the bot. Win by reaching 21 or a score higher than the bot without busting."""
 
         # ------ Check the user is registered or already has an ongoing game ---------
+        
         if len(self.client.games) >= 2:
             return await interaction.response.send_message(
                 embed=membed(
-                    "- The maximum consecutive blackjack games being held has been reached.\n"
-                    "- To prevent server overload, you cannot start a game until the current games "
-                    "being played has been finished.\n"
-                    " - The maximum consecutive blackjack game quota has been set to `2`."
-                )
-            )
-        
+                    "The maximum number of concurrent games has been reached. Try again later."))
+
         if self.client.games.get(interaction.user.id) is not None:
             return await interaction.response.send_message(
-                "You already have an ongoing game taking place.")
+                embed=membed("You already have an ongoing game taking place."))
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
@@ -5455,8 +5433,7 @@ class Economy(commands.Cog):
             embed=initial, view=bj_view)
         bj_view.message = await interaction.original_response()
 
-    @app_commands.command(name="bet",
-                          description="Bet your robux on a dice roll", extras={"exp_gained": 3})
+    @app_commands.command(name="bet", description="Bet your robux on a dice roll", extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 6)
     @app_commands.rename(exponent_amount='robux')
