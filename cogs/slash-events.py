@@ -66,22 +66,21 @@ class SlashExceptionHandler(commands.Cog):
 
         if isinstance(error, CommandAlreadyRegistered):
             content = Embed(
-                description=f"{interaction.user.name}, this command is registered already?\n"
-                            f"This is an issue with the bot, usually resolving itself within a few minutes.",
+                title="Command Already Exists",
+                description=f"{interaction.user.mention}, it appears another command with this name is registered already.\n"
+                            f"Not to worry though, this problem should be resolved within a few minutes.",
                 colour=0x2B2D31)
             content.set_thumbnail(url="https://i.imgur.com/zGtq4Dp.png")
             return await interaction.followup.send(content)
 
         if isinstance(error, CommandInvokeError):
-
             print_exception(type(error), error, error.__traceback__)
-
             await interaction.channel.send(f"{error.__cause__}")
             return await interaction.followup.send("Something fucked up")
-        else:
-            print_exception(type(error), error, error.__traceback__)
-            cause = error.__cause__ or error
-            return await interaction.followup.send(cause)
+        
+        print_exception(type(error), error, error.__traceback__)
+        cause = error.__cause__ or error
+        return await interaction.followup.send(cause)
 
 
 async def setup(client: commands.Bot):
