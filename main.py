@@ -1,21 +1,24 @@
 from __future__ import annotations
+
 from dotenv import load_dotenv
 from datetime import datetime
 from os import listdir, environ
 from sys import version
-from discord.ext import commands
+
 from re import compile
 from random import choice
-from typing import Literal, Any
 from collections import deque
+from typing import Literal, Any, Dict, Optional, TYPE_CHECKING, Union, List
+from logging import INFO as LOGGING_INFO
+
+from asyncio import run
+from aiohttp import ClientSession
+from asqlite import create_pool
+
 from discord.utils import setup_logging, format_dt
 from discord import app_commands, Object, ui, Intents, Status, Embed, Interaction, CustomActivity
 from discord import AppCommandType, SelectOption, Colour, Webhook, NotFound
-from asyncio import run
-from typing import Dict, Optional, TYPE_CHECKING, Union, List
-from aiohttp import ClientSession
-from asqlite import create_pool
-from logging import INFO as LOGGING_INFO
+from discord.ext import commands
 
 
 if TYPE_CHECKING:
@@ -154,15 +157,15 @@ class C2C(commands.Bot):
     async def setup_hook(self):
         print("we're in.")
 
-        self.pool_connection = await create_pool('C:\\Users\\georg\\Documents\\c2c\\db-shit\\economy.db')
+        self.pool_connection = await create_pool(
+            'C:\\Users\\georg\\Documents\\c2c\\db-shit\\economy.db')
         self.time_launch = datetime.now()
-
         self.session = ClientSession()
 
 
 intents = Intents.none()
 intents.members = True
-intents.messages = True
+intents.guild_messages = True
 intents.message_content = True
 intents.emojis_and_stickers = True
 intents.guild_reactions = True
@@ -176,6 +179,12 @@ client = C2C(
     activity=CustomActivity(name='Serving cc • /help'), status=Status.idle, 
     tree_cls=MyCommandTree, max_messages=100, max_ratelimit_timeout=30.0)
 print(version)
+
+
+cogs = Literal[
+    "admin", "ctx_events", "economy", 
+    "miscellaneous", "moderation", "music", 
+    "slash_events", "tempvoice"]
 
 
 @client.check
@@ -496,6 +505,20 @@ async def convert_time(ctx, time: TimeConverter):
     await ctx.send(f"Converted time: {time} seconds")
 
 
+@client.command(name="test")
+async def testit(ctx):
+    embed = Embed()
+    embed.title = "Your balance"
+    embed.add_field(name="Field 1", value="240,254,794")
+    embed.add_field(name="Field 2", value="693,201,329")
+    embed.add_field(name="\U0000200b", value="\U0000200b")
+    embed.add_field(name="Field 3", value="1,000,000,000")
+    embed.add_field(name="Field 4", value="1,000,000,000")
+    embed.add_field(name="\U0000200b", value="\U0000200b")
+    embed.set_footer(text="This embed is used within DMO!")
+    await ctx.send(embed=embed)
+
+
 @client.command(name='dispatch-webhook', aliases=("dw",))
 async def dispatch_the_webhook_when(ctx: commands.Context):
     await ctx.message.delete()
@@ -503,33 +526,72 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
         colour=Colour.from_rgb(3, 102, 214),
         title='Changes for 2024 Q1',
         description="Changes that have taken place in the period between January 1 - March 31 are noted here.\n\n"
-                    "- **Linked Roles**: Integrate your GitHub account to Discord and claim your linked role "
-                    "in the 'Linked Roles' tab.\n"
-                    " - Once claimed, you receive <@&1190772742409158667> and a badge next "
-                    "to your name in most channels.\n"
-                    "- **Activity Roles**: earn roles by participating regularly in channels.\n"
-                    " - <@&1190772029830471781> - earnt by sending 50 messages per week.\n"
-                    " - <@&1190772182591209492> - earnt by sending 150 messages per week.\n"
-                    "- **New Bots added**: <@491769129318088714> and <@770100332998295572>\n"
-                    "- **Event Highlights**: A recurring event for New Years Day was added.\n"
-                    " - Every year this event is created on the 1st Jan.\n"
-                    "- **Slash Command Changes:** You now only see slash commands that are relevant to you.\n"
-                    " - Server management related slash commands were removed completley for server members.\n"
-                    " - More are regularly being detected and removed from the list.\n"
-                    "- **XP Changes**: It recently became possible to earn XP in bot command channels\n"
-                    " - Link to announcement: https://discord.com/channels/829053898333225010/"
-                    "1121094935802822768/1166397053329477642.\n"
-                    "- **Channel Overhaul**: For a more simplistic look, <#1121445944576188517> and "
-                    "<#902138223571116052> were modified.")
-
+                    "- Some bots were remove")
     embed.set_footer(icon_url=ctx.guild.icon.url, text="That's all for Q1 2024. Next review due: 30 June 2024.")
-
+    
     webhook = Webhook.from_url(url=client.WEBHOOK_URL, session=client.session)
     thread = await ctx.guild.fetch_channel(1190736866308276394)
-    rtype = "feature" or "bugfix"
-    await webhook.send(f'Patch notes for Q1 2024 / This is mostly a `{rtype}` release', embed=embed,
-                       thread=Object(id=thread.id), silent=True)
-    await ctx.send(f"Done. The webhook was sent to '{thread.name}' with ID {thread.id}.")
+    rtype = "feature" # or "bugfix"
+    
+    await webhook.send(
+        f'Patch notes for Q1 2024 / This is mostly a `{rtype}` release', 
+        embed=embed, thread=Object(id=thread.id), silent=True)
+    
+    await ctx.send(f"Sent to '{thread.mention}' with ID {thread.id}.")
+
+
+@commands.is_owner()
+@client.command(name='reload', aliases=("rl",))
+async def reload_cog(ctx: commands.Context, cog_name: cogs):
+
+    try:
+        client.reload_extension(f"cogs.{cog_name}")
+    except commands.ExtensionNotLoaded:
+        return await ctx.send("That extension has not been loaded in yet.")
+    except commands.ExtensionNotFound:
+        return await ctx.send("Could not find an extension with that name.")
+    except commands.NoEntryPointError:
+        return await ctx.send("The extension does not have a setup function.")
+    
+    except commands.ExtensionFailed as e:
+        print(e)
+        return await ctx.send("The extension failed to load. See the console for traceback.")
+    
+    await ctx.message.add_reaction("\U00002705")
+
+
+@commands.is_owner()
+@client.command(name='unload', aliases=("ul",))
+async def unload_cog(ctx: commands.Context, cog_name: cogs):
+
+    try:
+        client.unload_extension(f"cogs.{cog_name}")
+    except commands.ExtensionNotLoaded:
+        return await ctx.send("That extension has not been loaded in yet.")
+    except commands.ExtensionNotFound:
+        return await ctx.send("Could not find an extension with that name.")
+    
+    await ctx.message.add_reaction("\U00002705")
+
+
+@commands.is_owner()
+@client.command(name='load', aliases=("ld",))
+async def load_cog(ctx: commands.Context, cog_name: cogs):
+        
+    try:
+        client.load_extension(f"cogs.{cog_name}")
+    except commands.ExtensionAlreadyLoaded:
+        return await ctx.send("That extension is already loaded.")
+    except commands.ExtensionNotFound:
+        return await ctx.send("Could not find an extension with that name.")
+    except commands.NoEntryPointError:
+        return await ctx.send("The extension does not have a setup function.")
+    
+    except commands.ExtensionFailed as e:
+        print(e)
+        return await ctx.send("The extension failed to load. See the console for traceback.")
+
+    await ctx.message.add_reaction("\U00002705")
 
 
 @client.tree.command(name='help', description='The help command for c2c. Shows help for different categories.',
