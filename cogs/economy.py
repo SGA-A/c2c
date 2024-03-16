@@ -299,7 +299,7 @@ def owners_nolimit(interaction: discord.Interaction) -> Optional[app_commands.Co
 
 
 def determine_exponent(rinput: str) -> str | int:
-    """Finds out what the exponential value entered is equivalent to in numerical form.
+    """Finds out what the exponential value entered is equivalent to in numerical form. (e.g, 1e6)
 
     Can handle normal integers and "max"/"all" is always returned 'as-is', not converted to numerical form."""
 
@@ -315,7 +315,7 @@ def determine_exponent(rinput: str) -> str | int:
     if is_exponential(rinput):
         before_e_str, after_e_str = map(str, rinput.split('e'))
         before_e = float(before_e_str)
-        ten_exponent = int(after_e_str)
+        ten_exponent = min(int(after_e_str), 30)
         actual_value = before_e * (10 ** ten_exponent)
     else:
         try:
@@ -505,13 +505,7 @@ class DepositOrWithdraw(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         val = determine_exponent(self.amount.value.replace(",", ""))
-        
-        try:
-            val = int(val)
-        except ValueError:
-            return await interaction.response.send_message(
-                embed=membed(f"You need to provide a real amount to {self.title.lower()}."),
-                delete_after=3.0, ephemeral=True)
+        val = int(val)
 
         if not val:
             return await interaction.response.send_message(
@@ -549,11 +543,11 @@ class DepositOrWithdraw(discord.ui.Modal):
         
         if val > self.their_default:
             return await interaction.response.send_message(
-                embed=membed(f"Either one (or both) of the following is true:\n" 
-                             f"1. You only have \U000023e3 **{self.their_default:,}**, "
-                             f"so you cannot deposit \U000023e3 **{val:,}**\n"
-                             "2. You don't have enough bankspace to deposit that amount."),
-                ephemeral=True)
+                embed=membed(
+                    "Either one (or both) of the following is true:\n" 
+                    "1. You only have don't have that much money in your wallet.\n"
+                    "2. You don't have enough bankspace to deposit that amount."),
+                ephemeral=True, delete_after=10.0)
 
         updated = await self.conn.execute(
             "UPDATE bank SET bank = bank + ?, wallet = wallet + ? WHERE userID = ? "
@@ -570,6 +564,15 @@ class DepositOrWithdraw(discord.ui.Modal):
 
         self.checks(updated[1], updated[0], updated[2]-updated[1])
         await interaction.response.edit_message(embed=embed, view=self.view_children)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+
+        if isinstance(error, ValueError):
+            return await interaction.response.send_message(
+                embed=membed(f"You need to provide a real amount to {self.title.lower()}."),
+                delete_after=3.0, ephemeral=True)
+        
+        await interaction.response.send_message(embed=membed("Something went wrong."), ephemeral=True)
 
 
 class ConfirmResetData(discord.ui.View):
@@ -5323,7 +5326,7 @@ class Economy(commands.Cog):
                     " - The maximum consecutive blackjack game quota has been set to `2`."
                 )
             )
-
+        
         if self.client.games.get(interaction.user.id) is not None:
             return await interaction.response.send_message(
                 "You already have an ongoing game taking place.")
