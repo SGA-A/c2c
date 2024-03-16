@@ -456,37 +456,6 @@ def modify_profile(typemod: Literal["update", "create", "delete"], key: str, new
                 return "invalid type of modification value entered"
 
 
-def get_stock(item: str) -> int:
-    """Find out how much of an item is available."""
-    with open_shelve("C:\\Users\\georg\\Documents\\c2c\\db-shit\\stock") as dbm:
-        a = dbm.get(f"{item}")
-        if not a:
-            a = 5
-            modify_stock(item, "+", a)
-        return int(a)
-
-
-def modify_stock(item: str, modify_type: Literal["+", "-"], amount: int) -> int:
-    """Directly modify the amount of stocks available for an item, returns the new amount that is available."""
-    with open_shelve("C:\\Users\\georg\\Documents\\c2c\\db-shit\\stock") as dbm:
-        match modify_type:
-            case "+":
-                a = dbm.get(f"{item}")
-                if a is None:
-                    a = 0
-                new_count = int(a) + amount
-                dbm.update({f'{item}': new_count})
-                dbm.close()
-                return new_count
-            case "-":
-                a = dbm.get(f"{item}")
-                if a is None:
-                    a = 0
-                new_count = int(a) - amount
-                dbm.update({f'{item}': new_count})
-                return new_count
-
-
 class DepositOrWithdraw(discord.ui.Modal):
     def __init__(self, *, title: str = ..., default_val: int, conn: asqlite_Connection, 
                  message: discord.InteractionMessage, view_children) -> None:
