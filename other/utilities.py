@@ -1,9 +1,10 @@
 from random import choices
-import re
+from re import compile
+
 from datetime import datetime, timedelta
 from pytz import timezone
 
-def labour_productivity_via(*, investment):
+def labour_productivity_via(*, investment: int) -> float:
     """Find a suitable productivity level of a slave based on the investment"""
     # Set your desired ranges
     lower_limit = 1000
@@ -15,14 +16,15 @@ def labour_productivity_via(*, investment):
     # Ensure the result is within the 1 to 10 range
     ranan = max(1, min(10, scaled_productivity))
     choicess = [0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1]
-    multi = choices(choicess,
-                           weights=[25, 20, 15, 14, 12, 5, 9])
+    multi = choices(choicess, weights=[25, 20, 15, 14, 12, 5, 9])
     return round(ranan+multi[0], 2)
 
 
-def parse_duration(input_duration):
+# ! Existing function that may be used sometime in the future
+def parse_duration(input_duration: str) -> datetime:
+    
     # Define regular expression pattern to extract days and hours
-    pattern = re.compile(r'(?:(\d+)d)? ?(?:(\d+)h)?')
+    pattern = compile(r'(?:(\d+)d)? ?(?:(\d+)h)?')
 
     # Extract days and hours from the input duration using the pattern
     match = pattern.match(input_duration)
@@ -47,7 +49,7 @@ def parse_duration(input_duration):
 
     # Calculate the datetime after the specified duration
     res_date = current_datetime + duration
-
+    
     return res_date
 
 
@@ -73,4 +75,3 @@ def string_to_datetime(string_obj: str) -> datetime:
     my_datetime = datetime.strptime(string_obj, date_format)
     my_datetime = my_datetime.replace(tzinfo=timezone("UTC"))
     return my_datetime
-    
