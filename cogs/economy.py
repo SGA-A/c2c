@@ -2798,8 +2798,10 @@ class Economy(commands.Cog):
     # -----------------------------------------
 
     @commands.Cog.listener()
-    async def on_app_command_completion(self, interaction: discord.Interaction,
-                                        command: Union[app_commands.Command, app_commands.ContextMenu]):
+    async def on_app_command_completion(
+        self, interaction: discord.Interaction, 
+        command: Union[app_commands.Command, app_commands.ContextMenu]):
+        
         """
         Increment the total command ran by a user by 1 for each call. Increase the interaction user's invoker if
         they are registered. Also provide a tip if the total commands ran counter is a multiple of 15.
@@ -2813,9 +2815,11 @@ class Economy(commands.Cog):
 
             async with connection.transaction():
                 total = await connection.execute(
-                    f"""
-                    UPDATE `{BANK_TABLE_NAME}` SET `cmds_ran` = `cmds_ran` + 1 
-                    WHERE userID = ? RETURNING cmds_ran
+                    """
+                    UPDATE `bank` 
+                    SET `cmds_ran` = `cmds_ran` + 1 
+                    WHERE userID = ? 
+                    RETURNING cmds_ran
                     """,
                     (interaction.user.id,))
                 total = await total.fetchone()
@@ -2827,15 +2831,11 @@ class Economy(commands.Cog):
                         shuffle(contents)
                         atip = choice(contents)
 
-                    tip = discord.Embed(
-                        description=f"\U0001f4a1 `TIP`: {atip}"
-                    )
+                    tip = discord.Embed()
+                    tip.description = f"\U0001f4a1 `TIP`: {atip}"
                     tip.set_footer(text="You will be able to disable these tips.")
                     
-                    return await interaction.followup.send(
-                        embed=tip,
-                        ephemeral=True
-                    )
+                    return await interaction.followup.send(embed=tip, ephemeral=True)
 
                 exp_gainable = command.extras.get("exp_gained")
                 
@@ -2847,42 +2847,48 @@ class Economy(commands.Cog):
                     'ON CONFLICT (userID) DO UPDATE SET exp = exp + ? RETURNING exp, level',
                     (interaction.user.id, exp_gainable))
 
-                if record:
-                    xp, level = record
-                    exp_needed = self.calculate_exp_for(level=level)
-
-                    if xp >= exp_needed:
-                        await connection.execute(
-                            """UPDATE `bank` SET level = level + 1, exp = 0, 
-                            bankspace = bankspace + ? WHERE userID = ?""",
-                            (randint(300_000, 20_000_000), interaction.user.id))
-
-                        user = interaction.user.name
-                        congos = choice(
-                            (f"Great work, {user}!",
-                             f"Hard work paid off, {user}!",
-                             f"Inspiring, {user}!",
-                             f"Top notch, {user}!",
-                             f"You're on fire, {user}!",
-                             f"You're on a roll, {user}!",
-                             f"Keep it up, {user}!",
-                             f"Amazing, {user}!",
-                             f"I'm proud of you, {user}!",
-                             f"Fantastic work, {user}!",
-                             f"Superb effort, {user}!",
-                             f"Brilliant job, {user}!",
-                             f"Outstanding work, {user}!",
-                             f"You're doing great, {user}!"))
-                        
-                        embed = discord.Embed(
-                            title="Level Up!",
-                            description=f"{congos}\n"
-                                        f"You've leveled up from level **{level:,}** to level **{level+1:,}**.",
-                            colour=0x55BEFF
-                        )
-
-                        await interaction.followup.send(embed=embed)
+                if not record:
                     return
+                
+                xp, level = record
+                exp_needed = self.calculate_exp_for(level=level)
+                
+                if xp < exp_needed:
+                    return
+                
+                await connection.execute(
+                    """
+                    UPDATE `bank` 
+                    SET level = level + 1, exp = 0, bankspace = bankspace + ? 
+                    WHERE userID = ?
+                    """,
+                    (randint(300_000, 20_000_000), interaction.user.id))
+
+                user = interaction.user.name
+                congos = choice((
+                    "Great work", 
+                    "Hard work paid off",
+                    "Inspiring",
+                    "Top notch",
+                    "You're on fire",
+                    "You're on a roll",
+                    "Keep it up",
+                    "Amazing",
+                    "I'm proud of you",
+                    "Fantastic work",
+                    "Superb effort",
+                    "Brilliant job",
+                    "Outstanding",
+                    "You're doing great"))
+                
+                rankup = discord.Embed()
+                rankup.title = "Level Up!"
+                rankup.colour = 0x55BEFF
+                rankup.description = (
+                    f"{congos}, {user}!\n"
+                    f"You've leveled up from level **{level:,}** to level **{level+1:,}**.")
+                
+                await interaction.followup.send(embed=rankup)
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
