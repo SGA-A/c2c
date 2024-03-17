@@ -884,8 +884,6 @@ class BalanceView(discord.ui.View):
         self.viewing = viewing
         super().__init__(timeout=120.0)
         
-        print(self.their_bank, self.their_wallet, self.their_bankspace, sep=" | ")
-
         self.checks(self.their_bank, self.their_wallet, self.their_bankspace-self.their_bank)
 
     def checks(self, new_bank, new_wallet, any_new_bankspace_left):
