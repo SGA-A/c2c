@@ -79,21 +79,8 @@ class TempVoice(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client: commands.Bot = client
 
-    @commands.Cog.listener()
-    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-        if before.channel == after.channel:
-            return
-        
-        async with self.client.pool_connection.acquire() as conn:
-            voice_data = await conn.fetchone(
-                "SELECT ownerID FROM guildVoiceSettings WHERE name = $0", before.channel.name)
-
-            if voice_data is None:
-                await before.channel.delete(reason="Empty voice channel")
-                await conn.execute(
-                    "DELETE FROM userVoiceSettings WHERE ownerID = ?", member.id)
-                await conn.commit()
-        
+    def add_user_to_db(self, member: discord.Member):
+        pass  # not sure how to do this yet
     
     voice = app_commands.Group(
         name="voice", 
@@ -123,19 +110,13 @@ class TempVoice(commands.Cog):
         
         embed = discord.Embed()
         async with self.client.pool_connection.acquire() as conn:
-            guild_data = await conn.fetchone(
-                "SELECT EXISTS (SELECT 1 FROM guildVoiceSettings WHERE guildID = ?)", (interaction.guild.id,))
-            
-            async with conn.transaction():
-                if not guild_data:
-                    embed.title = "Setup Complete"
-                    await conn.execute(
-                        "INSERT INTO guildVoiceSettings (guildID, voiceID) VALUES (?, ?)", (interaction.guild.id, creator_channel.id))
-                else:
-                    embed.title = "Setup Updated"
-                    await conn.execute(
-                        "UPDATE guildVoiceSettings SET voiceID = ? WHERE guildID = ?", (creator_channel.id, interaction.guild.id))
-        
+            await conn.execute(
+                """
+                INSERT INTO guildVoiceSettings (guildID, voiceID) VALUES ($0, $1) 
+                ON CONFLICT (guildID) DO UPDATE SET voiceID = $1""", 
+                interaction.guild.id, creator_channel.id)
+            await conn.commit()
+
         embed.description = f"Set the creator channel to {creator_channel.mention}."
         embed.colour = discord.Colour.blurple()
 
