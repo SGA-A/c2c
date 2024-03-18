@@ -2193,11 +2193,6 @@ class ItemQuantityModal(discord.ui.Modal):
 
         if not data:
             return current_price
-        
-        if active_sessions.get(interaction.user.id):
-            return await interaction.response.send_message(
-                embed=membed(WARN_FOR_CONCURRENCY))
-        active_sessions.update({interaction.user.id: 1})
 
         discounted_price = floor((95/100) * current_price)
         qty = data[0]
@@ -2358,6 +2353,12 @@ class ShopItem(discord.ui.Button):
         super().__init__(style=discord.ButtonStyle.blurple, emoji=self.ie, label=item_name, **kwargs)
 
     async def callback(self, interaction: discord.Interaction):
+
+        if active_sessions.get(interaction.user.id):
+            return await interaction.response.send_message(
+                embed=membed(WARN_FOR_CONCURRENCY))
+        active_sessions.update({interaction.user.id: 1})
+
         await interaction.response.send_modal(
             ItemQuantityModal(interaction.client, self.item_name, self.cost, self.ie))
 
