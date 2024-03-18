@@ -19,10 +19,11 @@ class ContextCommandHandler(commands.Cog):
     async def on_command_error(self, ctx: commands.Context, err: Exception):
         """The function that handles all the errors passed into the bot via text-based commands."""
         contact_view = MessageDevelopers(self.client)
+        
         if isinstance(err, errors.UserInputError):
 
             if isinstance(err, errors.MissingRequiredArgument):
-                await ctx.reply(
+                return await ctx.reply(
                     embed=membed("Some required arguments are missing."),
                     view=contact_view)
 
@@ -41,25 +42,29 @@ class ContextCommandHandler(commands.Cog):
             elif isinstance(err, errors.MissingPermissions):
                 errorc = membed("You're missing some permissions required to use this command.")
                 await ctx.reply(
-                    embed=errorc, view=contact_view, mention_author=False)
+                    embed=errorc, 
+                    view=contact_view, 
+                    mention_author=False)
 
             elif isinstance(err, errors.MissingRole):
 
                 embed = membed(f"You're missing a required role: <@&{err.missing_role}>")
                 await ctx.reply(
-                    embed=embed, mention_author=False, view=contact_view)
+                    embed=embed, 
+                    mention_author=False, 
+                    view=contact_view)
 
         elif isinstance(err, errors.CommandOnCooldown):
             after_cd = format_dt(utcnow() + timedelta(seconds=err.retry_after), style="R")
 
             await ctx.reply(
-                embed=membed(f"You're on cooldown. Try again {after_cd}"),
+                embed=membed(f"You're on a cooldown. Try again {after_cd}."),
                 mention_author=False,
                 view=contact_view)
 
         elif isinstance(err, errors.CommandNotFound):
             await ctx.reply(
-                "Could not find what you were looking for.",
+                embed=membed("Could not find what you were looking for."),
                 mention_author=False,
                 view=contact_view)
 
