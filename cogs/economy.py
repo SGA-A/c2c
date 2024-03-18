@@ -19,7 +19,7 @@ import datetime
 import aiofiles
 
 from other.utilities import datetime_to_string, string_to_datetime, labour_productivity_via
-from other.pagination import Pagination
+from other.pagination import Pagination, PaginationItem
 
 
 def membed(custom_description: str) -> discord.Embed:
@@ -642,9 +642,9 @@ class Confirm(discord.ui.View):
 
     @discord.ui.button(label='Confirm', style=discord.ButtonStyle.green)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        del active_sessions[interaction.user.id]
         self.children[0].style = discord.ButtonStyle.grey
         button.style = discord.ButtonStyle.success
-        del active_sessions[interaction.user.id]
 
         for item in self.children:
             item.disabled = True
@@ -2160,6 +2160,208 @@ class ShowcaseView(discord.ui.View):
         await self.start_updating_order(interaction.user, interaction)
 
 
+class ItemQuantityModal(discord.ui.Modal):
+    def __init__(self, client: commands.Bot, item_name: str, item_cost: int, ie: str):
+        self.client = client
+        self.item_cost = item_cost
+        self.item_name = item_name
+        self.ie = ie
+        self.activated_coupon = False
+
+        super().__init__(timeout=60.0, title=f"Purchase {item_name}")
+    
+    quantity = discord.ui.TextInput(
+        label="Quantity",
+        placeholder="A positive integer.",
+        default="1",
+        min_length=1,
+        max_length=5
+    )
+
+    async def calculate_discounted_price_if_any(
+            self, user: discord.Member, 
+            conn: asqlite_Connection, interaction: discord.Interaction, current_price: int) -> int:
+        """Check if the user is eligible for a discount on the item."""
+
+        data = await conn.fetchone(
+            """
+            SELECT inventory.qty
+            FROM shop
+            INNER JOIN inventory ON shop.itemID = inventory.itemID
+            WHERE shop.itemID = ? AND inventory.userID = ?
+            """, (12, user.id))
+
+        if not data:
+            return current_price
+        
+        if active_sessions.get(interaction.user.id):
+            return await interaction.response.send_message(
+                embed=membed(WARN_FOR_CONCURRENCY))
+        active_sessions.update({interaction.user.id: 1})
+
+        discounted_price = floor((95/100) * current_price)
+        qty = data[0]
+        view = Confirm(interaction)
+        
+        confirm = discord.Embed()
+        confirm.title = "Pending Confirmation"
+        confirm.colour = 0x2B2D31
+        confirm.description = (
+            f"Would you like to use your <:coupon:1210894601829879818> **Shop Coupon** for an additional **5**% off?\n"
+            f"(You have **{qty:,}** coupons in total)\n\n"
+            f"This will bring your total for this purchase to \U000023e3 **{discounted_price:,}** if you decide to use the coupon.")
+
+        await interaction.response.send_message(embed=confirm, view=view)
+        msg = await interaction.original_response()
+        
+        await view.wait()
+        embed = msg.embeds[0]
+        
+        if view.value is None:
+            for item in view.children:
+                item.disabled = True
+
+            del active_sessions[interaction.user.id]
+            embed.title = "Timed Out"
+            embed.description = f"~~{embed.description}~~"
+            embed.colour = discord.Colour.brand_red()
+            await msg.edit(embed=embed, view=view)
+            return view.value
+
+        if view.value:
+            self.activated_coupon = True
+
+            embed.title = "Action Confirmed"
+            embed.colour = discord.Colour.brand_green()
+            await msg.edit(embed=embed, view=view)
+            return discounted_price
+        
+        embed.title = "Action Cancelled"
+        embed.colour = discord.Colour.brand_red()
+        await msg.edit(embed=embed, view=view)
+        return current_price
+    
+    # --------------------------------------------------------------------------------------------
+    
+    async def confirm_purchase(
+            self, interaction: discord.Interaction, 
+            new_price: int, true_qty: int, conn: asqlite_Connection, current_balance: int) -> None:
+        
+        if active_sessions.get(interaction.user.id):
+            return await interaction.response.send_message(
+                embed=membed(WARN_FOR_CONCURRENCY))
+        active_sessions.update({interaction.user.id: 1})
+
+        view = Confirm(interaction)
+        confirm = discord.Embed()
+        confirm.title = "Pending Confirmation"
+        confirm.colour = 0x2B2D31
+        confirm.description = f"Are you sure you want to buy **{true_qty:,}x {self.ie} {self.item_name}** for **\U000023e3 {new_price:,}**?"
+        
+        msg = await interaction.followup.send(embed=confirm, view=view)
+
+        await view.wait()
+
+        if view.value is None:
+
+            for item in view.children:
+                item.disabled = True
+
+            del active_sessions[interaction.user.id]
+            confirm.title = "Timed Out"
+            confirm.description = f"~~{confirm.description}~~"
+            confirm.colour = discord.Colour.brand_red()
+            await msg.edit(embed=confirm, view=view)                    
+        
+        if view.value:
+            await Economy.update_inv_new(interaction.user, true_qty, self.item_name, conn)
+            new_am = await Economy.change_bank_new(interaction.user, conn, current_balance-new_price)
+            await conn.commit()
+
+            confirm.title = "Action Confirmed"
+            confirm.colour = discord.Colour.brand_green()
+            await msg.edit(embed=confirm, view=view)
+
+            confirm = discord.Embed(
+                title="Successful Purchase",
+                description=(
+                    f"> You have \U000023e3 {new_am[0]:,} left.\n\n"
+                    "**You bought:**\n"
+                    f"- {true_qty:,}x {self.ie} {self.item_name}\n\n"
+                    "**You paid:**\n"
+                    f"- \U000023e3 {new_price:,}"),
+                colour=0xFFFFFF)
+            confirm.set_footer(text="Thanks for your business.")
+
+            if self.activated_coupon:
+                await conn.execute(
+                    "UPDATE inventory SET qty = qty - 1 WHERE userID = $0 AND itemID = 12", interaction.user.id)
+                confirm.description += "\n\n**Additional info:**\n- <:coupon:1210894601829879818> 5% Coupon Discount was applied"
+            return await interaction.channel.send(embed=confirm)
+
+        confirm.title = "Action Cancelled"
+        confirm.colour = discord.Colour.brand_red()
+        await msg.edit(embed=confirm, view=view)
+    
+    # --------------------------------------------------------------------------------------------
+
+    async def on_submit(self, interaction: discord.Interaction):
+        true_quantity = determine_exponent(self.quantity.value)
+    
+        async with self.client.pool_connection.acquire() as conn:
+            conn: asqlite_Connection
+
+            if isinstance(true_quantity, str):
+                return await interaction.response.send_message(
+                    embed=membed("You need to provide a real amount."), ephemeral=True)
+            
+            true_quantity = abs(true_quantity)
+
+            if not true_quantity:
+                return await interaction.response.send_message(
+                    embed=membed("You need to provide a positive amount"), ephemeral=True)
+
+            current_price = self.item_cost * true_quantity
+            current_balance = await Economy.get_wallet_data_only(interaction.user, conn)
+
+            new_price = await self.calculate_discounted_price_if_any(
+                interaction.user, conn, interaction, current_price)
+            
+            if new_price is None:
+                return await interaction.channel.send(
+                    embed=membed(
+                        "You didn't respond in time so your purchase was cancelled."))
+            
+            if not interaction.response.is_done():
+                await interaction.response.defer(thinking=True)
+
+            if new_price > current_balance:
+                return await interaction.followup.send(
+                    embed=membed(
+                        f"You don't have enough money to buy **{true_quantity:,}x {self.ie} {self.item_name}**."))
+
+            await self.confirm_purchase(
+                interaction, new_price, true_quantity, conn, current_balance)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        print_exception(type(error), error, error.__traceback__)
+        if interaction.response.is_done():
+            await interaction.response.defer(thinking=True)
+        await interaction.followup.send(content="Something went wrong")
+
+
+class ShopItem(discord.ui.Button):
+    def __init__(self, item_name: str, cost: int, ie: str,**kwargs):
+        self.item_name = item_name
+        self.cost = cost
+        self.ie = ie
+        super().__init__(style=discord.ButtonStyle.blurple, emoji=self.ie, label=item_name, **kwargs)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.send_modal(
+            ItemQuantityModal(interaction.client, self.item_name, self.cost, self.ie))
+
+
 class Economy(commands.Cog):
 
     def __init__(self, client: commands.Bot):
@@ -3253,161 +3455,55 @@ class Economy(commands.Cog):
         guild_only=True, guild_ids=APP_GUILDS_ID)
 
     @shop.command(name='view', description='View all the shop items')
-    @app_commands.describe(sort_by='The custom order to sort by. Defaults to Name.')
     @app_commands.checks.cooldown(1, 12)
-    async def view_the_shop(self, interaction: discord.Interaction, 
-                            sort_by: Optional[Literal["Name", "Cost", "Rarity"]] = "Name"):
+    async def view_the_shop(self, interaction: discord.Interaction):
         """This is a subcommand. View the currently available items within the shop."""
 
+        paginator = PaginationItem(interaction)
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
-                
-            sort_by = sort_by.lower()
-            shop_sorted = await conn.fetchall("""
-                                              SELECT itemName, emoji, cost
-                                              FROM shop 
-                                              WHERE available = 1 
-                                              GROUP BY itemName
-                                              ORDER BY $0 DESC
-                                              """, sort_by)
+            
+            shop_sorted = await conn.fetchall(
+                """
+                SELECT itemName, emoji, cost
+                FROM shop 
+                WHERE available = 1 
+                GROUP BY itemName
+                ORDER BY cost
+                """)
+            wallet = await self.get_wallet_data_only(interaction.user, conn)
+
+            additional_notes = []
 
             additional_notes = [
-                f"{item[1]} {item[0]} \U00002500 [\U000023e3 **{item[2]:,}**]"
-                f"(https://youtu.be/dQw4w9WgXcQ)"
-                for item in shop_sorted
+                (f"{item[1]} {item[0]} \U00002500 [\U000023e3 **{item[2]:,}**]"
+                f"(https://youtu.be/dQw4w9WgXcQ)", ShopItem(item[0], item[2], item[1], row=i % 2)) for i, item in enumerate(shop_sorted)
             ]
 
             async def get_page_part(page: int):
                 emb = discord.Embed(
                     title="Shop",
                     color=0x2B2D31,
-                    description=""
+                    description=f"> You have \U000023e3 **{wallet:,}**.\n\n"
                 )
 
-                length = 10
+                length = 6
                 offset = (page - 1) * length
 
+                for item in paginator.children:
+                    if item.style == discord.ButtonStyle.blurple:
+                        paginator.remove_item(item)
+
                 for item_mod in additional_notes[offset:offset + length]:
-                    emb.description += f"{item_mod}\n"
+                    emb.description += f"{item_mod[0]}\n"
+                    paginator.add_item(item_mod[1])
                 n = Pagination.compute_total_pages(len(additional_notes), length)
                 return emb, n
-
-        await Pagination(interaction, get_page_part).navigate()
-
-    @shop.command(name='buy', description='Make a purchase from the shop', extras={"exp_gained": 4})
-    @app_commands.describe(item_name='The name of the item you want to buy.',
-                           quantity='The amount of this item to buy. Defaults to 1.')
-    async def buy(self, interaction: discord.Interaction, item_name: str, quantity: Optional[int] = 1):
-        """Buy an item directly from the shop."""
-
-        quantity = abs(quantity)
-
-        async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
-
-            name_res = await self.partial_match_for(item_name, conn)
-
-            if name_res is None:
-                return await interaction.response.send_message(
-                    embed=membed("This item does not exist. Are you trying"
-                                 " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
-                                 "1121094935802822768/1202647997641523241) an item?"))
-
-            elif isinstance(name_res, list):
-
-                suggestions = [item[0] for item in name_res]
-                return await interaction.response.send_message(
-                    content="There is more than one item with that name pattern.\nSelect one of the following options:",
-                    embed=membed('\n'.join(suggestions)))
-            else:
-                name_res = name_res[0]
-                data = await conn.fetchone("""
-                    SELECT emoji, cost, available, maximum
-                    FROM shop
-                    WHERE itemName = $0 
-                """, name_res)
-
-                ie, cost, available, maximum_am = data
-
-                wallet_amt = await conn.fetchone(
-                    f"SELECT wallet FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (interaction.user.id,))
-                
-                if wallet_amt is None:
-                    return await interaction.response.send_message(embed=self.not_registered)
-                
-                total_cost = cost * quantity
-                new_bal = wallet_amt[0] - total_cost
-
-                if not available:
-                    return await interaction.response.send_message(
-                        "You cannot purchase this item, it's not for sale.")
-
-                if new_bal < 0:
-                    return await interaction.response.send_message(
-                        f"You're short on cash by \U000023e3 **{abs(new_bal):,}** to "
-                        f"buy {ie} **{quantity:,}x** {name_res}, so uh no.")
-                
-                if maximum_am:
-                    their_am = await self.get_one_inv_data_new(interaction.user, name_res, conn)
-                    if their_am > maximum_am:
-                        return await interaction.response.send_message(
-                            f"You can't own more than **{maximum_am}x {ie} {name_res}** for now.")
-                
-                if active_sessions.get(interaction.user.id):
-                    return await interaction.response.send_message(
-                        embed=membed(WARN_FOR_CONCURRENCY))
-                active_sessions.update({interaction.user.id: 1})
-
-                view = Confirm(interaction)
-                confirm = discord.Embed()
-                confirm.title = "Pending Confirmation"
-                confirm.colour = 0x2B2D31
-                confirm.description = f"Are you sure you want to buy **{quantity:,}x {ie} {name_res}** for **\U000023e3 {total_cost:,}**?"
-
-                await interaction.response.send_message(embed=confirm, view=view)
-                msg = await interaction.original_response()
-
-                await view.wait()
-
-                embed = msg.embeds[0]
-                if view.value is None:
-                    
-                    for item in view.children:
-                        item.disabled = True
-
-                    del active_sessions[interaction.user.id]
-                    embed.title = "Timed Out"
-                    embed.description = f"~~{embed.description}~~"
-                    embed.colour = discord.Colour.brand_red()
-                    return await msg.edit(embed=embed, view=view)                    
-                if view.value:
-                    await self.update_inv_new(interaction.user, quantity, name_res, conn)
-                    new_am = await self.change_bank_new(interaction.user, conn, new_bal)
-                    await conn.commit()
-
-                    embed.title = "Action Confirmed"
-                    embed.colour = discord.Colour.brand_green()
-                    await msg.edit(embed=embed, view=view)
-
-                    embed = discord.Embed(
-                        title="Successful Purchase",
-                        description=(
-                            f"> You have \U000023e3 {new_am[0]:,} left.\n\n"
-                            "**You bought:**\n"
-                            f"- {quantity}x {ie} {name_res}\n\n"
-                            "**You paid:**\n"
-                            f"- \U000023e3 {total_cost:,}"),
-                        colour=0xFFFFFF)
-                    embed.set_footer(text="Thanks for your business.")
-
-                    return await interaction.followup.send(embed=embed)
-                
-                embed.title = "Action Cancelled"
-                embed.colour = discord.Colour.brand_red()
-                return await msg.edit(embed=embed, view=view)
+        paginator.get_page = get_page_part
+        await paginator.navigate()
 
     @shop.command(name='sell', description='Sell an item from your inventory', extras={"exp_gained": 4})
     @app_commands.describe(
@@ -3537,7 +3633,7 @@ class Economy(commands.Cog):
                     embed=membed('\n'.join(suggestions)))
             else:
                 name_res = name_res[0]
-                data = await conn.fetchone("SELECT cost, description, image, rarity, emoji, available, maximum FROM shop WHERE itemName = ?", name_res)
+                data = await conn.fetchone("SELECT cost, description, image, rarity, emoji, available FROM shop WHERE itemName = ?", name_res)
                 
                 dynamic_text = f"> {data[1]}\n\n"
                 dynamic_text += f"This item {"can" if data[5] else "cannot"} be purchased.\n"
@@ -5557,12 +5653,6 @@ class Economy(commands.Cog):
             return [
                 app_commands.Choice(name=option[0], value=option[0])
                 for option in options if current.lower() in option[0].lower()]
-
-    @buy.autocomplete('item_name')
-    async def buy_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
-        async with interaction.client.pool_connection.acquire() as conn:
-            options = await conn.fetchall("SELECT itemName FROM shop WHERE available = $0", 1)
-            return [app_commands.Choice(name=option[0], value=option[0]) for option in options if current.lower() in option[0].lower()]
 
     @item.autocomplete('item_name')
     async def item_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
