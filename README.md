@@ -50,7 +50,7 @@ We are 2 teenagers in the UK studying A-Levels, and chose to make this Discord b
 - Advanced economy system (no json, only using a database):
   - Running these databases using connection pools via [@Rapptz](https://www.github.com/Rapptz)'s `asqlite` repo.
   - The connection pool makes it fast and reliable, data loss is near impossible.
-  - Rob, Bankrob, Slots, Bets, Highlow, Blackjack and Building robberies.
+  - Rob, Bankrob, Slots, Bets, Highlow and Blackjack.
   - Advanced profile customization:
     - Set a custom profile title, profile avatar, profile bio and profile showcase.
   - More is being added regularly.
