@@ -3,6 +3,8 @@ from discord import app_commands
 
 from cogs.economy import APP_GUILDS_ID, membed
 from typing import Optional
+from asqlite import Connection as asqlite_Connection
+
 import discord
 
 
@@ -78,10 +80,48 @@ class PrivacyView(discord.ui.View):
 class TempVoice(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client: commands.Bot = client
+        self.active_voice_channels = {}
 
-    def add_user_to_db(self, member: discord.Member):
-        pass  # not sure how to do this yet
+    async def write_details_for(self, *, member: discord.Member, conn: asqlite_Connection):
+        vdata = await conn.fetchone(
+            "SELECT name, limit, bitrate, blocked, trusted, privacy FROM userVoiceSettings WHERE ownerID = ?", member.id)
+
+        vdata = vdata or (f"{member.name}'s Channel", 0, 64000, set(), set(), "0 0 0")
+        
+        self.active_voice_channels.update(
+            {
+                member.id: {
+                    "name": vdata[0],
+                    "limit": vdata[1],
+                    "bitrate": vdata[2],
+                    "blocked": vdata[3],  # stored as strings
+                    "trusted": vdata[4],  # stored as strings
+                    "privacy": vdata[5]
+                }
+            })
+
+    async def joined_creator_channel(self, owner: discord.Member, conn: asqlite_Connection):
+        pass
+
     
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
+    
+        if member.bot:
+            return
+        if before.channel == after.channel:
+            return
+        
+        async with self.client.pool_connection.acquire() as conn:
+            creator_channel = await conn.fetchone(
+                "SELECT voiceID FROM guildVoiceSettings WHERE guildID = $0", member.guild.id)
+            if creator_channel is None:
+                return
+            creator_channel = creator_channel[0]
+
+            if creator_channel == after.channel.id:
+                pass
+
     voice = app_commands.Group(
         name="voice", 
         description="Temporary voice channel management commands", 
@@ -108,7 +148,8 @@ class TempVoice(commands.Cog):
                 embed=membed("You must be an administrator to use this command."))
             return
         
-        embed = discord.Embed()
+        embed = discord.Embed(title="Setup Complete")
+
         async with self.client.pool_connection.acquire() as conn:
             await conn.execute(
                 """
