@@ -25,27 +25,23 @@ class SlashExceptionHandler(commands.Cog):
         self.client = client
         client.tree.error(coro=self.__dispatch_to_app_command_handler)
 
-    async def __dispatch_to_app_command_handler(self, interaction: Interaction,
-                                                error: app_commands.AppCommandError):
+    async def __dispatch_to_app_command_handler(
+            self, interaction: Interaction, error: app_commands.AppCommandError):
         self.client.dispatch("app_command_error", interaction, error)
 
     @commands.Cog.listener("on_app_command_error")
-    async def get_app_command_error(self, interaction: Interaction, error: app_commands.AppCommandError):
-
-        contact_view = MessageDevelopers(self.client)
-
-        if not interaction.response.is_done():
-            await interaction.response.defer(thinking=True)
+    async def get_app_command_error(
+        self, interaction: Interaction, error: app_commands.AppCommandError):
         
         if isinstance(error, app_commands.CheckFailure):
 
-            if isinstance(error, app_commands.MissingRole):  # when a user has a missing role
+            if isinstance(error, app_commands.MissingRole):
                 exception = membed(f"You're missing a required role: <@&{error.missing_role}>")
 
-            elif isinstance(error, app_commands.MissingPermissions):  # when a user has missing permissions
+            elif isinstance(error, app_commands.MissingPermissions):
                 exception = membed("You're missing some permissions required to use this command.")
 
-            elif isinstance(error, app_commands.CommandOnCooldown):  # when the command a user executes is on cooldown
+            elif isinstance(error, app_commands.CommandOnCooldown):
                 exception = Embed()
                 exception.title = choice([
                     "Too spicy, take a breather..", "Take a chill pill", "Woah now, slow it down",
@@ -57,29 +53,23 @@ class SlashExceptionHandler(commands.Cog):
             else:
                 exception = membed("Conditions needed to call this command were not met.")
 
-            return await interaction.followup.send(
-                embed=exception, view=contact_view)
+        elif isinstance(error, app_commands.CommandNotFound):
+            exception = membed("This command no longer exists!")
 
-        if isinstance(error, app_commands.CommandNotFound):
-            return await interaction.followup.send(
-                embed=membed("This command no longer exists!"), 
-                view=contact_view)
+        elif isinstance(error, app_commands.CommandAlreadyRegistered):
+            exception = membed("Another command with this name already exists.")
+        else:
+            print_exception(type(error), error, error.__traceback__)
+            exception = Embed(colour=0x2B2D31)
+            exception.title = "Something went wrong"
+            exception.description = (
+                "Seems like the bot has stumbled upon an unexpected error. "
+                "Not to worry, these things happen from time to time. If this issue persists, "
+                "please let us know about it. We're always here to help!")
 
-        if isinstance(error, app_commands.CommandAlreadyRegistered):
-            return await interaction.followup.send(
-                embed=membed("Another command with this name already exists."), 
-                view=contact_view)
-
-        print_exception(type(error), error, error.__traceback__)
-        error = Embed(colour=0x2B2D31)
-        error.title = "Something went wrong"
-        error.description = (
-            "Seems like the bot has stumbled upon an unexpected error. "
-            "Not to worry, these things happen from time to time. If this issue persists, "
-            "please let us know about it. We're always here to help!")
-
-        await interaction.followup.send(
-            embed=error, view=contact_view)
+        if not interaction.response.is_done():
+            return await interaction.response.send_message(embed=exception, view=MessageDevelopers(self.client))
+        await interaction.followup.send(embed=exception, view=MessageDevelopers(self.client))
 
 
 async def setup(client: commands.Bot):
