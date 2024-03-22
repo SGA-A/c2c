@@ -2,7 +2,7 @@ from PyDictionary import PyDictionary
 from xml.etree.ElementTree import fromstring
 from other.pagination import Pagination
 from io import BytesIO
-from random import choice, choices
+from random import choice
 from github import Github
 from re import compile as compile_it, search
 from psutil import Process, cpu_count
@@ -101,7 +101,7 @@ def extract_domain(website):
 
 def membed(descriptioner: str) -> discord.Embed:
     """Quickly create an embed with a custom description using the preset."""
-    membedder = discord.Embed(colour=0x2F3136, description=descriptioner)
+    membedder = discord.Embed(colour=0x2B2D31, description=descriptioner)
     return membedder
 
 
@@ -143,12 +143,12 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
     async def on_submit(self, interaction: discord.Interaction):
         channel = interaction.guild.get_channel(1122902104802070572)
         embed = discord.Embed(title=f'New Feedback: {self.fb_title.value or "Untitled"}',
-                              description=self.message.value, colour=0x2F3136)
+                              description=self.message.value, colour=0x2B2D31)
         embed.set_author(name=interaction.user.name,
                          icon_url=interaction.user.display_avatar.url)
 
         await channel.send(embed=embed)
-        success = discord.Embed(colour=0x2F3136,
+        success = discord.Embed(colour=0x2B2D31,
                                 description="## <:dispatche:1195745709463441429> Your response has been submitted.\n"
                                             "- Developers will consider your feedback accordingly within a few days.\n"
                                             "- From there, compensation will be decided upfront.\n\n"
@@ -172,12 +172,11 @@ class InviteButton(discord.ui.View):
         perms.read_messages = True
         perms.send_messages_in_threads = True
         perms.send_messages = True
-        perms.send_voice_messages = True
         
         perms.manage_channels = True
         perms.manage_messages = True
-        perms.manage_webhooks = True
         perms.manage_roles = True
+        perms.manage_threads = True
 
         perms.create_instant_invite = True
         perms.external_emojis = True
@@ -187,10 +186,7 @@ class InviteButton(discord.ui.View):
         perms.add_reactions = True
 
         perms.connect = True
-        perms.move_members = True
         perms.speak = True
-        perms.use_voice_activation = True
-        perms.priority_speaker = True
         perms.move_members = True
 
         self.add_item(discord.ui.Button(
@@ -203,18 +199,17 @@ class Miscellaneous(commands.Cog):
         self.client = client
         self.process = Process()
         self.wf = WaifuAioClient(session=client.session, token=client.WAIFU_API_KEY, app_name="c2c")
+        
         self.image_src = app_commands.ContextMenu(
             name='Extract Image Source',
             callback=self.extract_source)
+        
         self.get_embed_cmd = app_commands.ContextMenu(
             name='Extract Embed Colour',
             callback=self.embed_colour)
-        # self.image_src.error(self.my_cool_context_menu_error)
+
         self.client.tree.add_command(self.image_src)
         self.client.tree.add_command(self.get_embed_cmd)
-
-    async def cog_check(self, ctx: commands.Context) -> bool:
-        return ctx.guild is not None
 
     async def cog_unload(self) -> None:
         self.client.tree.remove_command(self.get_embed_cmd.name, type=self.get_embed_cmd.type)
@@ -591,10 +586,6 @@ class Miscellaneous(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @commands.command(name="random", description="Sends a random sticker")
-    async def send_random_sticker(self, ctx: commands.Context):
-        await ctx.send(stickers=choices(ctx.guild.stickers, k=1))
-
     @app_commands.command(name='emojis', description='Fetch all the emojis c2c can access')
     @app_commands.guilds(*APP_GUILDS_ID)
     async def emojis_paginator(self, interaction: discord.Interaction):
@@ -612,7 +603,7 @@ class Miscellaneous(commands.Cog):
             emb = discord.Embed(title="Emojis",
                                 description="> This is a command that fetches **all** of the emojis found"
                                             " in the client's internal cache and their associated atributes.\n\n",
-                                colour=0x2F3136)
+                                colour=0x2B2D31)
             offset = (page - 1) * length
             for user in emotes_all[offset:offset + length]:
                 emb.description += f"{user}\n"
@@ -701,7 +692,7 @@ class Miscellaneous(commands.Cog):
                                             f'- {maxim_usage}\n'
                                             f'- Expires {formatted_expiry}\n'
                                             f'- Invite Link is: {generated_invite.url}',
-                                colour=0x2F3136)
+                                colour=0x2B2D31)
         success.set_author(name=interaction.user.name,
                            icon_url=interaction.user.display_avatar.url)
         await interaction.response.send_message(embed=success)
@@ -1032,7 +1023,7 @@ class Miscellaneous(commands.Cog):
     @commands.command(name='avatar', description="Display a user's enlarged avatar")
     async def avatar(self, ctx, *, username: Union[discord.Member, discord.User] = None):
         """Shows a user's enlarged avatar (if possible)."""
-        embed = discord.Embed(colour=0x2F3136)
+        embed = discord.Embed(colour=0x2B2D31)
         username = username or ctx.author
         avatar = username.display_avatar.with_static_format('png')
         embed.set_author(name=username.name, url=username.display_avatar.url)
@@ -1042,7 +1033,7 @@ class Miscellaneous(commands.Cog):
     @commands.command(name='banner', description="Display a user's enlarged banner")
     async def banner(self, ctx, *, username: Union[discord.Member, discord.User] = None):
         """Shows a user's enlarged avatar (if possible)."""
-        embed = discord.Embed(colour=0x2F3136)
+        embed = discord.Embed(colour=0x2B2D31)
         username = username or ctx.author
 
         if username.banner:
