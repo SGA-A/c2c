@@ -1009,7 +1009,7 @@ class BlackjackUi(discord.ui.View):
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item[Any], /) -> None:
         print_exception(type(error), error, error.__traceback__)
         await interaction.response.send_message(
-            "Uh oh, that's an error. Not to worry, the problem should eventually resolve itself.")
+            embed=membed("Something went wrong. Try again later."))
 
     async def on_timeout(self) -> None:
         if not self.finished:
@@ -2368,13 +2368,15 @@ class Economy(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client: commands.Bot = client
 
-        self.not_registered = discord.Embed(description="## <:noacc:1183086855181324490> You are not registered.\n"
-                                                        "You'll need to register first before you "
-                                                        "can use this command.\n"
-                                                        "### Already Registered?\n"
-                                                        "Find out what could've happened by calling the command "
-                                                        "[`>reasons`](https://www.google.com/).", colour=0x2F3136,
-                                            timestamp=discord.utils.utcnow())
+        self.not_registered = discord.Embed(
+            description=(
+                "## <:noacc:1183086855181324490> You are not registered.\n"
+                "You'll need to register first before you "
+                "can use this command.\n"
+                "### Already Registered?\n"
+                "Find out what could've happened by calling the command "
+                "[`>reasons`](https://www.google.com/)."), 
+                colour=0x2F3136, timestamp=discord.utils.utcnow())
         self.batch_update.start()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
