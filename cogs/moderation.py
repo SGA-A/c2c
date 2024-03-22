@@ -28,177 +28,11 @@ class TimeConverter(app_commands.Transformer):
         return time
 
 
-class Moderation(commands.Cog):
-    def __init__(self, client: commands.Bot):
-        self.client = client
+@app_commands.guild_only()
+@app_commands.checks.bot_has_permissions(manage_roles=True)
+class RoleManagement(app_commands.Group):
 
-        self.purge_from_here_cmd = app_commands.ContextMenu(
-            name='Purge Up To Here',
-            callback=self.purge_from_here)
-        
-        self.client.tree.add_command(self.purge_from_here_cmd)
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.guild_permissions.manage_guild:
-            return True
-        await interaction.response.send_message(
-            embed=membed("You are not allowed to use these commands."))
-        return False
-    
-    async def cog_check(self, ctx: commands.Context) -> bool:
-        if ctx.author.guild_permissions.manage_guild:
-            return True
-        await ctx.send(
-            embed=membed("You are not allowed to use these commands."))
-        return False
-
-    @app_commands.guilds(*APP_GUILDS_ID)
-    async def purge_from_here(self, interaction: discord.Interaction, message: discord.Message):
-        
-        if not interaction.user.guild_permissions.manage_messages:
-            return await interaction.response.send_message(
-                embed=membed("You are not allowed to use this command."))
-
-        await interaction.response.defer(thinking=True, ephemeral=True)
-        diff = message.created_at - discord.utils.utcnow()
-        
-        if diff.total_seconds() > 1_209_600:
-            return await interaction.response.send_message(
-                embed=membed("This message was created more than 14 days ago."))
-        
-        count = await interaction.channel.purge(after=discord.Object(id=message.id))
-        await interaction.followup.send(embed=membed(f"Deleted **{len(count)}** messages."))
-
-    async def bulk_add_roles(
-            self, interaction: discord.Interaction, users_without_it: set, role: discord.Role, how_many: int) -> str | None:
-        if not interaction.response.is_done():
-            await interaction.response.defer(thinking=True)
-        start_time = perf_counter()
-        try:
-            for member in users_without_it:
-                await member.add_roles(discord.Object(id=role.id), atomic=True)
-        except discord.Forbidden:
-            return "Missing required permissions to add roles to members."
-        except discord.HTTPException:
-            return "We are being rate-limited. Try again later"
-        finally:
-            end_time = perf_counter()
-            success = discord.Embed()
-            success.colour = 0x54CD68
-            success.title = "Success"
-            success.description = f"Added {role.mention} to **{how_many}** members."
-            await interaction.followup.send(
-                content=f"Took {end_time - start_time:.2f}s", embed=success)
-            return None
-
-    async def bulk_remove_roles(
-            self, interaction: discord.Interaction, targets: set, new_role: discord.Role, how_many: int) -> str | None:
-        start_time = perf_counter()
-        
-        if not interaction.response.is_done():
-            await interaction.response.defer(thinking=True)
-        
-        try:
-            for member in targets:
-                await member.remove_roles(discord.Object(id=new_role.id), atomic=True)
-        except discord.Forbidden:
-            return "Missing required permissions to remove roles from members."
-        except discord.HTTPException:
-            return "We are being rate-limited. Try again later."
-        finally:
-            end_time = perf_counter()
-            success = discord.Embed()
-            success.colour = 0x54CD68
-            success.title = "Success"
-            success.description = f"Removed {new_role.mention} from **{how_many}** members."
-            await interaction.followup.send(
-                content=f"Took {end_time - start_time:.2f}s", embed=success)
-            return None
-    
-    async def do_boilerplate_role_checks(self, role: discord.Role, guild: discord.Guild, my_top: discord.Role) -> str | None:
-
-        if role.managed:
-            return f"The role {role.name} is managed and cannot be assigned or removed."
-
-        if role >= my_top:
-            roles_beneath = [iter_role for iter_role in guild.roles if (iter_role < role) and (iter_role > my_top)]
-            roles_beneath = [role.name for role in roles_beneath]
-
-            return (
-                f"The role '{role.name}' (pos {role.position}) is above my highest role '{my_top.name}' (pos {my_top.position}) meaning I cannot alter their roles.\n"
-                "Please ensure my highest role is above the role you want assigned or removed.\n\n"
-                f"{role.name} **<-- The role you wish to assign or remove**\n"
-                f"{'\n'.join(roles_beneath) + '\n' if roles_beneath else ''}"
-                f"{my_top.name} **<-- The bot's highest role**")
-
-    @tasks.loop()
-    async def check_for_role(self):
-        # fetch the task with the lowest/earliest `end_time`
-        async with self.client.pool_connection.acquire() as conn:
-            next_task = await conn.fetchone('SELECT * FROM tasks ORDER BY end_time ASC LIMIT 1')
-
-            # if no remaining tasks, stop the loop
-            if next_task is None:
-                self.check_for_role.cancel()
-                return
-            
-            # sleep until the task should be done
-            # if the time is before now, this should return immediately
-            
-            mod_to, role_id, end_time, in_guild = next_task
-            timestamp = datetime.fromtimestamp(end_time, tz=timezone("UTC"))
-            await discord.utils.sleep_until(timestamp)
-
-            # do your actual task stuff here
-            guild = self.client.get_guild(in_guild)
-            
-            try:
-                mem: discord.Member = guild.get_member(mod_to)
-                guild = await mem.remove_roles(discord.Object(id=role_id))
-            except discord.Forbidden:
-                pass
-            except discord.HTTPException:
-                pass
-            finally:
-                # delete the task we just completed
-                await conn.execute('DELETE FROM tasks WHERE mod_to = $1', mod_to)
-                await conn.commit()
-
-    @commands.command(name="close", description="Close the invocation thread")
-    @commands.guild_only()
-    async def close_thread(self, ctx: commands.Context):
-        await ctx.message.delete()
-        if isinstance(ctx.channel, discord.Thread):
-            await ctx.send(
-                "<:padlocke:1195739398323581011> This thread is now locked due to lack of use.\n"
-                "It may be re-opened if needed by contacting an admin.")
-            return await ctx.channel.edit(
-                locked=True,
-                archived=True,
-                reason=f'Marked as closed by {ctx.author} (ID: {ctx.author.id})')
-        else:
-            await ctx.reply("This is not a thread.", mention_author=False)
-
-    @commands.command(name='delay', description='Sets a slowmode for the invoker channel', aliases=('d',))
-    async def set_delay(self, ctx: commands.Context, slowmode_in_seconds: int):
-        """Sets a delay to which users can send messages."""
-        slowmode_in_seconds = abs(slowmode_in_seconds)
-        await ctx.channel.edit(slowmode_delay=slowmode_in_seconds)
-        if slowmode_in_seconds:
-            return await ctx.send(f'<:slowed:1195739862100353114> Slowmode set to {slowmode_in_seconds} seconds.')
-        await ctx.send("<:normale:1195740534703136921> Disabled slowmode.")
-
-    @commands.command(name="purge", description="Bulk-remove messages, excluding pins")
-    async def purge(self, ctx: commands.Context, purge_max_amount: int):
-        """Purge an amount of messages. Pinned messages aren't removed."""
-        await ctx.message.delete()
-        purge_max_amount = min(purge_max_amount, 300)
-        stop_at = discord.utils.utcnow() - timedelta(weeks=2)
-        await ctx.channel.purge(limit=purge_max_amount, check=lambda msg: not msg.pinned, bulk=True, after=stop_at, oldest_first=False)
-
-    roles = app_commands.Group(name="role", description="Role management commands", guild_only=True, guild_ids=APP_GUILDS_ID)
-
-    @roles.command(name="add", description="Adds a role to the specified member")
+    @app_commands.command(name="add", description="Adds a role to the specified member")
     @app_commands.describe(user="The user to add the role to.", role="The role to add to this user.")
     async def add_role(self, interaction: discord.Interaction, user: discord.Member, role: discord.Role):
 
@@ -210,13 +44,10 @@ class Moderation(commands.Cog):
         if resp:
             return await interaction.response.send_message(resp)
         
-        try:
-            await user.add_roles(discord.Object(id=role.id))
-            await interaction.response.send_message(embed=membed(f"Added {role.mention} to {user.mention}."))
-        except discord.Forbidden:
-            await interaction.response.send_message("Missing required permissions to do this.")
+        await user.add_roles(discord.Object(id=role.id))
+        await interaction.response.send_message(embed=membed(f"Added {role.mention} to {user.mention}."))
 
-    @roles.command(name="remove", description="Removes a role from the specified member")
+    @app_commands.command(name="remove", description="Removes a role from the specified member")
     @app_commands.describe(user="The user to remove the role from.", role="The role to remove from this user.")
     async def remove_role(self, interaction: discord.Interaction, user: discord.Member, role: discord.Role):
         
@@ -229,13 +60,10 @@ class Moderation(commands.Cog):
         if resp:
             return await interaction.response.send_message(resp)
     
-        try:
-            await user.remove_roles(discord.Object(id=role.id))
-            await interaction.response.send_message(embed=membed(f"Removed {role.mention} from {user.mention}."))
-        except discord.Forbidden:
-            await interaction.response.send_message("Missing required permissions to remove roles from members.")
+        await user.remove_roles(discord.Object(id=role.id))
+        await interaction.response.send_message(embed=membed(f"Removed {role.mention} from {user.mention}."))
 
-    @roles.command(name="all", description="Adds a role to all members")
+    @app_commands.command(name="all", description="Adds a role to all members")
     @app_commands.describe(role="The role to add to all members.")
     async def add_role_all(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
@@ -294,7 +122,7 @@ class Moderation(commands.Cog):
 
         await msg.edit(content=None, embed=confirm, view=None)
     
-    @roles.command(name="rall", description="Removes a role from all members")
+    @app_commands.command(name="rall", description="Removes a role from all members")
     @app_commands.describe(role="The role to remove to all members.")
     async def remove_roles_all(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
@@ -335,8 +163,6 @@ class Moderation(commands.Cog):
             try:
                 for member in users_without_it:
                     await member.remove_roles(discord.Object(id=role.id), atomic=True)
-            except discord.Forbidden:
-                return await msg.edit(content="Missing required permissions to remove roles from members.", embed=None, view=None)
             except discord.HTTPException:
                 return await msg.edit(content="We are being rate-limited. Try again later.", embed=None, view=None)
             finally:
@@ -352,7 +178,7 @@ class Moderation(commands.Cog):
 
         await msg.edit(embed=confirm, view=None)
 
-    @roles.command(name="allroles", description="Lists all roles in the server")
+    @app_commands.command(name="allroles", description="Lists all roles in the server")
     async def all_roles(self, interaction: discord.Interaction):
 
         guild_roles = interaction.guild.roles
@@ -375,7 +201,7 @@ class Moderation(commands.Cog):
 
         await Pagination(interaction, get_page_part).navigate()
     
-    @roles.command(name="info", description="Check info for a role")
+    @app_commands.command(name="info", description="Check info for a role")
     @app_commands.describe(role="The role to check info for.")
     async def role_info(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
@@ -413,7 +239,7 @@ class Moderation(commands.Cog):
         about.set_footer(text=f"ID: {role.id}")
         await interaction.followup.send(embed=about)
 
-    @roles.command(name="removebots", description="Removes a role from all bots")
+    @app_commands.command(name="removebots", description="Removes a role from all bots")
     @app_commands.describe(role="The role to remove from all bots.")
     async def remove_bots(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
@@ -435,7 +261,7 @@ class Moderation(commands.Cog):
         if resp:
             return await interaction.followup.send(resp)
         
-    @roles.command(name="humans", description="Adds a role to all humans")
+    @app_commands.command(name="humans", description="Adds a role to all humans")
     @app_commands.describe(role="The role to add to all humans.")
     async def add_humans(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
@@ -455,7 +281,7 @@ class Moderation(commands.Cog):
         if resp:
             return await interaction.followup.send(resp)
 
-    @roles.command(name="removehumans", description="Removes a role from all humans")
+    @app_commands.command(name="removehumans", description="Removes a role from all humans")
     @app_commands.describe(role="The role to remove from all humans.")
     async def remove_humans(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
@@ -475,8 +301,7 @@ class Moderation(commands.Cog):
         if resp:
             return await interaction.followup.send(resp)
         
-
-    @roles.command(name="in", description="Adds a role to all members currently in a base role")
+    @app_commands.command(name="in", description="Adds a role to all members currently in a base role")
     @app_commands.describe(base_role="The role that members need to get a new role.", new_role="The new role to add to all members in the base role.")
     async def add_role_in(self, interaction: discord.Interaction, base_role: discord.Role, new_role: discord.Role):
         await interaction.response.defer(thinking=True)
@@ -499,7 +324,7 @@ class Moderation(commands.Cog):
         if resp:
             return await interaction.followup.send(resp)
         
-    @roles.command(name="rin", description="Removes a role from all members currently in a base role")
+    @app_commands.command(name="rin", description="Removes a role from all members currently in a base role")
     @app_commands.describe(base_role="The role that members need to get a new role.", new_role="The new role to add to all members in the base role.")
     async def remove_role_in(self, interaction: discord.Interaction, base_role: discord.Role, new_role: discord.Role):
         await interaction.response.defer(thinking=True)
@@ -521,14 +346,182 @@ class Moderation(commands.Cog):
         if resp:
             return await interaction.followup.send(resp)
 
-    temprole = app_commands.Group(name="temprole", description="Role management commands but with an expiry attribute", guild_only=True, guild_ids=APP_GUILDS_ID)
+
+class Moderation(commands.Cog):
+    def __init__(self, client: commands.Bot):
+        self.client = client
+
+        self.purge_from_here_cmd = app_commands.ContextMenu(
+            name='Purge Up To Here',
+            callback=self.purge_from_here)
+        
+        roles = RoleManagement(
+            name="role", 
+            description="Role management commands", 
+            guild_ids=APP_GUILDS_ID, 
+            guild_only=True, 
+            default_permissions=discord.Permissions(manage_roles=True))
+        
+        self.client.tree.add_command(self.purge_from_here_cmd)
+        self.client.tree.add_command(roles)
+    
+    async def cog_check(self, ctx: commands.Context) -> bool:
+        if ctx.author.guild_permissions.manage_guild:
+            return True
+        await ctx.send(embed=membed("You are not allowed to use these commands."))
+        return False
+
+    @app_commands.default_permissions(manage_messages=True)
+    @app_commands.guilds(*APP_GUILDS_ID)
+    async def purge_from_here(self, interaction: discord.Interaction, message: discord.Message):
+
+        if not interaction.user.guild_permissions.manage_messages:
+            return await interaction.response.send_message(
+                embed=membed("You are not allowed to use this command."))
+        
+        diff = discord.utils.utcnow() - message.created_at
+        
+        if diff.total_seconds() > 1_209_600:
+            return await interaction.response.send_message(
+                embed=membed("This message was created more than 14 days ago."))
+        
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        count = await interaction.channel.purge(after=discord.Object(id=message.id))
+        await interaction.followup.send(embed=membed(f"Deleted **{len(count)}** messages."))
+
+    async def bulk_add_roles(
+            self, interaction: discord.Interaction, users_without_it: set, role: discord.Role, how_many: int) -> str | None:
+        if not interaction.response.is_done():
+            await interaction.response.defer(thinking=True)
+        start_time = perf_counter()
+        try:
+            for member in users_without_it:
+                await member.add_roles(discord.Object(id=role.id), atomic=True)
+        except discord.HTTPException:
+            return "We are being rate-limited. Try again later"
+        finally:
+            end_time = perf_counter()
+            success = discord.Embed()
+            success.colour = 0x54CD68
+            success.title = "Success"
+            success.description = f"Added {role.mention} to **{how_many}** members."
+            await interaction.followup.send(
+                content=f"Took {end_time - start_time:.2f}s", embed=success)
+            return None
+
+    async def bulk_remove_roles(
+            self, interaction: discord.Interaction, targets: set, new_role: discord.Role, how_many: int) -> str | None:
+        start_time = perf_counter()
+        
+        if not interaction.response.is_done():
+            await interaction.response.defer(thinking=True)
+        
+        try:
+            for member in targets:
+                await member.remove_roles(discord.Object(id=new_role.id), atomic=True)
+        except discord.HTTPException:
+            return "We are being rate-limited. Try again later."
+        finally:
+            end_time = perf_counter()
+            success = discord.Embed()
+            success.colour = 0x54CD68
+            success.title = "Success"
+            success.description = f"Removed {new_role.mention} from **{how_many}** members."
+            await interaction.followup.send(
+                content=f"Took {end_time - start_time:.2f}s", embed=success)
+            return None
+    
+    async def do_boilerplate_role_checks(self, role: discord.Role, guild: discord.Guild, my_top: discord.Role) -> str | None:
+
+        if role.managed:
+            return f"The role {role.name} is managed and cannot be assigned or removed."
+
+        if role >= my_top:
+            roles_beneath = [iter_role for iter_role in guild.roles if (iter_role < role) and (iter_role > my_top)]
+            roles_beneath = [role.name for role in roles_beneath]
+
+            return (
+                f"The role '{role.name}' (pos {role.position}) is above my highest role '{my_top.name}' (pos {my_top.position}) meaning I cannot alter their roles.\n"
+                "Please ensure my highest role is above the role you want assigned or removed.\n\n"
+                f"{role.name} **<-- The role you wish to assign or remove**\n"
+                f"{'\n'.join(roles_beneath) + '\n' if roles_beneath else ''}"
+                f"{my_top.name} **<-- The bot's highest role**")
+
+    @tasks.loop()
+    async def check_for_role(self):
+        # fetch the task with the lowest/earliest `end_time`
+        async with self.client.pool_connection.acquire() as conn:
+            next_task = await conn.fetchone('SELECT * FROM tasks ORDER BY end_time ASC LIMIT 1')
+
+            # if no remaining tasks, stop the loop
+            if next_task is None:
+                self.check_for_role.cancel()
+                return
+            
+            # sleep until the task should be done
+            # if the time is before now, this should return immediately
+            
+            mod_to, role_id, end_time, in_guild = next_task
+            timestamp = datetime.fromtimestamp(end_time, tz=timezone("UTC"))
+            await discord.utils.sleep_until(timestamp)
+
+            # do your actual task stuff here
+            guild = self.client.get_guild(in_guild)
+            
+            try:
+                mem: discord.Member = guild.get_member(mod_to)
+                guild = await mem.remove_roles(discord.Object(id=role_id))
+            except discord.HTTPException:
+                pass
+            finally:
+                # delete the task we just completed
+                await conn.execute('DELETE FROM tasks WHERE mod_to = $1', mod_to)
+                await conn.commit()
+
+    @commands.command(name="close", description="Close the invocation thread")
+    @commands.guild_only()
+    async def close_thread(self, ctx: commands.Context):
+        await ctx.message.delete()
+        if isinstance(ctx.channel, discord.Thread):
+            await ctx.send(
+                embed=membed(
+                    "<:padlocke:1195739398323581011> This thread is now locked due to lack of use.\n"
+                    "It may be re-opened if needed by contacting an admin."))
+            return await ctx.channel.edit(
+                locked=True,
+                archived=True,
+                reason=f'Marked as closed by {ctx.author} (ID: {ctx.author.id})')
+        else:
+            await ctx.reply(embed=membed("This is not a thread."), mention_author=False)
+
+    @commands.command(name='delay', description='Sets a slowmode for the invoker channel', aliases=('d',))
+    async def set_delay(self, ctx: commands.Context, slowmode_in_seconds: int):
+        """Sets a delay to which users can send messages."""
+        slowmode_in_seconds = abs(slowmode_in_seconds)
+        await ctx.channel.edit(slowmode_delay=slowmode_in_seconds)
+        if slowmode_in_seconds:
+            return await ctx.send(embed=membed(f'<:slowed:1195739862100353114> Slowmode set to {slowmode_in_seconds} seconds.'))
+        await ctx.send(embed=membed("<:normale:1195740534703136921> Disabled slowmode."))
+
+    @commands.command(name="purge", description="Bulk-remove messages, excluding pins")
+    async def purge(self, ctx: commands.Context, purge_max_amount: int):
+        """Purge an amount of messages. Pinned messages aren't removed."""
+        await ctx.message.delete()
+        stop_at = discord.utils.utcnow() - timedelta(weeks=2)
+        await ctx.channel.purge(limit=purge_max_amount, check=lambda msg: not msg.pinned, bulk=True, after=stop_at, oldest_first=False)
+
+    temprole = app_commands.Group(
+        name="temprole", 
+        description="Role management commands associated with an expiry.", 
+        guild_only=True, 
+        guild_ids=APP_GUILDS_ID, 
+        default_permissions=discord.Permissions(manage_roles=True))
 
     @temprole.command(name="add", description="Adds a temporary role")
-    @app_commands.rename(time="duration")
-    @app_commands.describe(user="The user to add the role to.", role="The role to add to this user.", time="When this role is removed e.g. 1d 7h 19m 4s.")
-    async def add_temp_role(self, interaction: discord.Interaction, user: discord.Member, time: app_commands.Transform[int, TimeConverter], role: discord.Role):
+    @app_commands.describe(user="The user to add the role to.", role="The role to add to this user.", duration="When this role should be removed e.g. 1d 7h 19m 4s.")
+    async def add_temp_role(self, interaction: discord.Interaction, user: discord.Member, duration: app_commands.Transform[int, TimeConverter], role: discord.Role):
         
-        if not time:
+        if not duration:
             return await interaction.response.send_message("Invalid delay provided. Use a valid format e.g. 1d 7h 19m 4s.")
 
         if role in user.roles:
@@ -539,39 +532,36 @@ class Moderation(commands.Cog):
         if resp:
             return await interaction.response.send_message(resp)
         
-        try:
-            # ! SEND THE MESSAGE HERE
-            minutes, seconds = divmod(time, 60)
-            hours, minutes = divmod(minutes, 60)
-            days, hours = divmod(hours, 24)
+        # ! SEND THE MESSAGE HERE
+        minutes, seconds = divmod(duration, 60)
+        hours, minutes = divmod(minutes, 60)
+        days, hours = divmod(hours, 24)
 
-            success = discord.Embed()
-            success.colour = 0x70DEAA
-            success.title = "Temporary role added"
+        success = discord.Embed()
+        success.colour = 0x70DEAA
+        success.title = "Temporary role added"
 
-            success.description = (
-                f"Granted {user.mention} the {role.mention} role for:\n"
-                f"- {int(days)} days, {int(hours)} hours, {int(minutes)} minutes and {int(seconds)} seconds.")
+        success.description = (
+            f"Granted {user.mention} the {role.mention} role for:\n"
+            f"- {int(days)} days, {int(hours)} hours, {int(minutes)} minutes and {int(seconds)} seconds.")
 
-            await user.add_roles(discord.Object(id=role.id))
-            await interaction.response.send_message(embed=success)
+        await user.add_roles(discord.Object(id=role.id))
+        await interaction.response.send_message(embed=success)
 
-            # ! SCHEDULE THE TASK HERE
-            timestamp = (discord.utils.utcnow() + timedelta(seconds=time)).timestamp()
+        # ! SCHEDULE THE TASK HERE
+        timestamp = (discord.utils.utcnow() + timedelta(seconds=duration)).timestamp()
 
-            conn = await self.client.pool_connection.acquire()
-            await conn.execute(
-                'INSERT INTO tasks (mod_to, role_id, end_time, in_guild) VALUES ($0, $1, $2, $3)', user.id, role.id, timestamp, guild.id)
-            await conn.commit()
-            await self.client.pool_connection.release(conn)
+        conn = await self.client.pool_connection.acquire()
+        await conn.execute(
+            'INSERT INTO tasks (mod_to, role_id, end_time, in_guild) VALUES ($0, $1, $2, $3)', user.id, role.id, timestamp, guild.id)
+        await conn.commit()
+        await self.client.pool_connection.release(conn)
 
-            if self.check_for_role.is_running():
-                self.check_for_role.restart()
-            else:
-                self.check_for_role.start()
+        if self.check_for_role.is_running():
+            self.check_for_role.restart()
+        else:
+            self.check_for_role.start()
 
-        except discord.Forbidden:
-            await interaction.response.send_message("Missing required permissions to do this.")
 
 async def setup(client):
     await client.add_cog(Moderation(client))
