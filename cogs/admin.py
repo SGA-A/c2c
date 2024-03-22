@@ -29,16 +29,7 @@ class Administrate(commands.Cog):
         self._last_result: Optional[Any] = None
 
     async def cog_check(self, ctx: commands.Context) -> bool:
-        return (ctx.author.id in self.client.owner_ids) and (ctx.guild is not None)
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return interaction.user.id in self.client.owner_ids
-
-    def return_custom_emoji(self, emoji_name):
-        """Return a custom emoji based off of the name from the internal cache."""
-        emoji = discord.utils.get(
-            self.client.emojis, name=emoji_name)
-        return emoji
+        return ctx.author.id in self.client.owner_ids
 
     @staticmethod
     async def fetch_fst_msg(channel) -> discord.Message | None:
@@ -48,7 +39,7 @@ class Administrate(commands.Cog):
 
         async for message in channel.history(limit=1, oldest_first=True):
             dtls = message
-            break  # Exit the loop after retrieving the first message
+            break
 
         return dtls
 
@@ -165,19 +156,23 @@ class Administrate(commands.Cog):
             await ctx.send("This command is to be called only within **cc**.")
 
     @app_commands.command(name="config", description="Adjust a user's robux directly")
+    @app_commands.default_permissions(administrator=True)
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.describe(configuration='the type of mode used for modifying robux',
-                           amount=('the amount of robux to modify. '
-                                   'Supports Shortcuts (exponents only).'),
-                           member='the member to modify the balance of',
-                           ephemeral='whether the response is hidden or not from others.',
-                           deposit_mode='the type of balance to modify through')
+    @app_commands.describe(
+        configuration='Whether to add, remove, or specify robux.',
+        amount='The amount of robux to modify. Supports Shortcuts (exponents only).',
+        member='The member to modify the balance of.',
+        ephemeral='Whether or not the response is only visible to you.',
+        deposit_mode='The type of balance to modify.')
     @app_commands.rename(ephemeral='is_hidden', member='user', deposit_mode='medium')
-    async def config(self, interaction: discord.Interaction,
-                     configuration: Literal["add", "remove", "make"], amount: str,
-                     member: Optional[discord.Member],
-                     ephemeral: Optional[bool] = True,
-                     deposit_mode: Optional[str] = "wallet"):
+    async def config(
+        self, 
+        interaction: discord.Interaction,
+        configuration: Literal["add", "remove", "make"], 
+        amount: str,
+        member: Optional[discord.Member],
+        ephemeral: Optional[bool] = True,
+        deposit_mode: Optional[Literal["wallet", "bank"]] = "wallet"):
         """Generates or deducts a given amount of robux to the mentioned user."""
         
         member = member or interaction.user
@@ -224,66 +219,14 @@ class Administrate(commands.Cog):
 
             await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
-    @app_commands.command(name='pin', description='Pin a message in any channel')
-    @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.describe(message_id='the ID of the message to be pinned',
-                           channel_name="the channel to fetch the pinned message from")
-    async def pin_it(self, interaction: discord.Interaction,
-                     channel_name: Optional[discord.abc.GuildChannel],
-                     message_id: str):
-        """Pin the specified message via it's ID in any given channel, defaults to invoker's."""
-
-        try:
-
-            if channel_name is None:
-                channel_name = interaction.channel
-
-            channel = await self.client.fetch_channel(channel_name.id)
-            message = await channel.fetch_message(int(message_id))
-
-            await message.pin(reason=f'Requested by {interaction.user.name}.')
-
-            await interaction.response.send_message(
-                f"Successfully pinned the message of id {message_id} "
-                f"sent by {message.author.name}.\n\n",
-                ephemeral=True, delete_after=3.0)
-
-        except discord.NotFound:
-
-            await interaction.response.send_message(
-                'Failed to pin the message, it was not found or was deleted.')
-
-        except discord.HTTPException as http:
-            await interaction.response.send_message(
-                f'Failed to pin the message, with a return status code of `{http.status}`.',
-                ephemeral=True, delete_after=3.0)
-
-    @commands.command(name='cthr', aliases=('ct', 'create_thread'),
-                      description='Use a preset to create forum channels')
+    @commands.command(name='cthr', aliases=('ct', 'create_thread'), description='Use a preset to create forum channels')
     async def create_thread(self, ctx: commands.Context, thread_name: str):
         """Create a forum channel quickly with only name of thread required as argument."""
-        if isinstance(ctx.channel, discord.TextChannel):
-            thread = await ctx.channel.create_thread(name=thread_name, auto_archive_duration=10080,
-                                                     message=discord.Object(ctx.message.id))
-            await thread.send(f"Your thread has been created, with name **{thread_name}**.",
-                              delete_after=5.0)
-        else:
-            await ctx.send("Invalid channel: you must be in a text channel to call this command.",
-                           delete_after=5.0)
-
-    @app_commands.command(name='react',
-                          description='Force-react to messages with any reaction')
-    @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.describe(message_id='the ID of the message to react to:',
-                           emote='the name of the emoji to react with, e.g., KarenLaugh')
-    async def react(self, interaction: discord.Interaction, message_id: str, emote: str):
-        """React to any given message with a custom emoji by referring to its name."""
-        b = await interaction.guild.fetch_channel(interaction.channel.id)
-        c = await b.fetch_message(int(message_id))
-        emoji = self.return_custom_emoji(emote)  # a function to return a custom emoji
-        await c.add_reaction(emoji)
-        await interaction.response.send_message(
-            content='the emoji has been added to the message', ephemeral=True, delete_after=3.0)
+        if not isinstance(ctx.channel, discord.TextChannel):
+            await ctx.send("You need to be in a text channel.", delete_after=5.0)
+        thread = await ctx.channel.create_thread(
+            name=thread_name, auto_archive_duration=10080, message=discord.Object(ctx.message.id))
+        await thread.send(f"Your thread was created with name **{thread.mention}**.", delete_after=5.0)
 
     @commands.command(name='sync', description='Sync the client tree for changes', aliases=("sy",))
     async def sync_tree(self, ctx: commands.Context) -> None:
@@ -674,21 +617,6 @@ class Administrate(commands.Cog):
         await ctx.send("**Permanent Invite Link** - discord.gg/W3DKAbpJ5E\n"
                        "This link ***will never*** expire, but note that it can "
                        "be disabled by an Administrator without notice.", silent=True)
-
-    @app_commands.command(name='edit', description='Edit a message from me')
-    @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.describe(msg='The ID of the message to edit',
-                           new_content='The new content to replace it with')
-    async def edit_msg(self, interaction: discord.Interaction, msg: str, new_content: str):
-        """Edit a message that was sent by the client."""
-        
-        await interaction.response.defer(thinking=True)
-        a = await self.client.fetch_guild(interaction.guild.id)
-        b = await a.fetch_channel(interaction.channel.id)
-        c = await b.fetch_message(int(msg))
-        await c.edit(content=new_content)
-        await interaction.followup.send(content="The edits have been made", ephemeral=True,
-                                        delete_after=3.0)
 
     @commands.command(name='quit', description='Quits the bot gracefully', aliases=('q',))
     async def quit_client(self, ctx):

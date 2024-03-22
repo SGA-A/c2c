@@ -336,7 +336,7 @@ class Miscellaneous(commands.Cog):
 
     @app_commands.command(name='bored', description="Find something to do if you're bored")
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.describe(activity_type='the type of activity to think of')
+    @app_commands.describe(activity_type='The type of activities to filter by.')
     async def prompt_act(self, interaction: discord.Interaction,
                          activity_type: Optional[Literal[
                              "education", "recreational", "social", "diy",
@@ -358,8 +358,8 @@ class Miscellaneous(commands.Cog):
                                guild_only=True, guild_ids=APP_GUILDS_ID)
 
     @anime.command(name='kona', description='Retrieve NSFW posts from Konachan')
-    @app_commands.describe(tags='the tags to base searches upon', page='the page to look through under a tag')
-    async def kona_fetch(self, interaction: discord.Interaction, tags: Optional[str], page: Optional[int]):
+    @app_commands.describe(tags='The tags to base searches upon.', page='The page number to look through.')
+    async def kona_fetch(self, interaction: discord.Interaction, tags: Optional[str], page: Optional[app_commands.Range[int, 1]]):
 
         if tags is None:
             tags = "original"
@@ -420,7 +420,7 @@ class Miscellaneous(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @anime.command(name='tagsearch', description='Retrieve tags from Konachan')
-    @app_commands.describe(tag_pattern="the pattern to use to find match results")
+    @app_commands.describe(tag_pattern="A single word to use to find matching results.")
     async def tag_fetch(self, interaction: discord.Interaction, tag_pattern: str):
 
         embed = discord.Embed(title='Results', colour=discord.Colour.dark_embed())
@@ -461,7 +461,7 @@ class Miscellaneous(commands.Cog):
 
     @anime.command(name='char', description="Retrieve SFW or NSFW anime images")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    @app_commands.describe(filter_by='what type of image to retrieve')
+    @app_commands.describe(filter_by='The type of image to retrieve.')
     async def get_via_nekos(self, interaction: discord.Interaction,
                             filter_by: Optional[
                                 Literal[
@@ -546,19 +546,27 @@ class Miscellaneous(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @anime.command(name='filter', description="Filter from SFW waifu images to send")
-    @app_commands.describe(waifu="include a female anime/manga character",
-                           maid="include women/girls employed to do work in their uniform",
-                           marin_kitagawa="include marin from my dress-up darling",
-                           mori_calliope="include the english virtual youtuber mori",
-                           raiden_shogun="include the electro archon from genshin impact",
-                           oppai="include oppai within the sfw range",
-                           selfies="include photo-like image of a waifu",
-                           uniform="include girls wearing any kind of uniform")
+    @app_commands.describe(
+        waifu="Include a female anime/manga character.",
+        maid="Include women/girls employed to do work in their uniform.",
+        marin_kitagawa="Include marin from My Dress-Up Darling.",
+        mori_calliope="Include the english VTuber Mori.",
+        raiden_shogun="Include the electro archon from Genshin Impact.",
+        oppai="Include oppai within the sfw range.",
+        selfies="Include photo-like image of a waifu.",
+        uniform="Include girls wearing any kind of uniform.")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    async def filter_waifu_search(self, interaction: discord.Interaction, waifu: Optional[bool], maid: Optional[bool],
-                                  marin_kitagawa: Optional[bool], mori_calliope: Optional[bool],
-                                  raiden_shogun: Optional[bool], oppai: Optional[bool], selfies: Optional[bool],
-                                  uniform: Optional[bool]):
+    async def filter_waifu_search(
+        self, 
+        interaction: discord.Interaction, 
+        waifu: Optional[bool], 
+        maid: Optional[bool], 
+        marin_kitagawa: Optional[bool], 
+        mori_calliope: Optional[bool], 
+        raiden_shogun: Optional[bool], 
+        oppai: Optional[bool], 
+        selfies: Optional[bool], 
+        uniform: Optional[bool]):
 
         tags = []
         for param, arg in iter(interaction.namespace):
@@ -665,9 +673,10 @@ class Miscellaneous(commands.Cog):
 
     @app_commands.command(name='inviter', description='Creates a server invite link')
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.checks.has_permissions(create_instant_invite=True)
-    @app_commands.describe(invite_lifespan='the duration of which the invite should last, must be > 0.',
-                           maximum_uses='how many uses the invite could be used for. 0 for unlimited uses.')
+    @app_commands.default_permissions(create_instant_invite=True)
+    @app_commands.describe(
+        invite_lifespan='A non-zero duration for which the invite should last for.', 
+        maximum_uses='The maximum number of uses for the created invite.')
     async def gen_new_invite(self, interaction: discord.Interaction, invite_lifespan: int, maximum_uses: int):
         if invite_lifespan <= 0:
             return await interaction.response.send_message(
@@ -700,7 +709,7 @@ class Miscellaneous(commands.Cog):
     @app_commands.command(name='define', description='Define any word of choice')
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 3, key=lambda i: i.user.id)
-    @app_commands.describe(word='the term that is to be defined for you')
+    @app_commands.describe(word='An english term.')
     async def define_word(self, interaction: discord.Interaction, word: str):
         try:
             the_dictionary = PyDictionary()
@@ -741,8 +750,9 @@ class Miscellaneous(commands.Cog):
             await interaction.response.send_message(f"{the_fact}.")
 
     @app_commands.command(name="image", description="Manipulate a user's avatar")
-    @app_commands.describe(user="the user to apply the manipulation to",
-                           endpoint="what kind of manipulation sorcery to use")
+    @app_commands.describe(
+        user="The user to apply the manipulation to.", 
+        endpoint="What kind of manipulation sorcery to use.")
     @app_commands.guilds(*APP_GUILDS_ID)
     async def image_manip(self, interaction: discord.Interaction,
                           user: Optional[discord.User],
@@ -771,8 +781,9 @@ class Miscellaneous(commands.Cog):
             await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
 
     @app_commands.command(name="image2", description="Manipulate a user's avatar further")
-    @app_commands.describe(user="the user to apply the manipulation to",
-                           endpoint="what kind of manipulation sorcery to use")
+    @app_commands.describe(
+        user="The user to apply the manipulation to.",
+        endpoint="What kind of manipulation sorcery to use.")
     @app_commands.guilds(*APP_GUILDS_ID)
     async def image2_manip(self, interaction: discord.Interaction,
                            user: Optional[discord.User],
@@ -799,7 +810,7 @@ class Miscellaneous(commands.Cog):
             await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
 
     @app_commands.command(name="locket", description="Insert people into a heart-shaped locket")
-    @app_commands.describe(user="the user to add to the locket", user2="the second user to add to the locket")
+    @app_commands.describe(user="The user to add to the locket.", user2="The second user to add to the locket.")
     @app_commands.guilds(*APP_GUILDS_ID)
     async def locket_manip(self, interaction: discord.Interaction,
                            user: Optional[discord.User], user2: discord.User):
@@ -824,7 +835,7 @@ class Miscellaneous(commands.Cog):
 
     @app_commands.command(name='com', description='Finds most common letters in a sentences')
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.describe(word='the sentence(s) to find the frequent letters of')
+    @app_commands.describe(word='The sentence(s) to find the frequent letters of.')
     async def common(self, interaction: Interaction, word: str):
 
         letters = []
@@ -861,7 +872,7 @@ class Miscellaneous(commands.Cog):
 
     @app_commands.command(name='charinfo', description='Show you info about character. Maximum 25 at once.')
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.describe(characters='any written letters or symbols')
+    @app_commands.describe(characters='Any written letters or symbols.')
     async def charinfo(self, interaction: Interaction, *, characters: str):
         """Shows you information about a number of characters.
         Only up to 25 characters at a time.
@@ -1004,7 +1015,7 @@ class Miscellaneous(commands.Cog):
     @app_commands.command(name='tn', description="Get the time now in your chosen format")
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.rename(spec="mode")
-    @app_commands.describe(spec='the mode of displaying the current time now')
+    @app_commands.describe(spec='The mode of displaying the current time now.')
     async def tn(self, interaction: discord.Interaction, spec: Optional[
         Literal["t - returns short time (format HH:MM)", "T - return long time (format HH:MM:SS)",
                 "d - returns short date (format DD/MM/YYYY)",

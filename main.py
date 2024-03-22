@@ -545,7 +545,7 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
 async def reload_cog(ctx: commands.Context, cog_name: cogs):
 
     try:
-        client.reload_extension(f"cogs.{cog_name}")
+        await client.reload_extension(f"cogs.{cog_name}")
     except commands.ExtensionNotLoaded:
         return await ctx.send("That extension has not been loaded in yet.")
     except commands.ExtensionNotFound:
@@ -565,7 +565,7 @@ async def reload_cog(ctx: commands.Context, cog_name: cogs):
 async def unload_cog(ctx: commands.Context, cog_name: cogs):
 
     try:
-        client.unload_extension(f"cogs.{cog_name}")
+        await client.unload_extension(f"cogs.{cog_name}")
     except commands.ExtensionNotLoaded:
         return await ctx.send("That extension has not been loaded in yet.")
     except commands.ExtensionNotFound:
@@ -579,7 +579,7 @@ async def unload_cog(ctx: commands.Context, cog_name: cogs):
 async def load_cog(ctx: commands.Context, cog_name: cogs):
         
     try:
-        client.load_extension(f"cogs.{cog_name}")
+        await client.load_extension(f"cogs.{cog_name}")
     except commands.ExtensionAlreadyLoaded:
         return await ctx.send("That extension is already loaded.")
     except commands.ExtensionNotFound:
@@ -594,9 +594,11 @@ async def load_cog(ctx: commands.Context, cog_name: cogs):
     await ctx.message.add_reaction("\U00002705")
 
 
-@client.tree.command(name='help', description='The help command for c2c. Shows help for different categories.',
-                     guilds=[Object(id=829053898333225010), Object(id=780397076273954886)])
-async def help_command(interaction: Interaction):
+@client.tree.command(
+    name='help', 
+    description='The help command for c2c. Shows help for different categories.', 
+    guilds=[Object(id=829053898333225010), Object(id=780397076273954886)])
+async def help_command_category(interaction: Interaction):
     
     epicker = choice(["<:githubB:1195500626382164119>",
                       "<:githubBF:1195498685296021535>", "<:githubW:1195499565508460634>",
