@@ -94,8 +94,7 @@ class MyCommandTree(app_commands.CommandTree):
 
     async def _update_cache(
             self, cmads: List[app_commands.AppCommand], 
-            guild: Optional[Union[Snowflake, int]] = None
-    ) -> None:
+            guild: Optional[Union[Snowflake, int]] = None) -> None:
         # because we support both int and Snowflake
         # we need to convert it to a Snowflake like object if it's an int
         _guild: Optional[Snowflake] = None
@@ -212,7 +211,6 @@ def return_interaction_cmds_last(command_holder: dict,
                                      "Economy", "Moderation", "Miscellaneous", "Administrate", "Music"]) -> dict:
     """Displays all the app commands and grouped app commands that are defined within a cog as a dict. This should
     always be called last for consistency."""
-
     for cmd in client.get_cog(category).get_app_commands():
         command_holder.update({cmd.name: deque([f'{category}', f'{cmd.description}', 'sla'])})
     return command_holder
@@ -324,12 +322,17 @@ class SelectMenu(ui.Select):
                             if isinstance(option, app_commands.AppCommandGroup):
                                 got_something = True
                                 total_cmds_cata += 1
-                                cmd_formatter.add(
-                                    f"\U00002022 {option.mention} - {option.description}")
+                                cmd_formatter.add(f"\U00002022 {option.mention} - {option.description}")
+                    
                     if not got_something:
                         cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
                 except AttributeError:
                     continue
+
+            roles = client.tree.get_app_command("role", guild=Object(id=interaction.guild.id))
+            for option in roles.options:
+                total_cmds_cata += 1
+                cmd_formatter.add(f"\U00002022 {option.mention} - {option.description}")
             
             proportion = (total_cmds_cata / total_cmds_rough) * 100
             
@@ -600,9 +603,9 @@ async def load_cog(ctx: commands.Context, cog_name: cogs):
     guilds=[Object(id=829053898333225010), Object(id=780397076273954886)])
 async def help_command_category(interaction: Interaction):
     
-    epicker = choice(["<:githubB:1195500626382164119>",
-                      "<:githubBF:1195498685296021535>", "<:githubW:1195499565508460634>",
-                      "<:githubBlue:1195664427836506212>"])
+    epicker = choice(
+        ["<:githubB:1195500626382164119>", "<:githubBF:1195498685296021535>", 
+         "<:githubW:1195499565508460634>", "<:githubBlue:1195664427836506212>"])
 
     embed = Embed(
         title='Help Menu for c2c', 
