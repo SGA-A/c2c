@@ -24,8 +24,7 @@ from other.pagination import Pagination, PaginationItem
 
 def membed(custom_description: str) -> discord.Embed:
     """Quickly construct an embed with a custom description using the preset."""
-    membedder = discord.Embed(colour=0x2B2D31,
-                              description=custom_description)
+    membedder = discord.Embed(colour=0x2B2D31, description=custom_description)
     return membedder
 
 
@@ -981,7 +980,7 @@ class BalanceView(discord.ui.View):
             
             balance = discord.Embed(
                 title=f"{self.viewing.name}'s balances", 
-                color=0x2F3136, timestamp=discord.utils.utcnow(),
+                color=0x2B2D31, timestamp=discord.utils.utcnow(),
                 url="https://dis.gd/support")
             balance.add_field(name="Wallet", value=f"\U000023e3 {nd[0]:,}")
             balance.add_field(name="Bank", value=f"\U000023e3 {nd[1]:,}")
@@ -2376,7 +2375,7 @@ class Economy(commands.Cog):
                 "### Already Registered?\n"
                 "Find out what could've happened by calling the command "
                 "[`>reasons`](https://www.google.com/)."), 
-                colour=0x2F3136, timestamp=discord.utils.utcnow())
+                colour=0x2B2D31, timestamp=discord.utils.utcnow())
         self.batch_update.start()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -2456,7 +2455,7 @@ class Economy(commands.Cog):
             
             lb = discord.Embed(
                 title=f"Leaderboard: {chosen_choice}",
-                color=0x2F3136,
+                color=0x2B2D31,
                 timestamp=discord.utils.utcnow())
 
             lb.set_footer(
@@ -3122,7 +3121,7 @@ class Economy(commands.Cog):
                 await Economy.change_pmulti_new(user_name, conn, rand)
                 await conn.commit()
                 multi_own = discord.Embed(
-                    colour=0x2F3136, 
+                    colour=0x2B2D31, 
                     description=f'# Your new personal multiplier has been created.\n'
                                 f'- Starting now, your new personal multiplier is **{rand}**%\n'
                                 f' - You cannot change this multiplier, it is fixed and unique '
@@ -3136,14 +3135,14 @@ class Economy(commands.Cog):
                                 f'If you\'ve received a low roll, there is a very *small chance* '
                                 f'you can request for a buff (in very unfortunate cases).')
             elif (their_multi[0] == 0) and (user_name.id != interaction.user.id):
-                multi_own = discord.Embed(colour=0x2F3136, description="No multipliers found for this user.")
+                multi_own = discord.Embed(colour=0x2B2D31, description="No multipliers found for this user.")
                 multi_own.set_author(
                     name=f'Viewing {user_name.name}\'s multipliers', 
                     icon_url=user_name.display_avatar.url)
             else:
                 server_bs = SERVER_MULTIPLIERS.get(interaction.guild.id, 0)
                 multi_own = discord.Embed(
-                    colour=0x2F3136, 
+                    colour=0x2B2D31, 
                     description=f'{sticky_msg}'
                                 f'Personal multiplier: **{their_multi[0]:,}**%\n'
                                 f'*A multiplier that is unique to a user and is usually a fixed '
@@ -4614,7 +4613,7 @@ class Economy(commands.Cog):
             if await self.can_call_out(member, conn):
                 return await interaction.response.send_message(embed=NOT_REGISTERED)
 
-            em = discord.Embed(color=0x2F3136)
+            em = discord.Embed(color=0x2B2D31)
             length = 8
 
             owned_items = await conn.fetchall(
@@ -4934,7 +4933,7 @@ class Economy(commands.Cog):
                 space = (nd[1] / nd[2]) * 100
 
                 balance = discord.Embed(
-                    title=f"{user.name}'s balances", color=0x2F3136, timestamp=discord.utils.utcnow(),
+                    title=f"{user.name}'s balances", color=0x2B2D31, timestamp=discord.utils.utcnow(),
                     url="https://dis.gd/support")
                 balance.add_field(name="Wallet", value=f"\U000023e3 {nd[0]:,}")
                 balance.add_field(name="Bank", value=f"\U000023e3 {nd[1]:,}")
@@ -5044,7 +5043,7 @@ class Economy(commands.Cog):
                     bank_new = await self.update_bank_new(user, conn, -bank_amt, "bank")
                     await conn.commit()
 
-                    embed = discord.Embed(colour=0x2F3136)
+                    embed = discord.Embed(colour=0x2B2D31)
 
                     embed.add_field(name="<:withdraw:1195657655134470155> Withdrawn", value=f"\U000023e3 {bank_amt:,}",
                                     inline=False)
@@ -5070,7 +5069,7 @@ class Economy(commands.Cog):
                 bank_new = await self.update_bank_new(user, conn, -amount_conv, "bank")
                 await conn.commit()
 
-                embed = discord.Embed(colour=0x2F3136)
+                embed = discord.Embed(colour=0x2B2D31)
                 embed.add_field(name="<:withdraw:1195657655134470155> Withdrawn", value=f"\U000023e3 {amount_conv:,}",
                                 inline=False)
                 embed.add_field(name="Current Wallet Balance", value=f"\U000023e3 {wallet_new[0]:,}")
@@ -5117,7 +5116,7 @@ class Economy(commands.Cog):
                     bank_new = await self.update_bank_new(user, conn, +available_bankspace, "bank")
                     await conn.commit()
 
-                    embed = discord.Embed(colour=0x2F3136)
+                    embed = discord.Embed(colour=0x2B2D31)
                     embed.add_field(name="<:deposit:1195657772231036948> Deposited",
                                     value=f"\U000023e3 {available_bankspace:,}", inline=False)
                     embed.add_field(name="Current Wallet Balance", value=f"\U000023e3 {wallet_new[0]:,}")
@@ -5149,7 +5148,7 @@ class Economy(commands.Cog):
                 bank_new = await self.update_bank_new(user, conn, +amount_conv, "bank")
                 await conn.commit()
 
-                embed = discord.Embed(colour=0x2F3136)
+                embed = discord.Embed(colour=0x2B2D31)
                 embed.add_field(name="<:deposit:1195657772231036948> Deposited", value=f"\U000023e3 {amount_conv:,}",
                                 inline=False)
                 embed.add_field(name="Current Wallet Balance", value=f"\U000023e3 {wallet_new[0]:,}")
@@ -5215,7 +5214,7 @@ class Economy(commands.Cog):
 
                 result = choices([0, 1], weights=(49, 51), k=1)
                 
-                embed = discord.Embed(colour=0x2F3136)
+                embed = discord.Embed(colour=0x2B2D31)
                 async with conn.transaction():
                     if not result[0]:
                         emote = choice(
