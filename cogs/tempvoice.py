@@ -2,10 +2,53 @@ from discord.ext import commands
 from discord import app_commands
 
 from cogs.economy import APP_GUILDS_ID, membed
-from typing import Optional
+from typing import Optional, Literal
 from asqlite import Connection as asqlite_Connection
 
 import discord
+
+
+class MemberSelect(discord.ui.UserSelect):
+    def __init__(self, client: commands.Bot, mode: Literal["Block", "Trust"]):
+        self.client = client
+        self.mode = mode
+        self.tempvoice = client.get_cog("TempVoice")
+        super().__init__(placeholder=f"Select any members to {mode.lower()}", min_values=1, max_values=3)
+
+    async def callback(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+
+        user = interaction.user
+        user_data = self.tempvoice.active_voice_channels[user.id]
+
+        selected_without_admin = {str(user.id) for user in self.values if not(user.guild_permissions.administrator or user.bot)}
+        verb = f"{self.mode.lower()}ed"
+        
+        overwrites = {**user.voice.channel.overwrites}
+        
+        trust_or_block = discord.PermissionOverwrite()
+        is_granted = self.mode == "Trust"
+        trust_or_block.update(
+            connect=is_granted, 
+            read_messages=is_granted, 
+            send_messages=is_granted
+        )
+
+        initial_users: set[str] = user_data[verb]
+        selected_without_admin = initial_users.union(selected_without_admin)
+        overwrites_to_add = selected_without_admin - initial_users
+
+        for overwrite_entry in overwrites_to_add:
+            overwrites.update({interaction.guild.get_member(int(overwrite_entry)): trust_or_block})
+
+        await user.voice.channel.edit(overwrites=overwrites)
+
+        if selected_without_admin == initial_users:
+            return await interaction.response.edit_message(
+                embed=membed(f"No changes were made to {verb} users, since the selected users can bypass it."), view=None)
+        
+        self.tempvoice.active_voice_channels[interaction.user.id].update({verb: selected_without_admin})
+        await interaction.edit_original_response(embed=membed(f"{self.mode}ed **{len(selected_without_admin)}** users."), view=None)
 
 
 class PrivacyOptions(discord.ui.Select):
@@ -52,7 +95,27 @@ class PrivacyOptions(discord.ui.Select):
         self.tempvoice.active_voice_channels[interaction.user.id].update({"privacy": " ".join(self.privacy_setting)})
 
         await self.voice_channel.set_permissions(interaction.guild.default_role, overwrite=overwrites)
-        await interaction.edit_original_response(embed=membed(content), view=None)
+        await interaction.response.edit_message(embed=membed(content), view=None)
+
+
+class TrustOrBlock(discord.ui.View):
+    def __init__(self, interaction: discord.Interaction, client: commands.Bot, mode: Literal["Block", "Trust"]):
+        self.interaction = interaction
+        super().__init__(timeout=60.0)
+        self.add_item(MemberSelect(client, mode=mode))
+
+    async def interaction_check(self, interaction: discord.Interaction[discord.Client]) -> bool:
+        if interaction.user.voice is not None:
+            return True
+        await interaction.response.edit_message(embed=membed("You disconnected."), view=None)
+        return False
+
+    async def on_timeout(self):
+        self.children[0].disabled = True
+        try:
+            await self.interaction.edit_original_response(view=self)
+        except discord.NotFound:
+            pass
 
 
 class PrivacyView(discord.ui.View):
@@ -64,6 +127,12 @@ class PrivacyView(discord.ui.View):
         super().__init__(timeout=60.0)
         self.add_item(PrivacyOptions(client, voice_channel, privacy_setting))
 
+    async def interaction_check(self, interaction: discord.Interaction[discord.Client]) -> bool:
+        if interaction.user.voice is not None:
+            return True
+        await interaction.response.edit_message(embed=membed("You disconnected."), view=None)
+        return False
+
     async def on_timeout(self):
         self.children[0].disabled = True
         try:
@@ -72,9 +141,7 @@ class PrivacyView(discord.ui.View):
             pass
     
     async def on_error(self, interaction: discord.Interaction[discord.Client], error: Exception, item: discord.ui.Item) -> None:
-        await interaction.edit_original_response(
-            embed=membed("Something went wrong. You should try again later when the developers resolve the issue."), view=None
-        )        
+        await interaction.response.edit_message(embed=membed("Something went wrong. You should try again later when the developers resolve the issue."), view=None)        
 
 
 class TempVoice(commands.Cog):
@@ -85,7 +152,10 @@ class TempVoice(commands.Cog):
     async def store_data_locally(self, *, member: discord.Member, conn: asqlite_Connection):
         vdata = await conn.fetchone(
             "SELECT name, `limit`, bitrate, blocked, trusted, privacy FROM userVoiceSettings WHERE ownerID = ?", member.id)
-
+        if vdata:
+            vdata = list(vdata)
+            vdata[3] ={uid for uid in vdata[3].split()}
+            vdata[4] = {uid for uid in vdata[4].split()}
         vdata = vdata or (f"{member.name}'s Channel", 0, 64000, set(), set(), "1 1 1")
         
         self.active_voice_channels.update(
@@ -99,7 +169,6 @@ class TempVoice(commands.Cog):
                     "privacy": vdata[5]
                 }
             })
-        # TODO tranform set of strings into a single string using join meth
 
     async def upon_joining_creator(
             self, owner: discord.Member, creator_channel_id: int):
@@ -111,7 +180,7 @@ class TempVoice(commands.Cog):
             category = await owner.guild.create_category("TempVoice")
         
         # ! [Can_connect, Can_view, Can_send_messages] either 0 (False) or 1 (True)
-        privacy: list = user_data["privacy"].split()
+        privacy: list = user_data["privacy"].split(" ")
 
         me_overwrites = discord.PermissionOverwrite()
         me_overwrites.update(
@@ -141,16 +210,38 @@ class TempVoice(commands.Cog):
             owner: owner_overwrites,
             owner.guild.me: me_overwrites
         }
+        
+        for anyone in user_data["trusted"]:
+            overwrites.update({owner.guild.get_member(int(anyone)): owner_overwrites})
+        
         try:
             channel = await category.create_voice_channel(
                 name=user_data["name"], 
                 bitrate=user_data["bitrate"], 
                 user_limit=user_data["limit"], overwrites=overwrites)
+            await owner.move_to(channel)
         except discord.RateLimited as rl:
             print(f"we are being ratelimited, try again in {rl.retry_after}s")
             del self.active_voice_channels[owner.id]
-        await owner.move_to(channel)
     
+    async def handle_mutual_removals(self, interaction: discord.Interaction, member: discord.Member, verb: Literal["trusted", "blocked"]):
+        user = interaction.user
+        current_overwrites = {**interaction.user.voice.channel.overwrites}
+        
+        data_searched = self.active_voice_channels[user.id][verb]
+        
+        if str(member.id) not in data_searched:
+            return await interaction.response.send_message(
+                embed=membed(f"{member.mention} is not a {verb} user."), ephemeral=True)
+        
+        del current_overwrites[member]
+        await user.voice.channel.set_permissions(member, overwrite=None)
+        data_searched.remove(str(member.id))
+        self.active_voice_channels[user.id].update({verb: data_searched})
+        
+        await interaction.response.send_message(
+            embed=membed(f"{member.mention} is **no longer {verb}**."), ephemeral=True)
+
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
 
@@ -170,16 +261,16 @@ class TempVoice(commands.Cog):
             creatorChannelId = creatorChannelId[0]
 
             if after.channel is None:
-                if (len(before.channel.members)-1) > 0:
+                old_channel_data = self.active_voice_channels.get(member.id)
+
+                if old_channel_data is None:  # owner hasnt left yet
+                    return
+                
+                if len(before.channel.members):
                     return
                 
                 if before.channel.id != creatorChannelId:
                     await before.channel.delete(reason="All users disconnected.")
-
-                try:
-                    old_channel_data: dict = self.active_voice_channels[member.id]
-                except KeyError:  # if the bot reset/reloaded
-                    return
 
                 old_channel_data.update(
                     {
@@ -189,9 +280,11 @@ class TempVoice(commands.Cog):
                 async with conn.transaction():
                     await conn.execute(
                         """
-                        UPDATE userVoiceSettings 
-                        SET name = ?, `limit` = ?, bitrate = ?, blocked = ?, trusted = ?, privacy = ?""", 
-                        *old_channel_data)
+                        INSERT OR REPLACE INTO userVoiceSettings (ownerID, name, `limit`, bitrate, blocked, trusted, privacy) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (member.id, *old_channel_data.values())
+                    )
                     del self.active_voice_channels[member.id]
                 return
             
@@ -271,7 +364,7 @@ class TempVoice(commands.Cog):
         await voice.channel.edit(bitrate=(bitrate*1000))
 
         await interaction.response.send_message(
-            embed=membed(f"Changed the bitrate of {voice.channel.mention} to **{bitrate / 1000}** kbps."))                
+            embed=membed(f"Changed the bitrate of {voice.channel.mention} to **{bitrate}** kbps."))                
 
     @voice.command(name="limit", description="Change the user limit of your temporary voice channel")
     @app_commands.checks.cooldown(1, 15)
@@ -311,6 +404,51 @@ class TempVoice(commands.Cog):
         await interaction.response.send_message(
             embed=membed(f"Kicked {member.mention} from {user_voice.channel.mention}."), 
             ephemeral=True)
+
+    @voice.command(name="trust", description="Trust users with permanent access to your temporary voice channel")
+    async def change_trusted_users(self, interaction: discord.Interaction):
+        trust_view = TrustOrBlock(interaction, self.client, mode="Trust")
+        await interaction.response.send_message(view=trust_view, ephemeral=True)
+    
+    @voice.command(name="block", description="Block users from access your temporary voice channel")
+    async def block_users(self, interaction: discord.Interaction):
+        block_view = TrustOrBlock(interaction, self.client, mode="Block")
+        await interaction.response.send_message(view=block_view, ephemeral=True)    
+    
+    @voice.command(name="untrust", description="Remove trusted users access to your temporary channel")
+    @app_commands.describe(member="The user to untrust from the channel.")
+    async def untrust_users(self, interaction: discord.Interaction, member: discord.Member):
+        await self.handle_mutual_removals(interaction, member, "trusted")
+    
+    @voice.command(name="unblock", description="Remove blocked users from your temporary voice channel")
+    @app_commands.describe(member="The user to unblock from the channel.")
+    async def unblock_users(self, interaction: discord.Interaction, member: discord.Member):
+        await self.handle_mutual_removals(interaction, member, "blocked")
+
+    @voice.command(name="info", description="Get information about a temporary voice channel")
+    async def voice_info(self, interaction: discord.Interaction):
+        user = interaction.user
+        data = self.active_voice_channels[user.id]
+        embed = discord.Embed(title="Temporary Voice Channel Information", colour=0x2B2D31, url=user.voice.channel.jump_url)
+        
+        privacy_broken = data["privacy"].split()
+        privacy = ["Locked", "Hidden", "Closed Chat"]
+        privacy = {privacy[i] for i, check in enumerate(privacy_broken) if check == "1"}
+
+        embed.description = (
+            f"- **Bitrate:** {data['bitrate'] // 1000} kbps\n"
+            f"- **User Limit:** {data['limit']}\n"
+            f"- **Privacy:** {', '.join(privacy) or 'Public Configuration'}\n"
+        )
+
+        embed.add_field(
+            name="Trusted Members", 
+            value=", ".join({self.client.get_user(int(trusted)).mention for trusted in data["trusted"]}) or "*None.*", inline=False)
+        
+        embed.add_field(
+            name="Blocked Members", 
+            value=", ".join({self.client.get_user(int(blocked)).mention for blocked in data["blocked"]} or "*None.*"), inline=False)
+        await interaction.response.send_messge(embed=embed)
 
 
 async def setup(client: commands.Bot):
