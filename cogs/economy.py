@@ -566,7 +566,7 @@ class ConfirmResetData(discord.ui.View):
         try:
             embed = self.message.embeds[0]
             embed.title = "Timed Out"
-            embed.colour = 0x979C9F
+            embed.colour = discord.Colour.brand_red()
             return await self.message.edit(embed=embed, view=self)
         except discord.NotFound:
             pass
@@ -623,7 +623,7 @@ class Confirm(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction[discord.Client]) -> bool:
         if self.interaction.user.id == interaction.user.id:
             return True
-        await interaction.response.send_message(embed=membed("This is not your confirmation menu.", ephemeral=True))
+        await interaction.response.send_message(embed=membed("This is not your confirmation menu."), ephemeral=True)
         return False
 
     @discord.ui.button(label='Cancel', style=discord.ButtonStyle.red)
