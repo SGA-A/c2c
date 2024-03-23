@@ -9,7 +9,6 @@ from psutil import Process, cpu_count
 from time import perf_counter
 from typing import Literal, Union, Optional
 from discord.ext import commands
-from other.spshit import get_song_attributes
 from discord import app_commands, Interaction, Object
 from unicodedata import name
 
@@ -621,55 +620,6 @@ class Miscellaneous(commands.Cog):
             return emb, n
 
         await Pagination(interaction, get_page_part).navigate()
-
-    @commands.command(name='spsearch', description='Search for songs on spotify', aliases=('sps', 'ss'))
-    async def search_sp(self, ctx, *, name_of_song):
-        async with ctx.typing():
-            song_emb = discord.Embed(colour=discord.Colour.from_rgb(79, 190, 78),
-                                     timestamp=datetime.datetime.now(datetime.UTC))
-            results = get_song_attributes(name_of_song)
-            song_emb.set_thumbnail(url=results[0]['image_url'])
-            song_emb.set_footer(icon_url=self.client.user.avatar.url,
-                                text='duplicates may be displayed')
-            lisr = []
-            boarder = '<:blurpleL:1159506273771978837>'
-            for index, result in enumerate(results, start=1):
-                if 0 <= result['popularity'] <= 33:
-                    rating = '(Unpopular \U00002b50)'
-                elif 33 <= result['popularity'] <= 66:
-                    rating = '(Quite Popular \U0001f31f )'
-                else:
-                    rating = '(Very Popular \U00002728)'
-                lisr.append(f'\n### Result {index}:\n'
-                            f'**Song Name**: {result['song_name']}\n'
-                            f'**Artist(s)**: {', '.join(result['artists'])}\n'
-                            f'**Track URL**: [Click Here]({result['external_urls']['spotify']})\n'
-                            f'**Popularity**: {result['popularity']} {rating}')
-
-            # noinspection PyUnboundLocalVariable
-            song_emb.description = (f'## Search Results\n'
-                                    f'> The **`popularity`** attribute may be difficult to understand. '
-                                    f'Type the command [`>aboutpop`](https://www.google.com) to learn more '
-                                    f'about this attribute.'
-                                    f'{f'\n{boarder * 7}'.join(lisr)}')
-            await ctx.send(embed=song_emb)
-
-    @commands.command(name='aboutpop', description='Explains how popularity is calculated')
-    async def about_pop_attr(self, ctx: commands.Context):
-        async with ctx.typing():
-            embed = membed(
-                "# How track popularity really is calculated\n"
-                "> If you have no idea what this is, learn more by calling [`>spsearch`](https://www.google.com)\n\n"
-                "- The popularity of a track is a value between **`0`** and **`100`**, with "
-                "**`100`** being the most popular.\n - The popularity is calculated by algorithm and is based, "
-                "in the most part, on the total number of plays "
-                "the track has had and how recent those plays are.\n"
-                " - Generally speaking, songs that are being played a lot now will have a higher popularity than songs "
-                "that were played a lot in the past. \n"
-                " - Duplicate tracks (e.g. the same track from a single and an album) are rated independently.\n\n"
-                "**N.B**: The popularity value may lag actual popularity by a few days: the value is **not** "
-                "updated in real time!")
-            await ctx.send(embed=embed)
 
     @app_commands.command(name='inviter', description='Creates a server invite link')
     @app_commands.guilds(*APP_GUILDS_ID)
