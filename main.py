@@ -8,7 +8,7 @@ from sys import version
 from re import compile
 from random import choice
 from collections import deque
-from typing import Literal, Any, Dict, Optional, TYPE_CHECKING, Union, List
+from typing import Literal, Any, Dict, Optional, TYPE_CHECKING, Union, List, Tuple
 from logging import INFO as LOGGING_INFO
 
 from asyncio import run
@@ -17,9 +17,10 @@ from asqlite import create_pool
 
 from discord.utils import setup_logging, format_dt
 from discord import app_commands, Object, ui, Intents, Status, Embed, Interaction, CustomActivity
-from discord import AppCommandType, SelectOption, Colour, Webhook, NotFound
+from discord import AppCommandType, SelectOption, Colour, Webhook, NotFound, ButtonStyle, Message
 from discord.ext import commands
 
+from cogs.economy import membed
 
 if TYPE_CHECKING:
     from discord.abc import Snowflake
@@ -174,7 +175,7 @@ intents.voice_states = True
 
 client = C2C(
     command_prefix='>', intents=intents, case_insensitive=True, help_command=None, 
-    owner_ids={992152414566232139, 546086191414509599, 1148206353647669298},
+    owner_ids={992152414566232139, 546086191414509599},  # 1148206353647669298
     activity=CustomActivity(name='Serving cc • /help'), status=Status.idle, 
     tree_cls=MyCommandTree, max_messages=100, max_ratelimit_timeout=30.0)
 print(version)
@@ -543,44 +544,115 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
     await ctx.send(f"Sent to '{thread.mention}' with ID {thread.id}.")
 
 
+class Confirm(ui.View):
+    """Chopped down version of the original interactive menu."""
+
+    def __init__(self, ctx: commands.Context):
+        self.ctx = ctx
+        super().__init__(timeout=45.0)
+        self.value = None
+
+    async def interaction_check(self, interaction: Interaction) -> bool:
+        if interaction.user.id in interaction.client.owner_ids:
+            return True
+        await interaction.response.send_message(
+            embed=membed("This confirmation menu is for developer use only."), ephemeral=True)
+        return False
+
+    @ui.button(label='Cancel', style=ButtonStyle.red)
+    async def cancel(self, interaction: Interaction, button: ui.Button):
+        self.children[1].style = ButtonStyle.grey
+        button.style = ButtonStyle.success
+        
+        for item in self.children:
+            item.disabled = True
+
+        await interaction.response.edit_message(view=self)
+        
+        self.value = False
+        self.stop()
+
+    @ui.button(label='Confirm', style=ButtonStyle.green)
+    async def confirm(self, interaction: Interaction, button: ui.Button):
+        self.children[0].style = ButtonStyle.grey
+        button.style = ButtonStyle.success
+
+        for item in self.children:
+            item.disabled = True
+        
+        await interaction.response.edit_message(view=self)
+
+        self.value = True
+        self.stop()
+
+
+async def confirm_before_hot_reloading(ctx: commands.Context) -> Tuple[bool, Message]:
+    confirm = Confirm(ctx)
+
+    confirmation = Embed(title="Pending Confirmation", colour=0x2B2D31)
+    confirmation.description = (
+        "Data previously loaded into a data structure will be lost.\n"
+        "Are you **sure** you want to proceed?")
+    msg = await ctx.send(embed=confirmation, view=confirm)
+    
+    await confirm.wait()
+
+    if confirm.value is None:
+        confirmation.title = "Timed out"
+        confirmation.description = f"~~{confirmation.description}~~"
+        confirmation.colour = Colour.brand_red()
+    elif confirm.value:
+        confirmation.title = "Action Confirmed"
+        confirmation.colour = Colour.green()
+    else:
+        confirmation.title = "Action Cancelled"
+        confirmation.colour = Colour.brand_red()
+    
+    reference = await msg.edit(embed=confirmation)
+    return confirm.value, reference
+
+
 @commands.is_owner()
 @client.command(name='reload', aliases=("rl",))
 async def reload_cog(ctx: commands.Context, cog_name: cogs):
-
+    val = await confirm_before_hot_reloading(ctx)
     try:
+        if not val[0]:
+            return
         await client.reload_extension(f"cogs.{cog_name}")
     except commands.ExtensionNotLoaded:
-        return await ctx.send("That extension has not been loaded in yet.")
+        return await val[1].reply(embed=membed("That extension has not been loaded in yet."))
     except commands.ExtensionNotFound:
-        return await ctx.send("Could not find an extension with that name.")
+        return await val[1].reply(embed=membed("Could not find an extension with that name."))
     except commands.NoEntryPointError:
-        return await ctx.send("The extension does not have a setup function.")
+        return await val[1].reply(embed=membed("The extension does not have a setup function."))
     
     except commands.ExtensionFailed as e:
         print(e)
-        return await ctx.send("The extension failed to load. See the console for traceback.")
+        return await val[1].reply("The extension failed to load. See the console for traceback.")
     
-    await ctx.message.add_reaction("\U00002705")
-
+    await val[1].reply(embed=membed("Done."))
 
 @commands.is_owner()
 @client.command(name='unload', aliases=("ul",))
 async def unload_cog(ctx: commands.Context, cog_name: cogs):
 
     try:
+        val = await confirm_before_hot_reloading(ctx)
+        if not val[0]:
+            return
         await client.unload_extension(f"cogs.{cog_name}")
     except commands.ExtensionNotLoaded:
-        return await ctx.send("That extension has not been loaded in yet.")
+        return await val[1].reply("That extension has not been loaded in yet.")
     except commands.ExtensionNotFound:
-        return await ctx.send("Could not find an extension with that name.")
+        return await val[1].reply("Could not find an extension with that name.")
     
-    await ctx.message.add_reaction("\U00002705")
+    await val[1].reply(embed=membed("Done."))
 
 
 @commands.is_owner()
 @client.command(name='load', aliases=("ld",))
 async def load_cog(ctx: commands.Context, cog_name: cogs):
-        
     try:
         await client.load_extension(f"cogs.{cog_name}")
     except commands.ExtensionAlreadyLoaded:
