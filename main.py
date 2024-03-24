@@ -8,7 +8,7 @@ from sys import version
 from re import compile
 from random import choice
 from collections import deque
-from typing import Literal, Any, Dict, Optional, TYPE_CHECKING, Union, List, Tuple
+from typing import Literal, Any, Dict, Optional, TYPE_CHECKING, Union, List
 from logging import INFO as LOGGING_INFO
 
 from asyncio import run
@@ -17,7 +17,7 @@ from asqlite import create_pool
 
 from discord.utils import setup_logging, format_dt
 from discord import app_commands, Object, ui, Intents, Status, Embed, Interaction, CustomActivity
-from discord import AppCommandType, SelectOption, Colour, Webhook, NotFound, ButtonStyle, Message
+from discord import AppCommandType, SelectOption, Colour, Webhook, NotFound, ButtonStyle
 from discord.ext import commands
 
 from cogs.economy import membed
@@ -586,7 +586,7 @@ class Confirm(ui.View):
         self.stop()
 
 
-async def confirm_before_hot_reloading(ctx: commands.Context) -> Tuple[bool, Message]:
+async def confirm_before_hot_reloading(ctx: commands.Context) -> bool:
     confirm = Confirm(ctx)
 
     confirmation = Embed(title="Pending Confirmation", colour=0x2B2D31)
@@ -611,8 +611,8 @@ async def confirm_before_hot_reloading(ctx: commands.Context) -> Tuple[bool, Mes
         confirmation.title = "Action Cancelled"
         confirmation.colour = Colour.brand_red()
     
-    reference = await msg.edit(embed=confirmation, view=confirm)
-    return confirm.value, reference
+    await msg.edit(embed=confirmation, view=confirm)
+    return confirm.value
 
 
 @commands.is_owner()
@@ -620,21 +620,21 @@ async def confirm_before_hot_reloading(ctx: commands.Context) -> Tuple[bool, Mes
 async def reload_cog(ctx: commands.Context, cog_name: cogs):
     val = await confirm_before_hot_reloading(ctx)
     try:
-        if not val[0]:
+        if not val:
             return
         await client.reload_extension(f"cogs.{cog_name}")
     except commands.ExtensionNotLoaded:
-        return await val[1].reply(embed=membed("That extension has not been loaded in yet."))
+        return await ctx.reply(embed=membed("That extension has not been loaded in yet."))
     except commands.ExtensionNotFound:
-        return await val[1].reply(embed=membed("Could not find an extension with that name."))
+        return await ctx.reply(embed=membed("Could not find an extension with that name."))
     except commands.NoEntryPointError:
-        return await val[1].reply(embed=membed("The extension does not have a setup function."))
+        return await ctx.reply(embed=membed("The extension does not have a setup function."))
     
     except commands.ExtensionFailed as e:
         print(e)
-        return await val[1].reply("The extension failed to load. See the console for traceback.")
+        return await ctx.reply(embed=membed("The extension failed to load. See the console for traceback."))
     
-    await val[1].reply(embed=membed("Done."))
+    await ctx.reply(embed=membed("Done."))
 
 @commands.is_owner()
 @client.command(name='unload', aliases=("ul",))
@@ -642,15 +642,15 @@ async def unload_cog(ctx: commands.Context, cog_name: cogs):
 
     try:
         val = await confirm_before_hot_reloading(ctx)
-        if not val[0]:
+        if not val:
             return
         await client.unload_extension(f"cogs.{cog_name}")
     except commands.ExtensionNotLoaded:
-        return await val[1].reply("That extension has not been loaded in yet.")
+        return await ctx.reply("That extension has not been loaded in yet.")
     except commands.ExtensionNotFound:
-        return await val[1].reply("Could not find an extension with that name.")
+        return await ctx.reply("Could not find an extension with that name.")
     
-    await val[1].reply(embed=membed("Done."))
+    await ctx.reply(embed=membed("Done."))
 
 
 @commands.is_owner()
