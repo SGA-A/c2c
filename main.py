@@ -168,7 +168,6 @@ intents.members = True
 intents.guild_messages = True
 intents.message_content = True
 intents.emojis_and_stickers = True
-intents.guild_reactions = True
 intents.guilds = True
 intents.voice_states = True
 
