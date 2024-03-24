@@ -598,6 +598,9 @@ async def confirm_before_hot_reloading(ctx: commands.Context) -> Tuple[bool, Mes
     await confirm.wait()
 
     if confirm.value is None:
+        for item in confirm.children:
+            item.disabled = True
+
         confirmation.title = "Timed out"
         confirmation.description = f"~~{confirmation.description}~~"
         confirmation.colour = Colour.brand_red()
@@ -608,7 +611,7 @@ async def confirm_before_hot_reloading(ctx: commands.Context) -> Tuple[bool, Mes
         confirmation.title = "Action Cancelled"
         confirmation.colour = Colour.brand_red()
     
-    reference = await msg.edit(embed=confirmation)
+    reference = await msg.edit(embed=confirmation, view=confirm)
     return confirm.value, reference
 
 
