@@ -15,6 +15,9 @@ class MemberSelect(discord.ui.UserSelect):
         self.tempvoice = client.get_cog("TempVoice")
         super().__init__(placeholder=f"Select any members to {mode.lower()}", min_values=1, max_values=3)
 
+    def check(self, username: discord.Member, interaction_user: discord.Member) -> bool:
+        return not(username.guild_permissions.administrator or username.bot or username == interaction_user)
+
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
         self.view.stop()
@@ -22,7 +25,7 @@ class MemberSelect(discord.ui.UserSelect):
         user = interaction.user
         user_data = self.tempvoice.active_voice_channels[user.id]
 
-        selected_without_admin = {str(user.id) for user in self.values if not(user.guild_permissions.administrator or user.bot)}
+        selected_without_admin = {str(username.id) for username in self.values if self.check(username, user)}
         verb = f"{self.mode.lower()}ed"
 
         initial_users: set[str] = user_data[verb]
@@ -31,27 +34,30 @@ class MemberSelect(discord.ui.UserSelect):
         trusted_and_blocked = user_data[oppo_verb].intersection(selected_without_admin)
         if trusted_and_blocked:
             return await interaction.edit_original_response(
-                embed=membed(f"Some of the members selected are already {oppo_verb}!"), 
+                embed=membed(f"Some of the members selected are {oppo_verb}!"), 
                 view=None
         )
 
         selected_without_admin = initial_users.union(selected_without_admin)
-        overwrites_to_add = selected_without_admin - initial_users
 
         if selected_without_admin == initial_users:
             return await interaction.edit_original_response(
-                embed=membed(f"No changes were made to {verb} users, since the selected users can bypass it."), 
+                embed=membed(
+                    f"No changes were made to {verb} users. Ensure that:\n"
+                    f"- You did not select admins.\n"
+                    f"- You did not select bots.\n"
+                    f"- You did not select yourself."), 
                 view=None
-        )
-
+            )
+        
+        overwrites_to_add = selected_without_admin - initial_users
         overwrites = {**user.voice.channel.overwrites}        
         trust_or_block = discord.PermissionOverwrite()
 
         is_granted = self.mode == "Trust"
         trust_or_block.update(
             connect=is_granted, 
-            read_messages=is_granted, 
-            send_messages=is_granted
+            read_messages=is_granted
         )
 
         for overwrite_entry in overwrites_to_add:
@@ -214,11 +220,13 @@ class TempVoice(commands.Cog):
             send_messages=privacy[-1] == "1"
         )
         
+        blocked_overwrites = discord.PermissionOverwrite()
+        blocked_overwrites.update(connect=False, read_messages=False)
+
         owner_overwrites = discord.PermissionOverwrite()
         owner_overwrites.update(
             connect=True, 
-            read_messages=True, 
-            send_messages=True
+            read_messages=True
         )
 
         overwrites = {
@@ -227,9 +235,12 @@ class TempVoice(commands.Cog):
             owner.guild.me: me_overwrites
         }
         
-        for anyone in user_data["trusted"]:
-            overwrites.update({owner.guild.get_member(int(anyone)): owner_overwrites})
-        
+        # Update permissions for trusted users
+        overwrites.update({owner.guild.get_member(int(anyone)): owner_overwrites for anyone in user_data["trusted"]})
+
+        # Update permissions for blocked users
+        overwrites.update({owner.guild.get_member(int(anyone)): blocked_overwrites for anyone in user_data["blocked"]})
+
         try:
             channel = await category.create_voice_channel(
                 name=user_data["name"], 
@@ -242,7 +253,6 @@ class TempVoice(commands.Cog):
     
     async def handle_mutual_removals(self, interaction: discord.Interaction, member: discord.Member, verb: Literal["trusted", "blocked"]):
         user = interaction.user
-        current_overwrites = {**interaction.user.voice.channel.overwrites}
         
         data_searched = self.active_voice_channels[user.id][verb]
         
@@ -250,7 +260,6 @@ class TempVoice(commands.Cog):
             return await interaction.response.send_message(
                 embed=membed(f"{member.mention} is not a {verb} user."), ephemeral=True)
         
-        del current_overwrites[member]
         await user.voice.channel.set_permissions(member, overwrite=None)
         data_searched.remove(str(member.id))
         self.active_voice_channels[user.id].update({verb: data_searched})
@@ -307,11 +316,6 @@ class TempVoice(commands.Cog):
             if after.channel.id == creatorChannelId:  # if user joined creator channel
                 await self.store_data_locally(member=member, conn=conn)
                 await self.upon_joining_creator(member, creatorChannelId)
-                return
-            
-            if (after.channel is not None) and (before.channel is None):
-                if str(member.id) in self.active_voice_channels[member.id]["blocked"]:
-                    return await member.move_to(None, reason="This user is blocked.")
 
 
     voice = app_commands.Group(
@@ -468,7 +472,7 @@ class TempVoice(commands.Cog):
         embed.set_footer(
             text=(
             "\U000000b9 Trusted Members can join your locked or hidden temporary voice channel\n"
-            "\U000000b2 Blocked Members cannot see your temporary voice channel"
+            "\U000000b2 Blocked Members cannot see your temporary channel"
             )
         )
         await interaction.response.send_message(embed=embed)
