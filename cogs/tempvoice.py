@@ -181,7 +181,8 @@ class TempVoice(commands.Cog):
                     "trusted": vdata[4],  # stored as set of strings
                     "privacy": vdata[5]
                 }
-            })
+            }
+        )
 
     async def upon_joining_creator(
             self, owner: discord.Member, creator_channel_id: int):
@@ -316,32 +317,33 @@ class TempVoice(commands.Cog):
         description="Temporary voice channel management commands", 
         guild_ids=APP_GUILDS_ID, 
         guild_only=True
-        )
+    )
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return self.active_voice_channels.get(interaction.user.id) is not None
 
-    @voice.command(name="setup", description="Setup a temporary voice channel")
+    @app_commands.command(name="setup", description="Setup a creator channel for temporary voice channels.")
     @app_commands.describe(creator_channel="The channel to use for making temporary voice channels.")
     @app_commands.checks.cooldown(1, 60, key=lambda interaction: interaction.guild_id)
     async def setup_voice(self, interaction: discord.Interaction, creator_channel: discord.VoiceChannel):
         
         if not interaction.user.guild_permissions.administrator:
-            await interaction.response.send_message(
-                embed=membed("You are not an admin."))
-            return
+            return await interaction.response.send_message(
+                embed=membed("You are not an admin.")
+        )
         
         embed = discord.Embed(title="Setup Complete")
         async with self.client.pool_connection.acquire() as conn:
             await conn.execute(
                 """
                 INSERT INTO guildVoiceSettings (guildID, voiceID) VALUES ($0, $1) 
-                ON CONFLICT (guildID) DO UPDATE SET voiceID = $1""", 
-                interaction.guild.id, creator_channel.id)
+                ON CONFLICT (guildID) DO UPDATE SET voiceID = $1
+                """, interaction.guild.id, creator_channel.id)
             await conn.commit()
 
         embed.description = f"Set the creator channel to {creator_channel.mention}."
         embed.colour = discord.Colour.blurple()
+        embed.set_footer(text="Permissions are required, double check they are set.")
 
         await interaction.response.send_message(embed=embed)
 
@@ -447,17 +449,26 @@ class TempVoice(commands.Cog):
 
         embed.description = (
             f"- **Bitrate:** {data['bitrate'] // 1000} kbps\n"
-            f"- **User Limit:** {data['limit']}\n"
+            f"- **User Limit:** {data['limit'] or 'No limit'}\n"
             f"- **Privacy:** {', '.join(privacy) or 'Public Configuration'}\n"
         )
 
         embed.add_field(
-            name="Trusted Members", 
-            value=", ".join({self.client.get_user(int(trusted)).mention for trusted in data["trusted"]}) or "*None.*", inline=False)
+            name="Trusted Members\U000000b9", 
+            value=", ".join({self.client.get_user(int(trusted)).mention for trusted in data["trusted"]}) or "*None.*", 
+            inline=False)
         
         embed.add_field(
-            name="Blocked Members", 
-            value=", ".join({self.client.get_user(int(blocked)).mention for blocked in data["blocked"]}) or "*None.*", inline=False)
+            name="Blocked Members\U000000b2", 
+            value=", ".join({self.client.get_user(int(blocked)).mention for blocked in data["blocked"]}) or "*None.*", 
+            inline=False)
+        
+        embed.set_footer(
+            text=(
+            "\U000000b9 Trusted Members can join your locked or hidden temporary voice channel\n"
+            "\U000000b2 Blocked Members cannot see your temporary voice channel"
+            )
+        )
         await interaction.response.send_message(embed=embed)
 
 
