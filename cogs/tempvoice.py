@@ -23,10 +23,29 @@ class MemberSelect(discord.ui.UserSelect):
 
         selected_without_admin = {str(user.id) for user in self.values if not(user.guild_permissions.administrator or user.bot)}
         verb = f"{self.mode.lower()}ed"
+
+        initial_users: set[str] = user_data[verb]
+        oppo_verb = "blocked" if verb == "trusted" else "trusted"
         
-        overwrites = {**user.voice.channel.overwrites}
-        
+        trusted_and_blocked = user_data[oppo_verb].intersection(selected_without_admin)
+        if trusted_and_blocked:
+            return await interaction.edit_original_response(
+                embed=membed(f"Some of the members selected are already {oppo_verb}!"), 
+                view=None
+        )
+
+        selected_without_admin = initial_users.union(selected_without_admin)
+        overwrites_to_add = selected_without_admin - initial_users
+
+        if selected_without_admin == initial_users:
+            return await interaction.edit_original_response(
+                embed=membed(f"No changes were made to {verb} users, since the selected users can bypass it."), 
+                view=None
+        )
+
+        overwrites = {**user.voice.channel.overwrites}        
         trust_or_block = discord.PermissionOverwrite()
+
         is_granted = self.mode == "Trust"
         trust_or_block.update(
             connect=is_granted, 
@@ -34,21 +53,16 @@ class MemberSelect(discord.ui.UserSelect):
             send_messages=is_granted
         )
 
-        initial_users: set[str] = user_data[verb]
-        selected_without_admin = initial_users.union(selected_without_admin)
-        overwrites_to_add = selected_without_admin - initial_users
-
         for overwrite_entry in overwrites_to_add:
             overwrites.update({interaction.guild.get_member(int(overwrite_entry)): trust_or_block})
-
-        await user.voice.channel.edit(overwrites=overwrites)
-
-        if selected_without_admin == initial_users:
-            return await interaction.response.edit_message(
-                embed=membed(f"No changes were made to {verb} users, since the selected users can bypass it."), view=None)
         
+        await user.voice.channel.edit(overwrites=overwrites)
         self.tempvoice.active_voice_channels[interaction.user.id].update({verb: selected_without_admin})
-        await interaction.edit_original_response(embed=membed(f"{self.mode}ed **{len(selected_without_admin)}** users."), view=None)
+        
+        await interaction.edit_original_response(
+            embed=membed(f"{self.mode}ed **{len(selected_without_admin)}** users."), 
+            view=None
+        )
 
 
 class PrivacyOptions(discord.ui.Select):
@@ -71,7 +85,6 @@ class PrivacyOptions(discord.ui.Select):
         super().__init__(placeholder="Select a Privacy Option", options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()
         chosen = self.values[0]
         overwrites = self.voice_channel.overwrites_for(interaction.guild.default_role)
         
@@ -141,7 +154,7 @@ class PrivacyView(discord.ui.View):
             pass
     
     async def on_error(self, interaction: discord.Interaction[discord.Client], error: Exception, item: discord.ui.Item) -> None:
-        await interaction.response.edit_message(embed=membed("Something went wrong. You should try again later when the developers resolve the issue."), view=None)        
+        await interaction.response.edit_message(embed=membed("Something went wrong."), view=None)        
 
 
 class TempVoice(commands.Cog):
@@ -293,10 +306,7 @@ class TempVoice(commands.Cog):
                 await self.upon_joining_creator(member, creatorChannelId)
                 return
             
-            if after.channel is not None:  # if it is a temp vc
-                if before.channel.id == creatorChannelId:
-                    return
-                
+            if (after.channel is not None) and (before.channel is None):
                 if str(member.id) in self.active_voice_channels[member.id]["blocked"]:
                     return await member.move_to(None, reason="This user is blocked.")
 
@@ -433,7 +443,7 @@ class TempVoice(commands.Cog):
         
         privacy_broken = data["privacy"].split()
         privacy = ["Locked", "Hidden", "Closed Chat"]
-        privacy = {privacy[i] for i, check in enumerate(privacy_broken) if check == "1"}
+        privacy = {privacy[i] for i, check in enumerate(privacy_broken) if check == "0"}
 
         embed.description = (
             f"- **Bitrate:** {data['bitrate'] // 1000} kbps\n"
@@ -447,8 +457,8 @@ class TempVoice(commands.Cog):
         
         embed.add_field(
             name="Blocked Members", 
-            value=", ".join({self.client.get_user(int(blocked)).mention for blocked in data["blocked"]} or "*None.*"), inline=False)
-        await interaction.response.send_messge(embed=embed)
+            value=", ".join({self.client.get_user(int(blocked)).mention for blocked in data["blocked"]}) or "*None.*", inline=False)
+        await interaction.response.send_message(embed=embed)
 
 
 async def setup(client: commands.Bot):
