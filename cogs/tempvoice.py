@@ -17,6 +17,7 @@ class MemberSelect(discord.ui.UserSelect):
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
+        self.view.stop()
 
         user = interaction.user
         user_data = self.tempvoice.active_voice_channels[user.id]
@@ -85,6 +86,7 @@ class PrivacyOptions(discord.ui.Select):
         super().__init__(placeholder="Select a Privacy Option", options=options)
 
     async def callback(self, interaction: discord.Interaction):
+        self.view.stop()
         chosen = self.values[0]
         overwrites = self.voice_channel.overwrites_for(interaction.guild.default_role)
         
