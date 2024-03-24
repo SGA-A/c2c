@@ -32,6 +32,64 @@ class TimeConverter(app_commands.Transformer):
 @app_commands.checks.bot_has_permissions(manage_roles=True)
 class RoleManagement(app_commands.Group):
 
+    async def bulk_add_roles(
+        self, interaction: discord.Interaction, users_without_it: set, role: discord.Role, how_many: int) -> str | None:
+        if not interaction.response.is_done():
+            await interaction.response.defer(thinking=True)
+        start_time = perf_counter()
+        try:
+            for member in users_without_it:
+                await member.add_roles(discord.Object(id=role.id), atomic=True)
+        except discord.HTTPException:
+            return "We are being rate-limited. Try again later"
+        finally:
+            end_time = perf_counter()
+            success = discord.Embed()
+            success.colour = 0x54CD68
+            success.title = "Success"
+            success.description = f"Added {role.mention} to **{how_many}** members."
+            await interaction.followup.send(
+                content=f"Took {end_time - start_time:.2f}s", embed=success)
+            return None
+
+    async def bulk_remove_roles(
+            self, interaction: discord.Interaction, targets: set, new_role: discord.Role, how_many: int) -> str | None:
+        start_time = perf_counter()
+        
+        if not interaction.response.is_done():
+            await interaction.response.defer(thinking=True)
+        
+        try:
+            for member in targets:
+                await member.remove_roles(discord.Object(id=new_role.id), atomic=True)
+        except discord.HTTPException:
+            return "We are being rate-limited. Try again later."
+        finally:
+            end_time = perf_counter()
+            success = discord.Embed()
+            success.colour = 0x54CD68
+            success.title = "Success"
+            success.description = f"Removed {new_role.mention} from **{how_many}** members."
+            await interaction.followup.send(
+                content=f"Took {end_time - start_time:.2f}s", embed=success)
+            return None
+    
+    async def do_boilerplate_role_checks(self, role: discord.Role, guild: discord.Guild, my_top: discord.Role) -> str | None:
+
+        if role.managed:
+            return f"The role {role.name} is managed and cannot be assigned or removed."
+
+        if role >= my_top:
+            roles_beneath = [iter_role for iter_role in guild.roles if (iter_role < role) and (iter_role > my_top)]
+            roles_beneath = [role.name for role in roles_beneath]
+
+            return (
+                f"The role '{role.name}' (pos {role.position}) is above my highest role '{my_top.name}' (pos {my_top.position}) meaning I cannot alter their roles.\n"
+                "Please ensure my highest role is above the role you want assigned or removed.\n\n"
+                f"{role.name} **<-- The role you wish to assign or remove**\n"
+                f"{'\n'.join(roles_beneath) + '\n' if roles_beneath else ''}"
+                f"{my_top.name} **<-- The bot's highest role**")
+
     @app_commands.command(name="add", description="Adds a role to the specified member")
     @app_commands.describe(user="The user to add the role to.", role="The role to add to this user.")
     async def add_role(self, interaction: discord.Interaction, user: discord.Member, role: discord.Role):
@@ -357,8 +415,8 @@ class Moderation(commands.Cog):
         
         roles = RoleManagement(
             name="role", 
-            description="Role management commands", 
-            guild_ids=APP_GUILDS_ID, 
+            description="Role management commands",
+            guild_ids=APP_GUILDS_ID,  
             guild_only=True, 
             default_permissions=discord.Permissions(manage_roles=True))
         
@@ -388,64 +446,6 @@ class Moderation(commands.Cog):
         await interaction.response.defer(thinking=True, ephemeral=True)
         count = await interaction.channel.purge(after=discord.Object(id=message.id))
         await interaction.followup.send(embed=membed(f"Deleted **{len(count)}** messages."))
-
-    async def bulk_add_roles(
-            self, interaction: discord.Interaction, users_without_it: set, role: discord.Role, how_many: int) -> str | None:
-        if not interaction.response.is_done():
-            await interaction.response.defer(thinking=True)
-        start_time = perf_counter()
-        try:
-            for member in users_without_it:
-                await member.add_roles(discord.Object(id=role.id), atomic=True)
-        except discord.HTTPException:
-            return "We are being rate-limited. Try again later"
-        finally:
-            end_time = perf_counter()
-            success = discord.Embed()
-            success.colour = 0x54CD68
-            success.title = "Success"
-            success.description = f"Added {role.mention} to **{how_many}** members."
-            await interaction.followup.send(
-                content=f"Took {end_time - start_time:.2f}s", embed=success)
-            return None
-
-    async def bulk_remove_roles(
-            self, interaction: discord.Interaction, targets: set, new_role: discord.Role, how_many: int) -> str | None:
-        start_time = perf_counter()
-        
-        if not interaction.response.is_done():
-            await interaction.response.defer(thinking=True)
-        
-        try:
-            for member in targets:
-                await member.remove_roles(discord.Object(id=new_role.id), atomic=True)
-        except discord.HTTPException:
-            return "We are being rate-limited. Try again later."
-        finally:
-            end_time = perf_counter()
-            success = discord.Embed()
-            success.colour = 0x54CD68
-            success.title = "Success"
-            success.description = f"Removed {new_role.mention} from **{how_many}** members."
-            await interaction.followup.send(
-                content=f"Took {end_time - start_time:.2f}s", embed=success)
-            return None
-    
-    async def do_boilerplate_role_checks(self, role: discord.Role, guild: discord.Guild, my_top: discord.Role) -> str | None:
-
-        if role.managed:
-            return f"The role {role.name} is managed and cannot be assigned or removed."
-
-        if role >= my_top:
-            roles_beneath = [iter_role for iter_role in guild.roles if (iter_role < role) and (iter_role > my_top)]
-            roles_beneath = [role.name for role in roles_beneath]
-
-            return (
-                f"The role '{role.name}' (pos {role.position}) is above my highest role '{my_top.name}' (pos {my_top.position}) meaning I cannot alter their roles.\n"
-                "Please ensure my highest role is above the role you want assigned or removed.\n\n"
-                f"{role.name} **<-- The role you wish to assign or remove**\n"
-                f"{'\n'.join(roles_beneath) + '\n' if roles_beneath else ''}"
-                f"{my_top.name} **<-- The bot's highest role**")
 
     @tasks.loop()
     async def check_for_role(self):
