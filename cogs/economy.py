@@ -3738,9 +3738,9 @@ class Economy(commands.Cog):
             res = modify_profile("delete", f"{interaction.user.id} avatar_url", url)
             match res:
                 case 0:
-                    res = "<:warning_nr:1195732155544911882> No custom avatar was found under your account."
+                    res = "No custom avatar was found under your account."
                 case _:
-                    res = "<:overwrite:1195729262729240666> Your avatar was removed."
+                    res = "<:overwrite:1195729262729240666Your avatar was removed."
             return await interaction.response.send_message(embed=membed(res))
 
         successful = discord.Embed(
@@ -3761,11 +3761,11 @@ class Economy(commands.Cog):
         modify_profile("delete", f"{interaction.user.id} avatar_url", "who cares")
         return await interaction.response.send_message(
             embed=membed(
-                "<:warning_nr:1195732155544911882> The avatar url requested for could not be added:\n"
-                "- The URL provided was not well formed.\n"
-                "- Discord embed thumbnails have specific image requirements to ensure proper display.\n"
-                " - **The recommended size for a thumbnail is 80x80 pixels.**"
-            ))
+                "The avatar url requested for could not be added:\n"
+                "- Make sure you actually uploaded a valid attachment.\n"
+                "- The recommended file size is 80x80."
+            )
+        )
 
     @profile.command(name='visibility', description='Hide your profile for privacy')
     @app_commands.describe(mode='Toggle a public or private profile.')
