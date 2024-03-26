@@ -89,15 +89,16 @@ UNIQUE_BADGES = {
     10: " (MAX)"}
 SERVER_MULTIPLIERS = {
     829053898333225010: 120,
-    780397076273954886: 160}
+    780397076273954886: 160
+}
 rarity_to_colour = {
-                "Godly": 0xE2104B,
-                "Legendary": 0xDA4B3D,
-                "Epic": 0xDE63FF,
-                "Rare": 0x5250A6,
-                "Uncommon": 0x9EFF8E,
-                "Common": 0x367B70
-            }
+    "Godly": 0xE2104B,
+    "Legendary": 0xDA4B3D,
+    "Epic": 0xDE63FF,
+    "Rare": 0x5250A6,
+    "Uncommon": 0x9EFF8E,
+    "Common": 0x367B70
+}
 ARROW = "<:arrowe:1180428600625877054>"
 CURRENCY = '<:robux:1146394968882151434>'
 PREMIUM_CURRENCY = '<:robuxpremium:1174417815327998012>'
@@ -682,7 +683,7 @@ class RememberPositionView(discord.ui.View):
         super().__init__(timeout=15.0)
 
         for emoji in all_emojis:
-            self.add_item(RememberPosition(emoji, self.determine_outcome, all_emojis))
+            self.add_item(RememberPosition(emoji, self.determine_outcome))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await economy_check(interaction, self.interaction.user)
@@ -730,12 +731,9 @@ class RememberPositionView(discord.ui.View):
 class RememberPosition(discord.ui.Button):
     """A minigame to remember the position the tiles shown were on once hidden."""
 
-    def __init__(self, random_emoji: str, button_cb: Callable, all_emojis: list[str]):
+    def __init__(self, random_emoji: str, button_cb: Callable):
         self.button_cb = button_cb
-
-        super().__init__(
-            style=discord.ButtonStyle.blurple, 
-            emoji=random_emoji, row=int(all_emojis.index(random_emoji) <= 4))
+        super().__init__(emoji=random_emoji)
     
     async def callback(self, interaction: discord.Interaction):
         await self.button_cb(interaction, button=self)
