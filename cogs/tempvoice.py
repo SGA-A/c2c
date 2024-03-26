@@ -428,7 +428,7 @@ class TempVoice(commands.Cog):
         trust_view = TrustOrBlock(interaction, self.client, mode="Trust")
         await interaction.response.send_message(view=trust_view, ephemeral=True)
     
-    @voice.command(name="block", description="Block users from access your temporary voice channel")
+    @voice.command(name="block", description="Block users from accessing your temporary voice channel")
     async def block_users(self, interaction: discord.Interaction):
         block_view = TrustOrBlock(interaction, self.client, mode="Block")
         await interaction.response.send_message(view=block_view, ephemeral=True)    
