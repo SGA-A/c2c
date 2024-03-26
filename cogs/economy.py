@@ -11,7 +11,7 @@ from random import randint, choices, choice, sample, shuffle
 from pluralizer import Pluralizer
 from discord import app_commands, SelectOption
 from asqlite import Connection as asqlite_Connection
-from typing import Coroutine, Optional, Literal, Any, Union, List
+from typing import Coroutine, Optional, Literal, Any, Union, List, Callable
 from traceback import print_exception
 
 import discord
@@ -504,7 +504,8 @@ class DepositOrWithdraw(discord.ui.Modal):
             embed.set_field_at(0, name="Wallet", value=f"\U000023e3 {data[0]:,}")
             embed.set_field_at(1, name="Bank", value=f"\U000023e3 {data[1]:,}")
             embed.set_field_at(2, name="Bankspace", value=f"\U000023e3 {data[2]:,} ({prcnt_full:.2f}% full)")
-            
+            embed.timestamp = discord.utils.utcnow()
+
             self.checks(data[1], data[0], data[2]-data[1])
             return await interaction.response.edit_message(embed=embed, view=self.view_children)
         
@@ -530,6 +531,7 @@ class DepositOrWithdraw(discord.ui.Modal):
         embed.set_field_at(0, name="Wallet", value=f"\U000023e3 {updated[0]:,}")
         embed.set_field_at(1, name="Bank", value=f"\U000023e3 {updated[1]:,}")
         embed.set_field_at(2, name="Bankspace", value=f"\U000023e3 {updated[2]:,} ({prcnt_full:.2f}% full)")
+        embed.timestamp = discord.utils.utcnow()
 
         self.checks(updated[1], updated[0], updated[2]-updated[1])
         await interaction.response.edit_message(embed=embed, view=self.view_children)
@@ -655,29 +657,27 @@ class Confirm(discord.ui.View):
         self.stop()
 
 
-class RememberPosition(discord.ui.View):
-    """A minigame to remember the position the tiles shown were on once hidden."""
-
-    def __init__(self, interaction: discord.Interaction, conn: asqlite_Connection, 
-                 actual_emoji: str, their_job: str):
+class RememberPositionView(discord.ui.View):
+    def __init__(
+            self, 
+            interaction: discord.Interaction, 
+            conn: asqlite_Connection, 
+            all_emojis: list[str], 
+            actual_emoji: str, 
+            their_job: str):
 
         self.interaction = interaction
         self.conn: asqlite_Connection = conn
         self.actual_emoji = actual_emoji
         self.their_job = their_job
-        self.base = randint(12_500_000, 20_000_000)
+        self.base = randint(5_500_000, 9_500_000)
+        super().__init__(timeout=15.0)
 
-        super().__init__(timeout=20.0)
-        removed = [item for item in self.children]
-        shuffle(removed)
-        self.clear_items()
-
-        for index, btn in enumerate(removed):
-            btn.row = 0 if index < 3 else 1
-            self.add_item(btn)
+        for emoji in all_emojis:
+            self.add_item(RememberPosition(emoji, self.determine_outcome, all_emojis))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if self.interaction.user.id != interaction.user.id:
+        if self.interaction.user != interaction.user:
             await interaction.response.send_message(
                 embed=membed("This is not your shift."), ephemeral=True, delete_after=5.0)
             return False
@@ -685,14 +685,13 @@ class RememberPosition(discord.ui.View):
     
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
 
-        self.base = floor((25 / 100) * self.base)
-
-        await Economy.update_bank_new(self.interaction.user, self.conn, self.base)
+        self.base_reward = floor((25 / 100) * self.base_reward)
+        await Economy.update_bank_new(self.interaction.user, self.conn, self.base_reward)
         await self.conn.commit()
 
         embed = self.message.embeds[0]
         embed.title = "Terrible effort!"
-        embed.description = f"**You were given:**\n- \U000023e3 {self.base:,} for a sub-par shift"
+        embed.description = f"**You were given:**\n- \U000023e3 {self.base_reward:,} for a sub-par shift"
         embed.colour = discord.Colour.brand_red()
         embed.set_footer(text=f"Working as a {self.their_job}")
 
@@ -701,13 +700,12 @@ class RememberPosition(discord.ui.View):
         except discord.NotFound:
             pass
 
-    async def determine_outcome(
-            self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def determine_outcome(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Determine the position of the real emoji."""
         self.stop()
         embed = self.message.embeds[0]
 
-        if button.label == self.actual_emoji:
+        if button.emoji.name == self.actual_emoji:
             embed.title = "Great work!"
             embed.description = f"**You were given:**\n- \U000023e3 {self.base:,} for your shift"
             embed.colour = discord.Colour.brand_green()
@@ -723,36 +721,20 @@ class RememberPosition(discord.ui.View):
         await self.conn.commit()
 
         await interaction.response.edit_message(content=None, embed=embed, view=None)
-            
-    @discord.ui.button(label="\U0001f7e5")
-    async def red_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Callback for the red buttons."""
-        await self.determine_outcome(interaction, button=button)
+
+
+class RememberPosition(discord.ui.Button):
+    """A minigame to remember the position the tiles shown were on once hidden."""
+
+    def __init__(self, random_emoji: str, button_cb: Callable, all_emojis: list[str]):
+        self.button_cb = button_cb
+
+        super().__init__(
+            style=discord.ButtonStyle.blurple, 
+            emoji=random_emoji, row=int(all_emojis.index(random_emoji) <= 4))
     
-    @discord.ui.button(label="\U0001f7e7")
-    async def orange_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Callback for the orange buttons."""
-        await self.determine_outcome(interaction, button=button)
-
-    @discord.ui.button(label="\U0001f7e8")
-    async def yellow_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Callback for the yellow buttons."""
-        await self.determine_outcome(interaction, button=button)
-
-    @discord.ui.button(label="\U0001f7e9")
-    async def green_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Callback for the green buttons."""
-        await self.determine_outcome(interaction, button=button)
-
-    @discord.ui.button(label="\U0001f7e6")
-    async def blue_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Callback for the blue buttons."""
-        await self.determine_outcome(interaction, button=button)
-
-    @discord.ui.button(label="\U0001f7ea")
-    async def purple_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Callback for the purple buttons."""
-        await self.determine_outcome(interaction, button=button)
+    async def callback(self, interaction: discord.Interaction):
+        await self.button_cb(interaction, button=self)
 
 
 class RememberOrder(discord.ui.View):
@@ -920,17 +902,28 @@ class BalanceView(discord.ui.View):
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
-            bank_amt = await Economy.get_spec_bank_data(interaction.user, "bank", conn)
+            bank_amt = await Economy.get_spec_bank_data(
+                interaction.user, 
+                field_name="bank", 
+                conn_input=conn
+            )
 
         if not bank_amt:
             return await interaction.response.send_message(
                 embed=membed("You have nothing to withdraw."), 
-                ephemeral=True, delete_after=3.0)
+                ephemeral=True, 
+                delete_after=3.0
+            )
 
         await interaction.response.send_modal(
             DepositOrWithdraw(
-                title=button.label, default_val=bank_amt, 
-                conn=conn, message=self.message, view_children=self))
+                title=button.label, 
+                default_val=bank_amt, 
+                conn=conn, 
+                message=self.message, 
+                view_children=self
+            )
+        )
 
     @discord.ui.button(label="Deposit", disabled=True)
     async def deposit_money_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -938,28 +931,41 @@ class BalanceView(discord.ui.View):
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
-            data = await conn.fetchone("SELECT wallet, bank, bankspace FROM `bank` WHERE userID = ?", (interaction.user.id,))
+            data = await conn.fetchone(
+                "SELECT wallet, bank, bankspace FROM `bank` WHERE userID = ?", 
+                (interaction.user.id,)
+            )
 
         if not data[0]:
             return await interaction.response.send_message(
-                embed=membed("You have nothing to deposit."),
-                ephemeral=True, delete_after=3.0)
+                embed=membed("You have nothing to deposit."), 
+                ephemeral=True, 
+                delete_after=3.0
+            )
         
         available_bankspace = data[2] - data[1]
 
         if not available_bankspace:
             return await interaction.response.send_message(
+                ephemeral=True, 
+                delete_after=5.0,
                 embed=membed(
                     f"You can only hold \U000023e3 **{data[2]:,}** in your bank right now.\n"
-                    "To hold more, use currency commands and level up more."),
-                ephemeral=True, delete_after=5.0)
+                    "To hold more, use currency commands and level up more."
+                )
+            )
 
         available_bankspace = min(data[0], available_bankspace)
         
         await interaction.response.send_modal(
             DepositOrWithdraw(
-                title=button.label, default_val=available_bankspace, 
-                conn=conn, message=self.message, view_children=self))
+                title=button.label, 
+                default_val=available_bankspace, 
+                conn=conn, 
+                message=self.message, 
+                view_children=self
+            )
+        )
     
     @discord.ui.button(emoji="<:refreshicon:1205432056369389590>")
     async def refresh_balance(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -978,10 +984,9 @@ class BalanceView(discord.ui.View):
 
             space = (nd[1] / nd[2]) * 100
             
-            balance = discord.Embed(
-                title=f"{self.viewing.name}'s balances", 
-                color=0x2B2D31, timestamp=discord.utils.utcnow(),
-                url="https://dis.gd/support")
+            balance = self.message.embeds[0]
+            balance.timestamp = discord.utils.utcnow()
+
             balance.add_field(name="Wallet", value=f"\U000023e3 {nd[0]:,}")
             balance.add_field(name="Bank", value=f"\U000023e3 {nd[1]:,}")
             balance.add_field(name="Bankspace", value=f"\U000023e3 {nd[2]:,} ({space:.2f}% full)")
@@ -4679,38 +4684,34 @@ class Economy(commands.Cog):
         )
 
     async def do_tiles(self, interaction: discord.Interaction, job_name: str, conn: asqlite_Connection):
-        elements = ["\U0001f7e5", "\U0001f7e7", "\U0001f7e8", "\U0001f7e9", "\U0001f7e6", "\U0001f7ea"]
-        shuffle(elements)
-        prompter = discord.Embed(
-            title="Remember the order of the tiles!",
-            description=" ".join(elements),
-            colour=0x2B2D31
-        )
+        emojis = [
+            "\U0001f600", "\U0001f606", "\U0001f643", "\U0001f642", "\U0001f609", 
+            "\U0001f60c", "\U0001f917", "\U0001f914", "\U0001f601", "\U0001f604"
+        ]
+        shuffle(emojis)
+        emoji = choice(emojis)
 
-        prompter.set_footer(text="You have 3 seconds to remember the order.")
+        prompter = membed(f"Look at the emoji closely!\n{emoji}")
 
         await interaction.response.send_message(embed=prompter)
-        asked_position = choices([0, 4, 5], k=1, weights=(50, 35, 15))[0]
         await sleep(3)
 
-        relative_positions = {
-            0: "first",
-            4: "penultimate (second-last)",
-            5: "last"
-        }
-
-        view = RememberPosition(
-            interaction, conn, elements[asked_position], job_name)
+        view = RememberPositionView(
+            interaction, 
+            conn, 
+            all_emojis=emojis, 
+            actual_emoji=emoji, 
+            their_job=job_name
+        )
+        
+        prompter.description = "What was the emoji?"
         
         view.message = await interaction.original_response()
-        await view.message.edit(
-            embed=membed(f"What colour was on the *{relative_positions[asked_position]}* position?"),
-            view=view
-        )
-        return
+        return await view.message.edit(embed=prompter, view=view)
 
-    work = app_commands.Group(name="work", description="Work management commands", 
-                              guild_only=True, guild_ids=APP_GUILDS_ID)
+    work = app_commands.Group(
+        name="work", description="Work management commands", 
+        guild_only=True, guild_ids=APP_GUILDS_ID)
 
     @work.command(name="shift", description="Fulfill a shift at your current job", extras={"exp_gained": 3})
     async def shift_at_work(self, interaction: discord.Interaction):
@@ -4718,7 +4719,7 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
-                    return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered)
             
             data = await conn.fetchall(
                 """
@@ -4740,7 +4741,7 @@ class Economy(commands.Cog):
                 ncd = (discord.utils.utcnow() + datetime.timedelta(minutes=40)).timestamp()
                 await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
-            possible_minigames = choices((1, 2), k=1, weights=(65, 35))[0]
+            possible_minigames = choices((1, 2), k=1, weights=(35, 65))[0]
             num_to_func_link = {
                 2: "do_order",
                 1: "do_tiles"
@@ -4756,8 +4757,10 @@ class Economy(commands.Cog):
     @app_commands.rename(chosen_job="job")
     @app_commands.describe(chosen_job='The job you want to apply for.')
     @app_commands.checks.cooldown(1, 6)
-    async def get_job(self, interaction: discord.Interaction,
-                      chosen_job: Literal['Plumber', 'Cashier', 'Fisher', 'Janitor', 'Youtuber', 'Police']):
+    async def get_job(
+        self, 
+        interaction: discord.Interaction, 
+        chosen_job: Literal['Plumber', 'Cashier', 'Fisher', 'Janitor', 'Youtuber', 'Police']):
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
@@ -4873,10 +4876,9 @@ class Economy(commands.Cog):
     @app_commands.describe(user='The user to find the balance of.',
                            with_force='Register this user if not already. Only for bot owners.')
     @app_commands.guild_only()
-    async def find_balance(self, interaction: discord.Interaction, user: Optional[discord.Member],
-                           with_force: Optional[bool]):
-        """Returns a user's balance."""
-
+    async def find_balance(
+        self, interaction: discord.Interaction, user: Optional[discord.Member], with_force: Optional[bool]):
+        
         user = user or interaction.user
 
         async with self.client.pool_connection.acquire() as conn:
@@ -4931,8 +4933,12 @@ class Economy(commands.Cog):
                 space = (nd[1] / nd[2]) * 100
 
                 balance = discord.Embed(
-                    title=f"{user.name}'s balances", color=0x2B2D31, timestamp=discord.utils.utcnow(),
-                    url="https://dis.gd/support")
+                    title=f"{user.name}'s balances", 
+                    colour=0x2B2D31, 
+                    timestamp=discord.utils.utcnow(), 
+                    url="https://dis.gd/support"
+                )
+
                 balance.add_field(name="Wallet", value=f"\U000023e3 {nd[0]:,}")
                 balance.add_field(name="Bank", value=f"\U000023e3 {nd[1]:,}")
                 balance.add_field(name="Bankspace", value=f"\U000023e3 {nd[2]:,} ({space:.2f}% full)")
