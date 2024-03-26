@@ -22,7 +22,7 @@ from cogs.economy import get_profile_key_value
 from cogs.economy import modify_profile
 
 
-class Administrate(commands.Cog):
+class Owner(commands.Cog):
     """Cog containing commands only executable by the bot owners. Contains debugging tools."""
     def __init__(self, client: commands.Bot):
         self.client = client
@@ -399,41 +399,43 @@ class Administrate(commands.Cog):
         await original.edit(embed=embed)
 
     @commands.command(name='update3', description='Modify rules and guidelines')
-    async def push_update3(self, ctx):
+    async def push_update3(self, ctx: commands.Context):
         """Push an update to the rules channel."""
         await ctx.message.delete()
-        channel = await self.client.fetch_channel(902138223571116052)
-        original = await channel.fetch_message(1140258074297376859)
-        r = discord.Embed(
-            title="Rules & Guidelines",
-            description=(
-                'We look forward to seeing you become a regular here! '
-                'However, ensure that you are familiar with our Server Guidelines!\n\n'
-                'Your entrance into the server confirms you accept the following rules as '
-                'well as agreement to any other rules that are implied elsewhere.\n'
-                '# 1. <:e1_comfy:1150361201352659066> Be Respectful!\n'
-                'Treat others the way you would want to be treated, '
-                'and avoid offensive language or behaviour.\n'
-                '# 2. <:pepe_blanket:798869466648674356> Be mindful of others!\n'
-                'Refrain from excessive messages, links, or images that '
-                'disrupt the flow of conversation.\n'
-                '# 3. <:threadwhite:1169704299509596190> Stay on topic.\n'
-                'Keep discussions relevant to the designated channels to maintain a focused '
-                'and organized environment. Innapropriate content is subject to removal!\n'
-                '# 4. <:Polarizer:1171491374756012152> Keep our server safe!\n'
-                'Any form of content that suggests normalization or '
-                'justification of NSFW content should not escape the '
-                'boundaries of <#1160547937420582942> or through the use '
-                'of <@432610292342587392>, sanctions will be upheld for such cases.\n'
-                '# 5. <:discordthinking:1173681144718446703> Adhere to the Terms of Service.\n'
-                'Abide by Discord\'s terms of service and community guidelines at all times:\n'
-                '[Discord Community Guidelines](https://discord.com/guidelines/)\n'
-                '[Discord Terms of Service](https://discord.com/terms)'),
-            colour=discord.Colour.from_rgb(208, 189, 196))
+        channel = self.client.get_partial_messageable(902138223571116052)
+        original = channel.get_partial_message(1140258074297376859)
+        
+        r = discord.Embed()
+        r.title = "Rules & Guidelines"
+        r.description=(
+            'We look forward to seeing you become a regular here! '
+            'However, ensure that you are familiar with our Server Guidelines!\n\n'
+            'Your entrance into the server confirms you accept the following rules as '
+            'well as agreement to any other rules that are implied elsewhere.\n'
+            '# 1. <:e1_comfy:1150361201352659066> Be Respectful!\n'
+            'Treat others the way you would want to be treated, '
+            'and avoid offensive language or behaviour.\n'
+            '# 2. <:pepe_blanket:798869466648674356> Be mindful of others!\n'
+            'Refrain from excessive messages, links, or images that '
+            'disrupt the flow of conversation.\n'
+            '# 3. <:threadwhite:1169704299509596190> Stay on topic.\n'
+            'Keep discussions relevant to the designated channels to maintain a focused '
+            'and organized environment. Innapropriate content is subject to removal!\n'
+            '# 4. <:Polarizer:1171491374756012152> Keep our server safe!\n'
+            'Any form of content that suggests normalization or '
+            'justification of NSFW content should not escape the '
+            'boundaries of <#1160547937420582942> or through the use '
+            'of <@432610292342587392>, sanctions will be upheld for such cases.\n'
+            '# 5. <:discordthinking:1173681144718446703> Adhere to the Terms of Service.\n'
+            'Abide by Discord\'s terms of service and community guidelines at all times:\n'
+            '[Discord Community Guidelines](https://discord.com/guidelines/)\n'
+            '[Discord Terms of Service](https://discord.com/terms)'
+        )
+        r.colour = discord.Colour.from_rgb(208, 189, 196)
         r.set_footer(
-            icon_url=('https://cdn.discordapp.com/emojis/1170379416845692928.gif?size=160&quality'
-                      '=lossless'),
-            text='thanks for reading and respecting our guidelines! now go have fun!')
+            icon_url='https://cdn.discordapp.com/emojis/1170379416845692928.gif?size=160&quality=lossless',
+            text='Thanks for reading and respecting our guidelines! Now go have fun!'
+        )
 
         await original.edit(embed=r)
 
@@ -443,116 +445,143 @@ class Administrate(commands.Cog):
         await ctx.message.delete()
         channel = await self.client.fetch_channel(1121445944576188517)
         original = await channel.fetch_message(1140952278862401657)
-        a = "C:\\Users\\georg\\Downloads\\Media\\attachments\\rsz_tic.png"
+        a = "C:\\Users\\georg\\Downloads\\Media\\rsz_tic.png"
         that_file = discord.File(a, filename="image.png")
         intro = discord.Embed(colour=discord.Colour.from_rgb(31, 16, 3))
         intro.set_image(url="attachment://image.png")
         embed = discord.Embed(
+            title="Origins",
             description=(
-                "# <:dscbday:1174417905006428190> Origins.\n"
-                "This is yet another hangout to theorize your day-to-day discussions. The "
-                "server was created on the **6th of April 2021** to "
-                "provide a space that fosters a chill and mature community that can talk about"
-                "anything and everything.\n\n"
-                "You might be asking: what does cc actually stand for? Truthfully speaking, "
-                "we don't know either, but our best guess is something along the lines of a "
-                "*collective community*, this being the aim by the server to date.\n\n"
-                "We hope you enjoy your stay, and we wish you a wonderful journey.\n"
-                "And don't forget; you're here forever."),
-            colour=discord.Colour.from_rgb(70, 55, 230))
+                """
+                **What is this server all about?!**
+                This is another hangout to theorize your day-to-day discussions. 
+                The server was created on the **6th of April 2021** to provide 
+                a space that fosters a chill and mature community that can talk 
+                about anything and everything.
+
+                **What does cc actually stand for?** 
+                We don't know either, our guess is something along the lines
+                of a collective community, this being the aim by the server to date.
+                
+                We hope you enjoy your stay, and we wish you a wonderful journey.
+                And don't forget; you're here forever.
+                """
+            ),
+            colour=0x2B2D31
+        )
+
+        embed.set_thumbnail(url="https://i.imgur.com/7RufohA.png")
         tbp = "\U0000279c"
 
         roles = discord.Embed(
-            description=f"# <:ismember:1180267726179143863> Server Roles Information.\n"
-                        f"- <@&893550756953735278>\n"
-                        f" - People who manage and moderate cc.\n\n"
-                        f"- <@&1140197893261758505>\n"
-                        f" - People who have a high rating on the <#1121097762537222235>.\n\n"
-                        f"- <@&1047575848980594758>\n"
-                        f" - People who joined Discord in 2019.\n\n"
-                        f"- <@&1121426143598354452>\n"
-                        f" - People with access to private features.\n\n"
-                        f"- <@&990900517301522432>\n"
-                        f" - People with full music control over music bots.\n\n"
-                        f"- <@&1168204249096785980>\n"
-                        f" - People with access to new features on {self.client.user.mention}.\n\n"
-                        f"- **Other custom roles**\n"
-                        f" - <@&1124762696110309579> and <@&1047576437177200770>.\n"
-                        f" - You can make your own custom role by reaching **Level 40**.",
-            colour=discord.Colour.from_rgb(101, 96, 243))
+            title="Server Roles",
+            description=(
+                f"""
+                - <@&893550756953735278>
+                  - People who manage and moderate cc.
+
+                - <@&1140197893261758505>
+                  - People who have a high rating on the legacy starboard.
+
+                - <@&1121426143598354452>
+                  - People with access to private features.
+
+                - <@&990900517301522432>
+                  - People with full music control over music bots.
+
+                - <@&1168204249096785980>
+                  - People with access to new features on {self.client.user.mention}\n
+                - Other custom roles
+                  - <@&1124762696110309579> and <@&1047576437177200770>.
+                  - Reaching **Level 40** to make your own!
+                """
+            ),
+            colour=0x2B2D31
+        )
+        
+        roles.set_thumbnail(url="https://i.imgur.com/ufnRnNx.png")
 
         ranks = discord.Embed(
+            title="Level Roles & Perks",
             description=(
-                f'# <:extlink:1174417919581630526> Level Roles & Perks.\n'
-                f'Your activity in the server will not be left unrewarded! Level up '
-                f'by participating in text channels. The more active you are, the higher '
-                f'levels attained and the better perks you receive.\n\n'
-                f'<@&923930948909797396>\n\n'
-                f'<@&923931088613699584>\n'
-                f'{tbp} \U000023e3 **335,000,000**\n\n'
-                f'<@&923931156125204490>\n'
-                f'{tbp} Your own custom channel\n\n'
-                f'<@&923931553791348756>\n'
-                f'{tbp} Request a feature for {self.client.user.mention}\n\n'
-                f'<@&923931585953280050>\n'
-                f'{tbp} \U000023e3 **1,469,000,000**\n\n'
-                f'<@&923931615208546313>\n'
-                f'{tbp} Access to a custom snipe command\n\n'
-                f'<@&923931646783287337>\n'
-                f'{tbp} \U000023e3 **17,555,000,000**, 5 \U0001f3c6\n\n'
-                f'<@&923931683311456267>\n'
-                f'{tbp} \U000023e3 **56,241,532,113**\n'
-                f'{tbp} 3,500 free EXP\n\n'
-                f'<@&923931729016795266>\n'
-                f'{tbp} Request a feature for {self.client.user.mention}\n'
-                f'{tbp} Your own custom role\n\n'
-                f'<@&923931772020985866>\n'
-                f'{tbp} \U000023e3 **72,681,998,999**, 64 \U0001f3c6\n\n'
-                f'<@&923931819571810305>\n'
-                f'{tbp} The Personal Token of Appreciation\n\n'
-                f'<@&923931862001414284>\n'
-                f' {tbp} *A random privilege, see Appendix 1 for details*'),
-            colour=discord.Colour.from_rgb(69, 105, 233))
+                f"""
+                Your activity in the server will not be left unrewarded! 
+                Level up by participating in text channels. 
+                The more active you are, the higher levels attained and the better perks you receive.
+                <@&923930948909797396>
+
+                <@&923931088613699584>
+                {tbp} \U000023e3 **335,000,000**
+
+                <@&923931156125204490>
+                {tbp} Your own custom channel
+
+                <@&923931553791348756>
+                {tbp} Request a feature for {self.client.user.mention}
+
+                <@&923931585953280050>
+                {tbp} \U000023e3 **1,469,000,000**
+
+                <@&923931646783287337>
+                {tbp} \U000023e3 **17,555,000,000**, 5 \U0001f3c6
+
+                <@&923931683311456267>
+                {tbp} \U000023e3 **56,241,532,113**
+                {tbp} 3,500 free EXP
+
+                <@&923931729016795266>
+                {tbp} Request a feature for {self.client.user.mention}
+                {tbp} Your own custom role
+
+                <@&923931772020985866>
+                {tbp} \U000023e3 **72,681,998,999**, 64 \U0001f3c6
+
+                <@&923931819571810305>
+                {tbp} The Personal Token of Appreciation
+
+                <@&923931862001414284>
+                {tbp} See Appendix 1
+                """
+            ),
+            colour=0x2B2D31
+        )
+        ranks.set_thumbnail(url="https://i.imgur.com/2V5LM2s.png")
 
         second_embed = discord.Embed(
+            title="The Appendix 1",
             description=(
-                '# The Appendix 1.'
-                '\nIf you somehow manage to reach **<@&923931862001414284>**, '
-                'out of 6 events, 1 will '
-                'take place. A dice will be rolled and the outcome'
-                ' will ultimately depend on a dice roll.\n\n'
-                '## Event 1:\n'
-                '\U0000279c Your level of experience and wisdom will prove you worthy of receiving'
-                ' <@&912057500914843680>, a role only members of high authority can attain.\n'
-                '## Event 2:\n'
-                '\U0000279c Your familiarity with this server will allow you to get '
-                '1 Month of Discord Nitro immediately when available.\n'
-                '## Event 3:\n'
-                '\U0000279c This is a karma roll. you will receive **nothing.**\n'
-                '## Event 4:\n'
-                '\U0000279c For the sake of nonplus, **this event '
-                'will not be disclosed until it is received.**\n'
-                '## Event 5:\n'
-                '\U0000279c This is a karma roll. you will receive **nothing.**\n'
-                '## Event 6:\n'
-                '\U0000279c This is a special one, only one could occur: a face reveal or a voice'
-                ' reveal by the owner. the choice will be made by '
-                'another dice roll (yes, another one).\n\n'
-                '# Side Note:\n'
-                'To remove the possibility of advantage, you cannot '
-                'earn EXP **while executing slash commands**.\n'
-                'Refer to this message for more information: https://discord.com'
-                '/channels/829053898333225010/1121094935802822768/1166397053329477642'
+                """
+                If you somehow manage to reach **<@&923931862001414284>**, out of 6 events, 1 will take place. 
+                A dice will be rolled and the outcome will ultimately depend on a dice roll.
+                1. Your level of experience and wisdom will prove you worthy of receiving <@&912057500914843680>, a role only members of high authority can attain.
+
+                2. Your familiarity with this server will allow you to get 1 Month of Discord Nitro immediately when available.
+
+                3. This is a karma roll. you will receive nothing.
+
+                4. For the sake of nonplus, this event will not be disclosed until it is received.
+
+                5. This is a karma roll. you will receive nothing.
+
+                6. This is a special one: a face reveal or a voice reveal by the owner. The choice will be made by another dice roll.
+
+                **Notes**
+                You cannot earn EXP while executing slash commands.
+                Refer to this message for details: https://discord.com/channels/829053898333225010/1121094935802822768/1166397053329477642
+                """
             ),
-            colour=discord.Colour.from_rgb(103, 2, 50))
-        second_embed.set_footer(text='Reminder: the perks from all roles are one-time '
-                                     'use only and cannot be reused or recycled.')
+            colour=0x2B2D31
+        )
+        second_embed.set_thumbnail(url="https://i.imgur.com/aoECtze.png")
+        second_embed.set_footer(
+            text=("Reminder: the perks from all roles are one-time use only and cannot be reused or recycled."
+            )
+        )
+        
         try:
-            await original.edit(attachments=[that_file],
-                                embeds=[intro, embed, ranks, roles, second_embed])
+            await original.edit(attachments=[that_file], embeds=[intro, embed, ranks, roles, second_embed])
         except discord.HTTPException as err:
-            ch = self.client.fetch_channel(1124090797613142087)
-            await ch.send(err.__cause__)
+            await ctx.send(err.__cause__)
 
     @commands.command(name='update4', description='Update the progress tracker')
     async def override_economy(self, ctx):
@@ -662,5 +691,5 @@ class Administrate(commands.Cog):
 
 async def setup(client):
     """Setup for cog."""
-    await client.add_cog(Administrate(client))
+    await client.add_cog(Owner(client))
     
