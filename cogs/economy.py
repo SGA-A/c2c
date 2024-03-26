@@ -2,7 +2,7 @@
 from asyncio import sleep
 from string import ascii_letters, digits
 from shelve import open as open_shelve
-from re import sub, search
+from re import search
 from ImageCharts import ImageCharts
 from discord.ext import commands, tasks
 from math import floor, ceil
@@ -37,6 +37,21 @@ def swap_elements(x, index1, index2) -> None:
     """
 
     x[index1], x[index2] = x[index2], x[index1]
+
+
+async def economy_check(
+        interaction: discord.Interaction, 
+        original: discord.Member
+    ) -> bool:
+    """Shared interaction check common amongst most interactions."""
+    if original != interaction.user:
+        await interaction.response.send_message(
+            embed=membed(f"This menu is controlled by {original.mention}."),
+            ephemeral=True,
+            delete_after=5.0
+        )
+        return False
+    return True
 
 
 def number_to_ordinal(n):
@@ -555,11 +570,7 @@ class ConfirmResetData(discord.ui.View):
         super().__init__(timeout=30.0)
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id != self.interaction.user.id:
-            await interaction.response.send_message(
-                embed=membed("This is not your confirmation menu."), ephemeral=True)
-            return False
-        return True
+        return await economy_check(interaction, self.interaction.user)
     
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
         del active_sessions[self.interaction.user.id]
@@ -623,10 +634,7 @@ class Confirm(discord.ui.View):
         self.value = None
 
     async def interaction_check(self, interaction: discord.Interaction[discord.Client]) -> bool:
-        if self.interaction.user.id == interaction.user.id:
-            return True
-        await interaction.response.send_message(embed=membed("This is not your confirmation menu."), ephemeral=True)
-        return False
+        return await economy_check(interaction, self.interaction.user)
 
     @discord.ui.button(label='Cancel', style=discord.ButtonStyle.red)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -677,11 +685,7 @@ class RememberPositionView(discord.ui.View):
             self.add_item(RememberPosition(emoji, self.determine_outcome, all_emojis))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if self.interaction.user != interaction.user:
-            await interaction.response.send_message(
-                embed=membed("This is not your shift."), ephemeral=True, delete_after=5.0)
-            return False
-        return True
+        return await economy_check(interaction, self.interaction.user)
     
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
 
@@ -767,11 +771,7 @@ class RememberOrder(discord.ui.View):
         #     x += 1
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if self.interaction.user.id != interaction.user.id:
-            await interaction.response.send_message(
-                embed=membed("This is not your shift."), ephemeral=True, delete_after=5.0)
-            return False
-        return True
+        return await economy_check(interaction, self.interaction.user)
     
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
 
@@ -879,14 +879,7 @@ class BalanceView(discord.ui.View):
         self.children[1].disabled = (new_wallet == 0) or (any_new_bankspace_left == 0)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if self.interaction.user.id != interaction.user.id:
-            await interaction.response.send_message(
-                embed=membed(
-                    f"This balance menu is controlled by {self.interaction.user.mention}, you will "
-                    "have to run the original command yourself.", ephemeral=True,
-                delete_after=5.0))
-            return False
-        return True
+        return await economy_check(interaction, self.interaction.user)
     
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
         for item in self.children:
@@ -976,7 +969,8 @@ class BalanceView(discord.ui.View):
             nd = await conn.execute(
                 """
                 SELECT wallet, bank, bankspace FROM `bank` WHERE userID = $0
-                """, self.viewing.id)
+                """, self.viewing.id
+            )
 
             nd = await nd.fetchone()
             bank = nd[0] + nd[1]
@@ -984,8 +978,9 @@ class BalanceView(discord.ui.View):
 
             space = (nd[1] / nd[2]) * 100
             
-            balance = self.message.embeds[0]
+            balance: discord.Embed = self.message.embeds[0]
             balance.timestamp = discord.utils.utcnow()
+            balance.clear_fields()
 
             balance.add_field(name="Wallet", value=f"\U000023e3 {nd[0]:,}")
             balance.add_field(name="Bank", value=f"\U000023e3 {nd[1]:,}")
@@ -1028,11 +1023,7 @@ class BlackjackUi(discord.ui.View):
                 pass
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user == self.interaction.user:
-            return True
-        await interaction.response.send_message(
-            embed=membed("This is not your game."), ephemeral=True)
-        return False
+        return await economy_check(interaction, self.interaction.user)
 
     @discord.ui.button(label='Hit', style=discord.ButtonStyle.blurple)
     async def hit_bj(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -1349,12 +1340,7 @@ class HighLow(discord.ui.View):
         self.stop()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user == self.interaction.user:
-            return True
-
-        await interaction.response.send_message(
-            embed=membed("This is not your highlow game"), ephemeral=True)
-        return False
+        return await economy_check(interaction, self.interaction.user)
 
     async def on_timeout(self) -> None:
         for item in self.children:
@@ -1625,12 +1611,7 @@ class DispatchServantView(discord.ui.View):
         self.add_item(SelectTaskMenu(conn, chosen_slay, skill_lvl))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user == self.interaction.user:
-            return True
-        else:
-            await interaction.response.send_message(
-                embed=membed("This is not your servant."), ephemeral=True)
-            return False
+        return await economy_check(interaction, self.interaction.user)
 
     async def on_timeout(self) -> None:
         for item in self.children:
@@ -1882,12 +1863,15 @@ class ServantsManager(discord.ui.View):
             return await interaction.response.send_message(
                 "This servant is not yours.", ephemeral=True, delete_after=3.0)
 
-        current_hunger = await self.child.conn.fetchone("SELECT hunger from `slay` WHERE userID = ? AND slay_name = ?",
-                                                        (self.child.owner_id, self.child.choice))
+        current_hunger = await self.child.conn.fetchone(
+            "SELECT hunger from `slay` WHERE userID = ? AND slay_name = ?", 
+            (self.child.owner_id, self.child.choice))
+        
         if current_hunger[0] >= 90:
             return await interaction.response.send_message(
                 embed=membed("Your servant is not hungry!"), 
-                ephemeral=True, delete_after=5.0)
+                ephemeral=True, 
+                delete_after=5.0)
 
         await self.add_exp_handle_interactions(interaction, mode="hunger")
 
@@ -2102,11 +2086,7 @@ class ShowcaseView(discord.ui.View):
             pass
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user == self.interaction.user:
-            return True
-        await interaction.response.send_message(
-            embed=membed("This is not your showcase."), ephemeral=True)
-        return False
+        return await economy_check(interaction, self.interaction.user)
     
     def do_button_checks(self, current_item_index: int):
         previous_item_index = current_item_index - 1
@@ -3536,13 +3516,14 @@ class Economy(commands.Cog):
 
             elif isinstance(name_res, list):
 
-                suggestions = [item[0] for item in name_res]  # Extract item names from the list
+                suggestions = [item[0] for item in name_res]
                 return await interaction.response.send_message(
                     content="There is more than one item with that name pattern.\nSelect one of the following options:",
                     embed=membed('\n'.join(suggestions)))
             else:
                 name_res = name_res[0]
-                wallet_amt = await conn.fetchone("""
+                wallet_amt = await conn.fetchone(
+                    """
                     SELECT wallet 
                     FROM bank 
                     WHERE userID = $0
@@ -3635,7 +3616,7 @@ class Economy(commands.Cog):
 
             elif isinstance(name_res, list):
 
-                suggestions = [item[0] for item in name_res]  # Extract item names from the list
+                suggestions = [item[0] for item in name_res]
                 return await interaction.response.send_message(
                     content="There is more than one item with that name pattern.\nSelect one of the following options:",
                     embed=membed('\n'.join(suggestions)))
@@ -3677,120 +3658,6 @@ class Economy(commands.Cog):
                                 value=f"<:robux:1146394968882151434> {floor(int(data[0]) / 4):,}")
                 em.set_footer(text=f"This is {data[3].lower()}!")
                 return await interaction.response.send_message(embed=em)
-
-    profile = app_commands.Group(
-        name='editprofile', description='custom-profile-orientated commands for use.', 
-        guild_only=True, guild_ids=APP_GUILDS_ID)
-
-    @profile.command(name='title', description='Add a title to your profile')
-    @app_commands.checks.cooldown(1, 30)
-    @app_commands.describe(text="The name of your desired title. Maximum 32 characters.")
-    async def update_title_profile(
-        self, interaction: discord.Interaction, text: app_commands.Range[str, 1, 32]):
-        """This is a subcommand. Change your current title, which is displayed on your profile."""
-
-        async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
-
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(
-                    embed=self.not_registered)
-
-            text = sub(r'[\n\t]', '', text)
-            await self.change_bank_new(interaction.user, conn, text, "title")
-            await conn.commit()
-            
-            await interaction.response.send_message(embed=membed("I've changed your title."))
-
-    @profile.command(name='bio', description='Add a bio to your profile')
-    @app_commands.describe(bio='The text of your bio. Maximum 200 characters. Leave blank to remove.')
-    @app_commands.checks.cooldown(1, 30)
-    async def update_bio_profile(
-        self, interaction: discord.Interaction, bio: app_commands.Range[str, None, 200]):
-        """This is a subcommand. Add a bio to your profile, or update an existing one."""
-
-        async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
-            
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
-            
-            if bio is None:
-                res = modify_profile("delete", f"{interaction.user.id} bio", "placeholder")
-                if not res:
-                    return await interaction.response.send_message(
-                        embed=membed("You don't have a bio yet."))
-                return await interaction.response.send_message(
-                    embed=membed("I've removed your bio."))
-
-            modify_profile("update", f"{interaction.user.id} bio", bio)
-            return await interaction.response.send_message(
-                embed=membed("I've changed your bio."))
-
-    @profile.command(name='avatar', description='Change your profile avatar')
-    @app_commands.describe(url='The URL of your new avatar. Leave blank to remove.')
-    @app_commands.checks.cooldown(1, 30)
-    async def update_avatar_profile(self, interaction: discord.Interaction, url: Optional[str]):
-        """This is a subcommand. Change the avatar that is displayed on the profile embed."""
-
-        async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
-
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
-
-        if url is None:
-            res = modify_profile("delete", f"{interaction.user.id} avatar_url", url)
-            match res:
-                case 0:
-                    res = "No custom avatar was found under your account."
-                case _:
-                    res = "<:overwrite:1195729262729240666Your avatar was removed."
-            return await interaction.response.send_message(embed=membed(res))
-
-        successful = discord.Embed(
-            colour=0x2B2D31, 
-            description=(
-                "## <:overwrite:1195729262729240666> Your custom has been added.\n"
-                "- If valid, it will look like this ----->\n"
-                "- If you can't see it, change it!"))
-        
-        successful.set_thumbnail(url=url)
-        modify_profile("update", f"{interaction.user.id} avatar_url", url)
-        await interaction.response.send_message(embed=successful)
-
-    @update_avatar_profile.error
-    async def uap_error(self, interaction: discord.Interaction, err: discord.app_commands.AppCommandError):
-        """Error handler that is fallback when the new avatar could not be updated."""
-
-        modify_profile("delete", f"{interaction.user.id} avatar_url", "who cares")
-        return await interaction.response.send_message(
-            embed=membed(
-                "The avatar url requested for could not be added:\n"
-                "- Make sure you actually uploaded a valid attachment.\n"
-                "- The recommended file size is 80x80."
-            )
-        )
-
-    @profile.command(name='visibility', description='Hide your profile for privacy')
-    @app_commands.describe(mode='Toggle a public or private profile.')
-    @app_commands.checks.cooldown(1, 30)
-    async def update_vis_profile(self, interaction: discord.Interaction,
-                                 mode: Literal['public', 'private']):
-        """This is a subcommand. Make your profile public or private."""
-
-        async with self.client.pool_connection.acquire() as conn:
-            conn: asqlite_Connection
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
-
-        modify_profile("update", f"{interaction.user.id} vis", mode)
-        cemoji = {"private": "<:privatee:1195728566919385088>",
-                  "public": "<:publice:1195728479715590205>"}
-        cemoji = cemoji.get(mode)
-        await interaction.response.send_message(
-            embed=membed(f"{cemoji} Your profile is now {mode}."),
-            ephemeral=True, delete_after=7.5)
 
     servant = app_commands.Group(
         name='servant', description='manage your servant.', guild_only=True, 
@@ -4065,7 +3932,7 @@ class Economy(commands.Cog):
 
             elif isinstance(name_res, list):
 
-                suggestions = [item[0] for item in name_res]  # Extract item names from the list
+                suggestions = [item[0] for item in name_res]
                 return await interaction.response.send_message(
                     content="There is more than one item with that name pattern.\nSelect one of the following options:",
                     embed=membed('\n'.join(suggestions)))
@@ -4078,7 +3945,7 @@ class Economy(commands.Cog):
                     FROM shop
                     INNER JOIN inventory ON shop.itemID = inventory.itemID
                     WHERE shop.itemName = ? AND inventory.userID = ?
-                """, (name_res, interaction.user.id))
+                    """, (name_res, interaction.user.id))
 
                 if not data:
                     return await interaction.response.send_message(
