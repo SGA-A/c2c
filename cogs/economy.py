@@ -4734,9 +4734,7 @@ class Economy(commands.Cog):
             has_cd = self.is_no_cooldown(data[0][0])
             if isinstance(has_cd, tuple):
                 return await interaction.response.send_message(
-                    embed=membed(
-                        f"You can work again at {has_cd[0]}"
-                        f" ({has_cd[1]})."))
+                    embed=membed(f"You can work again at {has_cd[0]} ({has_cd[1]})."))
 
             async with conn.transaction():
                 ncd = (discord.utils.utcnow() + datetime.timedelta(minutes=40)).timestamp()
