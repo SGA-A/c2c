@@ -11,6 +11,26 @@ from other.pagination import Pagination
 from cogs.economy import membed, Confirm, active_sessions, APP_GUILDS_ID
 
 
+def do_boilerplate_role_checks(role: discord.Role, guild: discord.Guild, my_top: discord.Role) -> str | None:
+
+    if role.managed:
+        return f"The role {role.name} is managed and cannot be assigned or removed."
+
+    if role >= my_top:
+        roles_beneath = [iter_role for iter_role in guild.roles if (iter_role < role) and (iter_role > my_top)]
+        roles_beneath = [role.name for role in roles_beneath]
+
+        return (
+f"""
+The role '{role.name}' (pos {role.position}) is above my highest role '{my_top.name}' (pos {my_top.position}) meaning I cannot alter their roles.
+Please ensure my highest role is above the role you want assigned or removed.
+
+{role.name} **<-- The role you wish to assign or remove**
+{'\n'.join(roles_beneath)}
+{my_top.name} **<-- The bot's highest role**
+"""
+)
+
 class TimeConverter(app_commands.Transformer):
     time_regex = compile(r"(\d{1,5}(?:[.,]?\d{1,5})?)([smhd])")
     time_dict = {"h": 3600, "s": 1, "m": 60, "d": 86400}
@@ -73,22 +93,6 @@ class RoleManagement(app_commands.Group):
             await interaction.followup.send(
                 content=f"Took {end_time - start_time:.2f}s", embed=success)
             return None
-    
-    async def do_boilerplate_role_checks(self, role: discord.Role, guild: discord.Guild, my_top: discord.Role) -> str | None:
-
-        if role.managed:
-            return f"The role {role.name} is managed and cannot be assigned or removed."
-
-        if role >= my_top:
-            roles_beneath = [iter_role for iter_role in guild.roles if (iter_role < role) and (iter_role > my_top)]
-            roles_beneath = [role.name for role in roles_beneath]
-
-            return (
-                f"The role '{role.name}' (pos {role.position}) is above my highest role '{my_top.name}' (pos {my_top.position}) meaning I cannot alter their roles.\n"
-                "Please ensure my highest role is above the role you want assigned or removed.\n\n"
-                f"{role.name} **<-- The role you wish to assign or remove**\n"
-                f"{'\n'.join(roles_beneath) + '\n' if roles_beneath else ''}"
-                f"{my_top.name} **<-- The bot's highest role**")
 
     @app_commands.command(name="add", description="Adds a role to the specified member")
     @app_commands.describe(user="The user to add the role to.", role="The role to add to this user.")
@@ -98,7 +102,7 @@ class RoleManagement(app_commands.Group):
             return await interaction.response.send_message("That member already has this role.")
 
         guild = interaction.guild
-        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
+        resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
             return await interaction.response.send_message(resp)
         
@@ -113,13 +117,59 @@ class RoleManagement(app_commands.Group):
             return await interaction.response.send_message("That member doesn't have this role.")
 
         guild = interaction.guild
-        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
+        resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         
         if resp:
             return await interaction.response.send_message(resp)
     
         await user.remove_roles(discord.Object(id=role.id))
         await interaction.response.send_message(embed=membed(f"Removed {role.mention} from {user.mention}."))
+
+    @app_commands.command(name="custom", description="Add or remove multiple roles in a single command")
+    @app_commands.describe(
+        user="The user to add/remove roles to.", 
+        roles="Precede role name with +/- to add or remove. Separate each with spaces.")
+    async def custom_roles(
+        self, interaction: discord.Interaction, user: discord.Member, roles: str):
+        await interaction.response.defer()
+
+        roles = roles.split()
+        added_roles = set()
+        removed_roles = set()
+
+        for role in roles:
+            switch = role[0]
+            if switch not in ("+", "-"):
+                continue
+            
+            rolemention = discord.utils.get(interaction.guild.roles, name=role[1:])
+
+            if rolemention is None:
+                continue
+            if rolemention.managed:
+                continue
+
+            if switch == "+":
+                added_roles.add(rolemention)
+                continue
+            removed_roles.add(rolemention)
+
+        their_roles = set(user.roles)
+        added_roles = added_roles.difference(their_roles)
+        removed_roles = removed_roles.intersection(their_roles)
+
+        if (not added_roles) and (not removed_roles):
+            return await interaction.followup.send("No changes were made.")
+        
+        embed = discord.Embed(colour=0x2B2D31, title="Role Changes")
+
+        await user.add_roles(*added_roles)
+        embed.add_field(name="Added", value="\n".join(role.mention for role in added_roles) or "\U0000200b")
+
+        embed.add_field(name="Removed", value="\n".join(role.mention for role in removed_roles) or "\U0000200b")
+        await user.remove_roles(*removed_roles)
+        
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="all", description="Adds a role to all members")
     @app_commands.describe(role="The role to add to all members.")
@@ -133,7 +183,7 @@ class RoleManagement(app_commands.Group):
         if not how_many:
             return await interaction.followup.send("Everybody has this role already.")
 
-        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
+        resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
             return await interaction.followup.send(resp)
         
@@ -192,7 +242,7 @@ class RoleManagement(app_commands.Group):
         if not how_many:
             return await interaction.followup.send("Nobody has this role already.")
 
-        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
+        resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp: 
             return await interaction.followup.send(resp)
 
@@ -311,7 +361,7 @@ class RoleManagement(app_commands.Group):
         if not count:
             return await interaction.followup.send("No bots have this role.")
 
-        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
+        resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
             return await interaction.followup.send(resp)
 
@@ -331,7 +381,7 @@ class RoleManagement(app_commands.Group):
         if not count:
             return await interaction.followup.send("All humans have this role already.")
 
-        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
+        resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
             return await interaction.followup.send(resp)
 
@@ -351,7 +401,7 @@ class RoleManagement(app_commands.Group):
         if not how_many:
             return await interaction.followup.send("No humans have this role.")
 
-        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
+        resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
             return await interaction.followup.send(resp)
 
@@ -374,7 +424,7 @@ class RoleManagement(app_commands.Group):
             return await interaction.followup.send("Nobody in the base role doesn't have the new role already.")
         
         guild = interaction.guild
-        resp = await self.do_boilerplate_role_checks(new_role, guild, guild.me.top_role)
+        resp = do_boilerplate_role_checks(new_role, guild, guild.me.top_role)
         if resp:
             return await interaction.followup.send(resp)
 
@@ -396,7 +446,7 @@ class RoleManagement(app_commands.Group):
             return await interaction.followup.send("Nobody in the base role has the new role.")
 
         guild = interaction.guild
-        resp = await self.do_boilerplate_role_checks(new_role, guild, guild.me.top_role)
+        resp = do_boilerplate_role_checks(new_role, guild, guild.me.top_role)
         if resp:
             return await interaction.followup.send(resp)
     
@@ -485,12 +535,16 @@ class Moderation(commands.Cog):
         if isinstance(ctx.channel, discord.Thread):
             await ctx.send(
                 embed=membed(
-                    "<:padlocke:1195739398323581011> This thread is now locked due to lack of use.\n"
-                    "It may be re-opened if needed by contacting an admin."))
+                    "This thread is now locked due to lack of use.\n"
+                    "It may be re-opened if needed by contacting an admin."
+                )
+            )
+
             return await ctx.channel.edit(
                 locked=True,
                 archived=True,
-                reason=f'Marked as closed by {ctx.author} (ID: {ctx.author.id})')
+                reason=f'Marked as closed by {ctx.author} (ID: {ctx.author.id})'
+            )
         else:
             await ctx.reply(embed=membed("This is not a thread."), mention_author=False)
 
@@ -500,8 +554,8 @@ class Moderation(commands.Cog):
         slowmode_in_seconds = abs(slowmode_in_seconds)
         await ctx.channel.edit(slowmode_delay=slowmode_in_seconds)
         if slowmode_in_seconds:
-            return await ctx.send(embed=membed(f'<:slowed:1195739862100353114> Slowmode set to {slowmode_in_seconds} seconds.'))
-        await ctx.send(embed=membed("<:normale:1195740534703136921> Disabled slowmode."))
+            return await ctx.send(embed=membed(f'Slowmode set to **{slowmode_in_seconds}** seconds.'))
+        await ctx.send(embed=membed("Disabled slowmode."))
 
     @commands.command(name="purge", description="Bulk-remove messages, excluding pins")
     async def purge(self, ctx: commands.Context, purge_max_amount: int):
@@ -528,7 +582,7 @@ class Moderation(commands.Cog):
             return await interaction.response.send_message("That member already has this role.")
 
         guild = interaction.guild
-        resp = await self.do_boilerplate_role_checks(role, guild, guild.me.top_role)
+        resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
             return await interaction.response.send_message(resp)
         
