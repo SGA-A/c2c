@@ -9,16 +9,35 @@ from discord.ui import View, Button
 
 from cogs.economy import membed
 
+cooldown_prompts = (
+    "Too spicy, take a breather..", 
+    "Take a chill pill", 
+    "Woah now, slow it down",
+    "Let's slow it down here", 
+    "Slow it down bud", 
+    "Spam isn't cool fam", 
+    "Hold your horses...",
+    "Pump the brakes, speed racer", 
+    "CHILL OUT, DAMN", 
+    "Easy tiger, let's not rush", 
+    "Slow down there cowboy", 
+    "Whoa there, slow down", 
+    "Cool your jets, space cadet",
+    "Easy does it, turbo"
+)
+
 
 class MessageDevelopers(View):
-    def __init__(self, client: commands.Bot):
+    def __init__(self):
         super().__init__(timeout=60.0)
-        self.client: commands.Bot = client
 
         self.add_item(
             Button(
                 label="Contact a developer", 
-                url="https://www.discordapp.com/users/546086191414509599"))
+                url="https://www.discordapp.com/users/546086191414509599"
+            )
+        )
+        
 
 class SlashExceptionHandler(commands.Cog):
     def __init__(self, client: commands.Bot):
@@ -43,9 +62,7 @@ class SlashExceptionHandler(commands.Cog):
 
             elif isinstance(error, app_commands.CommandOnCooldown):
                 exception = Embed()
-                exception.title = choice([
-                    "Too spicy, take a breather..", "Take a chill pill", "Woah now, slow it down",
-                    "Let's slow it down here", "Slow it down bud", "Spam isn't cool fam", "Hold your horses..."])
+                exception.title = choice(cooldown_prompts)
                 
                 exception.colour = 0x2B2D31
                 after_cd = format_dt(utcnow() + timedelta(seconds=error.retry_after), style="R")
@@ -68,8 +85,8 @@ class SlashExceptionHandler(commands.Cog):
                 "please let us know about it. We're always here to help!")
 
         if not interaction.response.is_done():
-            return await interaction.response.send_message(embed=exception, view=MessageDevelopers(self.client))
-        await interaction.followup.send(embed=exception, view=MessageDevelopers(self.client))
+            return await interaction.response.send_message(embed=exception, view=MessageDevelopers())
+        await interaction.followup.send(embed=exception, view=MessageDevelopers())
 
 
 async def setup(client: commands.Bot):
