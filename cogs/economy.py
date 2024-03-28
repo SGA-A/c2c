@@ -2289,14 +2289,16 @@ class ItemQuantityModal(discord.ui.Modal):
             if isinstance(true_quantity, str):
                 return await interaction.response.send_message(
                     embed=membed("You need to provide a real amount."), 
-                    ephemeral=True)
+                    ephemeral=True
+                )
             
             true_quantity = abs(true_quantity)
 
             if not true_quantity:
                 return await interaction.response.send_message(
                     embed=membed("You need to provide a positive amount"), 
-                    ephemeral=True)
+                    ephemeral=True
+                )
 
             current_price = self.item_cost * true_quantity
             current_balance = await Economy.get_wallet_data_only(interaction.user, conn)
@@ -2307,7 +2309,9 @@ class ItemQuantityModal(discord.ui.Modal):
             if new_price is None:
                 return await interaction.channel.send(
                     embed=membed(
-                        "You didn't respond in time so your purchase was cancelled."))
+                        "You didn't respond in time so your purchase was cancelled."
+                    )
+                )
             
             if not interaction.response.is_done():
                 await interaction.response.defer(thinking=True)
@@ -2318,7 +2322,12 @@ class ItemQuantityModal(discord.ui.Modal):
                         f"You don't have enough money to buy **{true_quantity:,}x {self.ie} {self.item_name}**."))
 
             await self.confirm_purchase(
-                interaction, new_price, true_quantity, conn, current_balance)
+                interaction, 
+                new_price, 
+                true_quantity, 
+                conn, 
+                current_balance
+            )
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         print_exception(type(error), error, error.__traceback__)
@@ -2350,28 +2359,14 @@ class Economy(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client: commands.Bot = client
 
-        self.not_registered = discord.Embed(
-            description=(
-                "## <:noacc:1183086855181324490> You are not registered.\n"
-                "You'll need to register first before you "
-                "can use this command.\n"
-                "### Already Registered?\n"
-                "Find out what could've happened by calling the command "
-                "[`>reasons`](https://www.google.com/)."), 
-                colour=0x2B2D31, timestamp=discord.utils.utcnow())
+        self.not_registered = membed(
+            "## <:noacc:1183086855181324490> You are not registered.\n"
+            "You'll need to register first before you can use this command.\n"
+            "### Already Registered?\n"
+            "Find out what could've happened by calling "
+            "[`>reasons`](https://www.google.com/)."
+        )
         self.batch_update.start()
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        role = interaction.guild.get_role(1168204249096785980)
-        if (role in interaction.user.roles) or (role is None):
-            return True
-        return False
-
-    async def cog_check(self, ctx: commands.Context) -> bool:
-        role = ctx.guild.get_role(1168204249096785980)
-        if (role in ctx.author.roles) or (role is None):
-            return True
-        return False
 
     @tasks.loop(hours=1)
     async def batch_update(self):
@@ -2645,8 +2640,10 @@ class Economy(commands.Cog):
 
         This is what should be done all the time to check if a user IS NOT REGISTERED.
         """
-        data = await conn_input.fetchone(f"SELECT EXISTS (SELECT 1 FROM `{BANK_TABLE_NAME}` WHERE userID = ?)",
-                                        (user.id,))
+        data = await conn_input.fetchone(
+            f"SELECT EXISTS (SELECT 1 FROM `{BANK_TABLE_NAME}` WHERE userID = $0)", 
+            user.id
+        )
 
         return not data[0]
 
@@ -2659,8 +2656,10 @@ class Economy(commands.Cog):
             do something
 
         This is what should be done all the time to check if a user IS NOT REGISTERED."""
-        data = await conn_input.fetchone(f"SELECT COUNT(*) FROM `{BANK_TABLE_NAME}` WHERE userID IN (?, ?)",
-                                        (user1.id, user2.id))
+        data = await conn_input.fetchone(
+            f"SELECT COUNT(*) FROM `{BANK_TABLE_NAME}` WHERE userID IN (?, ?)", 
+            (user1.id, user2.id)
+        )
 
         return data[0] == 2
 
@@ -2691,9 +2690,11 @@ class Economy(commands.Cog):
         return data
 
     @staticmethod
-    async def change_bank_new(user: discord.Member | discord.User, conn_input: asqlite_Connection,
-                              amount: Union[float, int, str] = 0,
-                              mode: str = "wallet") -> Optional[Any]:
+    async def change_bank_new(
+        user: discord.Member | discord.User, 
+        conn_input: asqlite_Connection, 
+        amount: Union[float, int, str] = 0, 
+        mode: str = "wallet") -> Optional[Any]:
         """Modifies a user's field values in any given mode.
 
         Unlike the other updating the bank method, this function directly changes the value to the parameter ``amount``.
@@ -2709,9 +2710,14 @@ class Economy(commands.Cog):
         return data
 
     @staticmethod
-    async def update_bank_multiple_new(user: discord.Member | discord.User, conn_input: asqlite_Connection,
-                                       mode1: str, amount1: Union[float, int], mode2: str, amount2: Union[float, int],
-                                       table_name: Optional[str] = "bank") -> Optional[Any]:
+    async def update_bank_multiple_new(
+        user: discord.Member | discord.User, 
+        conn_input: asqlite_Connection, 
+        mode1: str, 
+        amount1: Union[float, int], 
+        mode2: str, 
+        amount2: Union[float, int], 
+        table_name: Optional[str] = "bank") -> Optional[Any]:
         """Modifies any two fields at once by their respective amounts. Returning the values of both fields.
         You are able to choose what table you wish to modify the contents of."""
         data = await conn_input.execute(
@@ -2722,10 +2728,15 @@ class Economy(commands.Cog):
         return data
 
     @staticmethod
-    async def update_bank_three_new(user: discord.Member | discord.User, conn_input: asqlite_Connection,
-                                    mode1: str, amount1: Union[float, int], mode2: str, amount2: Union[float, int],
-                                    mode3: str, amount3: Union[float, int],
-                                    table_name: Optional[str] = "bank") -> Optional[Any]:
+    async def update_bank_three_new(
+        user: discord.Member | discord.User, conn_input: asqlite_Connection, 
+        mode1: str, 
+        amount1: Union[float, int], 
+        mode2: str, 
+        amount2: Union[float, int], 
+        mode3: str, 
+        amount3: Union[float, int], 
+        table_name: Optional[str] = "bank") -> Optional[Any]:
         """Modifies any three fields at once by their respective amounts. Returning the values of both fields.
         You are able to choose what table you wish to modify the contents of."""
         data = await conn_input.execute(
@@ -2775,8 +2786,9 @@ class Economy(commands.Cog):
         return bool(result[0]) if result else False
 
     @staticmethod
-    async def update_inv_new(user: discord.Member, amount: Union[float, int], item_name: str,
-                         conn: asqlite_Connection) -> Optional[Any]:
+    async def update_inv_new(
+        user: discord.Member, amount: Union[float, int], 
+        item_name: str, conn: asqlite_Connection) -> Optional[Any]:
         """Modify a user's inventory."""
 
         item_row = await conn.fetchone(
@@ -2833,8 +2845,7 @@ class Economy(commands.Cog):
             ("0 0 0", "None", user.id))
         
         await conn_input.execute(f"DELETE FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        await conn_input.execute(f"INSERT INTO `{INV_TABLE_NAME}` (userID) VALUES(?)", (user.id,))
-        
+        await conn_input.execute(f"INSERT INTO `{INV_TABLE_NAME}` (userID) VALUES(?)", (user.id,))        
         await conn_input.execute(f"DELETE FROM `{SLAY_TABLE_NAME}` WHERE userID = ?", (user.id,))
 
 
@@ -2857,12 +2868,6 @@ class Economy(commands.Cog):
 
 
     # ------------ JOB FUNCS ----------------
-
-    @staticmethod
-    async def get_job_data_only(user: discord.Member, conn_input: asqlite_Connection) -> str:
-        """Retrieves the users current job. This is now always a string."""
-        data = await conn_input.fetchone(f"SELECT job FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        return data[0]
 
     @staticmethod
     async def change_job_new(user: discord.Member, conn_input: asqlite_Connection, job_name: str) -> None:
@@ -2914,8 +2919,9 @@ class Economy(commands.Cog):
         return data
 
     @staticmethod
-    async def change_pmulti_new(user: discord.Member, conn_input: asqlite_Connection, amount: Union[float, int] = 0,
-                                mode: str = "pmulti") -> Optional[Any]:
+    async def change_pmulti_new(
+        user: discord.Member, conn_input: asqlite_Connection, 
+        amount: Union[float, int] = 0, mode: str = "pmulti") -> Optional[Any]:
         """Modifies a user's personal multiplier, returning the new multiplier after changes were made."""
 
         data = await conn_input.execute(
@@ -2942,38 +2948,6 @@ class Economy(commands.Cog):
         await conn_input.execute(
             "INSERT INTO slay (slay_name, userID, gender, claimed) VALUES (?, ?, ?, ?)",
             (sn, user.id, gd, dateclaim))
-
-    @staticmethod
-    async def get_servants(conn_input: asqlite_Connection, user: discord.Member):
-        """
-        Retrieve all servant entries for a specific user from the servant database table.
-
-        Parameters:
-        - conn_input (asqlite_Connection): The SQLite database connection.
-        - user (discord.Member): The Discord member for whom servant entries are being retrieved.
-
-        Returns:
-        List[Dict[str, Union[int, str, float]]]: A list of dictionaries containing servant information,
-        or an empty list if no entries are found.
-
-        Description:
-        This static method retrieves all servant entries for a specific user from the servant database table.
-        The result is a list of dictionaries, each representing a servant entry with associated information such as
-        slay_name, userID, gender, productivity, happiness, and status.
-        If no entries are found, an empty list is returned.
-
-        Example:
-        slay_entries = await get_slays(conn, user)
-        print(slay_entries)
-        [{'slay_name': 'Slay1', 'userID': 123456789, 'gender': 'Male',
-        'productivity': 0.8, 'happiness': 70, 'status': 1},
-         {'slay_name': 'Slay2', 'userID': 123456789, 'gender': 'Female',
-          'productivity': 0.9, 'happiness': 80, 'status': 2}]
-        """
-
-        new_data = await conn_input.fetchall("SELECT * FROM slay WHERE userID = ?", (user.id,))
-
-        return new_data
 
     @staticmethod
     async def delete_slay(conn_input: asqlite_Connection, user: discord.Member, slay_name):
@@ -4591,7 +4565,7 @@ class Economy(commands.Cog):
                 SELECT work FROM cooldowns WHERE userID = $0 UNION ALL SELECT job FROM bank WHERE userID = $0
                 """, interaction.user.id
             )
-        
+
             job_name = data[1][0]
             if job_name == "None":
                     return await interaction.response.send_message(
