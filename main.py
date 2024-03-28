@@ -8,7 +8,7 @@ from sys import version
 from re import compile
 from random import choice
 from collections import deque
-from typing import Literal, Any, Dict, Optional, TYPE_CHECKING, Union, List
+from typing import Literal, Any, Dict, Optional, TYPE_CHECKING, Union, List, Tuple
 from logging import INFO as LOGGING_INFO
 
 from asyncio import run
@@ -184,6 +184,7 @@ cogs = Literal[
     "admin", "ctx_events", "economy", 
     "miscellaneous", "moderation", "music", 
     "slash_events", "tempvoice"]
+classnames = Literal["Economy", "Moderation", "Utility", "Owner", "Music", "TempVoice"]
 
 
 @client.check
@@ -197,8 +198,8 @@ async def load_cogs() -> None:
             await client.load_extension(f"cogs.{filename[:-3]}")
 
 
-def return_txt_cmds_first(command_holder: dict,
-                          category: Literal["Economy", "Moderation", "Miscellaneous", "Administrate", "Music"]) -> dict:
+def return_txt_cmds_first(
+        command_holder: dict, category: classnames) -> dict:
     """Displays all the text-based commands that are defined within a cog as a dict. This should always be called
     first for consistency."""
     for cmd in client.get_cog(category).get_commands():
@@ -206,14 +207,49 @@ def return_txt_cmds_first(command_holder: dict,
     return command_holder
 
 
-def return_interaction_cmds_last(command_holder: dict,
-                                 category: Literal[
-                                     "Economy", "Moderation", "Miscellaneous", "Administrate", "Music"]) -> dict:
+def return_interaction_cmds_last(
+        command_holder: dict, category: classnames) -> dict:
     """Displays all the app commands and grouped app commands that are defined within a cog as a dict. This should
     always be called last for consistency."""
     for cmd in client.get_cog(category).get_app_commands():
         command_holder.update({cmd.name: deque([f'{category}', f'{cmd.description}', 'sla'])})
     return command_holder
+
+
+def fill_up_commands(category: classnames) -> dict:
+    """Assumes a category has both slash and text commands."""
+    the_dict = {}
+    new_dict = return_txt_cmds_first(the_dict, category)
+    all_cmds: dict = return_interaction_cmds_last(new_dict, category)
+    return all_cmds
+
+
+def generic_loop_with_subcommand(all_cmds: dict, cmd_formatter: set, guild_id) -> Tuple[set, int]:
+    total_command_count = 0
+
+    for cmd, cmd_details in all_cmds.items():
+        total_command_count += 1
+
+        if cmd_details[-1] == 'txt':
+            cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
+            continue
+        
+        command_manage = client.tree.get_app_command(cmd, guild=Object(id=guild_id))
+        
+        try:
+            got_something = False
+            if command_manage.options:
+                for option in command_manage.options:
+                    if isinstance(option, app_commands.AppCommandGroup):
+                        got_something = True
+                        total_command_count += 1
+                        cmd_formatter.add(f"\U00002022 {option.mention} - {option.description}")
+            
+            if not got_something:
+                cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
+        except AttributeError:
+            continue
+    return cmd_formatter, total_command_count
 
 
 async def total_command_count(interaction: Interaction) -> int:
@@ -227,31 +263,35 @@ class SelectMenu(ui.Select):
         optionss = [
             SelectOption(
                 label='Owner', 
-                description='Commands available to bot owners.', 
-                emoji='<a:e1_butterflyB:1124677894275338301>'),
+                description='Debugging facilities for developers.', 
+                emoji='<:ownerSTAR:1221502316478464050>'),
             SelectOption(
                 label='Moderation', 
-                description='Commands available to moderators.', 
-                emoji='<a:e1_starR:1124677520038567946>'),
+                description='Manage your own server, easily.', 
+                emoji='<:modSTAR:1221502315241013259>'),
             SelectOption(
                 label='Utility', 
-                description='Other helpful commands and resources.', 
-                emoji='<a:e1_starG:1124677658500927488>'),
+                description='Entertainment beginning.', 
+                emoji='<:utilitySTAR:1221502313798172753>'),
             SelectOption(
                 label='Economy', 
-                description='Commands for our virtual economy.', 
-                emoji='<a:e1_starY:1124677741980176495>'),
+                description='Earn a living in a simulated virtual economy.', 
+                emoji='\U00002b50'),
+            SelectOption(
+                label="TempVoice", 
+                description="Configure your own temporary voice channel.",
+                emoji="<:tempSTAR:1221502312472903851>"),
             SelectOption(
                 label='Music', 
-                description='Commands for a music experience.', 
-                emoji='<a:e1_starPur:1125040539943837738>')
+                description='Stream your favourite tunes from any platform.', 
+                emoji='<:musicSTAR:1221502310967017652>')
         ]
         super().__init__(placeholder="Select a command category", options=optionss)
 
     async def callback(self, interaction: Interaction):
 
         their_choice = self.values[0]
-        cmd_formatter: set = set()
+        cmd_formatter = set()
 
         total_cmds_rough = await total_command_count(interaction)
         total_cmds_cata = 0
@@ -259,13 +299,13 @@ class SelectMenu(ui.Select):
         for option in self.options:
             option.default = option.value == their_choice
 
+        embed = Embed()
+        embed.title = f"Help: {their_choice}"
         if their_choice == 'Owner':
 
-            the_dict = {}
-            new_dict = return_txt_cmds_first(the_dict, "Administrate")
-            all_cmds: dict = return_interaction_cmds_last(new_dict, "Administrate")
+            all_cmds = fill_up_commands(their_choice)
 
-            embed = Embed(title='Help: Owner', colour=Colour.from_rgb(91, 170, 239))
+            embed.colour = 0x5BAAEF
             embed.set_thumbnail(
                 url='https://cdn.discordapp.com/icons/592654230112698378/1a4fed4eca3d81da620a662a8b383c5b.png?size=512')
 
@@ -279,133 +319,38 @@ class SelectMenu(ui.Select):
                 command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
                 cmd_formatter.add(f"\U00002022 **{command_manage.mention}** - {cmd_details[1]}")
 
-            proportion = (total_cmds_cata / total_cmds_rough) * 100
-            
-            embed.description = "\n".join(cmd_formatter)
-            embed.add_field(
-                name='About: Owner', 
-                value=(
-                    f'Contains commands that are only able to be utilized by the bot developers, '
-                    f'and mostly'
-                    f'contain commands related to debugging and testing new features into the client '
-                    f'for later release.\n'
-                    f'__Interesting Stats__\n'
-                    f'- There are **{total_cmds_cata}** commands in this category\n'
-                    f'- Accounts for **{proportion:.2f}%** of all commands\n'
-                    f'- Last modified: <t:1702722548:D> (**<t:1702722548:R>**)\n'
-                    f'- Status: **READY**'))
-
-            await interaction.response.edit_message(embed=embed, view=self.view)
-
         elif their_choice == 'Moderation':
 
-            the_dict = {}
-            new_dict = return_txt_cmds_first(the_dict, "Moderation")
-            all_cmds: dict = return_interaction_cmds_last(new_dict, "Moderation")
+            all_cmds = fill_up_commands(their_choice)
 
-            embed = Embed(title='Help: Moderation', colour=Colour.from_rgb(247, 14, 115))
+            embed.colour = 0xF70E73
             embed.set_thumbnail(url='https://emoji.discadia.com/emojis/74e65408-2adb-46dc-86a7-363f3096b6b2.PNG')
 
-            for cmd, cmd_details in all_cmds.items():
-                total_cmds_cata += 1
-
-                if cmd_details[-1] == 'txt':
-                    cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
-                    continue
-                
-                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
-                
-                try:
-                    got_something = False
-                    if command_manage.options:
-                        for option in command_manage.options:
-                            if isinstance(option, app_commands.AppCommandGroup):
-                                got_something = True
-                                total_cmds_cata += 1
-                                cmd_formatter.add(f"\U00002022 {option.mention} - {option.description}")
-                    
-                    if not got_something:
-                        cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
-                except AttributeError:
-                    continue
+            cmd_formatter, total_cmds_cata = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild_id)
 
             roles = client.tree.get_app_command("role", guild=Object(id=interaction.guild.id))
             for option in roles.options:
                 total_cmds_cata += 1
                 cmd_formatter.add(f"\U00002022 {option.mention} - {option.description}")
-            
-            proportion = (total_cmds_cata / total_cmds_rough) * 100
-            
-            embed.description = "\n".join(cmd_formatter)
-            embed.add_field(
-                name='About: Mod', 
-                value=(
-                    f'Contains commands that are related to server management and moderation, hence these'
-                    f' commands require invokers to have higher levels of permissions to utilize these.\n'
-                    f'__Interesting Stats__\n'
-                    f'- There are **{total_cmds_cata}** commands in this category\n'
-                    f'- Accounts for **{proportion:.2f}%** of all commands\n'
-                    f'- Last modified: <t:1698856225:D> (**<t:1698856225:R>**)\n'
-                    f'- Status: **READY**'))
 
-            await interaction.response.edit_message(embed=embed, view=self.view)
+        elif (their_choice == 'Utility') or (their_choice == "TempVoice"):
 
-        elif their_choice == 'Utility':
-
-            the_dict = {}
-            new_dict = return_txt_cmds_first(the_dict, "Miscellaneous")
-            all_cmds: dict = return_interaction_cmds_last(new_dict, "Miscellaneous")
-
-            embed = Embed(title='Help: Utility', colour=Colour.from_rgb(15, 255, 135))
-            embed.set_thumbnail(url='https://i.imgur.com/YHBLgVx.png')
-
-            for cmd, cmd_details in all_cmds.items():
-                total_cmds_cata += 1
-                if cmd_details[-1] == 'txt':
-                    cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
-                    continue
-
-                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
-
-                try:
-                    got_something = False
-                    if command_manage.options:
-                        for option in command_manage.options:
-                            if isinstance(option, app_commands.AppCommandGroup):
-                                got_something = True
-                                total_cmds_cata += 1
-                                cmd_formatter.add(
-                                    f"\U00002022 {option.mention} - {option.description}")
-                    if not got_something:
-                        cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
-                except AttributeError:
-                    continue
-            
-            proportion = (total_cmds_cata / total_cmds_rough) * 100
-            
-            embed.description = "\n".join(cmd_formatter)
-            embed.add_field(
-                name='About: Utility', 
-                value=(
-                    f'Contains commands that may serve useful to some users, '
-                    f'especially to some of the geeks out there.\n'
-                    f'__Interesting Stats__\n'
-                    f'- There are **{total_cmds_cata}** commands in this category\n'
-                    f'- Accounts for **{proportion:.2f}%**'
-                    f' of all commands\n'
-                    f'- Last modified: <t:1702722548:D> (**<t:1702722548:R>**)\n'
-                    f'- Status: **READY**'))
-
-            await interaction.response.edit_message(embed=embed, view=self.view)
-
+            all_cmds = fill_up_commands(their_choice)
+            match their_choice:
+                case "Utility":
+                    embed.colour = 0x0FFF87
+                    embed.set_thumbnail(url='https://i.imgur.com/YHBLgVx.png')
+                case _:
+                    embed.colour = 0x8A1941
+                    embed.set_thumbnail(url='https://i.imgur.com/b8u1MQj.png')
+            cmd_formatter, total_cmds_cata = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild_id)
         elif their_choice == 'Economy':
             
-            embed = Embed(title='Help: Economy', colour=Colour.from_rgb(255, 215, 0))
+            embed.colour = 0xFFD700
             embed.set_thumbnail(url='https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Robux_2019_Logo_gold.svg/200px-Robux_2019_Logo_gold.svg.png')
 
-            the_dict = {}
-            new_dict = return_txt_cmds_first(the_dict, "Economy")
-            all_cmds: dict = return_interaction_cmds_last(new_dict, "Economy")
+            all_cmds = fill_up_commands(their_choice)
+            
             for cmd, cmd_details in all_cmds.items():
                 total_cmds_cata += 1
                 if cmd_details[-1] == 'txt':
@@ -427,49 +372,27 @@ class SelectMenu(ui.Select):
                         cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
                 except AttributeError:
                     cmd_formatter.add(f"\U00002022 </balance:1192188834134376500> - {cmd_details[1]}")
-
-            proportion = (total_cmds_cata / total_cmds_rough) * 100
-
-            embed.description = "\n".join(cmd_formatter)
-            embed.add_field(
-                name='About: Economy', 
-                value=(
-                    f'Contains commands that can be used by anybody, and relate to the virtual economy '
-                    f'system of the client.\n'
-                    f'__Interesting Stats__\n'
-                    f'- There are **{total_cmds_cata}** commands in this category\n'
-                    f'- Accounts for **{proportion:.2f}%** of all commands\n'
-                    f'- Last modified: <t:1702722548:D> (**<t:1702722548:R>**)\n'
-                    f'- Status: **LOCKED**'))
-
-            await interaction.response.edit_message(embed=embed, view=self.view)
-
         else:
-
-            embed = Embed(title='Help: Music', colour=Colour.from_rgb(105, 83, 224))
+            embed.colour = 0x6953E0
             embed.set_thumbnail(url="https://i.imgur.com/nFZTMFl.png")
 
-            the_dict: dict = {}
-            all_cmds = return_txt_cmds_first(the_dict, "Music")
+            all_cmds = return_txt_cmds_first(dict(), their_choice)
 
             for cmd, cmd_details in all_cmds.items():
                 cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                 total_cmds_cata += 1
 
-            proportion = (total_cmds_cata / total_cmds_rough) * 100
+        proportion = (total_cmds_cata / total_cmds_rough) * 100
+        embed.description = "\n".join(cmd_formatter)
+        embed.add_field(
+            name='Info', 
+            value=(
+                f'- {total_cmds_cata} commands listed\n'
+                f'- {proportion:.2f}% of all commands are here'
+            )
+        )
 
-            embed.description = "\n".join(cmd_formatter)
-            embed.add_field(
-                name='About: Music', 
-                value=(
-                    f'Contains commands that can be used by anybody, related to the music client '
-                    f'and its functions. Use these commands to play music on Discord.\n'
-                    f'__Interesting Stats__\n'
-                    f'- There are **{total_cmds_cata}** commands in this category\n'
-                    f'- Accounts for **{proportion:.2f}%** of all commands\n'
-                    f'- Last modified: <t:1703857689:D> (**<t:1703857689:R>**)\n'
-                    f'- Status: **READY**'))
-            await interaction.response.edit_message(embed=embed, view=self.view)
+        await interaction.response.edit_message(embed=embed, view=self.view)
 
 
 class Select(ui.View):
