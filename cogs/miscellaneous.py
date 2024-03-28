@@ -105,23 +105,23 @@ def membed(descriptioner: str) -> discord.Embed:
 
 
 def return_random_color():
-    colors_crayon = {
-        "warm pink": discord.Color.from_rgb(255, 204, 204),
-        "warm orange": discord.Color.from_rgb(255, 232, 204),
-        "warm yellow": discord.Color.from_rgb(242, 255, 204),
-        "warm green": discord.Color.from_rgb(223, 255, 204),
-        "warm blue": discord.Color.from_rgb(204, 255, 251),
-        "warm purple": discord.Color.from_rgb(204, 204, 255),
-        "polar ice": discord.Color.from_rgb(204, 255, 224),
-        "polar pink": discord.Color.from_rgb(212, 190, 244),
-        "unusual green": discord.Color.from_rgb(190, 244, 206),
-        "sea blue": discord.Color.from_rgb(255, 203, 193),
-        "pastel green": discord.Color.from_rgb(175, 250, 216),
-        "lighter blue": discord.Color.from_rgb(131, 227, 255),
-        "usual(?) green": discord.Color.from_rgb(191, 252, 198),
-        "deep purple": discord.Color.from_rgb(80, 85, 252)
-    }
-    return choice(list(colors_crayon.values()))
+    colors_crayon = (
+        discord.Color.from_rgb(255, 204, 204),
+        discord.Color.from_rgb(255, 232, 204),
+        discord.Color.from_rgb(242, 255, 204),
+        discord.Color.from_rgb(223, 255, 204),
+        discord.Color.from_rgb(204, 255, 251),
+        discord.Color.from_rgb(204, 204, 255),
+        discord.Color.from_rgb(204, 255, 224),
+        discord.Color.from_rgb(212, 190, 244),
+        discord.Color.from_rgb(190, 244, 206),
+        discord.Color.from_rgb(255, 203, 193),
+        discord.Color.from_rgb(175, 250, 216),
+        discord.Color.from_rgb(131, 227, 255),
+        discord.Color.from_rgb(191, 252, 198),
+        discord.Color.from_rgb(80, 85, 252)
+    )
+    return choice(colors_crayon)
 
 
 class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
@@ -136,28 +136,23 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
         style=discord.TextStyle.long,
         label='Description',
         required=True,
-        placeholder="Provide the feedback here."
+        placeholder="Put anything you want to share about the bot here.."
     )
 
     async def on_submit(self, interaction: discord.Interaction):
         channel = interaction.guild.get_channel(1122902104802070572)
-        embed = discord.Embed(title=f'New Feedback: {self.fb_title.value or "Untitled"}',
-                              description=self.message.value, colour=0x2B2D31)
-        embed.set_author(name=interaction.user.name,
-                         icon_url=interaction.user.display_avatar.url)
+        embed = discord.Embed()
+        embed.title = f'New Feedback: {self.fb_title.value or "Untitled"}'
+        embed.description = self.message.value
+        embed.colour = 0x2B2D31
+        embed.set_author(name=interaction.user.name, icon_url=interaction.user.display_avatar.url)
 
         await channel.send(embed=embed)
-        success = discord.Embed(colour=0x2B2D31,
-                                description="## <:dispatche:1195745709463441429> Your response has been submitted.\n"
-                                            "- Developers will consider your feedback accordingly within a few days.\n"
-                                            "- From there, compensation will be decided upfront.\n\n"
-                                            "You may get a unique badge or other type of reward based on how "
-                                            "constructive and thoughtful your feedback is.")
+        success = membed("Your response has been submitted!")
         await interaction.response.send_message(embed=success, ephemeral=True)
 
     async def on_error(self, interaction: discord.Interaction, error):
-        return await interaction.response.send_message(
-            "<:warning_nr:1195732155544911882> Something went wrong.")
+        return await interaction.response.send_message(embed=membed("Something went wrong."))
 
 
 class InviteButton(discord.ui.View):
@@ -193,7 +188,7 @@ class InviteButton(discord.ui.View):
             url=discord.utils.oauth_url(self.client.user.id, permissions=perms)))
 
 
-class Miscellaneous(commands.Cog):
+class Utility(commands.Cog):
     def __init__(self, client: commands.Bot):
         self.client = client
         self.process = Process()
@@ -264,29 +259,35 @@ class Miscellaneous(commands.Cog):
 
     @commands.command(name='invite', description='Links the invite for c2c')
     async def invite_bot(self, ctx):
-        await ctx.send(embed=membed("The button component gives a direct link to invite me to your server.\n"
-                                    "Remember that only developers can invite the bot."),
-                       view=InviteButton(self.client))
+        content = (
+            "The button component gives a direct link to invite me to your server.\n"
+            "Remember that only developers can invite the bot."
+        )
+        content = membed(content)
+        
+        await ctx.send(embed=content, view=InviteButton(self.client))
 
     @commands.command(name='calculate', aliases=('c', 'calc'), description='Compute a string or math expression')
     async def calculator(self, ctx: commands.Context, *, expression):
 
         try:
             result = eval(expression) or "Invalid"
-            await ctx.reply(f'<:resultce:1195746711495249931> **{ctx.author.name}**, the result is `{result:,}`',
-                            mention_author=False)
+            await ctx.reply(f'**{ctx.author.name}**, the result is `{result:,}`', mention_author=False)
         except Exception as e:
-            await ctx.reply(f'<:warning_nr:1195732155544911882> **Error:** {str(e)}', mention_author=False)
+            await ctx.reply(f'**Error:** {str(e)}', mention_author=False)
 
     @commands.command(name='ping', description='Checks latency of the bot')
-    async def ping(self, ctx):
+    async def ping(self, ctx: commands.Context):
         start = perf_counter()
-        message = await ctx.send("<:latencye:1195741921482641579> Ping...")
+        message = await ctx.send(embed=membed("Ping..."))
         end = perf_counter()
         duration = (end - start) * 1000
-        await message.edit(
-            content=f"<:latencye:1195741921482641579> REST: {duration:.2f}ms **\U0000007c** "
-                    f"WS: {self.client.latency * 1000:.2f} ms")
+        
+        content = membed(
+            f"- REST: {duration:.2f}ms\n"
+            f"- WS: {self.client.latency * 1000:.2f}ms"
+        )
+        await message.edit(embed=content)
 
     @app_commands.guilds(*APP_GUILDS_ID)
     async def extract_source(self, interaction: discord.Interaction, message: discord.Message):
@@ -625,12 +626,9 @@ class Miscellaneous(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.default_permissions(create_instant_invite=True)
     @app_commands.describe(
-        invite_lifespan='A non-zero duration for which the invite should last for.', 
+        invite_lifespan='A non-zero duration in days for which the invite should last for.', 
         maximum_uses='The maximum number of uses for the created invite.')
-    async def gen_new_invite(self, interaction: discord.Interaction, invite_lifespan: int, maximum_uses: int):
-        if invite_lifespan <= 0:
-            return await interaction.response.send_message(
-                embed=membed("The invite lifespan cannot be **less than or equal to 0**."))
+    async def gen_new_invite(self, interaction: discord.Interaction, invite_lifespan: app_commands.Range[int, 1], maximum_uses: int):
 
         maximum_uses = abs(maximum_uses)
         invite_lifespan *= 86400
@@ -1007,4 +1005,4 @@ class Miscellaneous(commands.Cog):
 
 
 async def setup(client):
-    await client.add_cog(Miscellaneous(client))
+    await client.add_cog(Utility(client))
