@@ -19,7 +19,7 @@ import datetime
 import aiofiles
 
 from other.utilities import datetime_to_string, string_to_datetime, labour_productivity_via
-from other.pagination import Pagination, PaginationItem
+from other.pagination import Pagination, PaginationItem, PaginationRefreshable
 
 
 def membed(custom_description: str) -> discord.Embed:
@@ -762,11 +762,6 @@ class RememberOrder(discord.ui.View):
         for index in x:
             removed[index].label = self.list_of_five_order[index]
             self.add_item(removed[index])
-
-        # for item in removed:
-        #     removed[x].label = self.list_of_five_order[x]
-        #     self.add_item(item)
-        #     x += 1
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await economy_check(interaction, self.interaction.user)
@@ -2434,161 +2429,101 @@ class Economy(commands.Cog):
             lb = discord.Embed(
                 title=f"Leaderboard: {chosen_choice}",
                 color=0x2B2D31,
-                timestamp=discord.utils.utcnow())
+                timestamp=discord.utils.utcnow()
+            )
 
-            lb.set_footer(
-                text="Ranked globally",
-                icon_url=self.client.user.avatar.url)            
-
+            lb.set_footer(text="Ranked globally")
             not_database = []
 
             if chosen_choice == 'Bank + Wallet':
 
-                data = await conn.execute(
+                data = await conn.fetchall(
                     f"""
-                    SELECT `userID`, SUM(`wallet` + `bank`) as total_balance 
+                    SELECT `userID`, SUM(`wallet` + `bank`) AS total_balance 
                     FROM `{BANK_TABLE_NAME}` 
                     GROUP BY `userID` 
                     ORDER BY total_balance DESC
-                    """,
-                    ())
-                data = await data.fetchall()
-
-                for i, member in enumerate(data):
-                    member_name = self.client.get_user(member[0])
-                    their_badge = UNIQUE_BADGES.get(member_name.id, "")
-                    msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
-                    not_database.append(msg1)
+                    """
+                )
 
             elif chosen_choice == 'Wallet':
 
-                data = await conn.execute(
+                data = await conn.fetchall(
                     f"""
-                    SELECT `userID`, `wallet` as total_balance 
+                    SELECT `userID`, `wallet` AS total_wallet 
                     FROM `{BANK_TABLE_NAME}` 
                     GROUP BY `userID` 
-                    ORDER BY total_balance DESC
-                    """,
-                    ())
-
-                data = await data.fetchall()
-
-                not_database = []
-
-
-                for i, member in enumerate(data):
-                    member_name = self.client.get_user(member[0])
-                    their_badge = UNIQUE_BADGES.get(member_name.id, "")
-                    msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
-                    not_database.append(msg1)
+                    ORDER BY total_wallet DESC
+                    """
+                )
 
             elif chosen_choice == 'Bank':
-                data = await conn.execute(
+                data = await conn.fetchall(
                     f"""
-                    SELECT `userID`, `bank` as total_balance 
+                    SELECT `userID`, `bank` AS total_bank 
                     FROM `{BANK_TABLE_NAME}` 
                     GROUP BY `userID` 
-                    ORDER BY total_balance DESC
-                    """,
-                    ())
-
-                data = await data.fetchall()
-                not_database = []
-
-                for i, member in enumerate(data):
-                    member_name = self.client.get_user(member[0])
-                    their_badge = UNIQUE_BADGES.get(member_name.id, "")
-                    msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
-                    not_database.append(msg1)
+                    ORDER BY total_bank DESC
+                    """
+                )
 
             elif chosen_choice == 'Inventory Net':
 
-                data = await conn.execute("""
+                data = await conn.fetchall(
+                    """
                     SELECT inventory.userID, SUM(shop.cost * inventory.qty) AS NetValue
                     FROM inventory
                     INNER JOIN shop ON shop.itemID = inventory.itemID
                     GROUP BY inventory.userID
                     ORDER BY NetValue DESC
-                """)
-
-                data = await data.fetchall()
-
-                not_database = []
-
-                for i, member in enumerate(data):
-                    member_name = self.client.get_user(member[0])
-                    their_badge = UNIQUE_BADGES.get(member_name.id, "")
-                    msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
-                    not_database.append(msg1)
+                    """
+                )
 
             elif chosen_choice == 'Bounty':
 
-                data = await conn.execute(
+                data = await conn.fetchall(
                     f"""
-                    SELECT `userID`, `bounty` as total_bounty 
+                    SELECT `userID`, `bounty` AS total_bounty 
                     FROM `{BANK_TABLE_NAME}` 
                     GROUP BY `userID` 
                     HAVING total_bounty > 0
                     ORDER BY total_bounty DESC
-                    """,
-                    ())
-
-                data = await data.fetchall()
-
-                not_database = []
-
-                for i, member in enumerate(data):
-                    member_name = self.client.get_user(member[0])
-                    their_badge = UNIQUE_BADGES.get(member_name.id, "")
-                    msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 {CURRENCY}{member[1]:,}"
-                    not_database.append(msg1)
+                    """
+                )
 
             elif chosen_choice == 'Commands':
 
-                data = await conn.execute(
+                data = await conn.fetchall(
                     f"""
-                    SELECT `userID`, `cmds_ran` as total_commands 
+                    SELECT `userID`, `cmds_ran` AS total_commands 
                     FROM `{BANK_TABLE_NAME}` 
                     GROUP BY `userID` 
                     HAVING cmds_ran > 0
                     ORDER BY total_commands DESC
-                    """,
-                    ())
+                    """
+                )
 
-                data = await data.fetchall()
-
-                not_database = []
-
-                for i, member in enumerate(data):
-                    member_name = self.client.get_user(member[0])
-                    their_badge = UNIQUE_BADGES.get(member_name.id, "")
-                    msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
-                    not_database.append(msg1)
             else:
-                data = await conn.execute(
+                data = await conn.fetchall(
                     f"""
-                    SELECT `userID`, `level` as lvl 
+                    SELECT `userID`, `level` AS lvl 
                     FROM `{BANK_TABLE_NAME}` 
                     GROUP BY `userID` 
                     HAVING lvl > 0
                     ORDER BY lvl DESC
-                    """,
-                    ())
+                    """
+                )
 
-                data = await data.fetchall()
-
-                not_database = []
-
-                for i, member in enumerate(data):
-                    member_name = self.client.get_user(member[0])
-                    their_badge = UNIQUE_BADGES.get(member_name.id, "")
-                    msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
-                    not_database.append(msg1)
+            for i, member in enumerate(data):
+                member_name = self.client.get_user(member[0])
+                their_badge = UNIQUE_BADGES.get(member_name.id, "")
+                msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
+                not_database.append(msg1)
             
             lb.description = (
-                f"Displaying the top [__`{len(data)}`__](https://www.quora.com/) users.\n\n"
+                f"Displaying the top [`{len(data)}`](https://www.quora.com/) users.\n\n"
                 f"{'\n'.join(not_database) or 'No data.'}")
-            return lb   
+            return lb
 
     async def servant_preset(self, owner_id: int, dtls):
         """Get servant details from the given owner ID, return it in a unique servant card."""
@@ -3461,6 +3396,7 @@ class Economy(commands.Cog):
                     emb.description += f"{item_mod[0]}\n"
                     paginator.add_item(item_mod[1])
                 n = Pagination.compute_total_pages(len(additional_notes), length)
+                emb.set_footer(text=f"Page {page} of {n}")
                 return emb, n
         paginator.get_page = get_page_part
         await paginator.navigate()
@@ -4445,7 +4381,7 @@ class Economy(commands.Cog):
     @app_commands.describe(member='The user whose inventory you want to see.')
     async def inventory(self, interaction: discord.Interaction, member: Optional[discord.Member]):
         """View your inventory or another player's inventory."""
-
+        return await interaction.response.send_message(embed=membed("This command is currently disabled."))
         member = member or interaction.user
 
         if (member.bot) and (member.id != self.client.user.id):
@@ -4456,41 +4392,49 @@ class Economy(commands.Cog):
 
             if await self.can_call_out(member, conn):
                 return await interaction.response.send_message(embed=NOT_REGISTERED)
+            
+            pagination = PaginationRefreshable(interaction)
 
-            em = discord.Embed(color=0x2B2D31)
-            length = 8
+            async def inner_callback():
+                em = discord.Embed(color=0x2B2D31)
+                length = 8
 
-            owned_items = await conn.fetchall(
-                """
-                SELECT shop.itemName, shop.emoji, inventory.qty
-                FROM shop
-                INNER JOIN inventory ON shop.itemID = inventory.itemID
-                WHERE inventory.userID = ?
-            """, (member.id,))
+                owned_items = await conn.fetchall(
+                    """
+                    SELECT shop.itemName, shop.emoji, inventory.qty
+                    FROM shop
+                    INNER JOIN inventory ON shop.itemID = inventory.itemID
+                    WHERE inventory.userID = $0
+                    """, member.id
+                )
 
-            if not owned_items:
-                if member.id == interaction.user.id:
-                    em.description = "You don't own any items yet. Go to the shop and buy some."
-                else:
-                    em.description = f"{member.name} has nothing for you to see."
-                return await interaction.response.send_message(embed=em)
+                if not owned_items:
+                    if member.id == interaction.user.id:
+                        em.description = "You don't own any items yet. Go to the shop and buy some."
+                    else:
+                        em.description = f"{member.mention} has nothing for you to see."
+                    return await interaction.response.send_message(embed=em)
 
-            async def get_page_part(page: int):
-                """Helper function to determine what page of the paginator we're on."""
+                async def get_page_part(page: int):
+                    """Helper function to determine what page of the paginator we're on."""
 
-                em.set_author(name=f"{member.display_name}'s Inventory", icon_url=member.display_avatar.url)
+                    em.set_author(name=f"{member.display_name}'s Inventory", icon_url=member.display_avatar.url)
 
-                offset = (page - 1) * length
-                em.timestamp = discord.utils.utcnow()
-                em.description = ""
-                
-                for item in owned_items[offset:offset + length]:
-                    em.description += f"{item[1]} **{item[0]}** \U00002500 {item[2]}\n"
+                    offset = (page - 1) * length
+                    em.timestamp = discord.utils.utcnow()
+                    em.description = ""
+                    
+                    for item in owned_items[offset:offset + length]:
+                        em.description += f"{item[1]} **{item[0]}** \U00002500 {item[2]:,}\n"
 
-                n = Pagination.compute_total_pages(len(owned_items), length)
-                return em, n
+                    n = pagination.compute_total_pages(len(owned_items), length)
+                    em.set_footer(text=f"Page {page} of {n}")
+                    return em, n
 
-            await Pagination(interaction, get_page_part).navigate()
+                pagination.get_page = get_page_part
+            pagination.refresh_callback = inner_callback
+
+            await pagination.navigate()
 
     async def do_order(self, interaction: discord.Interaction, job_name: str):
         possible_words: tuple = job_attrs.get(job_name)[0] 
@@ -4743,7 +4687,7 @@ class Economy(commands.Cog):
 
                 norer = membed(
                     f"# <:successful:1183089889269530764> You are now registered.\n"
-                    f"Your records have been added in our database, **{user.name}**.\n"
+                    f"Your records have been added in our database, {user.mention}.\n"
                     f"From now on, you may use any of the economy commands.\n"
                     f"Here are some of our top used commands:\n"
                     f"### 1. Start earning quick robux:\n"
@@ -4845,7 +4789,7 @@ class Economy(commands.Cog):
 
             if await self.can_call_out(member, conn):
                 await interaction.response.send_message(
-                    embed=membed(f"Could not find {member.name} in the database."))
+                    embed=membed(f"Could not find {member.mention} in the database."))
             else:
 
                 active_sessions.update({interaction.user.id: 1})
