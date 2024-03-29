@@ -586,7 +586,7 @@ class ConfirmResetData(discord.ui.View):
             pass
 
     @discord.ui.button(label='RESET MY DATA', style=discord.ButtonStyle.danger, emoji=discord.PartialEmoji.from_str("<a:rooFireAhh:1208545466132860990>"))
-    async def confirm_button_reset(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def confirm_button_reset(self, interaction: discord.Interaction, _: discord.ui.Button):
         
         embed: discord.Embed = self.message.embeds[0]
         self.count += 1
@@ -614,8 +614,8 @@ class ConfirmResetData(discord.ui.View):
 
         await interaction.followup.send(embed=membed(f"All of {whose} data has been reset.{end_note}"))
 
-    @discord.ui.button(label='CANCEL', style=discord.ButtonStyle.blurple)
-    async def cancel_button_reset(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label='CANCEL', style=discord.ButtonStyle.primary)
+    async def cancel_button_reset(self, interaction: discord.Interaction, _: discord.ui.Button):
         del active_sessions[interaction.user.id]
 
         for item in self.children:
@@ -637,10 +637,10 @@ class Confirm(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction[discord.Client]) -> bool:
         return await economy_check(interaction, self.interaction.user)
 
-    @discord.ui.button(label='Cancel', style=discord.ButtonStyle.red)
+    @discord.ui.button(label='Cancel', style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         del active_sessions[interaction.user.id]
-        self.children[1].style = discord.ButtonStyle.grey
+        self.children[1].style = discord.ButtonStyle.secondary
         button.style = discord.ButtonStyle.success
         
         for item in self.children:
@@ -651,10 +651,10 @@ class Confirm(discord.ui.View):
         self.value = False
         self.stop()
 
-    @discord.ui.button(label='Confirm', style=discord.ButtonStyle.green)
+    @discord.ui.button(label='Confirm', style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         del active_sessions[interaction.user.id]
-        self.children[0].style = discord.ButtonStyle.grey
+        self.children[0].style = discord.ButtonStyle.secondary
         button.style = discord.ButtonStyle.success
 
         for item in self.children:
@@ -1018,8 +1018,8 @@ class BlackjackUi(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await economy_check(interaction, self.interaction.user)
 
-    @discord.ui.button(label='Hit', style=discord.ButtonStyle.blurple)
-    async def hit_bj(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label='Hit', style=discord.ButtonStyle.primary)
+    async def hit_bj(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Button in the interface to hit within blackjack."""
         namount = self.client.games[interaction.user.id][-1]
         deck = self.client.games[interaction.user.id][0]
@@ -1132,8 +1132,8 @@ class BlackjackUi(discord.ui.View):
                 content="Press **Hit** to hit, **Stand** to finalize your deck or "
                         "**Forfeit** to end your hand prematurely.", embed=prg, view=self)
 
-    @discord.ui.button(label='Stand', style=discord.ButtonStyle.blurple)
-    async def stand_bj(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label='Stand', style=discord.ButtonStyle.primary)
+    async def stand_bj(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Button interface in blackjack to stand."""
         self.stop()
         self.finished = True
@@ -1264,8 +1264,8 @@ class BlackjackUi(discord.ui.View):
                            name=f"{interaction.user.name}'s blackjack game")
             await interaction.response.edit_message(content=None, embed=tie, view=None)
 
-    @discord.ui.button(label='Forfeit', style=discord.ButtonStyle.blurple)
-    async def forfeit_bj(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label='Forfeit', style=discord.ButtonStyle.primary)
+    async def forfeit_bj(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Button for the blackjack interface to forfeit the current match."""
 
         self.stop()
@@ -1327,9 +1327,9 @@ class HighLow(discord.ui.View):
         for item in self.children:
             item.disabled = True
             if item == clicked_button:
-                clicked_button.style = discord.ButtonStyle.blurple
+                item.style = discord.ButtonStyle.primary
                 continue
-            item.style = discord.ButtonStyle.gray
+            item.style = discord.ButtonStyle.secondary
         self.stop()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -1377,7 +1377,7 @@ class HighLow(discord.ui.View):
             icon_url=interaction.user.display_avatar.url)
         await interaction.response.edit_message(embed=lose, view=self)
 
-    @discord.ui.button(label='Lower', style=discord.ButtonStyle.blurple)
+    @discord.ui.button(label='Lower', style=discord.ButtonStyle.primary)
     async def low(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button for highlow interface to allow users to guess lower."""
         async with interaction.client.pool_connection.acquire() as conn:
@@ -1389,7 +1389,7 @@ class HighLow(discord.ui.View):
                     return await self.send_win(interaction, button, conn)
                 await self.send_loss(interaction, button, conn)
 
-    @discord.ui.button(label='JACKPOT!', style=discord.ButtonStyle.blurple)
+    @discord.ui.button(label='JACKPOT!', style=discord.ButtonStyle.primary)
     async def jackpot(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button for highlow interface to guess jackpot, meaning the guessed number is the actual number."""
 
@@ -1402,7 +1402,7 @@ class HighLow(discord.ui.View):
                     return await self.message.add_reaction("\U0001f911")
                 await self.send_loss(interaction, button, conn)
 
-    @discord.ui.button(label='Higher', style=discord.ButtonStyle.blurple)
+    @discord.ui.button(label='Higher', style=discord.ButtonStyle.primary)
     async def high(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button for highlow interface to allow users to guess higher."""
         
@@ -1837,7 +1837,7 @@ class ServantsManager(discord.ui.View):
             sembed = await self.economy.servant_preset(self.child.owner_id, dtls) 
             await interaction.response.edit_message(content=None, embed=sembed, view=self)
 
-    @discord.ui.button(label="Manage", style=discord.ButtonStyle.blurple, row=1)
+    @discord.ui.button(label="Manage", style=discord.ButtonStyle.primary, row=1)
     async def manage_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user.id != self.child.owner_id:
             return await interaction.response.send_message(
@@ -1849,8 +1849,8 @@ class ServantsManager(discord.ui.View):
         
         await interaction.response.edit_message(view=self)
 
-    @discord.ui.button(label='Feed', style=discord.ButtonStyle.blurple, row=1)
-    async def feed_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label='Feed', style=discord.ButtonStyle.primary, row=1)
+    async def feed_servant(self, interaction: discord.Interaction, _: discord.ui.Button):
 
         if interaction.user.id != self.child.owner_id:
             return await interaction.response.send_message(
@@ -1868,8 +1868,8 @@ class ServantsManager(discord.ui.View):
 
         await self.add_exp_handle_interactions(interaction, mode="hunger")
 
-    @discord.ui.button(label='Wash', style=discord.ButtonStyle.blurple, row=1)
-    async def wash_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label='Wash', style=discord.ButtonStyle.primary, row=1)
+    async def wash_servant(self, interaction: discord.Interaction, _: discord.ui.Button):
 
         if interaction.user.id != self.child.owner_id:
             return await interaction.response.send_message(
@@ -1896,8 +1896,8 @@ class ServantsManager(discord.ui.View):
         await interaction.channel.send(embed=membed(possible), delete_after=5.0)
         await self.add_exp_handle_interactions(interaction, mode="hygiene")
 
-    @discord.ui.button(label='Invest', style=discord.ButtonStyle.blurple, row=1)
-    async def invest_in_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label='Invest', style=discord.ButtonStyle.primary, row=1)
+    async def invest_in_servant(self, interaction: discord.Interaction, _: discord.ui.Button):
 
         if interaction.user.id != self.child.owner_id:
             return await interaction.response.send_message(
@@ -1906,8 +1906,8 @@ class ServantsManager(discord.ui.View):
         await interaction.response.send_modal(
             InvestmentModal(self.child.conn, self.child.client, self.child.choice, self))
 
-    @discord.ui.button(label="\u200b", emoji="\U0001fac2", style=discord.ButtonStyle.gray, row=2)
-    async def hug(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="\u200b", emoji="\U0001fac2", style=discord.ButtonStyle.secondary, row=2)
+    async def hug(self, interaction: discord.Interaction, _: discord.ui.Button):
 
         if interaction.user.id != self.child.owner_id:
             return await interaction.response.send_message(
@@ -1946,8 +1946,8 @@ class ServantsManager(discord.ui.View):
             await interaction.message.edit(content=None, embed=sembed, view=self)
         await interaction.response.send_message(embed=membed(selection), delete_after=5.0)
 
-    @discord.ui.button(label="\u200b", emoji="\U0001f48b", style=discord.ButtonStyle.gray, row=2)
-    async def kiss(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="\u200b", emoji="\U0001f48b", style=discord.ButtonStyle.secondary, row=2)
+    async def kiss(self, interaction: discord.Interaction, _: discord.ui.Button):
 
         if interaction.user.id != self.child.owner_id:
             return await interaction.response.send_message(
@@ -1981,8 +1981,8 @@ class ServantsManager(discord.ui.View):
             await interaction.message.edit(content=None, embed=sembed, view=self)
         await interaction.response.send_message(embed=membed(selection), delete_after=5.0)
 
-    @discord.ui.button(emoji="\U00002728", label="Add Photo", style=discord.ButtonStyle.green, row=3)
-    async def photo_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(emoji="\U00002728", label="Add Photo", style=discord.ButtonStyle.success, row=3)
+    async def photo_modal(self, interaction: discord.Interaction, _: discord.ui.Button):
 
         if interaction.user.id != self.child.owner_id:
             return await interaction.response.send_message(
@@ -1991,8 +1991,8 @@ class ServantsManager(discord.ui.View):
         await interaction.response.send_modal(
             ImageModal(self.child.conn, self.child.choice, self))
 
-    @discord.ui.button(emoji="\U00002728", label="Add Colour", style=discord.ButtonStyle.green, row=3)
-    async def hex_modal(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(emoji="\U00002728", label="Add Colour", style=discord.ButtonStyle.success, row=3)
+    async def hex_modal(self, interaction: discord.Interaction, _: discord.ui.Button):
 
         if interaction.user.id != self.child.owner_id:
             return await interaction.response.send_message(
@@ -2001,8 +2001,8 @@ class ServantsManager(discord.ui.View):
         await interaction.response.send_modal(
             HexModal(self.child.conn, self.child.choice, self))
 
-    @discord.ui.button(label="Go back", style=discord.ButtonStyle.blurple, row=4)
-    async def go_back(self, interaction: discord.Interaction, button: discord.ui.Button):
+    @discord.ui.button(label="Go back", style=discord.ButtonStyle.primary, row=4)
+    async def go_back(self, interaction: discord.Interaction, _: discord.ui.Button):
 
         for item in self.removed_items:
             self.remove_item(item)
@@ -2336,7 +2336,7 @@ class ShopItem(discord.ui.Button):
         self.item_name = item_name
         self.cost = cost
         self.ie = ie
-        super().__init__(style=discord.ButtonStyle.blurple, emoji=self.ie, label=item_name, **kwargs)
+        super().__init__(style=discord.ButtonStyle.primary, emoji=self.ie, label=item_name, **kwargs)
 
     async def callback(self, interaction: discord.Interaction):
 
@@ -3369,9 +3369,6 @@ class Economy(commands.Cog):
                 GROUP BY itemName
                 ORDER BY cost
                 """)
-            wallet = await self.get_wallet_data_only(interaction.user, conn)
-
-            additional_notes = []
 
             additional_notes = [
                 (f"{item[1]} {item[0]} \U00002500 [\U000023e3 **{item[2]:,}**]"
@@ -3379,6 +3376,8 @@ class Economy(commands.Cog):
             ]
 
             async def get_page_part(page: int):
+                wallet = await self.get_wallet_data_only(interaction.user, conn)
+
                 emb = discord.Embed(
                     title="Shop",
                     color=0x2B2D31,
@@ -3389,12 +3388,14 @@ class Economy(commands.Cog):
                 offset = (page - 1) * length
 
                 for item in paginator.children:
-                    if item.style == discord.ButtonStyle.blurple:
+                    if item.style.blurple:
                         paginator.remove_item(item)
 
                 for item_mod in additional_notes[offset:offset + length]:
                     emb.description += f"{item_mod[0]}\n"
+                    item_mod[1].disabled = wallet < item_mod[1].cost
                     paginator.add_item(item_mod[1])
+
                 n = Pagination.compute_total_pages(len(additional_notes), length)
                 emb.set_footer(text=f"Page {page} of {n}")
                 return emb, n
