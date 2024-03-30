@@ -267,14 +267,27 @@ class Utility(commands.Cog):
         
         await ctx.send(embed=content, view=InviteButton(self.client))
 
-    @commands.command(name='calculate', aliases=('c', 'calc'), description='Compute a string or math expression')
-    async def calculator(self, ctx: commands.Context, *, expression):
-
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.command(name='calc', description='Calculate an expression')
+    @app_commands.describe(expression='The expression to evaluate.')
+    async def calculator(self, interaction: discord.Interaction, expression: str):
         try:
-            result = eval(expression) or "Invalid"
-            await ctx.reply(f'**{ctx.author.name}**, the result is `{result:,}`', mention_author=False)
-        except Exception as e:
-            await ctx.reply(f'**Error:** {str(e)}', mention_author=False)
+            interpretable = expression.replace('^', '**').replace(',', '_')
+            result = eval(interpretable) or "Invalid Equation"
+
+            result = f"{float(result):,}"
+        except Exception:
+            result = "Invalid Equation"
+
+        output = membed(
+            f"""
+            \U0001f4e5 **Input:**
+            ```{expression}```
+            \U0001f4e4 **Output:**
+            ```{result}```
+            """
+        )
+        await interaction.response.send_message(embed=output)
 
     @commands.command(name='ping', description='Checks latency of the bot')
     async def ping(self, ctx: commands.Context):
