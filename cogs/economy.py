@@ -666,6 +666,64 @@ class Confirm(discord.ui.View):
         self.stop()
 
 
+async def respond(interaction: discord.Interaction, **kwargs) -> discord.WebhookMessage | None:
+    """Determine if we should respond to the interaction or send followups"""
+    if interaction.response.is_done():
+        return await interaction.followup.send(**kwargs)
+    await interaction.response.send_message(**kwargs)
+
+
+async def process_confirmation(interaction: discord.Interaction, prompt: str) -> bool:
+    """
+    Process a confirmation. This only updates the view.
+    
+    The actual action is done in the command itself.
+
+    You do not need to check if another confirmation is active, as this function does that for you.
+
+    This returns a boolean indicating whether the user confirmed the action or not, or None if the user timed out.
+    """
+
+    if active_sessions.get(interaction.user.id):
+        return await respond(interaction, embed=membed(WARN_FOR_CONCURRENCY))
+    active_sessions.update({interaction.user.id: 1})
+    
+    view = Confirm(interaction)
+    confirm = discord.Embed(
+        title="Pending Confirmation",
+        colour=0x2B2D31,
+        description=prompt
+    )
+
+    resp = await respond(interaction, embed=confirm, view=view)
+    msg = resp or await interaction.original_response()
+    await view.wait()
+    
+    embed = msg.embeds[0]
+    if view.value is None:
+        for item in view.children:
+            item.disabled = True
+
+        del active_sessions[interaction.user.id]
+        embed.title = "Timed Out"
+        embed.description = f"~~{embed.description}~~"
+        embed.colour = discord.Colour.brand_red()
+        await msg.edit(embed=embed, view=view)
+        return view.value
+    
+    if view.value:
+
+        embed.title = "Action Confirmed"
+        embed.colour = discord.Colour.brand_green()
+        await msg.edit(embed=embed, view=view)
+        return view.value
+    
+    embed.title = "Action Cancelled"
+    embed.colour = discord.Colour.brand_red()
+    await msg.edit(embed=embed, view=view)
+    return view.value
+
+
 class RememberPositionView(discord.ui.View):
     def __init__(
             self, 
@@ -1794,6 +1852,14 @@ class ServantsManager(discord.ui.View):
         except discord.NotFound:
             pass
 
+    async def check_user(self, interaction: discord.Interaction):
+        if interaction.user.id != self.child.owner_id:
+            await interaction.response.send_message(
+                embed=membed("This is not your servant"), 
+                ephemeral=True, 
+                delete_after=3.0
+            )
+    
     async def add_exp_handle_interactions(self, interaction: discord.Interaction, mode: str, by=1):
         """Add experience points to the servant increment their level if max XP is hit."""
         async with self.child.conn.transaction():
@@ -1826,7 +1892,7 @@ class ServantsManager(discord.ui.View):
                             "UPDATE `slay` SET skillL = skillL + 1 WHERE userID = ? AND slay_name = ?",)
                         up.set_footer(text=f"Your servant just unlocked: Skill L{level//3}!")
                         
-                    await interaction.channel.send(embed=up)
+                    await respond(interaction, embed=up)
 
             dtls = await self.child.conn.execute(
                     f"UPDATE `slay` SET {mode} = 100 WHERE slay_name = ? AND userID = ? RETURNING *",
@@ -1839,9 +1905,10 @@ class ServantsManager(discord.ui.View):
 
     @discord.ui.button(label="Manage", style=discord.ButtonStyle.primary, row=1)
     async def manage_servant(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user.id != self.child.owner_id:
-            return await interaction.response.send_message(
-                "This servant is not yours.", ephemeral=True, delete_after=3.0)
+        
+        await self.check_user(interaction)
+        if interaction.response.is_done():
+            return
 
         self.remove_item(button)
         for item in self.removed_items:
@@ -1852,9 +1919,9 @@ class ServantsManager(discord.ui.View):
     @discord.ui.button(label='Feed', style=discord.ButtonStyle.primary, row=1)
     async def feed_servant(self, interaction: discord.Interaction, _: discord.ui.Button):
 
-        if interaction.user.id != self.child.owner_id:
-            return await interaction.response.send_message(
-                "This servant is not yours.", ephemeral=True, delete_after=3.0)
+        await self.check_user(interaction)
+        if interaction.response.is_done():
+            return
 
         current_hunger = await self.child.conn.fetchone(
             "SELECT hunger from `slay` WHERE userID = ? AND slay_name = ?", 
@@ -1871,9 +1938,9 @@ class ServantsManager(discord.ui.View):
     @discord.ui.button(label='Wash', style=discord.ButtonStyle.primary, row=1)
     async def wash_servant(self, interaction: discord.Interaction, _: discord.ui.Button):
 
-        if interaction.user.id != self.child.owner_id:
-            return await interaction.response.send_message(
-                "This servant is not yours.", ephemeral=True, delete_after=3.0)
+        await self.check_user(interaction)
+        if interaction.response.is_done():
+            return
 
         current_hygiene = await self.child.conn.fetchone(
             "SELECT hygiene from `slay` WHERE userID = ? AND slay_name = ?", (self.child.owner_id, self.child.choice))
@@ -1893,15 +1960,15 @@ class ServantsManager(discord.ui.View):
              )
         )
 
-        await interaction.channel.send(embed=membed(possible), delete_after=5.0)
+        await respond(embed=membed(possible), delete_after=5.0)
         await self.add_exp_handle_interactions(interaction, mode="hygiene")
 
     @discord.ui.button(label='Invest', style=discord.ButtonStyle.primary, row=1)
     async def invest_in_servant(self, interaction: discord.Interaction, _: discord.ui.Button):
 
-        if interaction.user.id != self.child.owner_id:
-            return await interaction.response.send_message(
-                "This servant is not yours.", ephemeral=True, delete_after=3.0)
+        await self.check_user(interaction)
+        if interaction.response.is_done():
+            return
 
         await interaction.response.send_modal(
             InvestmentModal(self.child.conn, self.child.client, self.child.choice, self))
@@ -1909,9 +1976,9 @@ class ServantsManager(discord.ui.View):
     @discord.ui.button(label="\u200b", emoji="\U0001fac2", style=discord.ButtonStyle.secondary, row=2)
     async def hug(self, interaction: discord.Interaction, _: discord.ui.Button):
 
-        if interaction.user.id != self.child.owner_id:
-            return await interaction.response.send_message(
-                "This servant is not yours.", ephemeral=True, delete_after=3.0)
+        await self.check_user(interaction)
+        if interaction.response.is_done():
+            return
 
         data = await self.child.conn.fetchone(
             "SELECT gender from `slay` WHERE userID = ? AND slay_name = ?", (self.child.owner_id, self.child.choice))
@@ -1949,9 +2016,9 @@ class ServantsManager(discord.ui.View):
     @discord.ui.button(label="\u200b", emoji="\U0001f48b", style=discord.ButtonStyle.secondary, row=2)
     async def kiss(self, interaction: discord.Interaction, _: discord.ui.Button):
 
-        if interaction.user.id != self.child.owner_id:
-            return await interaction.response.send_message(
-                "This servant is not yours.", ephemeral=True, delete_after=3.0)
+        await self.check_user(interaction)
+        if interaction.response.is_done():
+            return
 
         pronouns = {"Female": ("her", "she"), "Male": ("his", "he")}
 
@@ -1984,9 +2051,9 @@ class ServantsManager(discord.ui.View):
     @discord.ui.button(emoji="\U00002728", label="Add Photo", style=discord.ButtonStyle.success, row=3)
     async def photo_modal(self, interaction: discord.Interaction, _: discord.ui.Button):
 
-        if interaction.user.id != self.child.owner_id:
-            return await interaction.response.send_message(
-                "This servant is not yours.", ephemeral=True, delete_after=3.0)
+        await self.check_user(interaction)
+        if interaction.response.is_done():
+            return
 
         await interaction.response.send_modal(
             ImageModal(self.child.conn, self.child.choice, self))
@@ -1994,15 +2061,19 @@ class ServantsManager(discord.ui.View):
     @discord.ui.button(emoji="\U00002728", label="Add Colour", style=discord.ButtonStyle.success, row=3)
     async def hex_modal(self, interaction: discord.Interaction, _: discord.ui.Button):
 
-        if interaction.user.id != self.child.owner_id:
-            return await interaction.response.send_message(
-                "This servant is not yours.", ephemeral=True, delete_after=3.0)
+        await self.check_user(interaction)
+        if interaction.response.is_done():
+            return
 
         await interaction.response.send_modal(
             HexModal(self.child.conn, self.child.choice, self))
 
     @discord.ui.button(label="Go back", style=discord.ButtonStyle.primary, row=4)
     async def go_back(self, interaction: discord.Interaction, _: discord.ui.Button):
+
+        await self.check_user(interaction)
+        if interaction.response.is_done():
+            return
 
         for item in self.removed_items:
             self.remove_item(item)
@@ -2171,45 +2242,24 @@ class ItemQuantityModal(discord.ui.Modal):
             return current_price
 
         discounted_price = floor((95/100) * current_price)
-        qty = data[0]
-        view = Confirm(interaction)
-        
-        confirm = discord.Embed()
-        confirm.title = "Pending Confirmation"
-        confirm.colour = 0x2B2D31
-        confirm.description = (
-            f"Would you like to use your <:coupon:1210894601829879818> **Shop Coupon** for an additional **5**% off?\n"
-            f"(You have **{qty:,}** coupons in total)\n\n"
-            f"This will bring your total for this purchase to \U000023e3 **{discounted_price:,}** if you decide to use the coupon.")
 
-        await interaction.response.send_message(embed=confirm, view=view)
-        msg = await interaction.original_response()
-        
-        await view.wait()
-        embed = msg.embeds[0]
-        
-        if view.value is None:
-            for item in view.children:
-                item.disabled = True
+        value = await process_confirmation(
+            interaction=interaction, 
+            prompt=(
+                "Would you like to use your <:coupon:1210894601829879818> "
+                "**Shop Coupon** for an additional **5**% off?\n"
+                f"(You have **{data[0]:,}** coupons in total)\n\n"
+                "This will bring your total for this purchase to \U000023e3 "
+                f"**{discounted_price:,}** if you decide to use the coupon."
+            )
+        )
 
-            del active_sessions[interaction.user.id]
-            embed.title = "Timed Out"
-            embed.description = f"~~{embed.description}~~"
-            embed.colour = discord.Colour.brand_red()
-            await msg.edit(embed=embed, view=view)
-            return view.value
-
-        if view.value:
+        if value is None:
+            return value
+        
+        if value:
             self.activated_coupon = True
-
-            embed.title = "Action Confirmed"
-            embed.colour = discord.Colour.brand_green()
-            await msg.edit(embed=embed, view=view)
             return discounted_price
-        
-        embed.title = "Action Cancelled"
-        embed.colour = discord.Colour.brand_red()
-        await msg.edit(embed=embed, view=view)
         return current_price
     
     # --------------------------------------------------------------------------------------------
@@ -2217,40 +2267,19 @@ class ItemQuantityModal(discord.ui.Modal):
     async def confirm_purchase(
             self, interaction: discord.Interaction, 
             new_price: int, true_qty: int, conn: asqlite_Connection, current_balance: int) -> None:
+
+        value = await process_confirmation(
+            interaction=interaction, 
+            prompt=(
+                f"Are you sure you want to buy **{true_qty:,}x {self.ie} "
+                f"{self.item_name}** for **\U000023e3 {new_price:,}**?"
+            )
+        )
         
-        if active_sessions.get(interaction.user.id):
-            return await interaction.response.send_message(embed=membed(WARN_FOR_CONCURRENCY))
-        active_sessions.update({interaction.user.id: 1})
-
-        view = Confirm(interaction)
-        confirm = discord.Embed()
-        confirm.title = "Pending Confirmation"
-        confirm.colour = 0x2B2D31
-        confirm.description = f"Are you sure you want to buy **{true_qty:,}x {self.ie} {self.item_name}** for **\U000023e3 {new_price:,}**?"
-        
-        msg = await interaction.followup.send(embed=confirm, view=view)
-
-        await view.wait()
-
-        if view.value is None:
-
-            for item in view.children:
-                item.disabled = True
-
-            del active_sessions[interaction.user.id]
-            confirm.title = "Timed Out"
-            confirm.description = f"~~{confirm.description}~~"
-            confirm.colour = discord.Colour.brand_red()
-            await msg.edit(embed=confirm, view=view)                    
-        
-        if view.value:
+        if value:
             await Economy.update_inv_new(interaction.user, true_qty, self.item_name, conn)
             new_am = await Economy.change_bank_new(interaction.user, conn, current_balance-new_price)
             await conn.commit()
-
-            confirm.title = "Action Confirmed"
-            confirm.colour = discord.Colour.brand_green()
-            await msg.edit(embed=confirm, view=view)
 
             confirm = discord.Embed(
                 title="Successful Purchase",
@@ -2267,11 +2296,7 @@ class ItemQuantityModal(discord.ui.Modal):
                 await conn.execute(
                     "UPDATE inventory SET qty = qty - 1 WHERE userID = $0 AND itemID = 12", interaction.user.id)
                 confirm.description += "\n\n**Additional info:**\n- <:coupon:1210894601829879818> 5% Coupon Discount was applied"
-            return await interaction.channel.send(embed=confirm)
-
-        confirm.title = "Action Cancelled"
-        confirm.colour = discord.Colour.brand_red()
-        await msg.edit(embed=confirm, view=view)
+            await respond(interaction, embed=confirm)
     
     # --------------------------------------------------------------------------------------------
 
@@ -2302,7 +2327,8 @@ class ItemQuantityModal(discord.ui.Modal):
                 interaction.user, conn, interaction, current_price)
             
             if new_price is None:
-                return await interaction.channel.send(
+                return await respond(
+                    interaction=interaction,
                     embed=membed(
                         "You didn't respond in time so your purchase was cancelled."
                     )
@@ -2339,12 +2365,9 @@ class ShopItem(discord.ui.Button):
         super().__init__(style=discord.ButtonStyle.primary, emoji=self.ie, label=item_name, **kwargs)
 
     async def callback(self, interaction: discord.Interaction):
-
         if active_sessions.get(interaction.user.id):
-            return await interaction.response.send_message(
-                embed=membed(WARN_FOR_CONCURRENCY))
-        active_sessions.update({interaction.user.id: 1})
-
+            return await interaction.response.send_message(embed=membed(WARN_FOR_CONCURRENCY))
+        
         await interaction.response.send_modal(
             ItemQuantityModal(interaction.client, self.item_name, self.cost, self.ie))
 
@@ -3388,7 +3411,7 @@ class Economy(commands.Cog):
                 offset = (page - 1) * length
 
                 for item in paginator.children:
-                    if item.style.blurple:
+                    if item.style == discord.ButtonStyle.blurple:
                         paginator.remove_item(item)
 
                 for item_mod in additional_notes[offset:offset + length]:
@@ -3443,12 +3466,15 @@ class Economy(commands.Cog):
                         embed=membed("You don't have this item."))
                 wallet_amt = wallet_amt[0]
 
-                item_attrs = await conn.fetchone("""
+                item_attrs = await conn.fetchone(
+                    """
                     SELECT shop.emoji, shop.cost, inventory.qty
                     FROM shop
                     INNER JOIN inventory ON shop.itemID = inventory.itemID
-                    WHERE shop.itemName = ?
-                """, (name_res,))
+                    WHERE shop.itemName = $0 AND inventory.userID = $1
+                    """, name_res, interaction.user.id
+                )
+
                 emoji, cost, qty = item_attrs
                 new_qty = qty - sell_quantity
                 
@@ -3456,57 +3482,30 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(
                         embed=membed(f"You're **{abs(new_qty)}** short on selling {emoji} **{sell_quantity:,}x** {name_res}, so uh no."))
 
-                if active_sessions.get(interaction.user.id):
-                    return await interaction.response.send_message(
-                        embed=membed(WARN_FOR_CONCURRENCY))
-                active_sessions.update({interaction.user.id: 1})
-
                 cost = floor((cost * sell_quantity) / 4)
-                embed = discord.Embed(
-                    title="Pending Confirmation",
-                    description=f"Are you sure you want to sell **{sell_quantity:,}x {emoji} {name_res}** for **\U000023e3 {cost:,}**?",
-                    colour=0x2B2D31
+                value = await process_confirmation(
+                    interaction=interaction, 
+                    prompt=(
+                        f"Are you sure you want to sell **{sell_quantity:,}x "
+                        f"{emoji} {name_res}** for **\U000023e3 {cost:,}**?"
+                    )
                 )
-                view = Confirm(interaction)
-                
-                await interaction.response.send_message(embed=embed, view=view)
-                msg = await interaction.original_response()
 
-                await view.wait()
-
-                embed = msg.embeds[0]
-                if view.value is None:
-                    
-                    for item in view.children:
-                        item.disabled = True
-
-                    del active_sessions[interaction.user.id]
-                    embed.title = "Timed Out"
-                    embed.description = f"~~{embed.description}~~"
-                    embed.colour = discord.Colour.brand_red()
-                    return await msg.edit(embed=embed, view=view)
-
-                if view.value:
+                if value:
                     await self.change_inv_new(interaction.user, new_qty, name_res, conn)
                     await self.update_bank_new(interaction.user, conn, +cost)
                     await conn.commit()
 
-                    embed.title = "Action Confirmed"
-                    embed.colour = discord.Colour.brand_green()
-                    await msg.edit(embed=embed, view=view)
-
-                    embed = discord.Embed(
-                        title=f"{interaction.user.global_name}'s Sale Receipt",
-                        description=(
-                            f"{interaction.user.mention} sold **{sell_quantity:,}x {emoji} {name_res}** "
-                            f"and got paid \U000023e3 **{cost:,}**."), colour=0x2B2D31)
+                    embed = discord.Embed()
+                    embed.title = f"{interaction.user.global_name}'s Sale Receipt"
+                    embed.description=(
+                        f"{interaction.user.mention} sold **{sell_quantity:,}x {emoji} {name_res}** "
+                        f"and got paid \U000023e3 **{cost:,}**.")
+                    embed.colour = 0x2B2D31
+                    
                     embed.set_footer(text="Thanks for your business.")
 
-                    return await interaction.followup.send(embed=embed)
-                
-                embed.title = "Action Cancelled"
-                embed.colour = discord.Colour.brand_red()
-                await msg.edit(embed=embed, view=view)
+                    await interaction.followup.send(embed=embed)
 
     @app_commands.command(name='item', description='Get more details on a specific item')
     @app_commands.describe(item_name='Select an item.')
@@ -3906,48 +3905,26 @@ class Economy(commands.Cog):
             req_level = (prestige + 1) * 35
 
             if (actual_robux >= req_robux) and (actual_level >= req_level):
-                if active_sessions.get(interaction.user.id):
-                    return await interaction.response.send_message(
-                        embed=membed(WARN_FOR_CONCURRENCY))
-                active_sessions.update({interaction.user.id: 1})
-
-                embed = discord.Embed(
-                    title="Pending Confirmation",
-                    description=(
-                        "Prestiging means losing nearly everything you've ever earned in the currency "
-                        "system in exchange for increasing your 'Prestige Level' "
-                        "and upgrading your status.\n\n"
-                        "**Things you will lose**:\n"
-                        "- All of your items/showcase\n"
-                        "- All of your robux\n"
-                        "- Your drone(s)\n"
-                        "- Your levels and XP\n"
-                        "Anything not mentioned in this list will not be lost.\n"
-                        "Are you sure you want to prestige?"),
-                    colour=0x2B2D31
+                massive_prompt = (
+                    """
+                    Prestiging means losing nearly everything you've ever earned in the currency 
+                    system in exchange for increasing your 'Prestige Level' 
+                    and upgrading your status.
+                    **Things you will lose**:
+                    - All of your items/showcase
+                    - All of your robux
+                    - Your drone(s)
+                    - Your levels and XP
+                    Anything not mentioned in this list will not be lost.
+                    Are you sure you want to prestige?
+                    """
                 )
-                embed.set_thumbnail(url="https://cdn.discordapp.com/emojis/955847572059193344.png")
+                
+                value = await process_confirmation(interaction=interaction, prompt=massive_prompt)
 
-                view = Confirm(interaction=interaction)
-                await interaction.response.send_message(embed=embed, view=view)
-                msg = await interaction.original_response()
+                if value:
 
-                await view.wait()
-                embed = msg.embeds[0]
-
-                if view.value is None:
-                    
-                    for item in view.children:
-                        item.disabled = True
-
-                    del active_sessions[interaction.user.id]
-                    embed.title = "Timed Out"
-                    embed.description = f"~~{embed.description}~~"
-                    embed.colour = discord.Colour.brand_red()
-                    return await msg.edit(embed=embed, view=view)   
-                if view.value:
                     await conn.execute("DELETE FROM inventory WHERE userID = ?", interaction.user.id)
-
                     await conn.execute(
                         f"""
                         UPDATE `{BANK_TABLE_NAME}` SET wallet = ?, bank = ?, showcase = ?, level = ?, exp = ?, 
@@ -3956,13 +3933,6 @@ class Economy(commands.Cog):
                         """, (0, 0, '0 0 0', 1, 0, randint(100_000_000, 500_000_000), interaction.user.id))
                     
                     await conn.commit()
-                    embed.colour = discord.Colour.brand_green()
-                    embed.title = "Action Confirmed"
-                    return await msg.edit(embed=embed)
-                
-                embed.title = "Action Cancelled"
-                embed.colour = discord.Colour.brand_red()
-                return await msg.edit(embed=embed, view=view)
             else:
                 emoji = PRESTIGE_EMOTES.get(prestige + 1)
                 emoji = search(r':(\d+)>', emoji)
@@ -4514,7 +4484,8 @@ class Economy(commands.Cog):
             job_name = data[1][0]
             if job_name == "None":
                     return await interaction.response.send_message(
-                        embed=membed("You don't have a job, get one first."))
+                        embed=membed("You don't have a job, get one first.")
+                    )
 
             has_cd = self.is_no_cooldown(data[0][0])
             if isinstance(has_cd, tuple):
@@ -4595,9 +4566,6 @@ class Economy(commands.Cog):
 
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
-            if active_sessions.get(interaction.user.id):
-                return await interaction.response.send_message(
-                    embed=membed(WARN_FOR_CONCURRENCY))
 
             data = await conn.fetchall(
                 """
@@ -4618,43 +4586,18 @@ class Economy(commands.Cog):
 
                 return await interaction.response.send_message(embed=embed)
 
-            active_sessions.update({interaction.user.id: 1})
-            view = Confirm(interaction)
-            confirm = discord.Embed()
-            confirm.title = "Pending Confirmation"
-            confirm.colour = 0x2B2D31
-            confirm.description = (
-                f"Are you sure you want to resign from your current job as a **{data[1][0]}**?\n"
-                "You won't be able to apply to another job for the next 48 hours.")
+            value = await process_confirmation(
+                interaction=interaction, 
+                prompt=(
+                    f"Are you sure you want to resign from your current job as a **{data[1][0]}**?\n"
+                    "You won't be able to apply to another job for the next 48 hours."
+                )
+            )
 
-            await interaction.response.send_message(embed=confirm, view=view)
-            msg = await interaction.original_response()
-            await view.wait()
-            
-            embed = msg.embeds[0]
-            if view.value is None:
-                
-                for item in view.children:
-                    item.disabled = True
-
-                del active_sessions[interaction.user.id]
-                embed.title = "Timed Out"
-                embed.description = f"~~{embed.description}~~"
-                embed.colour = discord.Colour.brand_red()
-                return await msg.edit(embed=embed, view=view)
-            if view.value:
+            if value:
                 ncd = (discord.utils.utcnow() + datetime.timedelta(days=2)).timestamp()
-                await self.update_cooldown(
-                conn, user=interaction.user, cooldown_type="job_change", new_cd=ncd)
+                await self.update_cooldown(conn, user=interaction.user, cooldown_type="job_change", new_cd=ncd)
                 await self.change_job_new(interaction.user, conn, job_name='None')
-
-                embed.title = "Action Confirmed"
-                embed.colour = discord.Colour.brand_green()
-                return await msg.edit(embed=embed, view=view)
-            
-            embed.title = "Action Cancelled"
-            embed.colour = discord.Colour.brand_red()
-            return await msg.edit(embed=embed, view=view)
     
     @app_commands.command(name="balance", description="Get someone's balance. Wallet, bank, and net worth.")
     @app_commands.describe(user='The user to find the balance of.',
