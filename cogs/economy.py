@@ -19,7 +19,7 @@ import datetime
 import aiofiles
 
 from other.utilities import datetime_to_string, string_to_datetime, labour_productivity_via
-from other.pagination import Pagination, PaginationItem, PaginationRefreshable
+from other.pagination import Pagination, PaginationItem
 
 
 def membed(custom_description: str) -> discord.Embed:
@@ -2293,8 +2293,7 @@ class ItemQuantityModal(discord.ui.Modal):
             confirm.set_footer(text="Thanks for your business.")
 
             if self.activated_coupon:
-                await conn.execute(
-                    "UPDATE inventory SET qty = qty - 1 WHERE userID = $0 AND itemID = 12", interaction.user.id)
+                await Economy.update_inv_new(interaction.user, -1, "Shop Coupon", conn)
                 confirm.description += "\n\n**Additional info:**\n- <:coupon:1210894601829879818> 5% Coupon Discount was applied"
             await respond(interaction, embed=confirm)
     
@@ -2765,12 +2764,16 @@ class Economy(commands.Cog):
             # If the resulting quantity would be <= 0, delete the row
             await conn.execute("DELETE FROM inventory WHERE userID = ? AND itemID = ?", (user.id, item_id))
             return (0,)
+        
         val = await conn.execute("""
             INSERT INTO inventory (userID, itemID, qty)
             VALUES (?, ?, ?)
             ON CONFLICT(userID, itemID) DO UPDATE SET qty = qty + ? 
             RETURNING qty
-        """, (user.id, item_id, amount, amount))
+            """, 
+            (user.id, item_id, amount, amount)
+        )
+
         val = await val.fetchone()
         return val
 
@@ -2784,6 +2787,7 @@ class Economy(commands.Cog):
             ORDER BY RANDOM()
             LIMIT 1
         """
+
         random_item = await conn.fetchone(random_item_query)
         
         update_query = """
@@ -4347,65 +4351,59 @@ class Economy(commands.Cog):
 
             await interaction.response.send_message(embed=embed)
 
+    
     @app_commands.command(name='inventory', description='View your currently owned items')
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(member='The user whose inventory you want to see.')
     async def inventory(self, interaction: discord.Interaction, member: Optional[discord.Member]):
         """View your inventory or another player's inventory."""
-        return await interaction.response.send_message(embed=membed("This command is currently disabled."))
+
         member = member or interaction.user
 
         if (member.bot) and (member.id != self.client.user.id):
-            return await interaction.response.send_message(embed=membed("Bots do not have accounts."))
+            return await interaction.response.send_message(
+                embed=membed("Bots do not have accounts."))
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
             if await self.can_call_out(member, conn):
                 return await interaction.response.send_message(embed=NOT_REGISTERED)
-            
-            pagination = PaginationRefreshable(interaction)
 
-            async def inner_callback():
-                em = discord.Embed(color=0x2B2D31)
-                length = 8
+            em = discord.Embed(color=0x2F3136)
+            length = 8
 
-                owned_items = await conn.fetchall(
-                    """
-                    SELECT shop.itemName, shop.emoji, inventory.qty
-                    FROM shop
-                    INNER JOIN inventory ON shop.itemID = inventory.itemID
-                    WHERE inventory.userID = $0
-                    """, member.id
-                )
+            owned_items = await conn.fetchall(
+                """
+                SELECT shop.itemName, shop.emoji, inventory.qty
+                FROM shop
+                INNER JOIN inventory ON shop.itemID = inventory.itemID
+                WHERE inventory.userID = ?
+            """, (member.id,))
 
-                if not owned_items:
-                    if member.id == interaction.user.id:
-                        em.description = "You don't own any items yet. Go to the shop and buy some."
-                    else:
-                        em.description = f"{member.mention} has nothing for you to see."
-                    return await interaction.response.send_message(embed=em)
+            if not owned_items:
+                if member.id == interaction.user.id:
+                    em.description = "You don't own any items yet."
+                else:
+                    em.description = f"{member.name} has nothing for you to see."
+                return await interaction.response.send_message(embed=em)
 
-                async def get_page_part(page: int):
-                    """Helper function to determine what page of the paginator we're on."""
+            async def get_page_part(page: int):
+                """Helper function to determine what page of the paginator we're on."""
 
-                    em.set_author(name=f"{member.display_name}'s Inventory", icon_url=member.display_avatar.url)
+                em.set_author(name=f"{member.display_name}'s Inventory", icon_url=member.display_avatar.url)
 
-                    offset = (page - 1) * length
-                    em.timestamp = discord.utils.utcnow()
-                    em.description = ""
-                    
-                    for item in owned_items[offset:offset + length]:
-                        em.description += f"{item[1]} **{item[0]}** \U00002500 {item[2]:,}\n"
+                offset = (page - 1) * length
+                em.timestamp = discord.utils.utcnow()
+                em.description = ""
+                
+                for item in owned_items[offset:offset + length]:
+                    em.description += f"{item[1]} **{item[0]}** \U00002500 {item[2]}\n"
 
-                    n = pagination.compute_total_pages(len(owned_items), length)
-                    em.set_footer(text=f"Page {page} of {n}")
-                    return em, n
+                n = Pagination.compute_total_pages(len(owned_items), length)
+                return em, n
 
-                pagination.get_page = get_page_part
-            pagination.refresh_callback = inner_callback
-
-            await pagination.navigate()
+            await Pagination(interaction, get_page_part).navigate()
 
     async def do_order(self, interaction: discord.Interaction, job_name: str):
         possible_words: tuple = job_attrs.get(job_name)[0] 
