@@ -8,28 +8,28 @@ from discord import app_commands
 import discord
 
 from other.pagination import Pagination
-from cogs.economy import membed, Confirm, active_sessions, APP_GUILDS_ID
+from cogs.economy import membed, process_confirmation, APP_GUILDS_ID
 
 
 def do_boilerplate_role_checks(role: discord.Role, guild: discord.Guild, my_top: discord.Role) -> str | None:
 
     if role.managed:
-        return f"The role {role.name} is managed and cannot be assigned or removed."
+        return f"The role {role.mention} is managed and cannot be assigned or removed."
 
     if role >= my_top:
         roles_beneath = [iter_role for iter_role in guild.roles if (iter_role < role) and (iter_role > my_top)]
         roles_beneath = [role.name for role in roles_beneath]
 
         return (
-f"""
-The role '{role.name}' (pos {role.position}) is above my highest role '{my_top.name}' (pos {my_top.position}) meaning I cannot alter their roles.
-Please ensure my highest role is above the role you want assigned or removed.
+            f"""
+            The role '{role.mention}' (pos {role.position}) is above my highest role '{my_top.mention}' (pos {my_top.position}) meaning I cannot alter their roles.
+            Please ensure my highest role is above the role you want assigned or removed.
 
-{role.name} **<-- The role you wish to assign or remove**
-{'\n'.join(roles_beneath)}
-{my_top.name} **<-- The bot's highest role**
-"""
-)
+            {role.name} **<-- The role you wish to assign or remove**
+            {'\n'.join(roles_beneath)}
+            {my_top.name} **<-- The bot's highest role**
+            """
+        )
 
 class TimeConverter(app_commands.Transformer):
     time_regex = compile(r"(\d{1,5}(?:[.,]?\d{1,5})?)([smhd])")
@@ -92,19 +92,19 @@ class RoleManagement(app_commands.Group):
             success.description = f"Removed {new_role.mention} from **{how_many}** members."
             await interaction.followup.send(
                 content=f"Took {end_time - start_time:.2f}s", embed=success)
-            return None
 
     @app_commands.command(name="add", description="Adds a role to the specified member")
     @app_commands.describe(user="The user to add the role to.", role="The role to add to this user.")
     async def add_role(self, interaction: discord.Interaction, user: discord.Member, role: discord.Role):
 
         if role in user.roles:
-            return await interaction.response.send_message("That member already has this role.")
+            return await interaction.response.send_message(
+                embed=membed(f"{user.mention} already has {role.mention}."))
 
         guild = interaction.guild
         resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
-            return await interaction.response.send_message(resp)
+            return await interaction.response.send_message(embed=membed(resp))
         
         await user.add_roles(discord.Object(id=role.id))
         await interaction.response.send_message(embed=membed(f"Added {role.mention} to {user.mention}."))
@@ -114,13 +114,13 @@ class RoleManagement(app_commands.Group):
     async def remove_role(self, interaction: discord.Interaction, user: discord.Member, role: discord.Role):
         
         if role not in user.roles:
-            return await interaction.response.send_message("That member doesn't have this role.")
+            return await interaction.response.send_message(embed=membed(f"{user.mention} does not have {role.mention}."))
 
         guild = interaction.guild
         resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         
         if resp:
-            return await interaction.response.send_message(resp)
+            return await interaction.response.send_message(embed=membed(resp))
     
         await user.remove_roles(discord.Object(id=role.id))
         await interaction.response.send_message(embed=membed(f"Removed {role.mention} from {user.mention}."))
@@ -159,7 +159,7 @@ class RoleManagement(app_commands.Group):
         removed_roles = removed_roles.intersection(their_roles)
 
         if (not added_roles) and (not removed_roles):
-            return await interaction.followup.send("No changes were made.")
+            return await interaction.followup.send(embed=membed("No changes were made."))
         
         embed = discord.Embed(colour=0x2B2D31, title="Role Changes")
 
@@ -181,54 +181,40 @@ class RoleManagement(app_commands.Group):
         
         how_many = len(users_without_it)
         if not how_many:
-            return await interaction.followup.send("Everybody has this role already.")
+            return await interaction.followup.send(embed=membed("Everybody has this role already."))
 
         resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
-            return await interaction.followup.send(resp)
+            return await interaction.followup.send(embed=membed(resp))
         
-        active_sessions.update({interaction.user.id: 1})
-        view = Confirm(interaction)
-        confirm = discord.Embed()
-        confirm.title = "Pending Confirmation"
-        confirm.colour = role.colour
-        confirm.description = f"This will add {role.mention} to **{how_many}** members.\nDo you want to continue?"
+        value = await process_confirmation(
+            interaction=interaction, 
+            prompt=(
+                f"This will add {role.mention} to **{how_many}** members."
+            )
+        )
         
-        await interaction.followup.send(embed=confirm, view=view)
-        msg = await interaction.original_response()
-
-        await view.wait()
-        if view.value is None:
-            del active_sessions[interaction.user.id]
-
-            confirm.colour = 0xD15E54
-            confirm.title = "Cancelled"
-            confirm.description = "You took too long.."
-            return await msg.edit(content=None, embed=confirm, view=None)
-        
-        if view.value:
+        if value:
             start_time = perf_counter()
-            await msg.edit(content=None, embed=membed("Adding roles... (This may take a while)"))
+            msg = await interaction.followup.send(content=None, embed=membed("Adding roles.."))
+            
             try:
                 for member in users_without_it:
-                    await member.add_roles(discord.Object(id=role.id), atomic=True)
+                    await member.add_roles(discord.Object(id=role.id))
             except discord.Forbidden:
-                await msg.edit(content="Missing required permissions to add roles to members.", embed=None)
-                return
+                return await msg.edit(embed=membed("Missing required permissions to add roles to members."))
             except discord.HTTPException:
-                await msg.edit(content="We are being rate-limited. Try again later.", embed=None)
+                return await msg.edit(embed=membed("We are being rate-limited. Try again later."))
             finally:
                 end_time = perf_counter()
+                confirm = discord.Embed()
                 confirm.colour = 0x70DEAA
                 confirm.title = "Success"
                 confirm.description = f"Added {role.mention} to **{how_many}** members."
-                return await msg.edit(content=f"Took {end_time - start_time:.2f}s", embed=confirm, view=None)
-
-        confirm.colour = 0xD15E54
-        confirm.title = "Cancelled"
-        confirm.description = "This role wasn't assigned to anyone."
-
-        await msg.edit(content=None, embed=confirm, view=None)
+                return await msg.edit(
+                    content=f"Took {end_time - start_time:.2f}s", 
+                    embed=confirm
+                )
     
     @app_commands.command(name="rall", description="Removes a role from all members")
     @app_commands.describe(role="The role to remove to all members.")
@@ -240,51 +226,34 @@ class RoleManagement(app_commands.Group):
 
         how_many = len(users_without_it)
         if not how_many:
-            return await interaction.followup.send("Nobody has this role already.")
+            return await interaction.followup.send(embed=membed("Nobody has this role already."))
 
         resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp: 
-            return await interaction.followup.send(resp)
-
-        active_sessions.update({interaction.user.id: 1})
-        view = Confirm(interaction)
-        confirm = discord.Embed()
-        confirm.title = "Pending Confirmation"
-        confirm.colour = role.colour 
-        confirm.description = f"This will remove {role.mention} from **{how_many}** members.\nDo you want to continue?"
+            return await interaction.followup.send(embed=membed(resp))
         
-        await interaction.followup.send(embed=confirm, view=view)
-        msg = await interaction.original_response()
+        value = await process_confirmation(
+            interaction=interaction, 
+            prompt=(
+                f"This will remove {role.mention} from **{how_many}** members."
+            )
+        )
 
-        await view.wait()
-        if view.value is None:
-            del active_sessions[interaction.user.id]
-
-            confirm.colour = 0xD15E54
-            confirm.title = "Cancelled"
-            confirm.description = "You took too long.."
-            return await msg.edit(embed=confirm, view=None)
-        
-        if view.value:
+        if value:
             start_time = perf_counter()
-            await msg.edit(content=None, embed=membed("Removing roles... (This may take a while)"))
+            msg = await interaction.followup.send(embed=membed("Removing roles.."))
             try:
                 for member in users_without_it:
                     await member.remove_roles(discord.Object(id=role.id), atomic=True)
             except discord.HTTPException:
-                return await msg.edit(content="We are being rate-limited. Try again later.", embed=None, view=None)
+                return await msg.edit(embed=membed("We are being rate-limited. Try again later."))
             finally:
                 end_time = perf_counter()
+                confirm = discord.Embed()
                 confirm.colour = 0x70DEAA
                 confirm.title = "Success"
                 confirm.description = f"Removed {role.mention} from **{how_many}** members."
                 return await msg.edit(content=f"Took {end_time - start_time:.2f}s", embed=confirm, view=None)
-
-        confirm.colour = 0xD15E54
-        confirm.title = "Cancelled"
-        confirm.description = "This role wasn't removed from anyone."
-
-        await msg.edit(embed=confirm, view=None)
 
     @app_commands.command(name="allroles", description="Lists all roles in the server")
     async def all_roles(self, interaction: discord.Interaction):
@@ -359,15 +328,23 @@ class RoleManagement(app_commands.Group):
         count = len(users_without_it)
         
         if not count:
-            return await interaction.followup.send("No bots have this role.")
+            return await interaction.followup.send(embed=membed("No bots have this role."))
 
         resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
-            return await interaction.followup.send(resp)
+            return await interaction.followup.send(embed=membed(resp))
 
-        resp = await self.bulk_remove_roles(interaction, targets=users_without_it, new_role=role, how_many=count)
-        if resp:
-            return await interaction.followup.send(resp)
+        value = await process_confirmation(
+            interaction=interaction, 
+            prompt=(
+                f"This will remove {role.mention} from **{count}** bot(s)."
+            )
+        )
+
+        if value:
+            resp = await self.bulk_remove_roles(interaction, targets=users_without_it, new_role=role, how_many=count)
+            if resp:
+                return await interaction.followup.send(embed=membed(resp))
         
     @app_commands.command(name="humans", description="Adds a role to all humans")
     @app_commands.describe(role="The role to add to all humans.")
@@ -379,15 +356,23 @@ class RoleManagement(app_commands.Group):
         count = len(users_without_it)
         
         if not count:
-            return await interaction.followup.send("All humans have this role already.")
+            return await interaction.followup.send(embed=membed("All humans have this role already."))
 
         resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
-            return await interaction.followup.send(resp)
+            return await interaction.followup.send(embed=membed(resp))
 
-        resp = await self.bulk_add_roles(interaction, users_without_it, role, count)
-        if resp:
-            return await interaction.followup.send(resp)
+        value = await process_confirmation(
+            interaction=interaction, 
+            prompt=(
+                f"This will remove {role.mention} from **{count}** bot(s)."
+            )
+        )
+
+        if value:
+            resp = await self.bulk_add_roles(interaction, users_without_it, role, count)
+            if resp:
+                return await interaction.followup.send(embed=membed(resp))
 
     @app_commands.command(name="removehumans", description="Removes a role from all humans")
     @app_commands.describe(role="The role to remove from all humans.")
@@ -399,41 +384,56 @@ class RoleManagement(app_commands.Group):
 
         how_many = len(users_without_it)
         if not how_many:
-            return await interaction.followup.send("No humans have this role.")
+            return await interaction.followup.send(embed=membed("No humans have this role."))
 
         resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
-            return await interaction.followup.send(resp)
+            return await interaction.followup.send(embed=membed(resp))
 
-        resp = await self.bulk_remove_roles(interaction, users_without_it, role, how_many)
-        if resp:
-            return await interaction.followup.send(resp)
+        value = await process_confirmation(
+            interaction=interaction, 
+            prompt=(
+                f"This will remove {role.mention} from **{how_many}** user(s)."
+            )
+        )
+
+        if value:
+            resp = await self.bulk_remove_roles(interaction, users_without_it, role, how_many)
+            if resp:
+                return await interaction.followup.send(embed=membed(resp))
         
     @app_commands.command(name="in", description="Adds a role to all members currently in a base role")
-    @app_commands.describe(base_role="The role that members need to get a new role.", new_role="The new role to add to all members in the base role.")
+    @app_commands.describe(base_role="The role members need to get a new role.", new_role="The new role to add to all members in the base role.")
     async def add_role_in(self, interaction: discord.Interaction, base_role: discord.Role, new_role: discord.Role):
         await interaction.response.defer(thinking=True)
 
         has_role = set(base_role.members)
         has_not_got_new = set(new_role.members)
         users_without_it = has_role.difference(has_not_got_new)
-        print(users_without_it)
         
         how_many = len(users_without_it)
         if not how_many:
-            return await interaction.followup.send("Nobody in the base role doesn't have the new role already.")
+            return await interaction.followup.send(embed=membed("Nobody in the base role doesn't have the new role already."))
         
         guild = interaction.guild
         resp = do_boilerplate_role_checks(new_role, guild, guild.me.top_role)
         if resp:
-            return await interaction.followup.send(resp)
+            return await interaction.followup.send(embed=membed(resp))
+        
+        value = await process_confirmation(
+            interaction=interaction, 
+            prompt=(
+                f"This will add {new_role.mention} to **{how_many}** user(s)."
+            )
+        )
 
-        resp = await self.bulk_add_roles(interaction, users_without_it, new_role, how_many)
-        if resp:
-            return await interaction.followup.send(resp)
+        if value:
+            resp = await self.bulk_add_roles(interaction, users_without_it, new_role, how_many)
+            if resp:
+                return await interaction.followup.send(embed=membed(resp))
         
     @app_commands.command(name="rin", description="Removes a role from all members currently in a base role")
-    @app_commands.describe(base_role="The role that members need to get a new role.", new_role="The new role to add to all members in the base role.")
+    @app_commands.describe(base_role="The role members need to lose a role.", new_role="The role to remove from all members in the base role.")
     async def remove_role_in(self, interaction: discord.Interaction, base_role: discord.Role, new_role: discord.Role):
         await interaction.response.defer(thinking=True)
 
@@ -443,16 +443,24 @@ class RoleManagement(app_commands.Group):
         how_many = len(users_with_both)
 
         if not how_many:
-            return await interaction.followup.send("Nobody in the base role has the new role.")
+            return await interaction.followup.send(embed=membed("Nobody in the base role has the new role."))
 
         guild = interaction.guild
         resp = do_boilerplate_role_checks(new_role, guild, guild.me.top_role)
         if resp:
-            return await interaction.followup.send(resp)
-    
-        resp = await self.bulk_remove_roles(interaction, users_with_both, new_role, how_many)
-        if resp:
-            return await interaction.followup.send(resp)
+            return await interaction.followup.send(embed=membed(resp))
+
+        value = await process_confirmation(
+            interaction=interaction, 
+            prompt=(
+                f"This will remove {new_role.mention} from **{how_many}** user(s)."
+            )
+        )
+
+        if value:
+            resp = await self.bulk_remove_roles(interaction, users_with_both, new_role, how_many)
+            if resp:
+                return await interaction.followup.send(embed=membed(resp))
 
 
 class Moderation(commands.Cog):
@@ -576,15 +584,15 @@ class Moderation(commands.Cog):
     async def add_temp_role(self, interaction: discord.Interaction, user: discord.Member, duration: app_commands.Transform[int, TimeConverter], role: discord.Role):
         
         if not duration:
-            return await interaction.response.send_message("Invalid delay provided. Use a valid format e.g. 1d 7h 19m 4s.")
+            return await interaction.response.send_message(embed=membed("Use a valid duration format e.g. 1d 7h 19m 4s."))
 
         if role in user.roles:
-            return await interaction.response.send_message("That member already has this role.")
+            return await interaction.response.send_message(embed=membed("That member already has this role."))
 
         guild = interaction.guild
         resp = do_boilerplate_role_checks(role, guild, guild.me.top_role)
         if resp:
-            return await interaction.response.send_message(resp)
+            return await interaction.response.send_message(embed=membed(resp))
         
         # ! SEND THE MESSAGE HERE
         minutes, seconds = divmod(duration, 60)
