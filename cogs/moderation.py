@@ -1,14 +1,15 @@
-from time import perf_counter
-from pytz import timezone
-from datetime import timedelta, datetime
 from re import compile
+from pytz import timezone
+from time import perf_counter
+from datetime import timedelta, datetime
 
-from discord.ext import commands, tasks
 from discord import app_commands
-import discord
+from discord.ext import commands, tasks
 
 from other.pagination import Pagination
 from cogs.economy import membed, process_confirmation, APP_GUILDS_ID
+
+import discord
 
 
 def do_boilerplate_role_checks(role: discord.Role, guild: discord.Guild, my_top: discord.Role) -> str | None:
