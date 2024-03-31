@@ -1,8 +1,9 @@
-from random import choices
 from re import compile
+from random import choices
 
-from datetime import datetime, timedelta
 from pytz import timezone
+from datetime import datetime, timedelta
+
 
 def labour_productivity_via(*, investment: int) -> float:
     """Find a suitable productivity level of a slave based on the investment"""
