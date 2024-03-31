@@ -1,28 +1,28 @@
 from traceback import print_exception
 from datetime import timedelta
 
-from discord import Embed
-from discord.ext import commands
 from discord.utils import format_dt, utcnow
-from discord.ext.commands import errors
+from discord.ext import commands
+from discord import Embed
 
-from cogs.economy import membed
-from cogs.slash_events import MessageDevelopers
+from .economy import membed
+from .slash_events import MessageDevelopers
 
 
 class ContextCommandHandler(commands.Cog):
     """The error handler for text-based commands that are called."""
     def __init__(self, client: commands.Bot):
         self.client = client
+        self.err = commands.errors
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, err: Exception):
         """The function that handles all the errors passed into the bot via text-based commands."""
         contact_view = MessageDevelopers()
         
-        if isinstance(err, errors.UserInputError):
+        if isinstance(err, commands.errors.UserInputError):
 
-            if isinstance(err, errors.MissingRequiredArgument):
+            if isinstance(err, self.err.MissingRequiredArgument):
                 return await ctx.reply(
                     embed=membed("Some required arguments are missing."),
                     view=contact_view
@@ -33,23 +33,23 @@ class ContextCommandHandler(commands.Cog):
                 view=contact_view
             )
 
-        elif isinstance(err, errors.CheckFailure):
+        elif isinstance(err, self.err.CheckFailure):
 
-            if isinstance(err, errors.NotOwner):
+            if isinstance(err, self.err.NotOwner):
                 await ctx.reply(
                     embed=membed("You do not own this bot."), 
                     view=contact_view, 
                     mention_author=False
                 )
 
-            elif isinstance(err, errors.MissingPermissions):
+            elif isinstance(err, self.err.MissingPermissions):
                 errorc = membed("You're missing some permissions required to use this command.")
                 await ctx.reply(
                     embed=errorc, 
                     view=contact_view, 
                     mention_author=False)
 
-            elif isinstance(err, errors.MissingRole):
+            elif isinstance(err, self.err.MissingRole):
 
                 embed = membed(f"You're missing a required role: <@&{err.missing_role}>")
                 await ctx.reply(
@@ -58,7 +58,7 @@ class ContextCommandHandler(commands.Cog):
                     view=contact_view
                 )
 
-        elif isinstance(err, errors.CommandOnCooldown):
+        elif isinstance(err, self.err.CommandOnCooldown):
             after_cd = format_dt(
                 utcnow() + timedelta(seconds=err.retry_after), style="R"
             )
@@ -69,7 +69,7 @@ class ContextCommandHandler(commands.Cog):
                 view=contact_view
             )
 
-        elif isinstance(err, errors.CommandNotFound):
+        elif isinstance(err, self.err.CommandNotFound):
             await ctx.reply(
                 embed=membed("Could not find what you were looking for."),
                 mention_author=False,
