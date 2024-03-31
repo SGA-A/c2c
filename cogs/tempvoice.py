@@ -1,11 +1,11 @@
-from discord.ext import commands
-from discord import app_commands
-
-from cogs.economy import APP_GUILDS_ID, membed
 from typing import Optional, Literal
 from asqlite import Connection as asqlite_Connection
 
 import discord
+from discord import app_commands
+from discord.ext import commands
+
+from cogs.economy import APP_GUILDS_ID, membed
 
 
 class MemberSelect(discord.ui.UserSelect):
@@ -328,11 +328,10 @@ class TempVoice(commands.Cog):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return self.active_voice_channels.get(interaction.user.id) is not None
 
-    @app_commands.command(name="setup", description="Setup a creator channel for temporary voice channels.")
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.command(name="setup", description="Setup a creator channel for temporary voice channels")
     @app_commands.describe(creator_channel="The channel to use for making temporary voice channels.")
-    @app_commands.checks.cooldown(1, 60, key=lambda interaction: interaction.guild_id)
     async def setup_voice(self, interaction: discord.Interaction, creator_channel: discord.VoiceChannel):
-        
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(
                 embed=membed("You are not an admin.")
