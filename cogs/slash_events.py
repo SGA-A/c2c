@@ -1,15 +1,16 @@
-from datetime import timedelta
 from random import choice
+from datetime import timedelta
 from traceback import print_exception
 
-from discord import Embed, Interaction, app_commands
 from discord.ext import commands
-from discord.utils import format_dt, utcnow
 from discord.ui import View, Button
+from discord.utils import format_dt, utcnow
+from discord import Embed, Interaction, app_commands
 
 from cogs.economy import membed
 
-cooldown_prompts = (
+
+COOLDOWN_PROMPTS = (
     "Too spicy, take a breather..", 
     "Take a chill pill", 
     "Woah now, slow it down",
@@ -62,7 +63,7 @@ class SlashExceptionHandler(commands.Cog):
 
             elif isinstance(error, app_commands.CommandOnCooldown):
                 exception = Embed()
-                exception.title = choice(cooldown_prompts)
+                exception.title = choice(COOLDOWN_PROMPTS)
                 
                 exception.colour = 0x2B2D31
                 after_cd = format_dt(utcnow() + timedelta(seconds=error.retry_after), style="R")
@@ -82,7 +83,8 @@ class SlashExceptionHandler(commands.Cog):
             exception.description = (
                 "Seems like the bot has stumbled upon an unexpected error. "
                 "Not to worry, these things happen from time to time. If this issue persists, "
-                "please let us know about it. We're always here to help!")
+                "please let us know about it. We're always here to help!"
+            )
 
         if not interaction.response.is_done():
             return await interaction.response.send_message(embed=exception, view=MessageDevelopers())
