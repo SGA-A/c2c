@@ -1,23 +1,24 @@
-from PyDictionary import PyDictionary
-from xml.etree.ElementTree import fromstring
-from other.pagination import Pagination
 from io import BytesIO
-from random import choice
 from github import Github
-from re import compile as compile_it, search
-from psutil import Process, cpu_count
+from random import choice
+from unicodedata import name
 from time import perf_counter
+from waifuim import WaifuAioClient
+from psutil import Process, cpu_count
+from PyDictionary import PyDictionary
+from waifuim.exceptions import APIException
 from typing import Literal, Union, Optional
+from re import compile as compile_it, search
+from xml.etree.ElementTree import fromstring
+
 from discord.ext import commands
 from discord import app_commands, Interaction, Object
-from unicodedata import name
 
 import discord
 import datetime
 
 from cogs.economy import owners_nolimit, APP_GUILDS_ID
-from waifuim.exceptions import APIException
-from waifuim import WaifuAioClient
+from other.pagination import Pagination
 
 
 ARROW = "<:arrowe:1180428600625877054>"
@@ -287,6 +288,7 @@ class Utility(commands.Cog):
             ```{result}```
             """
         )
+
         await interaction.response.send_message(embed=output)
 
     @commands.command(name='ping', description='Checks latency of the bot')
@@ -372,65 +374,83 @@ class Utility(commands.Cog):
 
     @anime.command(name='kona', description='Retrieve NSFW posts from Konachan')
     @app_commands.describe(tags='The tags to base searches upon.', page='The page number to look through.')
-    async def kona_fetch(self, interaction: discord.Interaction, tags: Optional[str], page: Optional[app_commands.Range[int, 1]]):
+    async def kona_fetch(
+        self, 
+        interaction: discord.Interaction, 
+        tags: Optional[str] = "original", 
+        page: Optional[app_commands.Range[int, 1]] = 1
+        ) -> None:
 
-        if tags is None:
-            tags = "original"
-        if page is None:
-            page = 1
-
+        await interaction.response.defer(thinking=True, ephemeral=True)
+        
         tagviewing = ', '.join(tags.split(' '))
 
-        posts_xml = await self.retrieve_via_kona(tags=tags, limit=3, page=page, mode="image",
-                                                 tag_pattern=None)
+        posts_xml = await self.retrieve_via_kona(
+            tags=tags, 
+            limit=3, 
+            page=page, 
+            mode="image", 
+            tag_pattern=None
+        )
 
         if isinstance(posts_xml, int):
             return await interaction.response.send_message(
-                embed=membed(f"The [konachan website](https://konachan.net/help) returned an erroneous status code of "
-                             f"`{posts_xml}`: {rmeaning.setdefault(posts_xml, "the cause of the error is not known")}."
-                             f"\nYou should try again later to see if the service improves."))
+                embed=membed(
+                    f"The [Konachan Website](https://konachan.net/help) returned an "
+                    f"erroneous status code of `{posts_xml}`: "
+                    f"{rmeaning.setdefault(posts_xml, "the cause of the error is not known")}.\n"
+                    f"You should try again later to see if the service improves."
+                )
+            )
 
         if len(posts_xml) == 0:
-            await interaction.response.defer(thinking=True, ephemeral=True)
-            tagsearch = self.client.tree.get_app_command(
-                'tagsearch', guild=discord.Object(id=interaction.guild.id))
 
-            if tagsearch is None:
-
-                return await interaction.followup.send(
-                    embed=membed("## No posts found.\n"
-                                 "- There are a few known causes:\n"
-                                 " - Entering an invalid tag name.\n"
-                                 " - Accessing some posts under the `copyright` tag.\n"
-                                 " - There are no posts found under this tag.\n"
-                                 " - The page requested exceeds the max length.\n"
-                                 "- You can find a tag by using /tagsearch "
-                                 "or [the website.](https://konachan.net/tag)"))
+            return await interaction.followup.send(
+                embed=membed(
+                    "## No posts found.\n"
+                    "- There are a few known causes:\n"
+                    " - Entering an invalid tag name.\n"
+                    " - Accessing some posts under the `copyright` tag.\n"
+                    " - There are no posts found under this tag.\n"
+                    " - The page requested exceeds the max length.\n"
+                    "- You can find a tag by using /tagsearch "
+                    "or [the website.](https://konachan.net/tag)"
+                )
+            )
 
         attachments = set()
         descriptionerfyrd = set()
         for result in posts_xml:
             tindex = posts_xml.index(result) + 1
-            descriptionerfyrd.add(f'**[{tindex}]** *Post by {result['author']}*\n'
-                                  f'- Created <t:{result['created_at']}:R>\n'
-                                  f'- [File URL (source)]({result['file_url']})\n'
-                                  f'- [File URL (jpeg)]({result['jpeg_url']})\n'
-                                  f'- Made by {result['source'] or '*Unknown User*'}\n'
-                                  f'- Tags: {result['tags']}')
+            descriptionerfyrd.add(
+                f'**[{tindex}]** *Post by {result['author']}*\n'
+                f'- Created <t:{result['created_at']}:R>\n'
+                f'- [File URL (source)]({result['file_url']})\n'
+                f'- [File URL (jpeg)]({result['jpeg_url']})\n'
+                f'- Made by {result['source'] or '*Unknown User*'}\n'
+                f'- Tags: {result['tags']}'
+            )
+
             attachments.add(f"**[{tindex}]**\n{result['jpeg_url']}")
 
-        embed = discord.Embed(title='Results',
-                              description=f'- Retrieval is based on the following filters:\n'
-                                          f' - **Tags**: {tagviewing}\n'
-                                          f' - **Page**: {page}\n\n',
-                              colour=discord.Colour.from_rgb(255, 233, 220))
+        embed = discord.Embed(
+            title='Results', 
+            colour=discord.Colour.from_rgb(255, 233, 220),
+            description=(
+                f'- Retrieval is based on the following filters:\n'
+                f' - **Tags**: {tagviewing}\n'
+                f' - **Page**: {page}\n\n'
+            )
+        )
 
         embed.set_author(icon_url=interaction.user.display_avatar.url, name=interaction.user.name)
         embed.description += "\n\n".join(descriptionerfyrd)
-        await interaction.channel.send(content=f"__Attachments "
-                                               f"for {interaction.user.mention}__\n\n" + "\n".join(attachments),
-                                       delete_after=30.0)
-        await interaction.response.send_message(embed=embed)
+        
+        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(
+            content=f"__Attachments for {interaction.user.mention}__\n\n{'\n'.join(attachments)}",
+            ephemeral=True
+        )
 
     @anime.command(name='tagsearch', description='Retrieve tags from Konachan')
     @app_commands.describe(tag_pattern="A single word to use to find matching results.")
@@ -481,8 +501,7 @@ class Utility(commands.Cog):
                                     "neko", "kitsune", "waifu", "husbando", "ai", "ass", "boobs", "creampie",
                                     "paizuri", "pussy", "random", "ecchi", "fucking"]]):
 
-        await interaction.response.send_message("Loading..")
-        msg = await interaction.original_response()
+        await interaction.response.defer()
 
         api_urls = {
             "neko": ("https://nekos.best/api/v2/neko", 'https://nekos.pro/api/neko'),
@@ -505,32 +524,36 @@ class Utility(commands.Cog):
         api_urls = api_urls.get(filter_by)
 
         if (isinstance(api_urls, str)) and (not interaction.channel.is_nsfw()):
-            return await msg.edit(
-                content=None,
-                embed=membed("This API endpoint **must** be used within an NSFW channel."))
-        elif isinstance(api_urls, tuple):
+            return await interaction.followup.send(
+                embed=membed("This API endpoint **must** be used within an NSFW channel.")
+            )
+        if isinstance(api_urls, tuple):
             api_urls = choice(api_urls)
-        else:
-            async with self.client.session.get(api_urls) as resp:
-                if resp.status != 200:
-                    return await msg.edit(
-                        content=None, embed=membed("The request failed, you should try again later."))
-                embed = discord.Embed(colour=discord.Colour.from_rgb(243, 157, 30))
+        
+        async with self.client.session.get(api_urls) as resp:
+            if resp.status != 200:
+                return await interaction.followup.send(
+                    embed=membed("The request failed, you should try again later.")
+                )
 
-                data = await resp.json()
-                if (extract_domain(api_urls) == "nekos.pro") and (not api_urls.endswith("ai")):  # ai doesnt have any params
-                    embed.set_author(name=f"{data.setdefault('character_name', 'Unknown Source')}")
-                    embed.set_image(url=data["url"])
-                    embed.set_footer(text=f"ID: {data['id']}")
-                elif extract_domain(api_urls) == "nekos.best":
-                    fm = data["results"][0]
-                    embed.set_author(name=f"{fm['artist_name']}")
-                    embed.set_image(url=fm["url"])
-                else:
-                    embed.set_image(url=data["url"])
-                    embed.set_footer(text=f"ID: {data['id']}")
+            embed = discord.Embed(colour=discord.Colour.from_rgb(243, 157, 30))
+            data = await resp.json()
 
-                await msg.edit(content=None, embed=embed)
+            if (extract_domain(api_urls) == "nekos.pro") and (not api_urls.endswith("ai")):
+                embed.set_author(name=f"{data.setdefault('character_name', 'Unknown Source')}")
+                embed.set_image(url=data["url"])
+                embed.set_footer(text=f"ID: {data.get('id', 'Unknown ID')}")
+            
+            elif extract_domain(api_urls) == "nekos.best":
+                fm = data["results"][0]
+                embed.set_author(name=f"{fm['artist_name']}")
+                embed.set_image(url=fm["url"])
+            
+            else:
+                embed.set_image(url=data["url"])
+                embed.set_footer(text=f"ID: {data.get('id', 'Unknown ID')}")
+
+            await interaction.followup.send(embed=embed)
 
     @anime.command(name='random', description="Get a completeley random waifu image")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
