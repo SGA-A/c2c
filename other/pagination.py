@@ -1,6 +1,6 @@
 import discord
-from typing import Callable, Optional
 from traceback import print_exception
+from typing import Optional, Callable
 
 
 def membed(custom_description: str) -> discord.Embed:
