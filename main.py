@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from asyncio import run
+from aiohttp import ClientSession
+from asqlite import create_pool
+
 from dotenv import load_dotenv
 from datetime import datetime
 from os import listdir, environ
@@ -8,18 +12,38 @@ from sys import version
 from re import compile
 from random import choice
 from collections import deque
-from typing import Literal, Any, Dict, Optional, TYPE_CHECKING, Union, List, Tuple
-from logging import INFO as LOGGING_INFO
+from logging import INFO
 
-from asyncio import run
-from aiohttp import ClientSession
-from asqlite import create_pool
+from typing import (
+    Literal, 
+    Any, 
+    Dict, 
+    Optional, 
+    TYPE_CHECKING, 
+    Union, 
+    List, 
+    Tuple
+)
+
+from discord import (
+    app_commands, 
+    Object, 
+    ui, 
+    Intents,
+    Status, 
+    Embed, 
+    Interaction, 
+    CustomActivity,
+    AppCommandType, 
+    SelectOption, 
+    Colour,
+    Webhook, 
+    NotFound, 
+    ButtonStyle
+)
 
 from discord.utils import setup_logging, format_dt
-from discord import app_commands, Object, ui, Intents, Status, Embed, Interaction, CustomActivity
-from discord import AppCommandType, SelectOption, Colour, Webhook, NotFound, ButtonStyle
 from discord.ext import commands
-
 from cogs.economy import membed
 
 if TYPE_CHECKING:
@@ -143,8 +167,8 @@ class MyCommandTree(app_commands.CommandTree):
 
 
 class C2C(commands.Bot):
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
 
         # Database and HTTP Connections
         self.pool_connection = None
@@ -173,10 +197,17 @@ intents.voice_states = True
 
 
 client = C2C(
-    command_prefix='>', intents=intents, case_insensitive=True, help_command=None, 
+    command_prefix='>', 
+    intents=intents, 
+    case_insensitive=True, 
+    help_command=None, 
     owner_ids={992152414566232139, 546086191414509599},  # 1148206353647669298
-    activity=CustomActivity(name='Serving cc • /help'), status=Status.idle, 
-    tree_cls=MyCommandTree, max_messages=100, max_ratelimit_timeout=30.0)
+    activity=CustomActivity(name='Serving cc • /help'), 
+    status=Status.idle, 
+    tree_cls=MyCommandTree, 
+    max_messages=100, 
+    max_ratelimit_timeout=30.0
+)
 print(version)
 
 
@@ -185,11 +216,6 @@ cogs = Literal[
     "miscellaneous", "moderation", "music", 
     "slash_events", "tempvoice"]
 classnames = Literal["Economy", "Moderation", "Utility", "Owner", "Music", "TempVoice"]
-
-
-@client.check
-async def globally_block_dms(ctx) -> bool:
-    return ctx.guild is not None
 
 
 async def load_cogs() -> None:
@@ -635,7 +661,7 @@ async def help_command_category(interaction: Interaction):
 
 async def main():
     try:
-        setup_logging(level=LOGGING_INFO)
+        setup_logging(level=INFO)
 
         load_dotenv()
         TOKEN = environ.get("BOT_TOKEN")
