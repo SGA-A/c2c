@@ -5,21 +5,29 @@ from re import findall
 from textwrap import indent
 from contextlib import redirect_stdout
 from traceback import format_exc
-from typing import Optional, Any, Literal, Union
+
+from typing import (
+    Optional, 
+    Any, 
+    Literal, 
+    Union
+)
 
 import asyncio
 import io
-
 import discord
+
 from discord import app_commands
 from discord.ext import commands
-
 from asqlite import Connection as asqlite_Connection
 
-from cogs.economy import CURRENCY, determine_exponent
-from cogs.economy import APP_GUILDS_ID
-from cogs.economy import get_profile_key_value
-from cogs.economy import modify_profile
+from cogs.economy import (
+    CURRENCY, 
+    determine_exponent, 
+    APP_GUILDS_ID, 
+    get_profile_key_value, 
+    modify_profile
+)
 
 
 class Owner(commands.Cog):
@@ -424,8 +432,7 @@ class Owner(commands.Cog):
             '# 4. <:Polarizer:1171491374756012152> Keep our server safe!\n'
             'Any form of content that suggests normalization or '
             'justification of NSFW content should not escape the '
-            'boundaries of <#1160547937420582942> or through the use '
-            'of <@432610292342587392>, sanctions will be upheld for such cases.\n'
+            'boundaries of <#1160547937420582942>, sanctions will be upheld for such cases.\n'
             '# 5. <:discordthinking:1173681144718446703> Adhere to the Terms of Service.\n'
             'Abide by Discord\'s terms of service and community guidelines at all times:\n'
             '[Discord Community Guidelines](https://discord.com/guidelines/)\n'
