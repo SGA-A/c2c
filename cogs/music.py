@@ -1,8 +1,14 @@
-from discord import FFmpegPCMAudio, VoiceChannel, PCMVolumeTransformer, Embed
-from discord.ext import commands
-from asyncio import TimeoutError as asyncTE
 from re import findall
 from os.path import basename
+from discord.ext import commands
+from asyncio import TimeoutError as asyncTE
+
+from discord import (
+    FFmpegPCMAudio, 
+    VoiceChannel, 
+    PCMVolumeTransformer, 
+    Embed
+)
 
 
 class Music(commands.Cog):
