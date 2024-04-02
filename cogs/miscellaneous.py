@@ -418,7 +418,7 @@ class Utility(commands.Cog):
                 )
             )
 
-        attachments = set()
+        attachments = []
         descriptionerfyrd = set()
         for result in posts_xml:
             tindex = posts_xml.index(result) + 1
@@ -431,7 +431,9 @@ class Utility(commands.Cog):
                 f'- Tags: {result['tags']}'
             )
 
-            attachments.add(f"**[{tindex}]**\n{result['jpeg_url']}")
+            embed = discord.Embed(title=f"Post {tindex}")
+            embed.set_image(url=result['jpeg_url'])
+            attachments.append(embed)
 
         embed = discord.Embed(
             title='Results', 
@@ -447,10 +449,7 @@ class Utility(commands.Cog):
         embed.description += "\n\n".join(descriptionerfyrd)
         
         await interaction.followup.send(embed=embed)
-        await interaction.followup.send(
-            content=f"__Attachments for {interaction.user.mention}__\n\n{'\n'.join(attachments)}",
-            ephemeral=True
-        )
+        await interaction.followup.send(embeds=attachments, ephemeral=True)
 
     @anime.command(name='tagsearch', description='Retrieve tags from Konachan')
     @app_commands.describe(tag_pattern="A single word to use to find matching results.")
