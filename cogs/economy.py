@@ -380,7 +380,7 @@ def generate_slot_combination():
     return slot_combination
 
 
-def generate_progress_bar(percentage):
+def generate_progress_bar(percentage: Union[float, int]) -> str:
     """
     Generate a visual representation of a progress bar based on the given percentage.
 
@@ -398,8 +398,8 @@ def generate_progress_bar(percentage):
     """
 
     percentage = round(percentage, -1)
-    if percentage > 100:
-        percentage = 100
+    percentage = min(percentage, 100)
+    
     progress_bar = {
         0: "<:pb1e:1199056980195676201><:pb2e:1199056978908037180>"
            "<:pb2e:1199056978908037180><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
@@ -435,7 +435,7 @@ def get_profile_key_value(key: str) -> Any:
         return dbmr.get(key)
 
 
-def display_user_friendly_deck_format(deck: list, /):
+def display_user_friendly_deck_format(deck: list, /) -> str:
     """Convert a deck view into a more user-friendly view of the deck."""
     remade = list()
     suits = ["\U00002665", "\U00002666", "\U00002663", "\U00002660"]
@@ -1569,7 +1569,7 @@ class HighLow(discord.ui.View):
         win = discord.Embed(
             colour=discord.Colour.brand_green(),
             description=(
-                f'**You won {CURRENCY} **{total:,}!**\n'
+                f'**You won {CURRENCY} {total:,}!**\n'
                 f'Your hint was **{self.hint_provided}**. '
                 f'The hidden number was **{self.true_value}**.\n'
                 f'Your new balance is {CURRENCY} **{new_balance[0]:,}**.'
