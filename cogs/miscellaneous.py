@@ -21,8 +21,9 @@ from cogs.economy import owners_nolimit, APP_GUILDS_ID
 from other.pagination import Pagination
 
 
+FORUM_ID = 1147176894903627888
 ARROW = "<:arrowe:1180428600625877054>"
-rmeaning = {
+RESPONSES = {
     403: "Forbidden - Access was denied",
     404: "Not Found",
     420: "Invalid Record - The record could not be saved",
@@ -32,6 +33,24 @@ rmeaning = {
     424: "Invalid Parameters - The given parameters were invalid",
     500: "Internal Server Error - Some unknown error occured on the konachan website's server",
     503: "Service Unavailable - The konachan website currently cannot handle the request"
+}
+
+UPLOAD_FILE_DESCRIPTION = "A file to upload alongside the thread."
+FORUM_TAG_IDS = {
+    'game': 1147178989329322024, 
+    'political': 1147179277343793282, 
+    'meme': 1147179514825297960, 
+    'anime/manga': 1147179594869387364, 
+    'reposts': 1147179787949969449, 
+    'career': 1147180119887192134, 
+    'rant': 1147180329057140797, 
+    'information': 1147180466210873364, 
+    'criticism': 1147180700022345859, 
+    'health': 1147180978356363274, 
+    'advice': 1147181072065515641, 
+    'showcase': 1147181147370049576, 
+    'coding': 1147182042744901703, 
+    'general discussion': 1147182171140923392
 }
 
 
@@ -194,7 +213,7 @@ class Utility(commands.Cog):
         self.client = client
         self.process = Process()
         self.wf = WaifuAioClient(session=client.session, token=client.WAIFU_API_KEY, app_name="c2c")
-        
+
         self.image_src = app_commands.ContextMenu(
             name='Extract Image Source',
             callback=self.extract_source)
@@ -369,8 +388,12 @@ class Utility(commands.Cog):
                 await interaction.response.send_message(
                     embed=membed("An unsuccessful request was made. Try again later."))
 
-    anime = app_commands.Group(name='anime', description="commands related to anime!", 
-                               guild_only=True, guild_ids=APP_GUILDS_ID)
+    anime = app_commands.Group(
+        name='anime', 
+        description="commands related to anime!", 
+        guild_only=True, 
+        guild_ids=APP_GUILDS_ID
+    )
 
     @anime.command(name='kona', description='Retrieve NSFW posts from Konachan')
     @app_commands.describe(tags='The tags to base searches upon.', page='The page number to look through.')
@@ -398,7 +421,7 @@ class Utility(commands.Cog):
                 embed=membed(
                     f"The [Konachan Website](https://konachan.net/help) returned an "
                     f"erroneous status code of `{posts_xml}`: "
-                    f"{rmeaning.setdefault(posts_xml, "the cause of the error is not known")}.\n"
+                    f"{RESPONSES.setdefault(posts_xml, "the cause of the error is not known")}.\n"
                     f"You should try again later to see if the service improves."
                 )
             )
@@ -463,15 +486,23 @@ class Utility(commands.Cog):
 
         if isinstance(tags_xml, int):
             return await interaction.response.send_message(
-                embed=membed(f"The [konachan website](https://konachan.net/help) returned an erroneous status code of "
-                             f"`{tags_xml}`: {rmeaning.setdefault(tags_xml, "the cause of the error is not known")}."
-                             f"\nYou should try again later to see if the service improves."), ephemeral=True)
+                ephemeral=True,
+                embed=membed(
+                    f"The [konachan website](https://konachan.net/help) returned an erroneous status code of "
+                    f"`{tags_xml}`: {RESPONSES.setdefault(tags_xml, "the cause of the error is not known")}."
+                    f"\nYou should try again later to see if the service improves."
+                )
+            )
 
         if len(tags_xml) == 0:
             return await interaction.response.send_message(
-                embed=membed("## No tags found.\n"
-                             "- There is only one known cause:\n"
-                             " - No matching tags exist yet under the given tag pattern."), ephemeral=True)
+                ephemeral=True,
+                embed=membed(
+                    "## No tags found.\n"
+                    "- There is only one known cause:\n"
+                    " - No matching tags exist yet under the given tag pattern."
+                )
+            )
 
         type_of_tag = {
             0: "`general`",
@@ -554,7 +585,7 @@ class Utility(commands.Cog):
 
             await interaction.followup.send(embed=embed)
 
-    @anime.command(name='random', description="Get a completeley random waifu image")
+    @anime.command(name='random', description="Get a completely random waifu image")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def waifu_random_fetch(self, interaction: discord.Interaction):
 
@@ -565,10 +596,14 @@ class Utility(commands.Cog):
         except APIException as ae:
             return await interaction.response.send_message(ae.detail)
 
-        embed = discord.Embed(colour=discord.Colour.from_rgb(243, 157, 30),
-                              description=f"Made <t:{int(image.uploaded_at.timestamp())}:R>\n"
-                                          f"NSFW Toggle Enabled: {is_nsfw}\n"
-                                          f"Tags: ")
+        embed = discord.Embed(
+            colour=discord.Colour.from_rgb(243, 157, 30), 
+            description=(
+                f"Made <t:{int(image.uploaded_at.timestamp())}:R>\n"
+                f"NSFW Toggle Enabled: {is_nsfw}\n"
+                f"Tags: "
+            )
+        )
 
         embed.set_author(name=image.artist or 'Unknown Source')
         tags = set()
@@ -656,6 +691,51 @@ class Utility(commands.Cog):
             return emb, n
 
         await Pagination(interaction, get_page_part).navigate()
+
+    @app_commands.command(name='upload', description='Upload a new forum thread')
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.describe(
+        name="The name of the thread.",
+        description="The content of the message to send with the thread.",
+        file=UPLOAD_FILE_DESCRIPTION,
+        file2=UPLOAD_FILE_DESCRIPTION,
+        file3=UPLOAD_FILE_DESCRIPTION,
+        tags="The tags to apply to the thread, seperated by spaces."
+    )
+    @app_commands.default_permissions(manage_guild=True)
+    async def create_new_thread(
+        self, 
+        interaction: discord.Interaction, 
+        name: str, 
+        description: Optional[str], 
+        tags: str, 
+        file: Optional[discord.Attachment], 
+        file2: Optional[discord.Attachment],
+        file3: Optional[discord.Attachment]) -> None:
+
+        await interaction.response.defer(thinking=True)
+
+        forum: discord.ForumChannel = self.client.get_channel(FORUM_ID)
+        tags = tags.lower().split()
+        
+        files = [
+            await param_value.to_file() 
+            for param_name, param_value in iter(interaction.namespace) 
+            if param_name.startswith("f") and param_value
+        ]
+
+        applicable_tags = [forum.get_tag(tag_id) for tagname in tags if (tag_id := FORUM_TAG_IDS.get(tagname)) is not None]
+    
+        thread, _ = await forum.create_thread(
+            name=name,
+            content=description,
+            files=files,
+            applied_tags=applicable_tags
+        )
+
+        await interaction.followup.send(
+            embed=membed(f"Your thread was created here: {thread.jump_url}.")
+        )
 
     @app_commands.command(name='inviter', description='Creates a server invite link')
     @app_commands.guilds(*APP_GUILDS_ID)
