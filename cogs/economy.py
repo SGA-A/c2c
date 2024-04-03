@@ -101,8 +101,8 @@ WARN_FOR_CONCURRENCY = "You are already in the middle of a transaction. Please f
 ROBUX_DESCRIPTION = 'Can be a constant number like "1234" or a shorthand (max, all, 1e6).'
 APP_GUILDS_ID = [829053898333225010, 780397076273954886]
 DOWN = True
-gend = {"Female": 0xF3AAE0, "Male": 0x737ECF}
-gender_emotes = {"Male": "<:male:1201993062885380097>", "Female": "<:female:1201992742574755891>"}
+GENDER_COLOURS = {"Female": 0xF3AAE0, "Male": 0x737ECF}
+GENDOR_EMOJIS = {"Male": "<:male:1201993062885380097>", "Female": "<:female:1201992742574755891>"}
 UNIQUE_BADGES = {
     992152414566232139: "<:e1_stafff:1145039666916110356>",
     546086191414509599: "<:in_power:1153754243220647997>",
@@ -115,7 +115,7 @@ SERVER_MULTIPLIERS = {
     829053898333225010: 120,
     780397076273954886: 160
 }
-rarity_to_colour = {
+RARITY_COLOUR = {
     "Godly": 0xE2104B,
     "Legendary": 0xDA4B3D,
     "Epic": 0xDE63FF,
@@ -142,9 +142,11 @@ LEVEL_UP_PROMPTS = (
 ARROW = "<:arrowe:1180428600625877054>"
 CURRENCY = '\U000023e3'
 PREMIUM_CURRENCY = '<:robuxpremium:1174417815327998012>'
-sticky_msg = "> \U0001f4cc This command is undergoing changes!\n\n"
-ERR_UNREASON = membed('You are unqualified to use this command. Possible reasons include '
-                      'insufficient balance and/or unreasonable input.')
+STICKY_MESSAGE = "> \U0001f4cc This command is undergoing changes!\n\n"
+ERR_UNREASON = membed(
+    'You are unqualified to use this command. Possible reasons include '
+    'insufficient balance and/or unreasonable input.'
+)
 DOWNM = membed('This command is currently outdated and will be made available at a later date.')
 NOT_REGISTERED = membed('Could not find an account associated with the user provided.')
 active_sessions = dict()
@@ -169,7 +171,7 @@ BONUS_MULTIPLIERS = {
     "🔥🔥🔥": 850
 }
 
-job_attrs = {
+JOB_KEYWORDS = {
     "Plumber": (("TOILET", "SINK", "SEWAGE", "SANITATION", "DRAINAGE", "PIPES",
                  "FAUCET", "LEAKAGE", "FIXTURES", "CLOG", "VALVE", "CORROSION", "WRENCH",
                  "SEPTIC", "FIXTURE", "TAP", "BLOCKAGE", "OVERFLOW", "PRESSURE", "REPAIRS",
@@ -1855,7 +1857,7 @@ class Servants(discord.ui.Select):
     def __init__(self, client: commands.Bot, their_slays: list, their_choice: str, owner_id: int, conn):
 
         options = [SelectOption(
-            emoji=gender_emotes.get(slay[1]), label=slay[0], description=f"Level {slay[2]} | Skill Level {slay[-1]}") for slay in their_slays]
+            emoji=GENDOR_EMOJIS.get(slay[1]), label=slay[0], description=f"Level {slay[2]} | Skill Level {slay[-1]}") for slay in their_slays]
 
         self.client: commands.Bot = client
         self.owner_id = owner_id
@@ -2788,8 +2790,8 @@ class Economy(commands.Cog):
         claimed = string_to_datetime(claimed)
 
         sdetails = discord.Embed(
-            color=hexx or gend.get(gender, 0x2B2D31), 
-            title=f"{slay_name} {gender_emotes.get(gender)}",
+            color=hexx or GENDER_COLOURS.get(gender, 0x2B2D31), 
+            title=f"{slay_name} {GENDOR_EMOJIS.get(gender)}",
             description=(
                 f"Currently: {"*Awaiting orders*" if status else "*Working*"}\n"
                 f"**Investment:** {CURRENCY} {investment:,}\n"
@@ -3315,7 +3317,7 @@ class Economy(commands.Cog):
                 server_bs = SERVER_MULTIPLIERS.get(interaction.guild.id, 0)
                 multi_own = discord.Embed(
                     colour=0x2B2D31, 
-                    description=f'{sticky_msg}'
+                    description=f'{STICKY_MESSAGE}'
                                 f'Personal multiplier: **{their_multi[0]:,}**%\n'
                                 f'*A multiplier that is unique to a user and is usually a fixed '
                                 f'amount.*\n\n'
@@ -3450,7 +3452,7 @@ class Economy(commands.Cog):
 
                         await interaction.response.send_message(
                             embed=discord.Embed(
-                                colour=rarity_to_colour.get(attrs[-1], 0x2B2D31),
+                                colour=RARITY_COLOUR.get(attrs[-1], 0x2B2D31),
                                 description=f"Shared **{quantity}x {attrs[1]} {name_res}** with {recipient.mention}!"
                             )
                         )
@@ -3865,7 +3867,7 @@ class Economy(commands.Cog):
                 em = discord.Embed(
                     title=name_res,
                     description=dynamic_text, 
-                    colour=rarity_to_colour.get(data[3], 0x2B2D31), 
+                    colour=RARITY_COLOUR.get(data[3], 0x2B2D31), 
                     url="https://www.youtube.com")
                 
                 em.set_thumbnail(url=data[2])
@@ -4079,7 +4081,7 @@ class Economy(commands.Cog):
 
                 data = await data.fetchone()
 
-                hexclr = data[1] or gend.get(data[2], 0x2B2D31)
+                hexclr = data[1] or GENDER_COLOURS.get(data[2], 0x2B2D31)
                 embed = discord.Embed()
                 embed.title = "Task Complete"
                 embed.description = (
@@ -4856,11 +4858,11 @@ class Economy(commands.Cog):
             await Pagination(interaction, get_page_part).navigate()
 
     async def do_order(self, interaction: discord.Interaction, job_name: str):
-        possible_words: tuple = job_attrs.get(job_name)[0] 
+        possible_words: tuple = JOB_KEYWORDS.get(job_name)[0] 
         list_possible_words = list(possible_words)
         shuffle(list_possible_words)
         
-        reduced = randint(10000000, job_attrs.get(job_name)[-1])
+        reduced = randint(10000000, JOB_KEYWORDS.get(job_name)[-1])
         
         selected_words = sample(list_possible_words, k=5)
         selected_words = [word.lower() for word in selected_words]
@@ -4938,7 +4940,8 @@ class Economy(commands.Cog):
             has_cd = self.is_no_cooldown(data[0][0])
             if isinstance(has_cd, tuple):
                 return await interaction.response.send_message(
-                    embed=membed(f"You can work again at {has_cd[0]} ({has_cd[1]})."))
+                    embed=membed(f"You can work again at {has_cd[0]} ({has_cd[1]}).")
+                )
 
             async with conn.transaction():
                 ncd = (discord.utils.utcnow() + datetime.timedelta(minutes=40)).timestamp()
@@ -5568,8 +5571,11 @@ class Economy(commands.Cog):
                     )
                 )
 
-    @app_commands.command(name="blackjack",
-                          description="Test your skills at blackjack", extras={"exp_gained": 3})
+    @app_commands.command(
+            name="blackjack", 
+            description="Test your skills at blackjack", 
+            extras={"exp_gained": 3}
+    )
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 4)
     @app_commands.rename(bet_amount='robux')
@@ -5581,27 +5587,24 @@ class Economy(commands.Cog):
         
         if len(self.client.games) >= 2:
             return await interaction.response.send_message(
-                embed=membed("The maximum number of concurrent games has been reached."))
+                embed=membed("The maximum number of concurrent games has been reached.")
+            )
 
         if self.client.games.get(interaction.user.id) is not None:
-            return await interaction.response.send_message(embed=membed("You already have an ongoing game taking place."))
+            return await interaction.response.send_message(
+                embed=membed("You already have an ongoing game taking place.")
+            )
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
+            
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
-
-        # ----------------- Game setup ---------------------------------
-
-        deck = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 11] * 4
-        shuffle(deck)
-
-        player_hand = [deck.pop(), deck.pop()]
-        dealer_hand = [deck.pop(), deck.pop()]
 
         has_keycard = await self.user_has_item(interaction.user.id, "Keycard", conn)
         wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
         pmulti = await self.get_pmulti_data_only(interaction.user, conn)
+
         # ----------- Check what the bet amount is, converting where necessary -----------
 
         expo = determine_exponent(bet_amount)
@@ -5641,6 +5644,14 @@ class Economy(commands.Cog):
                         f"You also can't bet anything more than {CURRENCY} **{MAX_BET_WITHOUT:,}**."
                     )
                 )
+
+        # ----------------- Game setup ---------------------------------
+
+        deck = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 11] * 4
+        shuffle(deck)
+
+        player_hand = [deck.pop(), deck.pop()]
+        dealer_hand = [deck.pop(), deck.pop()]
 
         # ------------ In the case where the user already won --------------
         player_sum = calculate_hand(player_hand)
