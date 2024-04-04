@@ -6,8 +6,10 @@ from asqlite import create_pool
 
 from dotenv import load_dotenv
 from datetime import datetime
+from pathlib import Path
+from traceback import print_exception
 from os import listdir, environ
-from sys import version
+from sys import version, stderr
 
 from re import compile
 from random import choice
@@ -181,6 +183,13 @@ class C2C(commands.Bot):
     async def setup_hook(self):
         print("we're in.")
 
+        for file in Path('cogs').glob('**/*.py'):
+            *tree, _ = file.parts
+            try:
+                await self.load_extension(f"{'.'.join(tree)}.{file.stem}")
+            except Exception as e:
+                print_exception(type(e), e, e.__traceback__, file=stderr)
+
         self.pool_connection = await create_pool(
             'C:\\Users\\georg\\Documents\\c2c\\db-shit\\economy.db')
         self.time_launch = datetime.now()
@@ -316,7 +325,7 @@ class SelectMenu(ui.Select):
 
     async def callback(self, interaction: Interaction):
 
-        their_choice = self.values[0]
+        their_choice: str = self.values[0]
         cmd_formatter = set()
 
         total_cmds_rough = await total_command_count(interaction)
@@ -370,6 +379,7 @@ class SelectMenu(ui.Select):
                     embed.colour = 0x8A1941
                     embed.set_thumbnail(url='https://i.imgur.com/b8u1MQj.png')
             cmd_formatter, total_cmds_cata = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild_id)
+        
         elif their_choice == 'Economy':
             
             embed.colour = 0xFFD700
@@ -476,20 +486,37 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
     await ctx.message.delete()
     embed = Embed(
         colour=Colour.from_rgb(3, 102, 214),
-        title='Changes for 2024 Q1',
-        description="Changes that have taken place in the period between January 1 - March 31 are noted here.\n\n"
-                    "- Some bots were remove")
-    embed.set_footer(icon_url=ctx.guild.icon.url, text="That's all for Q1 2024. Next review due: 30 June 2024.")
+        title='Changelog',
+        description=(
+            "Changes taken place between <t:1704067200:d> - <t:1711843200:d> are noted here.\n\n"
+            "- Removed some bots from the server\n"
+            "- Deleted the self-role channel (https://discord.com/channels/829053898333225010/1124782048041762867/1210988672355147816)\n"
+            "- Archived the starboard and the weekly poll channels\n"
+            "- Deleted some roles\n"
+            "- Verified all bots ensuring they pass the verification level\n"
+            "- Gave information channels a better look\n"
+            "- <#1122599897577832549> and <#949039705188626442> no longer appear by default\n"
+            "- Changed the colour of some roles\n"
+            "- Hidden irrelevant app (slash) commands from server members\n"
+            "- Increased the verification level requirement to access the server"
+        )
+    )
+    
+    embed.set_footer(
+        icon_url=ctx.guild.icon.url, 
+        text="That's all for Q1 2024. Next review due: 30 June 2024."
+    )
     
     webhook = Webhook.from_url(url=client.WEBHOOK_URL, session=client.session)
-    thread = await ctx.guild.fetch_channel(1190736866308276394)
-    rtype = "feature" # or "bugfix"
+    rtype = "bugfix"  # or "feature"
     
-    await webhook.send(
-        f'Patch notes for Q1 2024 / This is mostly a `{rtype}` release', 
-        embed=embed, thread=Object(id=thread.id), silent=True)
+    msg = await webhook.fetch_message(1225532637217554503, thread=Object(id=1190736866308276394))
+    await msg.edit(
+        content=f'This is mostly a `{rtype}` release.', 
+        embed=embed
+    )
     
-    await ctx.send(f"Sent to '{thread.mention}' with ID {thread.id}.")
+    await ctx.send("Done.")
 
 
 class Confirm(ui.View):
@@ -671,7 +698,6 @@ async def main():
         client.NINJAS_API_KEY = environ.get("API_KEY")
         client.WAIFU_API_KEY = environ.get("WAIFU_API_KEY")
 
-        await load_cogs()
         await client.start(TOKEN)
     finally:
         await client.close()
