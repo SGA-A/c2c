@@ -177,7 +177,7 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
 
 class InviteButton(discord.ui.View):
     def __init__(self, client: commands.Bot):
-        super().__init__(timeout=60.0)
+        super().__init__()
         self.client: commands.Bot = client
 
         perms = discord.Permissions.none()
@@ -203,9 +203,24 @@ class InviteButton(discord.ui.View):
         perms.speak = True
         perms.move_members = True
 
-        self.add_item(discord.ui.Button(
-            label="Invite Link",
-            url=discord.utils.oauth_url(self.client.user.id, permissions=perms)))
+        self.add_item(
+            discord.ui.Button(
+                label="Invite Link",
+                url=discord.utils.oauth_url(self.client.user.id, permissions=perms)
+            )
+        )
+
+
+class ImageSource(discord.ui.View):
+    def __init__(self, url: str):
+        super().__init__()
+
+        self.add_item(
+            discord.ui.Button(
+                label="Source",
+                url=url
+            )
+        )
 
 
 class Utility(commands.Cog):
@@ -479,8 +494,11 @@ class Utility(commands.Cog):
     async def tag_fetch(self, interaction: discord.Interaction, tag_pattern: str):
 
         embed = discord.Embed(title='Results', colour=discord.Colour.dark_embed())
-        embed.set_author(icon_url=interaction.user.display_avatar.url, name=interaction.user.name,
-                         url=interaction.user.display_avatar.url)
+        embed.set_author(
+            icon_url=interaction.user.display_avatar.url, 
+            name=interaction.user.name, 
+            url=interaction.user.display_avatar.url
+        )
 
         tags_xml = await self.retrieve_via_kona(tag_pattern=tag_pattern, mode="tag", tags=None)
 
@@ -525,11 +543,16 @@ class Utility(commands.Cog):
     @anime.command(name='char', description="Retrieve SFW or NSFW anime images")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     @app_commands.describe(filter_by='The type of image to retrieve.')
-    async def get_via_nekos(self, interaction: discord.Interaction,
-                            filter_by: Optional[
-                                Literal[
-                                    "neko", "kitsune", "waifu", "husbando", "ai", "ass", "boobs", "creampie",
-                                    "paizuri", "pussy", "random", "ecchi", "fucking"]]):
+    async def get_via_nekos(
+        self, 
+        interaction: discord.Interaction, 
+        filter_by: Optional[
+                Literal[
+                    "neko", "kitsune", "waifu", "husbando", "ai", "ass", "boobs", 
+                    "creampie", "paizuri", "pussy", "random", "ecchi", "fucking"
+                ]
+            ]
+            ) -> discord.WebhookMessage:
 
         await interaction.response.defer()
 
@@ -575,15 +598,15 @@ class Utility(commands.Cog):
                 embed.set_footer(text=f"ID: {data.get('id', 'Unknown ID')}")
             
             elif extract_domain(api_urls) == "nekos.best":
-                fm = data["results"][0]
-                embed.set_author(name=f"{fm['artist_name']}")
-                embed.set_image(url=fm["url"])
+                data = data["results"][0]
+                embed.set_author(name=f"{data['artist_name']}")
+                embed.set_image(url=data["url"])
             
             else:
                 embed.set_image(url=data["url"])
                 embed.set_footer(text=f"ID: {data.get('id', 'Unknown ID')}")
 
-            await interaction.followup.send(embed=embed)
+            await interaction.followup.send(embed=embed, view=ImageSource(url=data["url"]))
 
     @anime.command(name='random', description="Get a completely random waifu image")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
@@ -612,8 +635,9 @@ class Utility(commands.Cog):
 
         embed.description += ", ".join(tags)
         embed.set_image(url=image.url)
+        
 
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, view=ImageSource(url=image.url))
 
     @anime.command(name='filter', description="Filter from SFW waifu images to send")
     @app_commands.describe(
@@ -651,9 +675,13 @@ class Utility(commands.Cog):
         except APIException as ae:
             return await interaction.response.send_message(ae.detail)
 
-        embed = discord.Embed(colour=discord.Colour.from_rgb(243, 157, 30),
-                              description=f"Made <t:{int(image.uploaded_at.timestamp())}:R>\n"
-                                          "Tags: ")
+        embed = discord.Embed(
+            colour=discord.Colour.from_rgb(243, 157, 30), 
+            description=(
+                f"Made <t:{int(image.uploaded_at.timestamp())}:R>\n"
+                "Tags: "
+            )
+        )
 
         embed.set_author(name=image.artist or 'Unknown Source')
         tags = set()
@@ -662,7 +690,7 @@ class Utility(commands.Cog):
         embed.description += ", ".join(tags)
         embed.set_image(url=image.url)
 
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, view=ImageSource(url=image.url))
 
     @app_commands.command(name='emojis', description='Fetch all the emojis c2c can access')
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -678,15 +706,22 @@ class Utility(commands.Cog):
             emotes_all.append(needed)
 
         async def get_page_part(page: int):
-            emb = discord.Embed(title="Emojis",
-                                description="> This is a command that fetches **all** of the emojis found"
-                                            " in the client's internal cache and their associated atributes.\n\n",
-                                colour=0x2B2D31)
+            emb = discord.Embed(
+                colour=0x2B2D31,
+                title="Emojis", 
+                description=(
+                    "> This is a command that fetches **all** of the emojis found"
+                    " in the client's internal cache and their associated atributes.\n\n"
+                )
+            )
+
             offset = (page - 1) * length
             for user in emotes_all[offset:offset + length]:
                 emb.description += f"{user}\n"
-            emb.set_author(name=interaction.guild.me.name,
-                           icon_url=interaction.guild.me.display_avatar.url)
+            emb.set_author(
+                name=interaction.guild.me.name, 
+                icon_url=interaction.guild.me.display_avatar.url
+            )
             n = Pagination.compute_total_pages(len(emotes_all), length)
             return emb, n
 
