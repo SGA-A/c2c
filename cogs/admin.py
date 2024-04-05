@@ -392,18 +392,28 @@ class Owner(commands.Cog):
 
         embed = discord.Embed(
             title='Update Schedule',
+            colour=discord.Colour.from_rgb(101, 242, 171),
             description=(
-                'This embed will post any **changes to the server** in the near future.'
-                ' This includes any feature updates within the server'
-                ' and any other optimization changes.\n'),
-            colour=discord.Colour.from_rgb(101, 242, 171))
-        embed.add_field(name="There's nothing here yet.",
-                        value="There are no planned changes for the server right now.")
-        embed.set_footer(text='Check back later for any known scheduled updates..',
-                         # replace 'more' w/ 'any known'
-                         icon_url=(
-                             'https://pa1.narvii.com/6025/'
-                             '9497042b3aad0518f08dd2bfefb0e2262f4a7149_hq.gif'))
+                'This embed will post any changes to the server in the near future.\n\n'
+                '- Add more custom role colours\n'
+                '- Remove more redundant bots\n'
+                '- Add new tasks to complete in Server Onboarding\n'
+                '- Add emotes to the channel topic of every channel\n'
+                '- Pick a more suitable role colour for <@&914565377961369632>'
+            )
+        )
+
+        # embed.add_field(
+        #     name="There's nothing here yet.", 
+        #     value="There are no planned changes for the server right now."
+        # )
+
+        # replace 'more' w/ 'any known'
+        embed.set_footer(
+            text='Check back later for more scheduled updates..', 
+            icon_url=('https://pa1.narvii.com/6025/9497042b3aad0518f08dd2bfefb0e2262f4a7149_hq.gif')
+        )
+
         await original.edit(embed=embed)
 
     @commands.command(name='update3', description='Modify rules and guidelines')
@@ -658,6 +668,8 @@ class Owner(commands.Cog):
     async def quit_client(self, ctx):
         """Quits the bot gracefully."""
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
+        utility_cog = self.client.get_cog("Utility")
+        await utility_cog.wf.close()
         await self.client.session.close()
         await self.client.pool_connection.close()
         await self.client.http.close()
@@ -685,9 +697,10 @@ class Owner(commands.Cog):
                 message = message.replace(f'<{match}>', f"{emoji}")
                 continue
             if ctx.interaction:
-                return await ctx.send("I could not format your emoji, because "
-                                      "that does not exist within my internal cache!\n"
-                                      "As such, your message was not sent.", ephemeral=True)
+                return await ctx.send(
+                    "I could not format your emoji, because "
+                    "that does not exist within my internal cache!\n"
+                    "As such, your message was not sent.", ephemeral=True)
             return
 
         channel = channel or ctx.channel
