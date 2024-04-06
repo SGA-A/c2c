@@ -39,7 +39,7 @@ class MemberSelect(discord.ui.UserSelect):
         user = interaction.user
         owner_data = self.tempvoice.active_voice_channels[user.id]
 
-        selected_without_admin = {str(selected.id) for selected in self.values if self.can_allow(selected, user)}
+        selected_without_admin = {str(selected.id) for selected in self.values if self.can_allow(interaction, selected)}
 
         oppo_verb = "blocked" if self.verb == "trusted" else "trusted"
         
