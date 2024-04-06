@@ -21,7 +21,6 @@ from cogs.economy import owners_nolimit, APP_GUILDS_ID
 from other.pagination import Pagination
 
 
-FORUM_ID = 1147176894903627888
 ARROW = "<:arrowe:1180428600625877054>"
 RESPONSES = {
     403: "Forbidden - Access was denied",
@@ -33,24 +32,6 @@ RESPONSES = {
     424: "Invalid Parameters - The given parameters were invalid",
     500: "Internal Server Error - Some unknown error occured on the konachan website's server",
     503: "Service Unavailable - The konachan website currently cannot handle the request"
-}
-
-UPLOAD_FILE_DESCRIPTION = "A file to upload alongside the thread."
-FORUM_TAG_IDS = {
-    'game': 1147178989329322024, 
-    'political': 1147179277343793282, 
-    'meme': 1147179514825297960, 
-    'anime/manga': 1147179594869387364, 
-    'reposts': 1147179787949969449, 
-    'career': 1147180119887192134, 
-    'rant': 1147180329057140797, 
-    'information': 1147180466210873364, 
-    'criticism': 1147180700022345859, 
-    'health': 1147180978356363274, 
-    'advice': 1147181072065515641, 
-    'showcase': 1147181147370049576, 
-    'coding': 1147182042744901703, 
-    'general discussion': 1147182171140923392
 }
 
 
@@ -727,51 +708,6 @@ class Utility(commands.Cog):
 
         await Pagination(interaction, get_page_part).navigate()
 
-    @app_commands.command(name='upload', description='Upload a new forum thread')
-    @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.describe(
-        name="The name of the thread.",
-        description="The content of the message to send with the thread.",
-        file=UPLOAD_FILE_DESCRIPTION,
-        file2=UPLOAD_FILE_DESCRIPTION,
-        file3=UPLOAD_FILE_DESCRIPTION,
-        tags="The tags to apply to the thread, seperated by spaces."
-    )
-    @app_commands.default_permissions(manage_guild=True)
-    async def create_new_thread(
-        self, 
-        interaction: discord.Interaction, 
-        name: str, 
-        description: Optional[str], 
-        tags: str, 
-        file: Optional[discord.Attachment], 
-        file2: Optional[discord.Attachment],
-        file3: Optional[discord.Attachment]) -> None:
-
-        await interaction.response.defer(thinking=True)
-
-        forum: discord.ForumChannel = self.client.get_channel(FORUM_ID)
-        tags = tags.lower().split()
-        
-        files = [
-            await param_value.to_file() 
-            for param_name, param_value in iter(interaction.namespace) 
-            if param_name.startswith("f") and param_value
-        ]
-
-        applicable_tags = [forum.get_tag(tag_id) for tagname in tags if (tag_id := FORUM_TAG_IDS.get(tagname)) is not None]
-    
-        thread, _ = await forum.create_thread(
-            name=name,
-            content=description,
-            files=files,
-            applied_tags=applicable_tags
-        )
-
-        await interaction.followup.send(
-            embed=membed(f"Your thread was created here: {thread.jump_url}.")
-        )
-
     @app_commands.command(name='inviter', description='Creates a server invite link')
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.default_permissions(create_instant_invite=True)
@@ -1115,17 +1051,22 @@ class Utility(commands.Cog):
     @app_commands.rename(spec="mode")
     @app_commands.describe(spec='The mode of displaying the current time now.')
     async def tn(self, interaction: discord.Interaction, spec: Optional[
-        Literal["t - returns short time (format HH:MM)", "T - return long time (format HH:MM:SS)",
-                "d - returns short date (format DD/MM/YYYY)",
-                "D - returns long date (format DD Month Year)",
-                "F - returns long date and time (format Day, DD Month Year HH:MM)",
-                "R - returns the relative time since now"]]) -> None:
+        Literal[
+            "t - returns short time (format HH:MM)", 
+            "T - return long time (format HH:MM:SS)",
+            "d - returns short date (format DD/MM/YYYY)",
+            "D - returns long date (format DD Month Year)",
+            "F - returns long date and time (format Day, DD Month Year HH:MM)",
+            "R - returns the relative time since now"
+        ]
+    ]) -> None:
 
         speca = spec[0] if spec else None
         format_dtime = discord.utils.format_dt(datetime.datetime.now(), style=speca)
-        embed = discord.Embed(description=f'## <:watchb:1195754643209334906> Timestamp Conversion\n{format_dtime}\n'
-                                          f'- The epoch time in this format is: `{format_dtime}`',
-                              colour=return_random_color())
+        embed = membed(
+            f"## <:watchb:1195754643209334906> Timestamp Conversion\n{format_dtime}\n"
+            f"- The epoch time in this format is: `{format_dtime}`"
+        )
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
