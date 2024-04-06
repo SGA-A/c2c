@@ -26,8 +26,29 @@ from cogs.economy import (
     determine_exponent, 
     APP_GUILDS_ID, 
     get_profile_key_value, 
-    modify_profile
+    modify_profile,
+    membed
 )
+
+
+FORUM_ID = 1147176894903627888
+UPLOAD_FILE_DESCRIPTION = "A file to upload alongside the thread."
+FORUM_TAG_IDS = {
+    'game': 1147178989329322024, 
+    'political': 1147179277343793282, 
+    'meme': 1147179514825297960, 
+    'anime/manga': 1147179594869387364, 
+    'reposts': 1147179787949969449, 
+    'career': 1147180119887192134, 
+    'rant': 1147180329057140797, 
+    'information': 1147180466210873364, 
+    'criticism': 1147180700022345859, 
+    'health': 1147180978356363274, 
+    'advice': 1147181072065515641, 
+    'showcase': 1147181147370049576, 
+    'coding': 1147182042744901703, 
+    'general discussion': 1147182171140923392
+}
 
 
 class Owner(commands.Cog):
@@ -708,6 +729,50 @@ class Owner(commands.Cog):
         if ctx.interaction:
             await ctx.send(f"Done. Sent this message to {channel.mention}.", ephemeral=True)
 
+    @app_commands.command(name='upload', description='Upload a new forum thread')
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.describe(
+        name="The name of the thread.",
+        description="The content of the message to send with the thread.",
+        file=UPLOAD_FILE_DESCRIPTION,
+        file2=UPLOAD_FILE_DESCRIPTION,
+        file3=UPLOAD_FILE_DESCRIPTION,
+        tags="The tags to apply to the thread, seperated by spaces."
+    )
+    @app_commands.default_permissions(manage_guild=True)
+    async def create_new_thread(
+        self, 
+        interaction: discord.Interaction, 
+        name: str, 
+        description: Optional[str], 
+        tags: str, 
+        file: Optional[discord.Attachment], 
+        file2: Optional[discord.Attachment],
+        file3: Optional[discord.Attachment]) -> None:
+
+        await interaction.response.defer(thinking=True)
+
+        forum: discord.ForumChannel = self.client.get_channel(FORUM_ID)
+        tags = tags.lower().split()
+        
+        files = [
+            await param_value.to_file() 
+            for param_name, param_value in iter(interaction.namespace) 
+            if param_name.startswith("f") and param_value
+        ]
+
+        applicable_tags = [forum.get_tag(tag_id) for tagname in tags if (tag_id := FORUM_TAG_IDS.get(tagname)) is not None]
+    
+        thread, _ = await forum.create_thread(
+            name=name,
+            content=description,
+            files=files,
+            applied_tags=applicable_tags
+        )
+
+        await interaction.followup.send(
+            embed=membed(f"Your thread was created here: {thread.jump_url}.")
+        )
 
 async def setup(client):
     """Setup for cog."""
