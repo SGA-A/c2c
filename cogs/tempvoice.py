@@ -8,49 +8,62 @@ from discord.ext import commands
 from cogs.economy import APP_GUILDS_ID, membed
 
 
+def return_default_user_voice_settings(name: str) -> tuple:
+    return (f"{name}'s Channel", 0, 64000, set(), set(), "1 1 1", None)
+
+
 class MemberSelect(discord.ui.UserSelect):
-    def __init__(self, client: commands.Bot, mode: Literal["Block", "Trust"]):
+    def __init__(self, client: commands.Bot, mode: Literal["Block", "Trust"], user: discord.Member):
         self.client = client
         self.mode = mode
         self.tempvoice = client.get_cog("TempVoice")
-        super().__init__(placeholder=f"Select any members to {mode.lower()}", min_values=1, max_values=3)
+        self.verb = f"{self.mode.lower()}ed"
+        self.user_data: set[str] = self.tempvoice.active_voice_channels[user.id][self.verb]
 
-    def check(self, username: discord.Member, interaction_user: discord.Member) -> bool:
-        return not(username.guild_permissions.administrator or username.bot or username == interaction_user)
+        super().__init__(
+            placeholder=f"Select members to {mode.lower()}", 
+            min_values=1, 
+            max_values=3,
+            default_values=[
+                discord.SelectDefaultValue.from_user(discord.Object(id=int(user_id))) for user_id in self.user_data
+            ]
+        )
+
+    def can_allow(self, interaction: discord.Interaction, selected: discord.Member) -> bool:
+        return not(selected.guild_permissions.administrator or (selected in {interaction.user, interaction.guild.me}))
 
     async def callback(self, interaction: discord.Interaction):
         await interaction.response.defer()
         self.view.stop()
 
         user = interaction.user
-        user_data = self.tempvoice.active_voice_channels[user.id]
+        owner_data = self.tempvoice.active_voice_channels[user.id]
 
-        selected_without_admin = {str(username.id) for username in self.values if self.check(username, user)}
-        verb = f"{self.mode.lower()}ed"
+        selected_without_admin = {str(selected.id) for selected in self.values if self.can_allow(selected, user)}
 
-        initial_users: set[str] = user_data[verb]
-        oppo_verb = "blocked" if verb == "trusted" else "trusted"
+        oppo_verb = "blocked" if self.verb == "trusted" else "trusted"
         
-        trusted_and_blocked = user_data[oppo_verb].intersection(selected_without_admin)
+        trusted_and_blocked = owner_data[oppo_verb].intersection(selected_without_admin)
         if trusted_and_blocked:
             return await interaction.edit_original_response(
-                embed=membed(f"Some of the members selected are {oppo_verb}!"), 
-                view=None
-        )
+                view=None, 
+                embed=membed(f"Some of the members selected are {oppo_verb}!")
+            )
 
-        selected_without_admin = initial_users.union(selected_without_admin)
+        selected_without_admin = self.user_data.union(selected_without_admin)
 
-        if selected_without_admin == initial_users:
+        if selected_without_admin == self.user_data:
             return await interaction.edit_original_response(
+                view=None,
                 embed=membed(
-                    f"No changes were made to {verb} users. Ensure that:\n"
+                    f"No changes were made to {self.verb} users. Ensure that:\n"
                     f"- You did not select admins.\n"
-                    f"- You did not select bots.\n"
-                    f"- You did not select yourself."), 
-                view=None
+                    f"- You did not select {self.client.user.mention}.\n"
+                    f"- You did not select yourself."
+                )
             )
         
-        overwrites_to_add = selected_without_admin - initial_users
+        overwrites_to_add = selected_without_admin - self.user_data
         overwrites = {**user.voice.channel.overwrites}        
         trust_or_block = discord.PermissionOverwrite()
 
@@ -64,7 +77,7 @@ class MemberSelect(discord.ui.UserSelect):
             overwrites.update({interaction.guild.get_member(int(overwrite_entry)): trust_or_block})
         
         await user.voice.channel.edit(overwrites=overwrites)
-        self.tempvoice.active_voice_channels[interaction.user.id].update({verb: selected_without_admin})
+        self.tempvoice.active_voice_channels[interaction.user.id].update({self.verb: selected_without_admin})
         
         await interaction.edit_original_response(
             embed=membed(f"{self.mode}ed **{len(selected_without_admin)}** users."), 
@@ -123,7 +136,7 @@ class TrustOrBlock(discord.ui.View):
     def __init__(self, interaction: discord.Interaction, client: commands.Bot, mode: Literal["Block", "Trust"]):
         self.interaction = interaction
         super().__init__(timeout=60.0)
-        self.add_item(MemberSelect(client, mode=mode))
+        self.add_item(MemberSelect(client, mode=mode, user=interaction.user))
 
     async def interaction_check(self, interaction: discord.Interaction[discord.Client]) -> bool:
         if interaction.user.voice is not None:
@@ -172,12 +185,12 @@ class TempVoice(commands.Cog):
 
     async def store_data_locally(self, *, member: discord.Member, conn: asqlite_Connection):
         vdata = await conn.fetchone(
-            "SELECT name, `limit`, bitrate, blocked, trusted, privacy FROM userVoiceSettings WHERE ownerID = ?", member.id)
+            "SELECT name, `limit`, bitrate, blocked, trusted, privacy, status FROM userVoiceSettings WHERE ownerID = ?", member.id)
         if vdata:
             vdata = list(vdata)
             vdata[3] ={uid for uid in vdata[3].split()}
             vdata[4] = {uid for uid in vdata[4].split()}
-        vdata = vdata or (f"{member.name}'s Channel", 0, 64000, set(), set(), "1 1 1")
+        vdata = vdata or return_default_user_voice_settings(member.name)
         
         self.active_voice_channels.update(
             {
@@ -187,7 +200,8 @@ class TempVoice(commands.Cog):
                     "bitrate": vdata[2],
                     "blocked": vdata[3],  # stored as set of strings
                     "trusted": vdata[4],  # stored as set of strings
-                    "privacy": vdata[5]
+                    "privacy": vdata[5],
+                    "status": vdata[6]
                 }
             }
         )
@@ -245,10 +259,17 @@ class TempVoice(commands.Cog):
             channel = await category.create_voice_channel(
                 name=user_data["name"], 
                 bitrate=user_data["bitrate"], 
-                user_limit=user_data["limit"], overwrites=overwrites)
+                user_limit=user_data["limit"], 
+                overwrites=overwrites
+            )
             await owner.move_to(channel)
+
+            current_status = user_data["status"]
+            if current_status:
+                await channel.edit(status=current_status)
+
         except discord.RateLimited as rl:
-            print(f"we are being ratelimited, try again in {rl.retry_after}s")
+            print(f"We are being ratelimited, try again in {rl.retry_after:.2f}s.")
             del self.active_voice_channels[owner.id]
     
     async def handle_mutual_removals(self, interaction: discord.Interaction, member: discord.Member, verb: Literal["trusted", "blocked"]):
@@ -305,11 +326,14 @@ class TempVoice(commands.Cog):
                 async with conn.transaction():
                     await conn.execute(
                         """
-                        INSERT OR REPLACE INTO userVoiceSettings (ownerID, name, `limit`, bitrate, blocked, trusted, privacy) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        INSERT OR REPLACE INTO userVoiceSettings 
+                            (ownerID, name, `limit`, bitrate, blocked, trusted, privacy, status) 
+                        VALUES 
+                            (?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (member.id, *old_channel_data.values())
                     )
+
                     del self.active_voice_channels[member.id]
                 return
             
@@ -341,9 +365,19 @@ class TempVoice(commands.Cog):
         async with self.client.pool_connection.acquire() as conn:
             await conn.execute(
                 """
-                INSERT INTO guildVoiceSettings (guildID, voiceID) VALUES ($0, $1) 
-                ON CONFLICT (guildID) DO UPDATE SET voiceID = $1
-                """, interaction.guild.id, creator_channel.id)
+                INSERT INTO guildVoiceSettings 
+                    (guildID, voiceID) 
+                VALUES 
+                    ($0, $1) 
+                ON CONFLICT 
+                    (guildID) 
+                DO UPDATE SET 
+                    voiceID = $1
+                """, 
+                interaction.guild.id, 
+                creator_channel.id
+            )
+
             await conn.commit()
 
         embed.description = f"Set the creator channel to {creator_channel.mention}."
@@ -364,6 +398,19 @@ class TempVoice(commands.Cog):
         await user.voice.channel.edit(name=channel_name)
         await interaction.response.send_message(
             embed=membed(f"Renamed the channel to **{channel_name}**"))
+
+    @voice.command(name="status", description="Set the status of your temporary voice channel")
+    @app_commands.checks.cooldown(3, 60.0)
+    @app_commands.describe(text="The text shown on the voice channel status. Leave empty to reset it.")
+    async def set_status(self, interaction: discord.Interaction, text: Optional[app_commands.Range[str, None, 500]]):
+        channel = interaction.user.voice.channel
+
+        self.active_voice_channels[interaction.user.id].update({"status": text})
+
+        await channel.edit(status=text)
+        await interaction.response.send_message(
+            embed=membed(f"Set the status of {channel.mention} successfully.")
+        )
 
     @voice.command(name="bitrate", description="Change the bitrate of your temporary voice channel")
     @app_commands.checks.cooldown(1, 15)
@@ -409,16 +456,17 @@ class TempVoice(commands.Cog):
     async def kick_user_voice(self, interaction: discord.Interaction, member: discord.Member):
         user = interaction.user
         user_voice = user.voice
+        await interaction.response.defer(thinking=True, ephemeral=True)
 
         not_found = membed(f"{member.mention} is not in your voice channel.")
         if member.voice is None:
-            return await interaction.response.send_message(embed=not_found)
+            return await interaction.followup.send(embed=not_found)
         
         if member.voice.channel is not user_voice.channel:
-            return await interaction.response.send_message(embed=not_found)
+            return await interaction.followup.send(embed=not_found)
 
         await member.move_to(None, reason=f"Requested by {user.name} (ID: {user.id})")
-        await interaction.response.send_message(
+        await interaction.followup.send(
             embed=membed(f"Kicked {member.mention} from {user_voice.channel.mention}."), 
             ephemeral=True)
 
@@ -475,6 +523,18 @@ class TempVoice(commands.Cog):
             )
         )
         await interaction.response.send_message(embed=embed)
+
+    @voice.command(name="reset", description="Reset your temporary voice channel")
+    async def reset_voice(self, interaction: discord.Interaction):
+        user = interaction.user
+
+        self.active_voice_channels[user.id] = return_default_user_voice_settings(user.name)
+
+        await interaction.response.send_message(
+            embed=membed(
+                f"Reset {user.voice.channel.mention}. Changes are applied upon reconnecting."
+            )
+        )
 
 
 async def setup(client: commands.Bot):
