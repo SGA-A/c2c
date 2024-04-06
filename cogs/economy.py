@@ -81,10 +81,9 @@ async def economy_check(
 def number_to_ordinal(n):
     """Convert 01 to 1st, 02 to 2nd etc."""
     if 10 <= n % 100 <= 20:
-        suffix = 'th'
-    else:
-        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
-
+        return f"{n}th"
+    
+    suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
     return f"{n}{suffix}"
 
 
@@ -143,13 +142,10 @@ ARROW = "<:arrowe:1180428600625877054>"
 CURRENCY = '\U000023e3'
 PREMIUM_CURRENCY = '<:robuxpremium:1174417815327998012>'
 STICKY_MESSAGE = "> \U0001f4cc This command is undergoing changes!\n\n"
-ERR_UNREASON = membed(
-    'You are unqualified to use this command. Possible reasons include '
-    'insufficient balance and/or unreasonable input.'
-)
 DOWNM = membed('This command is currently outdated and will be made available at a later date.')
 NOT_REGISTERED = membed('Could not find an account associated with the user provided.')
 active_sessions = dict()
+SLOTS = ('🔥', '😳', '🌟', '💔', '🖕', '🤡', '🍕', '🍆', '🍑')
 BONUS_MULTIPLIERS = {
     "🍕🍕": 55,
     "🤡🤡": 56.5,
@@ -172,27 +168,58 @@ BONUS_MULTIPLIERS = {
 }
 
 JOB_KEYWORDS = {
-    "Plumber": (("TOILET", "SINK", "SEWAGE", "SANITATION", "DRAINAGE", "PIPES",
-                 "FAUCET", "LEAKAGE", "FIXTURES", "CLOG", "VALVE", "CORROSION", "WRENCH",
-                 "SEPTIC", "FIXTURE", "TAP", "BLOCKAGE", "OVERFLOW", "PRESSURE", "REPAIRS",
-                 "BACKFLOW"), 14_000_000),
-    "Cashier": (("ROBUX", "TILL", "ITEMS", "WORKER", 
-                "REGISTER", "CHECKOUT", "TRANSACTIONS", "RECEIPTS", "SCANNER",
-                "PRICING", "BARCODES", "CURRENCY", "CHANGE", "CHECKOUT", "BAGGIN",
-                "DISCOUNTS", "REFUNDS", "EXCHANGE", "GIFTCARDS"), 15_000_000),
-    "Fisher": (("FISHING", "NETS", "TRAWLING", "FISHERMAN", "CATCH", 
-                "VESSEL", "AQUATIC", "HARVESTING", "MARINE"), 18_000_000),
-    "Janitor": (("CLEANING", "SWEEPING", "MOPING", "CUSTODIAL", 
-                "MAINTENANCE", "SANITATION", "BROOM", "VACUUMING", "RECYCLING",
-                "DUSTING", "RESTROOM", "LITTER", "POLISHING"), 16_000_000),
-    "Youtuber": (("CONTENT CREATION", "VIDEO PRODUCTION", 
-                "CHANNEL", "SUBSCRIBERS", "EDITING", "UPLOAD", "VLOGGING", 
-                "MONETIZATION", "THUMBNAIL", "ENGAGEMENT", "COMMENTS", "EQUIPMENT",
-                "LIGHTING", "MICROPHONE", "CAMERA", "COPYRIGHT", "COMMUNITY", "FANBASE",
-                "DEMOGRAPHIC", "INFLUENCER", "SPONSORSHIP", "ALGORITHM", "COLLABORATE"), 20_000_000),
-    "Police": (("LAW ENFORCEMENT", "PATROL", "CRIME PREVENTION", 
-                "INVESTIGATION", "ARREST", "UNIFORM", "BADGE", "INTERROGATION", "FORENSICS", "SUSPECT",
-                "PURSUIT", "INCIDENT", "EMERGENCY", "SUSPECT", "EVIDENCE", "RADIO", "DISPATCHER", "WITNESS"), 10_000_000)
+    "Plumber": (
+        (
+            "TOILET", "SINK", "SEWAGE", "SANITATION", "DRAINAGE", "PIPES", "FAUCET", 
+            "LEAKAGE", "FIXTURES", "CLOG", "VALVE", "CORROSION", "WRENCH", "SEPTIC", 
+            "FIXTURE", "TAP", "BLOCKAGE", "OVERFLOW", "PRESSURE", "REPAIRS","BACKFLOW"
+        ), 14_000_000
+    ),
+
+    "Cashier": (
+        (
+            "ROBUX", "TILL", "ITEMS", "WORKER", 
+            "REGISTER", "CHECKOUT", "TRANSACTIONS", 
+            "RECEIPTS", "SCANNER", "PRICING", "BARCODES", 
+            "CURRENCY", "CHANGE", "CHECKOUT", "BAGGIN", 
+            "DISCOUNTS", "REFUNDS", "EXCHANGE", "GIFTCARDS"
+        ), 15_000_000
+    ),
+
+    "Fisher": (
+        (
+            "FISHING", "NETS", "TRAWLING", "FISHERMAN", "CATCH", 
+            "VESSEL", "AQUATIC", "HARVESTING", "MARINE"
+        ), 18_000_000
+    ),
+
+    "Janitor": (
+        (
+            "CLEANING", "SWEEPING", "MOPING", "CUSTODIAL", 
+            "MAINTENANCE", "SANITATION", "BROOM", "VACUUMING", "RECYCLING",
+            "DUSTING", "RESTROOM", "LITTER", "POLISHING"
+        ), 16_000_000
+    ),
+
+    "Youtuber": (
+        (
+            "CONTENT CREATION", "VIDEO PRODUCTION", "CHANNEL", "SUBSCRIBERS", 
+            "EDITING", "UPLOAD", "VLOGGING", "MONETIZATION", "THUMBNAIL", 
+            "ENGAGEMENT", "COMMENTS", "EQUIPMENT", "LIGHTING", "MICROPHONE", 
+            "CAMERA", "COPYRIGHT", "COMMUNITY", "FANBASE", "DEMOGRAPHIC", 
+            "INFLUENCER", "SPONSORSHIP", "ALGORITHM", "COLLABORATE"
+        ), 20_000_000
+    ),
+
+    "Police": (
+        (
+            "LAW ENFORCEMENT", "PATROL", "CRIME PREVENTION", 
+            "INVESTIGATION", "ARREST", "UNIFORM", "BADGE", 
+            "INTERROGATION", "FORENSICS", "SUSPECT", "PURSUIT", 
+            "INCIDENT", "EMERGENCY", "SUSPECT", "EVIDENCE", 
+            "RADIO", "DISPATCHER", "WITNESS"
+        ), 10_000_000
+    )
 }
 
 PRESTIGE_EMOTES = {
@@ -240,10 +267,9 @@ def make_plural(word, count):
 
 def plural_for_own(count: int) -> str:
     """Only use this pluralizer if the term is 'own'. Nothing else."""
-    if count != 1:
-        return "own"
-    else:
+    if count == 1:
         return "owns"
+    return "own"
 
 
 def generateID() -> str:
@@ -348,12 +374,6 @@ def reverse_format_number_short(formatted_number: str) -> int:
 
     return int(formatted_number)
 
-def owners_nolimit(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
-    """Any of the owners of the client bypass all cooldown restrictions (i.e. Splint + inter_geo)."""
-    if interaction.user.id in {546086191414509599, 992152414566232139}:
-        return None
-    return app_commands.Cooldown(1, randint(6, 8))
-
 
 def determine_exponent(rinput: str) -> str | int:
     """Finds out what the exponential value entered is equivalent to in numerical form. (e.g, 1e6)
@@ -386,14 +406,13 @@ def determine_exponent(rinput: str) -> str | int:
 
 def generate_slot_combination():
     """A slot machine that generates and returns one row of slots."""
-    slot = ('🔥', '😳', '🌟', '💔', '🖕', '🤡', '🍕', '🍆', '🍑')
 
     weights = [
         (800, 1000, 800, 100, 900, 800, 1000, 800, 800),
         (800, 1000, 800, 100, 900, 800, 1000, 800, 800),
         (800, 1000, 800, 100, 900, 800, 1000, 800, 800)]
 
-    slot_combination = ''.join(choices(slot, weights=w, k=1)[0] for w in weights)
+    slot_combination = ''.join(choices(SLOTS, weights=w, k=1)[0] for w in weights)
     return slot_combination
 
 
@@ -511,6 +530,58 @@ def modify_profile(typemod: Literal["update", "create", "delete"], key: str, new
                     return 0
             case _:
                 return "invalid type of modification value entered"
+
+
+async def add_command_usage(user_id: int, command_name: str, conn: asqlite_Connection) -> int:
+    """Add command usage to db. Only include the parent name if it is a subcommand."""
+    
+    value = await conn.fetchone(
+        """
+        INSERT INTO command_uses (userID, cmd_name, cmd_count)
+        VALUES (?, ?, 1)
+        ON CONFLICT(userID, cmd_name) DO UPDATE SET cmd_count = cmd_count + 1 
+        RETURNING cmd_count
+        """, (user_id, command_name)
+    )
+
+    return value[0]
+
+
+async def total_commands_used_by_user(user_id: int, conn: asqlite_Connection) -> int:
+    """
+    Select all records for the given user_id and sum up the command_count.
+    
+    This will always return a value.
+    """
+
+    total = await conn.fetchone(
+        """
+        SELECT COALESCE(SUM(cmd_count), 0) FROM command_uses
+        WHERE userID = $0
+        """, user_id
+    )
+
+    return total[0]
+
+
+
+async def find_fav_cmd_for(user_id, conn: asqlite_Connection) -> str:
+    """Select the command with the highest command_count for the given user id."""
+    
+    fav = await conn.fetchone(
+        """
+        SELECT cmd_name FROM command_uses
+        WHERE userID = $0
+        ORDER BY cmd_count DESC
+        LIMIT 1
+        """, user_id
+    )
+    
+    if fav is None:
+        return "-"
+    
+    return fav[0]
+
 
 
 class DepositOrWithdraw(discord.ui.Modal):
@@ -3203,17 +3274,10 @@ class Economy(commands.Cog):
                 return
 
             async with connection.transaction():
-                total = await connection.execute(
-                    """
-                    UPDATE `bank` 
-                    SET `cmds_ran` = `cmds_ran` + 1 
-                    WHERE userID = ? 
-                    RETURNING cmds_ran
-                    """,
-                    (interaction.user.id,))
-                total = await total.fetchone()
+                cmd = interaction.command.parent or interaction.command
+                total = await add_command_usage(interaction.user.id, command_name=cmd.name, conn=connection)
 
-                if not total[0] % 15:
+                if not total % 15:
 
                     async with aiofiles.open("C:\\Users\\georg\\Documents\\c2c\\tips.txt") as f:
                         contents = await f.readlines()
@@ -4361,11 +4425,12 @@ class Economy(commands.Cog):
 
                 data = await conn.fetchone(
                     f"""
-                    SELECT wallet, bank, cmds_ran, showcase, title, bounty, prestige, level, exp 
+                    SELECT wallet, bank, showcase, title, bounty, prestige, level, exp 
                     FROM `{BANK_TABLE_NAME}` 
                     WHERE userID = $0
                     """, user.id
                 )
+                wallet, bank, showcase, title, bounty, prestige, level, exp = data
 
                 net_attrs = await conn.fetchone(
                     """
@@ -4377,7 +4442,6 @@ class Economy(commands.Cog):
                 )
 
                 # ----------- SHOWCASE STUFF ------------
-                showcase: str = data[3]
                 id_details = {}
 
                 for item_id in showcase.split():
@@ -4415,33 +4479,38 @@ class Economy(commands.Cog):
                 else:
                     total_slays = "No servants"
                 
-                # ---------------------------------------
+                # -------------- COMMANDS --------------
                 
+                cmd_count = await total_commands_used_by_user(user.id, conn=conn)
+                fav = await find_fav_cmd_for(user.id, conn=conn)
+
+                # ---------------------------------------
+
                 procfile.description = (
                     f"""
-                    ### {user.name} - [{data[4]}](https://www.dis.gd/support)
-                    {PRESTIGE_EMOTES.get(data[6], "")} Prestige Level **{data[6]}** {UNIQUE_BADGES.get(data[-1], "")}
-                    <:bountybag:1195653667135692800> Bounty: {CURRENCY} **{data[5]:,}**
+                    ### {user.name} - [{title}](https://www.dis.gd/support)
+                    {PRESTIGE_EMOTES.get(prestige, "")} Prestige Level **{prestige}** {UNIQUE_BADGES.get(prestige, "")}
+                    <:bountybag:1195653667135692800> Bounty: {CURRENCY} **{bounty:,}**
                     {get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"}
                     """
                 )
                 
-                boundary = self.calculate_exp_for(level=data[7])
+                boundary = self.calculate_exp_for(level=level)
                 procfile.add_field(
                     name='Level',
                     value=(
-                        f"Level: `{data[7]:,}`\n"
-                        f"Experience: `{data[8]}/{boundary}`\n"
-                        f"{generate_progress_bar((data[8] / boundary) * 100)}"
+                        f"Level: `{level:,}`\n"
+                        f"Experience: `{exp}/{boundary}`\n"
+                        f"{generate_progress_bar((exp / boundary) * 100)}"
                     )
                 )
 
                 procfile.add_field(
                     name='Robux',
                     value=(
-                        f"Wallet: `{CURRENCY} {format_number_short(int(data[0]))}`\n"
-                        f"Bank: `{CURRENCY} {format_number_short(data[1])}`\n"
-                        f"Net: `{CURRENCY} {format_number_short(data[0] + data[1])}`"
+                        f"Wallet: `{CURRENCY} {format_number_short(wallet)}`\n"
+                        f"Bank: `{CURRENCY} {format_number_short(bank)}`\n"
+                        f"Net: `{CURRENCY} {format_number_short(wallet+bank)}`"
                     )
                 )
 
@@ -4456,7 +4525,10 @@ class Economy(commands.Cog):
 
                 procfile.add_field(
                     name='Commands', 
-                    value=f"Total: `{format_number_short(data[2])}`"
+                    value=(
+                        f"Total: `{format_number_short(cmd_count)}`\n"
+                        f"Favourite: `{fav}`"
+                    )
                 )
 
                 procfile.add_field(name="Servants", value=total_slays)
@@ -4467,7 +4539,7 @@ class Economy(commands.Cog):
                 )
 
                 if get_profile_key_value(f"{user.id} bio"):
-                    procfile.description += f"\n**Bio:** {get_profile_key_value(f'{user.id} bio')}"
+                    procfile.description += f"**Bio:** {get_profile_key_value(f'{user.id} bio')}"
                 if get_profile_key_value(f"{user.id} avatar_url"):
                     try:
                         procfile.set_thumbnail(url=get_profile_key_value(f"{user.id} avatar_url"))
