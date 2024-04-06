@@ -4388,6 +4388,31 @@ class Economy(commands.Cog):
                 embed.set_footer(text="Imagine thinking you can prestige already.")
                 return await interaction.response.send_message(embed=embed)
 
+    async def do_showcase_lookup(self, raw_showcase: str, conn: asqlite_Connection, user_id):
+        id_details = {}
+
+        for item_id in raw_showcase.split():
+            
+            if item_id == "0":
+                continue
+            
+            showdata = await conn.fetchone(
+                """
+                SELECT shop.itemName, shop.emoji, inventory.qty
+                FROM shop
+                INNER JOIN inventory ON shop.itemID = inventory.itemID
+                WHERE shop.itemID = $0 AND inventory.userID = $1
+                """, item_id, user_id
+            )
+
+            if showdata:
+                id_details[item_id] = showdata
+
+        return [
+            f"`{item_data[2]}x` {item_data[1]} {item_data[0]}"
+            for item_data in id_details.values()
+        ]
+
     @app_commands.command(name='profile', description='View user information and other stats')
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(
@@ -4442,27 +4467,12 @@ class Economy(commands.Cog):
                 )
 
                 # ----------- SHOWCASE STUFF ------------
-                id_details = {}
-
-                for item_id in showcase.split():
-                    if item_id == "0":
-                        continue
-                    showdata = await conn.fetchone(
-                        """
-                        SELECT shop.itemName, shop.emoji, inventory.qty
-                        FROM shop
-                        INNER JOIN inventory ON shop.itemID = inventory.itemID
-                        WHERE shop.itemID = $0 AND inventory.userID = $1
-                        """, item_id, interaction.user.id
-                    )
-
-                    if showdata:
-                        id_details[item_id] = showdata
-
-                showcase_ui_new = [
-                    f"`{item_data[2]}x` {item_data[1]} {item_data[0]}"
-                    for item_data in id_details.values()
-                ]
+                
+                showcase_ui_new = await self.do_showcase_lookup(
+                    raw_showcase=showcase,
+                    conn=conn,
+                    user_id=user.id
+                )
 
                 # ------------ SERVANT STUFF ------------
 
@@ -4486,9 +4496,10 @@ class Economy(commands.Cog):
 
                 # ---------------------------------------
 
+                procfile.title = f"{user.name} - {title}"
+                procfile.url = "https://www.dis.gd/support"
                 procfile.description = (
                     f"""
-                    ### {user.name} - [{title}](https://www.dis.gd/support)
                     {PRESTIGE_EMOTES.get(prestige, "")} Prestige Level **{prestige}** {UNIQUE_BADGES.get(prestige, "")}
                     <:bountybag:1195653667135692800> Bounty: {CURRENCY} **{bounty:,}**
                     {get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"}
