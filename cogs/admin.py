@@ -426,9 +426,9 @@ class Owner(commands.Cog):
                 'This embed will post any changes to the server in the near future.\n\n'
                 '- Add more custom role colours\n'
                 '- Remove more redundant bots\n'
-                '- Add new tasks to complete in Server Onboarding\n'
-                '- Add emotes to the channel topic of every channel\n'
-                '- Pick a more suitable role colour for <@&914565377961369632>'
+                '- ~~Add new tasks to complete in Server Onboarding~~\n'
+                '- ~~Add emotes to the channel topic of every channel~~\n'
+                '- ~~Pick a more suitable role colour for The Crew~~'
             )
         )
 
@@ -782,6 +782,28 @@ class Owner(commands.Cog):
         await interaction.followup.send(
             embed=membed(f"Your thread was created here: {thread.jump_url}.")
         )
+
+    @commands.command(name="upload2")
+    async def upload2(self, ctx: commands.Context):
+        channel: discord.PartialMessageable = self.client.get_partial_messageable(1147203137195745431)
+        msg = channel.get_partial_message(1147203137195745431)
+        a = membed(
+            "> **What are Forum Channels?**\n\n"
+            "Forum Channels are designed to allow conversations to coexist without people talking over each other.\n\n"
+            "> **What is this channel for?**\n\n"
+            "The channel is based on uploading media and sharing your thoughts about it.\n\n"
+            "> **Where do I start?!**\n\n"
+            "- Refresh your memory of the Post Guidelines\n"
+            "- Engage in an existing thread, or create your own, talk about whatever you like\n"
+            "- Include some tags in your posts to give people an idea of what your post is all about\n\n"
+            "And that's it!"
+        )
+        a.title = "FAQ"
+        a.set_thumbnail(url="https://i.imgur.com/Udo4MDP.png")
+
+        await msg.edit(embed=a)
+        await ctx.send("done")
+
 
 async def setup(client):
     """Setup for cog."""
