@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from datetime import datetime
 from pathlib import Path
 from traceback import print_exception
-from os import listdir, environ
+from os import environ
 from sys import version, stderr
 
 from re import compile
@@ -84,8 +84,11 @@ class MyCommandTree(app_commands.CommandTree):
         return None
 
     def get_app_command(
-            self, value: Union[str, int],
-            guild: Optional[Union[Snowflake, int]] = None) -> Optional[app_commands.AppCommand]:
+            self, 
+            value: Union[str, int],
+            guild: Optional[Union[Snowflake, int]] = None
+        ) -> Optional[app_commands.AppCommand]:
+        
         def search_dict(d: AppCommandStore) -> Optional[app_commands.AppCommand]:
             for cmd_name, cmd in d.items():
                 if value == cmd_name or (str(value).isdigit() and int(value) == cmd.id):
@@ -120,8 +123,11 @@ class MyCommandTree(app_commands.CommandTree):
         return ret
 
     async def _update_cache(
-            self, cmads: List[app_commands.AppCommand], 
-            guild: Optional[Union[Snowflake, int]] = None) -> None:
+            self, 
+            cmads: List[app_commands.AppCommand], 
+            guild: Optional[Union[Snowflake, int]] = None
+        ) -> None:
+
         # because we support both int and Snowflake
         # we need to convert it to a Snowflake like object if it's an int
         _guild: Optional[Snowflake] = None
@@ -136,16 +142,16 @@ class MyCommandTree(app_commands.CommandTree):
         else:
             self._global_app_commands = self._unpack_app_commands(cmads)
 
-    async def fetch_command(
-            self, command_id: int, /, *, 
-            guild: Optional[Snowflake] = None) -> app_commands.AppCommand:
+    async def fetch_command(self, command_id: int, /, *, guild: Optional[Snowflake] = None) -> app_commands.AppCommand:
         res = await super().fetch_command(command_id, guild=guild)
         await self._update_cache([res], guild=guild)
         return res
 
     async def fetch_commands(
             self, *, 
-            guild: Optional[Snowflake] = None) -> List[app_commands.AppCommand]:
+            guild: Optional[Snowflake] = None
+        ) -> List[app_commands.AppCommand]:
+
         res = await super().fetch_commands(guild=guild)
         await self._update_cache(res, guild=guild)
         return res
@@ -156,13 +162,24 @@ class MyCommandTree(app_commands.CommandTree):
         else:
             self._global_app_commands = {}
 
-    def clear_commands(self, *, guild: Optional[Snowflake], typer: Optional[AppCommandType] = None,
-                       clear_app_commands_cache: bool = True) -> None:
+    def clear_commands(
+            self, 
+            *, 
+            guild: Optional[Snowflake], 
+            command_type: Optional[AppCommandType] = None, 
+            clear_app_commands_cache: bool = True
+        ) -> None:
+        
         super().clear_commands(guild=guild)
         if clear_app_commands_cache:
             self.clear_app_commands_cache(guild=guild)
 
-    async def sync(self, *, guild: Optional[Snowflake] = None) -> List[app_commands.AppCommand]:
+    async def sync(
+            self, 
+            *, 
+            guild: Optional[Snowflake] = None
+        ) -> List[app_commands.AppCommand]:
+
         res = await super().sync(guild=guild)
         await self._update_cache(res, guild=guild)
         return res
@@ -191,7 +208,9 @@ class C2C(commands.Bot):
                 print_exception(type(e), e, e.__traceback__, file=stderr)
 
         self.pool_connection = await create_pool(
-            'C:\\Users\\georg\\Documents\\c2c\\db-shit\\economy.db')
+            'C:\\Users\\georg\\Documents\\c2c\\db-shit\\economy.db'
+        )
+
         self.time_launch = datetime.now()
         self.session = ClientSession()
 
@@ -210,7 +229,7 @@ client = C2C(
     intents=intents, 
     case_insensitive=True, 
     help_command=None, 
-    owner_ids={992152414566232139, 546086191414509599},  # 1148206353647669298
+    owner_ids={992152414566232139, 546086191414509599},
     activity=CustomActivity(name='Serving cc • /help'), 
     status=Status.idle, 
     tree_cls=MyCommandTree, 
@@ -221,16 +240,24 @@ print(version)
 
 
 cogs = Literal[
-    "admin", "ctx_events", "economy", 
-    "miscellaneous", "moderation", "music", 
-    "slash_events", "tempvoice"]
-classnames = Literal["Economy", "Moderation", "Utility", "Owner", "Music", "TempVoice"]
+    "admin", 
+    "ctx_events", 
+    "economy", 
+    "miscellaneous", 
+    "moderation", 
+    "music", 
+    "slash_events", 
+    "tempvoice"
+]
 
-
-async def load_cogs() -> None:
-    for filename in listdir('C:\\Users\\georg\\Documents\\c2c\\cogs'):
-        if filename.endswith(".py"):
-            await client.load_extension(f"cogs.{filename[:-3]}")
+classnames = Literal[
+    "Economy", 
+    "Moderation", 
+    "Utility", 
+    "Owner", 
+    "Music", 
+    "TempVoice"
+]
 
 
 def return_txt_cmds_first(
@@ -488,32 +515,50 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
         colour=Colour.from_rgb(3, 102, 214),
         title='Changelog',
         description=(
-            "Changes taken place between <t:1704067200:d> - <t:1711843200:d> are noted here.\n\n"
-            "- Removed some bots from the server\n"
-            "- Deleted the self-role channel (https://discord.com/channels/829053898333225010/1124782048041762867/1210988672355147816)\n"
-            "- Archived the starboard and the weekly poll channels\n"
-            "- Deleted some roles\n"
-            "- Verified all bots ensuring they pass the verification level\n"
-            "- Gave information channels a better look\n"
-            "- <#1122599897577832549> and <#949039705188626442> no longer appear by default\n"
-            "- Changed the colour of some roles\n"
-            "- Hidden irrelevant app (slash) commands from server members\n"
-            "- Increased the verification level requirement to access the server"
+            "Changes taken place between <t:1711929600:d> - <t:1719705600:d> are noted here.\n\n"
+            "- Added new colour roles\n"
+            "- Changed the colour of some colour roles\n"
+            "- Added new self roles obtainable via <id:customize>\n"
+            "- Changed the default colour for <@&914565377961369632>\n"
+            "- Emojified the topic of all non-archived channels\n"
+            "- Added new tasks to complete in Server Onboarding\n"
+            "- Removed more redundant permissions from bots\n"
+            "- Cleaned the pinned messages of most channels\n"
+            "- Added a requirement to include tags upon creating a post\n"
+            "- Simplified the guidelines thread for the forum (https://discord.com/channels/829053898333225010/1147203137195745431)\n"
+            "- Added a policy to never close threads that are inactive, only lock them\n"
+            "- Kicked more bots off the server\n"
+            "- Renamed some channels for consistency\n"
+            "- Disabled AutoMod rules completely, no moderation rules are in effect anymore"
         )
     )
     
     embed.set_footer(
         icon_url=ctx.guild.icon.url, 
-        text="That's all for Q1 2024. Next review due: 30 June 2024."
+        text="That's all for Q2 2024. Next review due: 30 September 2024."
     )
     
     webhook = Webhook.from_url(url=client.WEBHOOK_URL, session=client.session)
-    rtype = "bugfix"  # or "feature"
+    rtype = "feature"  # or "bugfix"
     
-    msg = await webhook.fetch_message(1225532637217554503, thread=Object(id=1190736866308276394))
-    await msg.edit(
-        content=f'This is mostly a `{rtype}` release.', 
-        embed=embed
+
+    # For editing the original message
+
+    # msg = await webhook.fetch_message(
+    #     1225532637217554503, 
+    #     thread=Object(id=1190736866308276394)
+    # )
+
+    # await msg.edit(
+    #     content=f'This is mostly a `{rtype}` release.', 
+    #     embed=embed
+    # )
+
+    await webhook.send(
+        content=f'This is mostly a `{rtype}` release.',
+        embed=embed, 
+        thread=Object(id=1190736866308276394),
+        silent=True
     )
     
     await ctx.send("Done.")
