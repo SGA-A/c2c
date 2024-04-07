@@ -61,18 +61,6 @@ class Owner(commands.Cog):
         return ctx.author.id in self.client.owner_ids
 
     @staticmethod
-    async def fetch_fst_msg(channel) -> discord.Message | None:
-        """Fetch the first message of a given channel"""
-
-        dtls = None
-
-        async for message in channel.history(limit=1, oldest_first=True):
-            dtls = message
-            break
-
-        return dtls
-
-    @staticmethod
     def cleanup_code(content: str) -> str:
         """Automatically removes code blocks from the code."""
         # remove ```py\n```
@@ -82,23 +70,6 @@ class Owner(commands.Cog):
         # remove `foo`
         return content.strip('` \n')
 
-    @commands.command(name='firstmsg', description='Fetch the first message of a channel')
-    async def first_message_fetchit(self, ctx: commands.Context):
-        """Fetch the first message of a channel. Used for nostalgic purposes."""
-        await ctx.message.delete()
-        msg = await self.fetch_fst_msg(ctx, channel_id=ctx.channel.id)
-
-        if msg is not None:
-            pinver = await ctx.send(f"\U00002728 First message of"
-                                    f" {ctx.channel.mention} by {msg.author.name}: {msg.jump_url}")
-            try:
-                await pinver.pin(reason='A special message to remember.')
-            except discord.HTTPException:
-                pass
-            return
-        await ctx.send("I could not fetch the"
-                       f" first message for {ctx.channel.mention}. Sorry.")
-
     @commands.command(name='uptime', description='Returns the time the bot has been active for')
     async def uptime(self, ctx: commands.Context):
         """Returns uptime in terms of days, hours, minutes and seconds"""
@@ -106,8 +77,13 @@ class Owner(commands.Cog):
         minutes, seconds = divmod(diff.total_seconds(), 60)
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
-        await ctx.send(content=f"**Uptime**: {int(days)} days, {int(hours)} hours, "
-                               f"{int(minutes)} minutes and {int(seconds)} seconds.")
+        
+        await ctx.send(
+            content=(
+                f"**Uptime**: {int(days)} days, {int(hours)} hours, "
+                f"{int(minutes)} minutes and {int(seconds)} seconds."
+            )
+        )
 
     @commands.command(name="p_n", description="Send payouts to eligible members")
     async def rewards_user_roles(self, ctx: commands.Context):
@@ -116,73 +92,79 @@ class Owner(commands.Cog):
 
         pinned_if_any = get_profile_key_value("weeklyr msg id")
         if pinned_if_any is not None:
+            
             try:
                 already_pinned = await ctx.fetch_message(pinned_if_any)
                 await already_pinned.unpin(reason="Outdated weekly reward announcement")  # unpin if stored
+            
             except discord.HTTPException:
                 msg = await ctx.send(
-                    content="**[WARNING]:** Previous weekly reward announcement was detected, but"
-                            " could not be found in the invoker channel. Make sure you are calling "
-                            "this command in the same channel it was sent in.", mention_author=True)
-                return await msg.edit(content=f"{msg.content}\n"
-                                              f"I have cancelled the payout operation.")
+                    mention_author=True,
+                    content=(
+                        "**[WARNING]:** Previous weekly reward announcement was detected, but"
+                        " could not be found in the invoker channel. Make sure you are calling "
+                        "this command in the same channel it was sent in."
+                    )
+                )
 
-        if ctx.guild.id == 829053898333225010:
-            active_members = ctx.guild.get_role(1190772029830471781).members
-            activated_members = ctx.guild.get_role(1190772182591209492).members
+                return await msg.edit(content=f"{msg.content}\n\nCancelled the payout operation.")
 
-            eligible = len(active_members) + len(activated_members)
-            actual = 0
+        if ctx.guild.id != 829053898333225010:
+            return await ctx.send("This command is to be called only within **cc**.")
+        
+        active_members = ctx.guild.get_role(1190772029830471781).members
+        activated_members = ctx.guild.get_role(1190772182591209492).members
 
-            async with self.client.pool_connection.acquire() as conn:
-                conn: asqlite_Connection
-                payouts = {}
-                economy = self.client.get_cog("Economy")
+        eligible = len(active_members) + len(activated_members)
+        actual = 0
 
-                async with conn.transaction():
-                    for member in activated_members:  # activated member rewards
-                        if await economy.can_call_out(member, conn):
-                            continue
-                        amt_activated = randint(1_100_000_000, 2_100_000_000)
-                        await economy.update_bank_new(member, conn, amt_activated)
-                        payouts.update(
-                            {f"{member.mention}": (amt_activated,
-                                                ctx.guild.get_role(1190772182591209492).mention)})
-                        actual += 1
+        async with self.client.pool_connection.acquire() as conn:
+            conn: asqlite_Connection
+            payouts = {}
+            economy = self.client.get_cog("Economy")
 
-                    for member in active_members:  # active member rewards
-                        if await economy.can_call_out(member, conn):
-                            continue
-                        amt_active = randint(200000000, 1100000000)
-                        await economy.update_bank_new(member, conn, amt_active)
-                        payouts.update(
-                            {f"{member.mention}": (amt_active,
-                                                ctx.guild.get_role(1190772029830471781).mention)})
-                        actual += 1
+            async with conn.transaction():
+                for member in activated_members:
+                    if await economy.can_call_out(member, conn):
+                        continue
+                    amt_activated = randint(1_100_000_000, 2_100_000_000)
+                    await economy.update_bank_new(member, conn, amt_activated)
+                    payouts.update(
+                        {f"{member.mention}": (amt_activated, ctx.guild.get_role(1190772182591209492).mention)})
+                    actual += 1
 
-                dt_now = datetime.now()
-                payday = discord.Embed(
-                    colour=discord.Colour.dark_embed(),
-                    description=(
-                        "## Weekly Rewards (for week "
-                        f"{dt_now.isocalendar().week} of {dt_now.year})\n"
-                        "These are the users who were eligible to claim this week's activity "
-                        "rewards. Entries that contained users not registered as of "
-                        f"{discord.utils.format_dt(dt_now, style="t")} today were "
-                        f"ignored. Considering this, `{eligible}` user(s) were eligible,"
-                        f" but `{actual}` user(s) were given these rewards.\n"))
+                for member in active_members:
+                    if await economy.can_call_out(member, conn):
+                        continue
+                    amt_active = randint(200000000, 1100000000)
+                    await economy.update_bank_new(member, conn, amt_active)
+                    payouts.update({f"{member.mention}": (amt_active, ctx.guild.get_role(1190772029830471781).mention)})
+                    actual += 1
 
-                payday_notes = []
-                for member, payout in payouts.items():  # all members that got paid
-                    payday_notes.append(f"- {member} walked away with \U000023e3 "
-                                        f"**{payout[0]:,}** from being {payout[1]}.")
+            dt_now = datetime.now()
+            payday = discord.Embed(
+                colour=discord.Colour.dark_embed(),
+                description=(
+                    "## Weekly Rewards (for week "
+                    f"{dt_now.isocalendar().week} of {dt_now.year})\n"
+                    "These are the users who were eligible to claim this week's activity "
+                    "rewards. Entries that contained users not registered as of "
+                    f"{discord.utils.format_dt(dt_now, style="t")} today were "
+                    f"ignored. Considering this, `{eligible}` user(s) were eligible,"
+                    f" but `{actual}` user(s) were given these rewards.\n"
+                )
+            )
 
-                payday.description += '\n'.join(payday_notes)
-                unpinned = await ctx.send(embed=payday)
-                await unpinned.pin(reason="Latest weekly rewards announcement")
-                modify_profile("update", "weeklyr msg id", unpinned.id)  # store to unpin later
-        else:
-            await ctx.send("This command is to be called only within **cc**.")
+            payday_notes = []
+            for member, payout in payouts.items():  # all members that got paid
+                payday_notes.append(
+                    f"- {member} walked away with \U000023e3 **{payout[0]:,}** from being {payout[1]}."
+                )
+
+            payday.description += '\n'.join(payday_notes)
+            unpinned = await ctx.send(embed=payday)
+            await unpinned.pin(reason="Latest weekly rewards announcement")
+            modify_profile("update", "weeklyr msg id", unpinned.id)  # store to unpin later
 
     @app_commands.command(name="config", description="Adjust a user's robux directly")
     @app_commands.default_permissions(administrator=True)
@@ -201,7 +183,8 @@ class Owner(commands.Cog):
         amount: str,
         member: Optional[discord.Member],
         ephemeral: Optional[bool] = True,
-        deposit_mode: Optional[Literal["wallet", "bank"]] = "wallet"):
+        deposit_mode: Optional[Literal["wallet", "bank"]] = "wallet"
+    ) -> None:
         """Generates or deducts a given amount of robux to the mentioned user."""
         
         member = member or interaction.user
@@ -210,9 +193,12 @@ class Owner(commands.Cog):
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
             
-            embed = discord.Embed(title='Success', 
-                                  colour=discord.Colour.random(),
-                                  timestamp=discord.utils.utcnow())
+            embed = discord.Embed(
+                title='Success', 
+                colour=discord.Colour.random(), 
+                timestamp=discord.utils.utcnow()
+            )
+
             economy = self.client.get_cog("Economy")
 
             if configuration.startswith("a"):
@@ -238,7 +224,8 @@ class Owner(commands.Cog):
                 embed.description = (
                     f"- \U0000279c **{member.display_name}**'s "
                     f"**`{deposit_mode}`** balance has been changed to {CURRENCY}{real_amount:,}.\n"
-                    f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY}{new_amount[0]:,}.")
+                    f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY}{new_amount[0]:,}."
+                )
                 
                 embed.set_footer(text="configuration type: ALTER_TO")
 
@@ -252,15 +239,27 @@ class Owner(commands.Cog):
     async def create_thread(self, ctx: commands.Context, thread_name: str):
         """Create a forum channel quickly with only name of thread required as argument."""
         if not isinstance(ctx.channel, discord.TextChannel):
-            await ctx.send("You need to be in a text channel.", delete_after=5.0)
+            await ctx.send(
+                "You need to be in a text channel.", 
+                delete_after=5.0
+            )
+
         thread = await ctx.channel.create_thread(
-            name=thread_name, auto_archive_duration=10080, message=discord.Object(ctx.message.id))
-        await thread.send(f"Your thread was created with name **{thread.mention}**.", delete_after=5.0)
+            name=thread_name, 
+            auto_archive_duration=10080, 
+            message=discord.Object(ctx.message.id)
+        )
+
+        await thread.send(
+            content=f"Created {thread.mention}.",
+            delete_after=5.0
+        )
 
     @commands.command(name='sync', description='Sync the client tree for changes', aliases=("sy",))
     async def sync_tree(self, ctx: commands.Context) -> None:
         """Sync the client's tree to either the guild or globally, varies from time to time."""
         print("syncing")
+        
         # Application command synchronization - uncomment stmts when syncing globally
         # ctx.bot.tree.copy_global_to(guild=discord.Object(id=780397076273954886))
         # ctx.bot.tree.copy_global_to(guild=discord.Object(id=829053898333225010))
@@ -328,79 +327,88 @@ class Owner(commands.Cog):
     async def blank(self, ctx):
         """Clear out the channel."""
         await ctx.send(
-            ".\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"
-            "\n > Blanked out the channel.")
+            """
+            .
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
+            \n> Blanked out.
+            """
+        )
 
     @commands.command(name='regex', description='Load automod match_regex rules')
     async def automod_regex(self, ctx):
         """Automod regex rules and their patterns."""
         await ctx.guild.create_automod_rule(
-            name='new rule by cxc',
+            name='new rule by c2c',
             event_type=discord.AutoModRuleEventType.message_send,
+            actions=[discord.AutoModRuleAction(duration=timedelta(minutes=5.0))],
             trigger=discord.AutoModTrigger(
-                regex_patterns=["a", "b", "c", "d", "e"]),
-            actions=[discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
+                regex_patterns=["a", "b", "c", "d", "e"]
+            )
+        )
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
     @commands.command(name='mentions', description='Load automod mass_mentions rules')
     async def automod_mentions(self, ctx):
         """Automod mentioning rules"""
         await ctx.guild.create_automod_rule(
-            name='new rule by cxc',
+            name='new rule by c2c',
             event_type=discord.AutoModRuleEventType.message_send,
-            trigger=discord.AutoModTrigger(mention_limit=5),
-            actions=[discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
+            actions=[discord.AutoModRuleAction(duration=timedelta(minutes=5.0))],
+            trigger=discord.AutoModTrigger(mention_limit=5)
+        )
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
     @commands.command(name='keyword', description='Load automod by_keyword rules')
     async def automod_keyword(self, ctx, the_word):
         """Automod keyword rules"""
         await ctx.guild.create_automod_rule(
-            name='new rule by cxc',
+            name='new rule by c2c',
             event_type=discord.AutoModRuleEventType.message_send,
+            actions=[discord.AutoModRuleAction(duration=timedelta(minutes=5.0))],
             trigger=discord.AutoModTrigger(keyword_filter=[f'{the_word}']),
-            actions=[discord.AutoModRuleAction(duration=timedelta(minutes=5.0))])
+        )
+
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
     @commands.command(name='update', description='Update channel information')
@@ -485,10 +493,13 @@ class Owner(commands.Cog):
         original = await channel.fetch_message(1140952278862401657)
         a = "C:\\Users\\georg\\Downloads\\Media\\rsz_tic.png"
         that_file = discord.File(a, filename="image.png")
+        
         intro = discord.Embed(colour=discord.Colour.from_rgb(31, 16, 3))
         intro.set_image(url="attachment://image.png")
+        
         embed = discord.Embed(
             title="Origins",
+            colour=0x2B2D31,
             description=(
                 """
                 **What is this server all about?!**
@@ -504,8 +515,7 @@ class Owner(commands.Cog):
                 We hope you enjoy your stay, and we wish you a wonderful journey.
                 And don't forget; you're here forever.
                 """
-            ),
-            colour=0x2B2D31
+            )
         )
 
         embed.set_thumbnail(url="https://i.imgur.com/7RufohA.png")
@@ -513,6 +523,7 @@ class Owner(commands.Cog):
 
         roles = discord.Embed(
             title="Server Roles",
+            colour=0x2B2D31,
             description=(
                 f"""
                 - <@&893550756953735278>
@@ -533,14 +544,14 @@ class Owner(commands.Cog):
                   - <@&1124762696110309579> and <@&1047576437177200770>.
                   - Reaching **Level 40** to make your own!
                 """
-            ),
-            colour=0x2B2D31
+            )
         )
         
         roles.set_thumbnail(url="https://i.imgur.com/ufnRnNx.png")
 
         ranks = discord.Embed(
             title="Level Roles & Perks",
+            colour=0x2B2D31,
             description=(
                 f"""
                 Your activity in the server will not be left unrewarded! 
@@ -580,13 +591,13 @@ class Owner(commands.Cog):
                 <@&923931862001414284>
                 {tbp} See Appendix 1
                 """
-            ),
-            colour=0x2B2D31
+            )
         )
         ranks.set_thumbnail(url="https://i.imgur.com/2V5LM2s.png")
 
         second_embed = discord.Embed(
             title="The Appendix 1",
+            colour=0x2B2D31,
             description=(
                 """
                 If you somehow manage to reach **<@&923931862001414284>**, out of 6 events, 1 will take place. 
@@ -607,19 +618,23 @@ class Owner(commands.Cog):
                 You cannot earn EXP while executing slash commands.
                 Refer to this message for details: https://discord.com/channels/829053898333225010/1121094935802822768/1166397053329477642
                 """
-            ),
-            colour=0x2B2D31
+            )
         )
         second_embed.set_thumbnail(url="https://i.imgur.com/aoECtze.png")
         second_embed.set_footer(
-            text=("Reminder: the perks from all roles are one-time use only and cannot be reused or recycled."
+            text=(
+                "Reminder: the perks from all roles are one-time use only and cannot be reused or recycled."
             )
         )
         
         try:
-            await original.edit(attachments=[that_file], embeds=[intro, embed, ranks, roles, second_embed])
+            await original.edit(
+                attachments=[that_file], 
+                embeds=[intro, embed, ranks, roles, second_embed]
+            )
+
         except discord.HTTPException as err:
-            await ctx.send(err.__cause__)
+            await ctx.send(str(err))
 
     @commands.command(name='update4', description='Update the progress tracker')
     async def override_economy(self, ctx):
@@ -677,14 +692,6 @@ class Owner(commands.Cog):
                 " making it possible!"))
         await original.edit(embed=temporary)
 
-    @commands.command(name='ccil', description='Sends an invite for the cc support server')
-    async def preset_ccil(self, ctx):
-        """Sends the invite link to join the support server (cc)."""
-        await ctx.message.delete()
-        await ctx.send("**Permanent Invite Link** - discord.gg/W3DKAbpJ5E\n"
-                       "This link ***will never*** expire, but note that it can "
-                       "be disabled by an Administrator without notice.", silent=True)
-
     @commands.command(name='quit', description='Quits the bot gracefully', aliases=('q',))
     async def quit_client(self, ctx):
         """Quits the bot gracefully."""
@@ -698,13 +705,18 @@ class Owner(commands.Cog):
 
     @commands.hybrid_command(name='repeat', description='Repeat what you typed', aliases=('say',))
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.describe(message='what you want me to say',
-                           channel='what channel i should send in')
-    async def repeat(self, ctx: commands.Context,
-                     channel: Optional[
-                         Union[
-                             discord.TextChannel, discord.VoiceChannel,
-                             discord.ForumChannel, discord.Thread]], *, message: str):
+    @app_commands.describe(
+        message='what you want me to say', 
+        channel='what channel i should send in'
+    )
+    async def repeat(
+        self, 
+        ctx: commands.Context, 
+        channel: Optional[
+            Union[
+                discord.TextChannel, discord.VoiceChannel,
+                discord.ForumChannel, discord.Thread]], 
+        *, message: str) -> None:
         """Repeat what you typed, also converting emojis based on whats inside two equalities."""
 
         if not ctx.interaction:
@@ -718,10 +730,7 @@ class Owner(commands.Cog):
                 message = message.replace(f'<{match}>', f"{emoji}")
                 continue
             if ctx.interaction:
-                return await ctx.send(
-                    "I could not format your emoji, because "
-                    "that does not exist within my internal cache!\n"
-                    "As such, your message was not sent.", ephemeral=True)
+                return await ctx.send("Could not find that emoji.", ephemeral=True)
             return
 
         channel = channel or ctx.channel
