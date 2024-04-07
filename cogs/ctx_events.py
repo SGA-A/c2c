@@ -60,7 +60,8 @@ class ContextCommandHandler(commands.Cog):
 
         elif isinstance(err, self.err.CommandOnCooldown):
             after_cd = format_dt(
-                utcnow() + timedelta(seconds=err.retry_after), style="R"
+                utcnow() + timedelta(seconds=err.retry_after), 
+                style="R"
             )
 
             await ctx.reply(
