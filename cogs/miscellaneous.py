@@ -17,7 +17,7 @@ from discord import app_commands, Interaction, Object
 import discord
 import datetime
 
-from cogs.economy import owners_nolimit, APP_GUILDS_ID
+from cogs.economy import APP_GUILDS_ID
 from other.pagination import Pagination
 
 
@@ -35,8 +35,11 @@ RESPONSES = {
 }
 
 
-def was_called_in_a_nsfw_channel(interaction: discord.Interaction):
-    return interaction.channel.is_nsfw()
+def owners_nolimit(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
+    """Any of the owners of the client bypass all cooldown restrictions."""
+    if interaction.user.id in {546086191414509599, 992152414566232139}:
+        return None
+    return app_commands.Cooldown(1, 7)
 
 
 def extract_attributes(post_element, mode: Literal["image", "tag"]):
@@ -186,7 +189,7 @@ class InviteButton(discord.ui.View):
 
         self.add_item(
             discord.ui.Button(
-                label="Invite Link",
+                label="Invite",
                 url=discord.utils.oauth_url(self.client.user.id, permissions=perms)
             )
         )
@@ -225,8 +228,14 @@ class Utility(commands.Cog):
         self.client.tree.remove_command(self.get_embed_cmd.name, type=self.get_embed_cmd.type)
         self.client.tree.remove_command(self.image_src.name, type=self.image_src.type)
 
-    async def retrieve_via_kona(self, tag_pattern: Optional[str], tags: Optional[str],
-                                limit=5, page=1, mode=Literal["image", "tag"]):
+    async def retrieve_via_kona(
+            self, 
+            tag_pattern: Optional[str], 
+            tags: Optional[str], 
+            limit=5, 
+            page=1, 
+            mode=Literal["image", "tag"]
+        ):
         """Returns a list of dictionaries for you to iterate through and fetch their attributes"""
         if mode == "image":
             base_url = "https://konachan.net/post.xml"
@@ -257,6 +266,8 @@ class Utility(commands.Cog):
                 await message.add_reaction("<:milady:973571282031484968>")
         except discord.NotFound:
             pass
+        except discord.Forbidden:
+            pass
         
         if message.content.startswith(".."):
             match = search(r'\d+$', message.content)
@@ -282,6 +293,82 @@ class Utility(commands.Cog):
         content = membed(content)
         
         await ctx.send(embed=content, view=InviteButton(self.client))
+
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.command(name='serverinfo', description="Show information about the server and its members")
+    async def display_server_info(self, interaction: discord.Interaction):
+        await interaction.response.defer(thinking=True)
+
+        guild = interaction.guild
+
+        total_bots = 0
+
+        for member in guild.members:
+            if not member.bot:
+                continue
+            total_bots += 1
+
+        embed = discord.Embed(
+            title=guild.name,
+            colour=guild.me.color,
+            description=(
+                f"Owner: {guild.owner.name}\n"
+                f"Maximum File Size: {guild.filesize_limit / 1_000_000}MB\n"
+                f"Role Count: {len(guild.roles)}\n"
+            )
+        )
+
+        time = guild.created_at
+        tn_full, tn_relative = discord.utils.format_dt(time), discord.utils.format_dt(time, style="R")
+        embed.add_field(
+            name="Created",
+            value=f"{tn_full} ({tn_relative})",
+        )
+        embed.add_field(name="\U0000200b", value="\U0000200b")
+
+        if guild.description:
+            embed.add_field(
+                name="Server Description",
+                value=guild.description,
+                inline=False
+            )
+
+        embed.add_field(
+            name="Member Info",
+            value=(
+                f"Humans: {guild.member_count-total_bots:,}\n"
+                f"Bots: {total_bots:,}\n"
+                f"Total: {guild.member_count:,}\n"
+            )
+        )
+
+        embed.add_field(
+            name="Channel Info",
+            value=(
+                f"<:categoryCh:1226619447171875006> {len(guild.categories)}\n"
+                f"<:textCh:1226619349037482154> {len(guild.text_channels)}\n"
+                f"<:voiceCh:1226619160050663495> {len(guild.voice_channels)}"
+            )
+        )
+
+        animated_emojis = sum(1 for emoji in guild.emojis if emoji.animated)
+
+        embed.add_field(
+            name="Emojis",
+            value=(
+                f"Static: {len(guild.emojis)-animated_emojis}/{guild.emoji_limit}\n"
+                f"Animated: {animated_emojis}/{guild.emoji_limit}"
+            )
+        )
+
+        embed.set_thumbnail(url=guild.icon.url)
+       
+        embed.set_author(
+            name=f"Requested by {interaction.user.name}", 
+            icon_url=interaction.user.display_avatar.url,
+        )
+
+        await interaction.followup.send(embed=embed)
 
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.command(name='calc', description='Calculate an expression')
@@ -954,10 +1041,16 @@ class Utility(commands.Cog):
         for commit in commits:
             revision.append(
                 f"[`{commit.sha[:6]}`]({commit.html_url}) {commit.commit.message.splitlines()[0]} "
-                f"({format_relative(commit.commit.author.date)})")
+                f"({format_relative(commit.commit.author.date)})"
+            )
 
-        embed = discord.Embed(description=f'Latest Changes:\n'
-                                          f'{"\n".join(revision)}')
+        embed = discord.Embed(
+            description=(
+                f'Latest Changes:\n'
+                f'{"\n".join(revision)}'
+            )
+        )
+        
         embed.title = 'Official Bot Server Invite'
         embed.url = 'https://discord.gg/W3DKAbpJ5E'
         embed.colour = discord.Colour.blurple()
@@ -993,23 +1086,44 @@ class Utility(commands.Cog):
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
 
-        embed.add_field(name='<:membersb:1195752573555183666> Members',
-                        value=f'{total_members} total\n{total_unique} unique')
-        embed.add_field(name='<:channelb:1195752572116541590> Channels',
-                        value=f'{text + voice} total\n{text} text\n{voice} voice')
-        embed.add_field(name='<:processb:1195752570069713047> Process',
-                        value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU')
-        embed.add_field(name='<:serversb:1195752568303927377> Guilds',
-                        value=f'{guilds} total\n'
-                              f'{ARROW}{len(self.client.emojis)} emojis\n'
-                              f'{ARROW}{len(self.client.stickers)} stickers')
-        embed.add_field(name='<:cmdsb:1195752574821879872> Commands',
-                        value=f'{amount} total\n'
-                              f'{ARROW}{lentxt} (prefix)\n'
-                              f'{ARROW}{lenslash} (slash)')
-        embed.add_field(name='<:uptimeb:1195752565208522812> Uptime',
-                        value=f"{int(days)}d {int(hours)}h "
-                              f"{int(minutes)}m {int(seconds)}s")
+        embed.add_field(
+            name='<:membersb:1195752573555183666> Members',
+            value=f'{total_members} total\n{total_unique} unique'
+        )
+
+        embed.add_field(
+            name='<:channelb:1195752572116541590> Channels', 
+            value=f'{text + voice} total\n{text} text\n{voice} voice'
+        )
+
+        embed.add_field(
+            name='<:processb:1195752570069713047> Process', 
+            value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU'
+        )
+
+        embed.add_field(
+            name='<:serversb:1195752568303927377> Guilds', 
+            value=(
+                f'{guilds} total\n'
+                f'{ARROW}{len(self.client.emojis)} emojis\n'
+                f'{ARROW}{len(self.client.stickers)} stickers'
+            )
+        )
+
+        embed.add_field(
+            name='<:cmdsb:1195752574821879872> Commands', 
+            value=(
+                f'{amount} total\n'
+                f'{ARROW}{lentxt} (prefix)\n'
+                f'{ARROW}{lenslash} (slash)'
+            )
+        )
+
+        embed.add_field(
+            name='<:uptimeb:1195752565208522812> Uptime', 
+            value=f"{int(days)}d {int(hours)}h {int(minutes)}m {int(seconds)}s"
+        )
+
         embed.set_footer(text=f'Made with discord.py v{discord.__version__}', icon_url='http://i.imgur.com/5BFecvA.png')
         await interaction.followup.send(embed=embed)
 
