@@ -36,7 +36,7 @@ class TimeConverter(app_commands.Transformer):
     time_regex = compile(r"(\d{1,5}(?:[.,]?\d{1,5})?)([smhd])")
     time_dict = {"h": 3600, "s": 1, "m": 60, "d": 86400}
 
-    async def transform(self, interaction: discord.Interaction, argument: str) -> int:
+    async def transform(self, _: discord.Interaction, argument: str) -> int:
         matches = self.time_regex.findall(argument.lower())
         time = 0
         for v, k in matches:
@@ -74,7 +74,13 @@ class RoleManagement(app_commands.Group):
             return None
 
     async def bulk_remove_roles(
-            self, interaction: discord.Interaction, targets: set, new_role: discord.Role, how_many: int) -> str | None:
+            self, 
+            interaction: discord.Interaction, 
+            targets: set, 
+            new_role: discord.Role, 
+            how_many: int
+        ) -> str | None:
+        
         start_time = perf_counter()
         
         if not interaction.response.is_done():
@@ -129,9 +135,14 @@ class RoleManagement(app_commands.Group):
     @app_commands.command(name="custom", description="Add or remove multiple roles in a single command")
     @app_commands.describe(
         user="The user to add/remove roles to.", 
-        roles="Precede role name with +/- to add or remove. Separate each with spaces.")
+        roles="Precede role name with +/- to add or remove. Separate each with spaces."
+    )
     async def custom_roles(
-        self, interaction: discord.Interaction, user: discord.Member, roles: str):
+        self, 
+        interaction: discord.Interaction, 
+        user: discord.Member, 
+        roles: str
+        ) -> discord.WebhookMessage:
         await interaction.response.defer()
 
         roles = roles.split()
