@@ -3267,6 +3267,10 @@ class Economy(commands.Cog):
         they are registered. Also provide a tip if the total commands ran counter is a multiple of 15.
         """
 
+        cmd = interaction.command
+        if isinstance(cmd, app_commands.ContextMenu):
+            return
+
         async with self.client.pool_connection.acquire() as connection:
             connection: asqlite_Connection
 
@@ -3274,7 +3278,7 @@ class Economy(commands.Cog):
                 return
 
             async with connection.transaction():
-                cmd = interaction.command.parent or interaction.command
+                cmd = cmd.parent or cmd
                 total = await add_command_usage(interaction.user.id, command_name=cmd.name, conn=connection)
 
                 if not total % 15:
