@@ -606,11 +606,11 @@ class Owner(commands.Cog):
 
                 2. Your familiarity with this server will allow you to get 1 Month of Discord Nitro immediately when available.
 
-                3. This is a karma roll. you will receive nothing.
+                3. This is a karma roll, you will receive nothing.
 
                 4. For the sake of nonplus, this event will not be disclosed until it is received.
 
-                5. This is a karma roll. you will receive nothing.
+                5. This is a karma roll, you will receive nothing.
 
                 6. This is a special one: a face reveal or a voice reveal by the owner. The choice will be made by another dice roll.
 
