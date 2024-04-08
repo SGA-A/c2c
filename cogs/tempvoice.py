@@ -279,14 +279,18 @@ class TempVoice(commands.Cog):
         
         if str(member.id) not in data_searched:
             return await interaction.response.send_message(
-                embed=membed(f"{member.mention} is not a {verb} user."), ephemeral=True)
+                embed=membed(f"{member.mention} is not a {verb} user."), 
+                ephemeral=True
+            )
         
         await user.voice.channel.set_permissions(member, overwrite=None)
         data_searched.remove(str(member.id))
         self.active_voice_channels[user.id].update({verb: data_searched})
         
         await interaction.response.send_message(
-            embed=membed(f"{member.mention} is **no longer {verb}**."), ephemeral=True)
+            embed=membed(f"{member.mention} is **no longer {verb}**."), 
+            ephemeral=True
+        )
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
