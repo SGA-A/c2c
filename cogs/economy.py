@@ -5830,7 +5830,8 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(
                     embed=membed(
                         f"You can't bet less than {CURRENCY} **{MIN_BET_WITHOUT:,}**.\n"
-                        f"You also can't bet anything more than {CURRENCY} **{MAX_BET_WITHOUT:,}**."
+                        f"You also can't bet anything more than {CURRENCY} **{MAX_BET_WITHOUT:,}**.\n"
+                        f"These values can increase when you acquire a <:lanyard:1165935243140796487> Keycard."
                     )
                 )
             
