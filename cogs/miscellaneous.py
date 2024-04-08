@@ -371,6 +371,13 @@ class Utility(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.command(name="usage", description="See your total command usage")
+    async def view_user_usage(self, interaction: discord.Interaction):
+        await interaction.response.send_message(
+            embed=membed("This command is a work in progress!")
+        )
+
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.command(name='calc', description='Calculate an expression')
     @app_commands.describe(expression='The expression to evaluate.')
     async def calculator(self, interaction: discord.Interaction, expression: str):
