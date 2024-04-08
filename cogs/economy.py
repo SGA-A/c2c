@@ -43,7 +43,7 @@ import discord
 import datetime
 import aiofiles
 
-from other.pagination import Pagination, PaginationItem
+from other.pagination import Pagination, PaginationItem, PaginationSimple
 
 
 def membed(custom_description: str) -> discord.Embed:
@@ -2945,10 +2945,9 @@ class Economy(commands.Cog):
         It also returns the new balance in the given mode, if any (defaults to wallet).
         Note that conn_input is not the last parameter, it is the second parameter to be included."""
 
-        data = await conn_input.execute(
+        data = await conn_input.fetchone(
             f"UPDATE `{BANK_TABLE_NAME}` SET `{mode}` = `{mode}` + ? WHERE userID = ? RETURNING `{mode}`",
             (amount, user.id))
-        data = await data.fetchone()
         return data
 
     @staticmethod
@@ -3406,45 +3405,59 @@ class Economy(commands.Cog):
     )
 
     @share.command(name="robux", description="Share robux with another user", extras={"exp_gained": 5})
+    @app_commands.rename(share_amount="amount")
     @app_commands.describe(
         recipient='The user receiving the robux shared.', 
-        amount=ROBUX_DESCRIPTION
+        share_amount=ROBUX_DESCRIPTION
     )
     @app_commands.checks.cooldown(1, 6)
-    async def share_robux(self, interaction: discord.Interaction, recipient: discord.Member, amount: str):
+    async def share_robux(
+        self, 
+        interaction: discord.Interaction, 
+        recipient: discord.Member, 
+        share_amount: str
+    ) -> None:
         """"Give an amount of robux to another user."""
 
         user = interaction.user
 
-        async with self.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
             if not (await self.can_call_out_either(user, recipient, conn)):
                 return await interaction.response.send_message(embed=NOT_REGISTERED)
             else:
-                real_amount = determine_exponent(amount)
+                share_amount = determine_exponent(share_amount)
                 wallet_amt_host = await Economy.get_wallet_data_only(user, conn)
 
-                if isinstance(real_amount, str):
-                    if real_amount.lower() not in {"all", "max"}:
+                if isinstance(share_amount, str):
+                    if share_amount.lower() not in {"all", "max"}:
                         return await interaction.response.send_message(
                             embed=membed("You need to provide a valid amount to share.")
                         )
-                    real_amount = wallet_amt_host
-                else:
-                    if not real_amount:
-                        return await interaction.response.send_message(
-                            embed=membed("The share amount needs to be greater than zero."))
-                    elif real_amount > wallet_amt_host:
-                        return await interaction.response.send_message(
-                            embed=membed("You don't have that much money to share."))
-                    else:
-                        await self.update_bank_new(user, conn, -int(real_amount))
-                        await self.update_bank_new(recipient, conn, int(real_amount))
+                    share_amount = wallet_amt_host
+                
+                if not share_amount:
+                    return await interaction.response.send_message(
+                        embed=membed("The share amount needs to be greater than zero."))
+                
+                if share_amount > wallet_amt_host:
+                    return await interaction.response.send_message(
+                        embed=membed("You don't have that much money to share."))
 
+                sql_query = """
+                    UPDATE bank 
+                    SET wallet = wallet + ? 
+                    WHERE userID = ?
+                """
+
+                params_sender = (-int(share_amount), user.id)
+                params_recipient = (int(share_amount), recipient.id)
+                await conn.executemany(sql_query, [params_sender, params_recipient])
                 await conn.commit()
+
                 return await interaction.response.send_message(
-                    embed=membed(f"Shared {CURRENCY} **{real_amount:,}** with {recipient.mention}!")
+                    embed=membed(f"Shared {CURRENCY} **{share_amount:,}** with {recipient.mention}!")
                 )
 
     @share.command(name='items', description='Share items with another user', extras={"exp_gained": 5})
@@ -4927,22 +4940,25 @@ class Economy(commands.Cog):
                     em.description = f"{member.name} has nothing for you to see."
                 return await interaction.response.send_message(embed=em)
 
+            em.set_author(name=f"{member.display_name}'s Inventory", icon_url=member.display_avatar.url)
+            paginator = PaginationSimple(interaction)
+
             async def get_page_part(page: int):
                 """Helper function to determine what page of the paginator we're on."""
 
-                em.set_author(name=f"{member.display_name}'s Inventory", icon_url=member.display_avatar.url)
-
                 offset = (page - 1) * length
-                em.timestamp = discord.utils.utcnow()
                 em.description = ""
                 
                 for item in owned_items[offset:offset + length]:
                     em.description += f"{item[1]} **{item[0]}** \U00002500 {item[2]}\n"
 
                 n = Pagination.compute_total_pages(len(owned_items), length)
+                em.set_footer(text=f"Page {page} of {n}")
                 return em, n
+            
+            paginator.get_page = get_page_part
 
-            await Pagination(interaction, get_page_part).navigate()
+            await paginator.navigate()
 
     async def do_order(self, interaction: discord.Interaction, job_name: str):
         possible_words: tuple = JOB_KEYWORDS.get(job_name)[0] 
