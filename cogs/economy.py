@@ -93,9 +93,10 @@ BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
 INV_TABLE_NAME = "inventory"
 COOLDOWN_TABLE_NAME = "cooldowns"
+MIN_BET_KEYCARD = 500_000
 MAX_BET_KEYCARD = 15_000_000
+MIN_BET_WITHOUT = 100_000
 MAX_BET_WITHOUT = 10_000_000
-MIN_BET = 500_000
 WARN_FOR_CONCURRENCY = "You are already in the middle of a transaction. Please finish that first."
 ROBUX_DESCRIPTION = 'Can be a constant number like "1234" or a shorthand (max, all, 1e6).'
 APP_GUILDS_ID = [829053898333225010, 780397076273954886]
@@ -3045,7 +3046,23 @@ class Economy(commands.Cog):
         return 0
 
     @staticmethod
-    async def user_has_item(user_id: int, item_name: str, conn: asqlite_Connection) -> bool:
+    async def user_has_item_from_id(user_id: int, item_id: int, conn: asqlite_Connection) -> bool:
+        """Check if a user has a specific item based on its id."""
+        query = (
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM inventory
+                WHERE inventory.userID = ? AND inventory.itemID = ?
+            )
+            """
+        )
+
+        result = await conn.fetchone(query, (user_id, item_id))
+        return bool(result[0]) if result else False
+
+    @staticmethod
+    async def user_has_item_from_name(user_id: int, item_name: str, conn: asqlite_Connection) -> bool:
         """Check if a user has a specific item based on its name."""
         query = (
             """
@@ -4682,41 +4699,24 @@ class Economy(commands.Cog):
         lower or equal to the actual number.
         """
 
-        def is_valid(value: int, user_balance: int) -> bool:
-            """A check that defines that the amount a user inputs is valid for their account.
-            Meets preconditions for highlow.
-            :param value: amount to check,
-            :param user_balance: the user's balance currenctly, which should be an integer.
-            :return: A boolean indicating whether the amount is valid for the function to proceed."""
-            if value <= 0:
-                return (False, "You can't bet less than 0.")
-            if value > MAX_BET_KEYCARD:
-                return (False, f"You can't bet more than {CURRENCY} **{MAX_BET_KEYCARD:,}**.")
-            if value < MIN_BET:
-                return (False, f"You can't bet less than {CURRENCY} **{MIN_BET:,}**.")
-            if value > user_balance:
-                return (False, "You are too poor for this bet.")
-            return True
-
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
+            
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
 
-            real_amount = determine_exponent(robux)
             wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
+            has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
 
-            if isinstance(real_amount, str):
-                if real_amount in {'all', 'max'}:
-                    real_amount = min(wallet_amt, MAX_BET_KEYCARD)
-                else:
-                    return await interaction.response.send_message(
-                        embed=membed("You need to provide a real amount to bet upon."))
+            robux = await self.do_wallet_checks(
+                interaction=interaction,
+                wallet_amount=wallet_amt,
+                exponent_amount=robux,
+                has_keycard=has_keycard
+            )
             
-            check = is_valid(abs(int(real_amount)), wallet_amt)
-            
-            if isinstance(check, tuple):
-                return await interaction.response.send_message(embed=membed(check[1]))
+            if robux is None:
+                return
 
             number = randint(1, 100)
             hint = randint(1, 100)
@@ -4727,16 +4727,18 @@ class Economy(commands.Cog):
                 "I just chose a secret number between 0 and 100.\n"
                 f"Is the secret number *higher* or *lower* than **{hint}**?"
             )
+
             query.set_author(
                 name=f"{interaction.user.name}'s high-low game", 
                 icon_url=interaction.user.display_avatar.url
             )
+
             query.set_footer(text="The jackpot button is if you think it is the same!")
             
             hl_view = HighLow(
                 interaction, 
                 hint_provided=hint, 
-                bet=real_amount, 
+                bet=robux, 
                 value=number
             )
 
@@ -4758,49 +4760,19 @@ class Economy(commands.Cog):
                 await interaction.response.send_message(embed=self.not_registered)
 
         # --------------- Checks before betting i.e. has keycard, meets bet constraints. -------------
-        data = await self.get_one_inv_data_new(interaction.user, "Keycard", conn)
-        amount = determine_exponent(amount)
-
-        slot_stuff = await conn.fetchone(f"SELECT slotw, slotl, wallet FROM `{BANK_TABLE_NAME}` WHERE userID = $0", interaction.user.id)
+        has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
+        slot_stuff = await conn.fetchone("SELECT slotw, slotl, wallet FROM `bank` WHERE userID = $0", interaction.user.id)
         id_won_amount, id_lose_amount, wallet_amt = slot_stuff[0], slot_stuff[1], slot_stuff[-1]
 
-        try:
-            assert isinstance(amount, int)
-            amount = amount
-        except AssertionError:
-            if amount in {'max', 'all'}:
-                if data >= 1:
-                    amount = min(MAX_BET_KEYCARD*2, wallet_amt)
-                else:
-                    amount = min(MAX_BET_WITHOUT*2, wallet_amt)
-            else:
-                return await interaction.response.send_message(
-                    embed=membed("You need to provide a real amount to bet upon.")
-                )
-
-        # --------------- Contains checks before betting i.e. has keycard, meets bet constraints. -------------
+        amount = await self.do_wallet_checks(
+            interaction=interaction,
+            wallet_amount=wallet_amt,
+            exponent_amount=amount,
+            has_keycard=has_keycard
+        )
         
-        if amount > wallet_amt:
-                return await interaction.response.send_message(
-                    embed=membed("You are too poor for this bet.")
-                )
-        
-        if data:
-            if (amount < MIN_BET*2) or (amount > MAX_BET_KEYCARD*2):
-                return await interaction.response.send_message(
-                    embed=membed(
-                        f"You can't bet less than {CURRENCY} **{MIN_BET*2:,}**.\n"
-                        f"You also can't bet anything more than {CURRENCY} **{MAX_BET_KEYCARD*2:,}**."
-                    )
-                )	
-        else:
-            if (amount < MIN_BET*2) or (amount > MAX_BET_WITHOUT*2):
-                return await interaction.response.send_message(
-                    embed=membed(
-                        f"You can't bet less than {CURRENCY} **{MIN_BET*2:,}**.\n"
-                        f"You also can't bet anything more than {CURRENCY} **{MAX_BET_WITHOUT*2:,}**."
-                    )
-                )
+        if amount is None:
+            return
 
         # ------------------ THE SLOT MACHINE ITESELF ------------------------
 
@@ -5624,39 +5596,42 @@ class Economy(commands.Cog):
 
     @app_commands.command(name='coinflip', description='Bet your robux on a coin flip', extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.describe(bet_on='The side of the coin you bet it will flip on.',
-                           amount=ROBUX_DESCRIPTION)
+    @app_commands.describe(
+        bet_on='The side of the coin you bet it will flip on.', 
+        amount=ROBUX_DESCRIPTION
+    )
     @app_commands.checks.cooldown(1, 6)
     @app_commands.rename(bet_on='side', amount='robux')
-    async def coinflip(self, interaction: discord.Interaction, bet_on: str, amount: int):
+    async def coinflip(self, interaction: discord.Interaction, bet_on: str, amount: str):
         """Flip a coin and make a bet on what side of the coin it flips to."""
 
         user = interaction.user
-
-        amount = determine_exponent(str(amount))
-
         bet_on = "heads" if "h" in bet_on.lower() else "tails"
-        if (amount < MIN_BET) or (amount > MAX_BET_KEYCARD):
-            return await interaction.response.send_message(
-                embed=membed(
-                    f"As per-policy, the minimum bet is {CURRENCY} **{MIN_BET:,}** and "
-                    f"the maximum bet is {CURRENCY}**{MAX_BET_KEYCARD}**."
-                )
-            )
         
-        async with self.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
+            
+            wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
+            has_keycard = await self.user_has_item_from_id(
+                user_id=interaction.user.id,
+                item_id=1,
+                conn=conn
+            )
+            
+            amount = await self.do_wallet_checks(
+                interaction=interaction,
+                wallet_amount=wallet_amt,
+                exponent_amount=amount,
+                has_keycard=has_keycard
+            )
+
+            if amount is None:
+                return
 
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
-            
-            wallet_amt = await self.get_wallet_data_only(user, conn)
-            if wallet_amt < amount:
-                return await interaction.response.send_message(
-                    embed=membed("You are too poor to make this bet."))
 
-            coin = ("heads", "tails")
-            result = choice(coin)
+            result = choice(("heads", "tails"))
 
             async with conn.transaction():
                 if result != bet_on:
@@ -5704,49 +5679,27 @@ class Economy(commands.Cog):
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
 
-        has_keycard = await self.user_has_item(interaction.user.id, "Keycard", conn)
-        wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
-        pmulti = await self.get_pmulti_data_only(interaction.user, conn)
+        has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
+        
+        wallet_amt, pmulti = await conn.fetchone(
+            """
+            SELECT wallet, pmulti
+            FROM bank
+            WHERE userID = $0
+            """, interaction.user.id
+        )
 
         # ----------- Check what the bet amount is, converting where necessary -----------
 
-        expo = determine_exponent(bet_amount)
-
-        try:
-            assert isinstance(expo, int)
-            namount = expo
-        except AssertionError:
-            if bet_amount.lower() in {'max', 'all'}:
-                if has_keycard:
-                    namount = min(MAX_BET_KEYCARD, wallet_amt)
-                else:
-                    namount = min(MAX_BET_WITHOUT, wallet_amt)
-            else:
-                return await interaction.response.send_message(
-                    embed=membed("You need to provide a real amount to bet upon."))
-
-        # -------------------- Check to see if user has sufficient balance --------------------------
-
-        if namount > wallet_amt:
-                return await interaction.response.send_message(
-                    embed=membed("You are too poor for this bet."))
-
-        if has_keycard:
-            if (namount < MIN_BET) or (namount > MAX_BET_KEYCARD):
-                return await interaction.response.send_message(
-                    embed=membed(
-                        f"You can't bet less than {CURRENCY} **{MIN_BET:,}**.\n"
-                        f"You also can't bet anything more than {CURRENCY} **{MAX_BET_KEYCARD:,}**."
-                    )
-                )
-        else:
-            if (namount < MIN_BET) or (namount > MAX_BET_WITHOUT):
-                return await interaction.response.send_message(
-                    embed=membed(
-                        f"You can't bet less than {CURRENCY} **{MIN_BET:,}**.\n"
-                        f"You also can't bet anything more than {CURRENCY} **{MAX_BET_WITHOUT:,}**."
-                    )
-                )
+        namount = await self.do_wallet_checks(
+            interaction=interaction, 
+            has_keycard=has_keycard,
+            wallet_amount=wallet_amt,
+            exponent_amount=bet_amount
+        )
+        
+        if namount is None:
+            return
 
         # ----------------- Game setup ---------------------------------
 
@@ -5761,13 +5714,12 @@ class Economy(commands.Cog):
         dealer_sum = calculate_hand(dealer_hand)
 
         if player_sum == 21:
-            bj_lose = await conn.execute('SELECT bjl FROM bank WHERE userID = ?', (interaction.user.id,))
-            bj_lose = await bj_lose.fetchone()
+            bj_lose = await conn.fetchone('SELECT bjl FROM bank WHERE userID = $0', interaction.user.id)
             new_bj_win = await self.update_bank_new(interaction.user, conn, 1, "bjw")
             new_total = new_bj_win[0] + bj_lose[0]
 
             prctnw = (new_bj_win[0] / new_total) * 100
-            new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
+            new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti
             amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
             new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
             await conn.commit()
@@ -5775,8 +5727,7 @@ class Economy(commands.Cog):
             d_fver_p = display_user_friendly_deck_format(player_hand)
             d_fver_d = display_user_friendly_deck_format(dealer_hand)
 
-            winner = discord.Embed()
-            winner.colour = discord.Colour.brand_green()
+            winner = discord.Embed(colour=discord.Colour.brand_green())
             winner.description = (
                 f"**Blackjack! You've already won with a total of {player_sum}!**\n"
                 f"You won {CURRENCY} **{amount_after_multi:,}**. "
@@ -5836,6 +5787,55 @@ class Economy(commands.Cog):
             embed=initial, view=bj_view)
         bj_view.message = await interaction.original_response()
 
+    async def do_wallet_checks(
+            self, 
+            interaction: discord.Interaction,  
+            wallet_amount: int, 
+            exponent_amount : str | int,
+            has_keycard: Optional[bool] = False
+        ) -> int | None:
+        """Reusable wallet checks that are common amongst most gambling commands."""
+
+        expo = determine_exponent(exponent_amount)
+        try:
+            assert isinstance(expo, int)
+            amount = expo
+        except AssertionError:
+            if exponent_amount.lower() in {'max', 'all'}:
+                if has_keycard:
+                    amount = min(MAX_BET_KEYCARD, wallet_amount)
+                else:
+                    amount = min(MAX_BET_WITHOUT, wallet_amount)
+            else:
+                return await interaction.response.send_message(
+                    embed=membed("You need to provide a real amount to bet upon.")
+                )
+
+        if amount > wallet_amount:
+            return await interaction.response.send_message(
+                embed=membed("You are too poor for this bet.")
+            )
+
+        if has_keycard:
+
+            if (amount < MIN_BET_KEYCARD) or (amount > MAX_BET_KEYCARD):
+                return await interaction.response.send_message(
+                    embed=membed(
+                        f"You can't bet less than {CURRENCY} **{MIN_BET_KEYCARD:,}**.\n"
+                        f"You also can't bet anything more than {CURRENCY} **{MAX_BET_KEYCARD:,}**."
+                    )
+                )
+        else:
+            if (amount < MIN_BET_WITHOUT) or (amount > MAX_BET_WITHOUT):
+                return await interaction.response.send_message(
+                    embed=membed(
+                        f"You can't bet less than {CURRENCY} **{MIN_BET_WITHOUT:,}**.\n"
+                        f"You also can't bet anything more than {CURRENCY} **{MAX_BET_WITHOUT:,}**."
+                    )
+                )
+            
+        return amount
+
     @app_commands.command(name="bet", description="Bet your robux on a dice roll", extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 6)
@@ -5850,48 +5850,24 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=self.not_registered)
             conn: asqlite_Connection
 
-            data = await conn.fetchone(f"SELECT pmulti, wallet, betw, betl FROM `{BANK_TABLE_NAME}` WHERE userID = ?",
-                                      (interaction.user.id,))
+            data = await conn.fetchone(
+                f"SELECT pmulti, wallet, betw, betl FROM `{BANK_TABLE_NAME}` WHERE userID = $0", 
+                interaction.user.id
+            )
+
             pmulti, wallet_amt = data[0], data[1]
+            has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
 
-            has_keycard = await self.user_has_item(interaction.user.id, "Keycard", conn)
-            expo = determine_exponent(exponent_amount)
-
-            try:
-                assert isinstance(expo, int)
-                amount = expo
-            except AssertionError:
-                if exponent_amount.lower() in {'max', 'all'}:
-                    if has_keycard:
-                        amount = min(MAX_BET_KEYCARD, wallet_amt)
-                    else:
-                        amount = min(MAX_BET_WITHOUT, wallet_amt)
-                else:
-                    return await interaction.response.send_message(
-                        embed=membed("You need to provide a real amount to bet upon."))
-
-            if amount > wallet_amt:
-                    return await interaction.response.send_message(
-                        embed=membed("You are too poor for this bet."))
-
-            if has_keycard:
-
-                if (amount < MIN_BET) or (amount > MAX_BET_KEYCARD):
-                    return await interaction.response.send_message(
-                        embed=membed(
-                            f"You can't bet less than {CURRENCY} **{MIN_BET:,}**.\n"
-                            f"You also can't bet anything more than {CURRENCY} **{MAX_BET_KEYCARD:,}**."
-                        )
-                    )
-            else:
-                if (amount < MIN_BET) or (amount > MAX_BET_WITHOUT):
-                    return await interaction.response.send_message(
-                        embed=membed(
-                            f"You can't bet less than {CURRENCY} **{MIN_BET:,}**.\n"
-                            f"You also can't bet anything more than {CURRENCY} **{MAX_BET_WITHOUT:,}**."
-                        )
-                    )
-
+            amount = await self.do_wallet_checks(
+                interaction=interaction, 
+                has_keycard=has_keycard,
+                wallet_amount=wallet_amt,
+                exponent_amount=exponent_amount
+            )
+            
+            if amount is None:
+                return
+            
             # --------------------------------------------------------
             smulti = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti
             badges = set()
@@ -5901,15 +5877,26 @@ class Economy(commands.Cog):
 
             if has_keycard:
                 badges.add("<:lanyard:1165935243140796487>")
-                your_choice = choices([1, 2, 3, 4, 5, 6], 
-                                      weights=[37 / 3, 37 / 3, 37 / 3, 63 / 3, 63 / 3, 63 / 3], k=1)
-                bot_choice = choices([1, 2, 3, 4, 5, 6],
-                                     weights=[65 / 4, 65 / 4, 65 / 4, 65 / 4, 35 / 2, 35 / 2], k=1)
+                
+                your_choice = choices(
+                    [1, 2, 3, 4, 5, 6], 
+                    weights=[37 / 3, 37 / 3, 37 / 3, 63 / 3, 63 / 3, 63 / 3]
+                )
+
+                bot_choice = choices(
+                    [1, 2, 3, 4, 5, 6], 
+                    weights=[65 / 4, 65 / 4, 65 / 4, 65 / 4, 35 / 2, 35 / 2]
+                )
+
             else:
-                bot_choice = choices([1, 2, 3, 4, 5, 6],
-                                     weights=[10, 10, 15, 27, 15, 23], k=1)
-                your_choice = choices([1, 2, 3, 4, 5, 6], 
-                                      weights=[55 / 3, 55 / 3, 55 / 3, 45 / 3, 45 / 3, 45 / 3], k=1)
+                bot_choice = choices(
+                    [1, 2, 3, 4, 5, 6], 
+                    weights=[10, 10, 15, 27, 15, 23])
+                
+                your_choice = choices(
+                    [1, 2, 3, 4, 5, 6], 
+                    weights=[55 / 3, 55 / 3, 55 / 3, 45 / 3, 45 / 3, 45 / 3]
+                )
             
             async with conn.transaction():
                 if your_choice[0] > bot_choice[0]:
