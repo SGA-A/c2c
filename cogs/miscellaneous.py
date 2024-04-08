@@ -20,8 +20,8 @@ import datetime
 from cogs.economy import APP_GUILDS_ID
 from other.pagination import Pagination
 
-
 ARROW = "<:arrowe:1180428600625877054>"
+API_EXCEPTION = "The API fucked up, try again later."
 RESPONSES = {
     403: "Forbidden - Access was denied",
     404: "Not Found",
@@ -102,7 +102,7 @@ def extract_domain(website):
     return match.group(1)
 
 
-def membed(descriptioner: str) -> discord.Embed:
+def membed(descriptioner: Optional[str] = None) -> discord.Embed:
     """Quickly create an embed with a custom description using the preset."""
     membedder = discord.Embed(colour=0x2B2D31, description=descriptioner)
     return membedder
@@ -461,22 +461,26 @@ class Utility(commands.Cog):
     @app_commands.command(name='bored', description="Find something to do if you're bored")
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(activity_type='The type of activities to filter by.')
-    async def prompt_act(self, interaction: discord.Interaction,
-                         activity_type: Optional[Literal[
-                             "education", "recreational", "social", "diy",
-                             "charity", "cooking", "relaxation", "music", "busywork"]]):
-        if activity_type is None:
-            activity_type = ""
-        else:
+    async def prompt_act(
+        self, 
+        interaction: discord.Interaction, 
+        activity_type: Optional[
+            Literal[
+                "education", "recreational", "social", "diy", 
+                "charity", "cooking", "relaxation", "music", "busywork"
+            ]] = ""
+        ) -> None:
+        
+        if activity_type:
             activity_type = f"?type={activity_type}"
+        
         async with self.client.session.get(
                 f"http://www.boredapi.com/api/activity{activity_type}") as response:
             if response.status == 200:
                 resp = await response.json()
-                await interaction.response.send_message(f"{resp['activity']}.")
+                await interaction.response.send_message(embed=membed(f"{resp['activity']}."))
             else:
-                await interaction.response.send_message(
-                    embed=membed("An unsuccessful request was made. Try again later."))
+                await interaction.response.send_message(embed=membed("An unsuccessful request was made."))
 
     anime = app_commands.Group(
         name='anime', 
@@ -744,11 +748,13 @@ class Utility(commands.Cog):
             tags.append(param)
 
         if not tags:
-            return await interaction.response.send_message("Cannot have no tags.")
+            return await interaction.response.send_message(
+                embed=membed("You need to include at least 1 tag.")
+            )
         try:
             image = await self.wf.search(included_tags=tags, is_nsfw=False)
         except APIException as ae:
-            return await interaction.response.send_message(ae.detail)
+            return await interaction.response.send_message(embed=membed(ae.detail))
 
         embed = discord.Embed(
             colour=discord.Colour.from_rgb(243, 157, 30), 
@@ -814,24 +820,34 @@ class Utility(commands.Cog):
         invite_lifespan *= 86400
 
         generated_invite = await interaction.channel.create_invite(
-            reason=f'Creation requested by {interaction.user.name}',
-            max_age=invite_lifespan, max_uses=maximum_uses)
+            reason=f'Invite creation requested by {interaction.user.name}',
+            max_age=invite_lifespan, 
+            max_uses=maximum_uses
+        )
 
         match maximum_uses:
             case 0:
                 maxim_usage = "No limit to maximum usage"
             case _:
                 maxim_usage = f"Max usages set to {generated_invite.max_uses}"
+        
         formatted_expiry = discord.utils.format_dt(generated_invite.expires_at, 'R')
-        success = discord.Embed(title='Successfully generated new invite link',
-                                description=f'**A new invite link was created.**\n'
-                                            f'- Invite channel set to {generated_invite.channel}\n'
-                                            f'- {maxim_usage}\n'
-                                            f'- Expires {formatted_expiry}\n'
-                                            f'- Invite Link is: {generated_invite.url}',
-                                colour=0x2B2D31)
-        success.set_author(name=interaction.user.name,
-                           icon_url=interaction.user.display_avatar.url)
+        success = discord.Embed(
+            title='Successfully generated new invite link', 
+            colour=0x2B2D31,
+            description=(
+                f'**A new invite link was created.**\n'
+                f'- Invite channel set to {generated_invite.channel}\n'
+                f'- {maxim_usage}\n'
+                f'- Expires {formatted_expiry}\n'
+                f'- Invite Link is: {generated_invite.url}'
+            )
+        )
+        success.set_author(
+            name=interaction.user.name, 
+            icon_url=interaction.user.display_avatar.url
+        )
+
         await interaction.response.send_message(embed=success)
 
     @app_commands.command(name='define', description='Define any word of choice')
@@ -847,23 +863,29 @@ class Utility(commands.Cog):
                 for thing in item:
                     if isinstance(thing, list):
                         unique_colour = return_random_color()
-                        the_result = discord.Embed(title=f'Define: {choicer.lower()}',
-                                                   description=f'<:dictionarye:1195748221994160220> This shows '
-                                                               f'all the available definitions for the word {choicer}.',
-                                                   colour=unique_colour)
+                        the_result = discord.Embed(colour=unique_colour)
+                        the_result.title = f'Define: {choicer.lower()}'
+                        the_result.description=(
+                            '<:dictionarye:1195748221994160220> This shows '
+                            f'all the available definitions for the word {choicer}.'
+                        )
+                        
                         for x in range(0, len(thing)):
                             if "(" in thing[x]:
                                 thing[x] += ")"
                             the_result.add_field(name=f'Definition {x + 1}', value=f'{thing[x]}')
                         if len(the_result.fields) == 0:
-                            the_result.add_field(name="Looks like no results were found.",
-                                                 value=f"We couldn't find a definition for {choicer.lower()}.")
+                            the_result.add_field(
+                                name="No results were found.", 
+                                value=f"We couldn't find a definition for {choicer.lower()}."
+                            )
                         return await interaction.response.send_message(embed=the_result)
                     else:
                         continue
         except AttributeError:
             await interaction.response.send_message(
-                content='Try again, but this time input an actual word.')
+                embed=membed('Try again, but this time input an actual word.')
+            )
 
     @app_commands.command(name='randomfact', description='Queries a random fact')
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -875,26 +897,29 @@ class Utility(commands.Cog):
         async with self.client.session.get(api_url, params=parameters) as resp:
             text = await resp.json()
             the_fact = text[0].get('fact')
-            await interaction.response.send_message(f"{the_fact}.")
+            await interaction.response.send_message(embed=membed(f"{the_fact}."))
 
     @app_commands.command(name="image", description="Manipulate a user's avatar")
     @app_commands.describe(
         user="The user to apply the manipulation to.", 
         endpoint="What kind of manipulation sorcery to use.")
     @app_commands.guilds(*APP_GUILDS_ID)
-    async def image_manip(self, interaction: discord.Interaction,
-                          user: Optional[discord.User],
-                          endpoint: Optional[
-                              Literal[
-                                  "abstract", "balls", "billboard", "bonks", "bubble", "canny", "clock",
-                                  "cloth", "contour", "cow", "cube", "dilate", "fall", "fan", "flush", "gallery",
-                                  "globe", "half-invert", "hearts", "infinity", "laundry", "lsd", "optics", "parapazzi"
-                              ]]):
+    async def image_manip(
+        self, 
+        interaction: discord.Interaction, 
+        user: Optional[discord.User], 
+        endpoint: Optional[
+            Literal[
+                "abstract", "balls", "billboard", "bonks", "bubble", "canny", "clock",
+                "cloth", "contour", "cow", "cube", "dilate", "fall", "fan", "flush", "gallery",
+                "globe", "half-invert", "hearts", "infinity", "laundry", "lsd", "optics", "parapazzi"
+            ]] = "abstract"
+        ) -> discord.InteractionMessage | None:
+    
         start = perf_counter()
         await interaction.response.send_message("Loading..")
         msg = await interaction.original_response()
         user = user or interaction.user
-        endpoint = endpoint or "abstract"
 
         params = {'image_url': user.display_avatar.url}
         headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}
@@ -904,26 +929,32 @@ class Utility(commands.Cog):
             if response.status == 200:
                 buffer = BytesIO(await response.read())
                 end = perf_counter()
-                return await msg.edit(content=f"Done. Took `{end-start:.2f}s`.",
-                                      attachments=[discord.File(buffer, f'{endpoint}.gif')])
-            await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
+                return await msg.edit(
+                    content=f"Done. Took `{end-start:.2f}s`.", 
+                    attachments=[discord.File(buffer, f'{endpoint}.gif')]
+                )
+            
+            await msg.edit(embed=membed(API_EXCEPTION))
 
     @app_commands.command(name="image2", description="Manipulate a user's avatar further")
     @app_commands.describe(
         user="The user to apply the manipulation to.",
         endpoint="What kind of manipulation sorcery to use.")
     @app_commands.guilds(*APP_GUILDS_ID)
-    async def image2_manip(self, interaction: discord.Interaction,
-                           user: Optional[discord.User],
-                           endpoint: Optional[
-                              Literal[
-                                  "minecraft", "patpat", "plates", "pyramid", "radiate", "rain", "ripped", "ripple",
-                                  "shred", "wiggle", "warp", "wave"]]):
+    async def image2_manip(
+        self, 
+        interaction: discord.Interaction,
+        user: Optional[discord.User],
+        endpoint: Optional[
+            Literal[
+                "minecraft", "patpat", "plates", "pyramid", "radiate", "rain", "ripped", "ripple",
+                "shred", "wiggle", "warp", "wave"]] = "wave"
+        ) -> discord.InteractionMessage | None:
+
         start = perf_counter()
         await interaction.response.send_message("Loading..")
         msg = await interaction.original_response()
         user = user or interaction.user
-        endpoint = endpoint or "wave"
 
         params = {'image_url': user.display_avatar.url}
         headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}
@@ -933,17 +964,24 @@ class Utility(commands.Cog):
             if response.status == 200:
                 buffer = BytesIO(await response.read())
                 end = perf_counter()
-                return await msg.edit(content=f"Done. Took `{end-start:.2f}s`.",
-                                      attachments=[discord.File(buffer, f'{endpoint}.gif')])
-            await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
+                return await msg.edit(
+                    content=f"Done. Took `{end-start:.2f}s`.", 
+                    attachments=[discord.File(buffer, f'{endpoint}.gif')]
+                )
+            
+            await msg.edit(embed=membed(API_EXCEPTION))
 
     @app_commands.command(name="locket", description="Insert people into a heart-shaped locket")
     @app_commands.describe(user="The user to add to the locket.", user2="The second user to add to the locket.")
     @app_commands.guilds(*APP_GUILDS_ID)
-    async def locket_manip(self, interaction: discord.Interaction,
-                           user: Optional[discord.User], user2: discord.User):
+    async def locket_manip(
+        self, 
+        interaction: discord.Interaction, 
+        user: Optional[discord.User], 
+        user2: discord.User
+        ) -> discord.InteractionMessage | None:
+        
         start = perf_counter()
-
         await interaction.response.send_message("Loading..")
         msg = await interaction.original_response()
 
@@ -957,9 +995,12 @@ class Utility(commands.Cog):
             if response.status == 200:
                 buffer = BytesIO(await response.read())
                 end = perf_counter()
-                return await msg.edit(content=f"Done. Took `{end-start:.2f}s`.",
-                                      attachments=[discord.File(buffer, 'heart_locket.gif')])
-            await msg.edit(content="The API we are using could not handle your request right now. Try again later.")
+                return await msg.edit(
+                    content=f"Done. Took `{end-start:.2f}s`.", 
+                    attachments=[discord.File(buffer, 'heart_locket.gif')]
+                )
+            
+            await msg.edit(embed=membed(API_EXCEPTION))
 
     @app_commands.command(name='com', description='Finds most common letters in a sentences')
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -1140,9 +1181,9 @@ class Utility(commands.Cog):
         async with ctx.typing():
             async with self.client.session.get("https://api.popcat.xyz/pickuplines") as resp:
                 if resp.status != 200:
-                    return await ctx.send("The request failed, you should try again later.")
+                    return await ctx.send(embed=membed(API_EXCEPTION))
                 data = await resp.json()
-                await ctx.reply(data["pickupline"])
+                await ctx.reply(embed=membed(data["pickupline"]))
 
     @commands.command(name="wyr", description="Get 'would you rather' questions to use")
     @commands.guild_only()
@@ -1150,11 +1191,15 @@ class Utility(commands.Cog):
         async with ctx.typing():
             async with self.client.session.get("https://api.popcat.xyz/wyr") as resp:
                 if resp.status != 200:
-                    return await ctx.send("The request failed, you should try again later.")
+                    return await ctx.send(embed=membed(API_EXCEPTION))
                 data = await resp.json()
-                await ctx.reply(f'Would you rather:\n'
-                                f'1. {data["ops1"].capitalize()} or..\n'
-                                f'2. {data["ops2"].capitalize()}')
+                await ctx.reply(
+                    embed=membed(
+                        f'Would you rather:\n'
+                        f'1. {data["ops1"].capitalize()} or..\n'
+                        f'2. {data["ops2"].capitalize()}'
+                    )
+                )
 
     @commands.command(name="alert", description="Create real incoming iphone alerts")
     @commands.guild_only()
@@ -1164,26 +1209,30 @@ class Utility(commands.Cog):
             async with self.client.session.get(
                     f"https://api.popcat.xyz/alert?text={custom_text}") as resp:
                 if resp.status != 200:
-                    return await ctx.send("The service is currently not available, try again later.")
-                await ctx.send(resp.url)
+                    return await ctx.send(embed=membed(API_EXCEPTION))
+                embed: discord.Embed = membed()
+                embed.set_image(url=resp.url)
+                await ctx.send(embed=embed)
 
     @app_commands.command(name='tn', description="Get the time now in your chosen format")
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.rename(spec="mode")
     @app_commands.describe(spec='The mode of displaying the current time now.')
-    async def tn(self, interaction: discord.Interaction, spec: Optional[
-        Literal[
-            "t - returns short time (format HH:MM)", 
-            "T - return long time (format HH:MM:SS)",
-            "d - returns short date (format DD/MM/YYYY)",
-            "D - returns long date (format DD Month Year)",
-            "F - returns long date and time (format Day, DD Month Year HH:MM)",
-            "R - returns the relative time since now"
-        ]
-    ]) -> None:
+    async def tn(
+        self, 
+        interaction: discord.Interaction, 
+        spec: Optional[
+            Literal[
+                "t - returns short time (format HH:MM)", 
+                "T - return long time (format HH:MM:SS)",
+                "d - returns short date (format DD/MM/YYYY)",
+                "D - returns long date (format DD Month Year)",
+                "F - returns long date and time (format Day, DD Month Year HH:MM)",
+                "R - returns the relative time since now"
+            ]] = "t"
+        ) -> None:
 
-        speca = spec[0] if spec else None
-        format_dtime = discord.utils.format_dt(datetime.datetime.now(), style=speca)
+        format_dtime = discord.utils.format_dt(datetime.datetime.now(), style=spec)
         embed = membed(
             f"## <:watchb:1195754643209334906> Timestamp Conversion\n{format_dtime}\n"
             f"- The epoch time in this format is: `{format_dtime}`"
@@ -1204,15 +1253,15 @@ class Utility(commands.Cog):
     @commands.command(name='banner', description="Display a user's enlarged banner")
     async def banner(self, ctx, *, username: Union[discord.Member, discord.User] = None):
         """Shows a user's enlarged avatar (if possible)."""
-        embed = discord.Embed(colour=0x2B2D31)
         username = username or ctx.author
-
-        if username.banner:
-            embed.set_author(name=username.name, url=username.display_avatar.url)
-            embed.set_image(url=username.banner.with_static_format('png'))
-        else:
+        embed = membed()
+        
+        if not username.banner:
             embed.description = f"{username.mention} does not have a banner."
+            return await ctx.send(embed=embed)
 
+        embed.set_author(name=username.name, url=username.display_avatar.url)
+        embed.set_image(url=username.banner.with_static_format('png'))
         await ctx.send(embed=embed)
 
 
