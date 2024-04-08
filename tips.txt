@@ -23,3 +23,6 @@ Your servants have the possibility to fund billions towards your name. Use them 
 You can send us feedback in the bot. If it's a bug or feature that is approved, you will be able to claim rewards!
 You have servants that can unlock certain tasks when they reach a certain skill level. Unlock them and gain huge rewards.
 You can deposit and withdraw robux just by viewing your </balance:1192188834134376500>! Click on the buttons associated with them to get started.
+You can change the status of your own temporary voice channel: </voice status:1218328248937873479>
+Manage your own temporary voice channel with the /voice subcommands. You'll need to setup the creator channel if you have not already and connect to it.
+Some commands require the use of this prefix: `>` and some are slash commands. Check our help command to identify them accordingly!
