@@ -40,8 +40,7 @@ from discord import (
     SelectOption, 
     Colour,
     Webhook, 
-    NotFound, 
-    ButtonStyle
+    NotFound
 )
 
 from discord.utils import setup_logging, format_dt
@@ -247,6 +246,7 @@ cogs = Literal[
     "moderation", 
     "music", 
     "slash_events", 
+    "tags",
     "tempvoice"
 ]
 
@@ -256,25 +256,24 @@ classnames = Literal[
     "Utility", 
     "Owner", 
     "Music", 
+    "Tags", 
     "TempVoice"
 ]
 
 
-def return_txt_cmds_first(
-        command_holder: dict, category: classnames) -> dict:
+def return_txt_cmds_first(command_holder: dict, category: classnames) -> dict:
     """Displays all the text-based commands that are defined within a cog as a dict. This should always be called
     first for consistency."""
     for cmd in client.get_cog(category).get_commands():
-        command_holder.update({cmd.name: deque([f'{category}', f'{cmd.description}', 'txt'])})
+        command_holder.update({cmd.name: deque((f'{category}', f'{cmd.description}', 'txt'))})
     return command_holder
 
 
-def return_interaction_cmds_last(
-        command_holder: dict, category: classnames) -> dict:
+def return_interaction_cmds_last(command_holder: dict, category: classnames) -> dict:
     """Displays all the app commands and grouped app commands that are defined within a cog as a dict. This should
     always be called last for consistency."""
     for cmd in client.get_cog(category).get_app_commands():
-        command_holder.update({cmd.name: deque([f'{category}', f'{cmd.description}', 'sla'])})
+        command_holder.update({cmd.name: deque((f'{category}', f'{cmd.description}', 'sla'))})
     return command_holder
 
 
@@ -284,6 +283,33 @@ def fill_up_commands(category: classnames) -> dict:
     new_dict = return_txt_cmds_first(the_dict, category)
     all_cmds: dict = return_interaction_cmds_last(new_dict, category)
     return all_cmds
+
+
+def generic_loop_slash_only_subcommands(all_cmds: dict, cmd_formatter: set, guild_id) -> Tuple[set, int]:
+    """Returns tuple with first element as set of commands, second being the total command count."""
+    total_command_count = 0
+
+    for cmd, cmd_details in all_cmds.items():
+        total_command_count += 1
+
+        command_manage = client.tree.get_app_command(cmd, guild=Object(id=guild_id))
+        try:
+            got_something = False
+            if not command_manage.options:
+                continue
+
+            for option in command_manage.options:
+                if not isinstance(option, app_commands.AppCommandGroup):
+                    continue
+                got_something = True
+                total_command_count += 1
+                cmd_formatter.add(f"\U00002022 {option.mention} - {option.description}")
+            
+            if not got_something:
+                cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
+        except AttributeError:
+            continue
+    return cmd_formatter, total_command_count
 
 
 def generic_loop_with_subcommand(all_cmds: dict, cmd_formatter: set, guild_id) -> Tuple[set, int]:
@@ -340,6 +366,10 @@ class SelectMenu(ui.Select):
                 description='Earn a living in a simulated virtual economy.', 
                 emoji='\U00002b50'),
             SelectOption(
+                label='Tags',
+                description='Create and manage your own tags.',
+                emoji='<:tagsSTAR:1227681495255355535>'),
+            SelectOption(
                 label="TempVoice", 
                 description="Configure your own temporary voice channel.",
                 emoji="<:tempSTAR:1221502312472903851>"),
@@ -395,7 +425,18 @@ class SelectMenu(ui.Select):
                 total_cmds_cata += 1
                 cmd_formatter.add(f"\U00002022 {option.mention} - {option.description}")
 
-        elif (their_choice == 'Utility') or (their_choice == "TempVoice"):
+        elif their_choice == 'Tags':
+
+            all_cmds = client.get_cog(their_choice).get_commands()[0]
+            for cmd in all_cmds.commands:
+                total_cmds_cata += 1
+                cmd_formatter.add(f"\U00002022 [`>{cmd.qualified_name}`](https://youtu.be/dQw4w9WgXcQ) - {cmd.description}")
+        
+            embed.colour = 0x9EE1FF
+            embed.set_thumbnail(url='https://i.imgur.com/uHb7xhc.png')
+            embed.set_footer(text="These are also available as slash commands!")
+
+        elif their_choice in {"Utility", "TempVoice"}:
 
             all_cmds = fill_up_commands(their_choice)
             match their_choice:
@@ -424,13 +465,16 @@ class SelectMenu(ui.Select):
 
                 try:
                     got_something = False
-                    if command_manage.options:
-                        for option in command_manage.options:
-                            if isinstance(option, app_commands.AppCommandGroup):
-                                got_something = True
-                                total_cmds_cata += 1
-                                cmd_formatter.add(
-                                    f"\U00002022 {option.mention} - {option.description}")
+                    if not command_manage.options:
+                        continue
+
+                    for option in command_manage.options:
+                        if not isinstance(option, app_commands.AppCommandGroup):
+                            continue
+                        got_something = True
+                        total_cmds_cata += 1
+                        cmd_formatter.add(f"\U00002022 {option.mention} - {option.description}")
+
                     if not got_something:
                         cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
                 except AttributeError:
@@ -541,7 +585,6 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
     webhook = Webhook.from_url(url=client.WEBHOOK_URL, session=client.session)
     rtype = "feature"  # or "bugfix"
     
-
     # For editing the original message
 
     # msg = await webhook.fetch_message(
@@ -564,84 +607,10 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
     await ctx.send("Done.")
 
 
-class Confirm(ui.View):
-    """Chopped down version of the original interactive menu."""
-
-    def __init__(self, ctx: commands.Context):
-        self.ctx = ctx
-        super().__init__(timeout=45.0)
-        self.value = None
-
-    async def interaction_check(self, interaction: Interaction) -> bool:
-        if interaction.user.id in interaction.client.owner_ids:
-            return True
-        await interaction.response.send_message(
-            embed=membed("This confirmation menu is for developer use only."), ephemeral=True)
-        return False
-
-    @ui.button(label='Cancel', style=ButtonStyle.red)
-    async def cancel(self, interaction: Interaction, button: ui.Button):
-        self.children[1].style = ButtonStyle.grey
-        button.style = ButtonStyle.success
-        
-        for item in self.children:
-            item.disabled = True
-
-        await interaction.response.edit_message(view=self)
-        
-        self.value = False
-        self.stop()
-
-    @ui.button(label='Confirm', style=ButtonStyle.green)
-    async def confirm(self, interaction: Interaction, button: ui.Button):
-        self.children[0].style = ButtonStyle.grey
-        button.style = ButtonStyle.success
-
-        for item in self.children:
-            item.disabled = True
-        
-        await interaction.response.edit_message(view=self)
-
-        self.value = True
-        self.stop()
-
-
-async def confirm_before_hot_reloading(ctx: commands.Context) -> bool:
-    confirm = Confirm(ctx)
-
-    confirmation = Embed(title="Pending Confirmation", colour=0x2B2D31)
-    confirmation.description = (
-        "Data previously loaded into a data structure will be lost.\n"
-        "Are you **sure** you want to proceed?")
-    msg = await ctx.send(embed=confirmation, view=confirm)
-    
-    await confirm.wait()
-
-    if confirm.value is None:
-        for item in confirm.children:
-            item.disabled = True
-
-        confirmation.title = "Timed out"
-        confirmation.description = f"~~{confirmation.description}~~"
-        confirmation.colour = Colour.brand_red()
-    elif confirm.value:
-        confirmation.title = "Action Confirmed"
-        confirmation.colour = Colour.green()
-    else:
-        confirmation.title = "Action Cancelled"
-        confirmation.colour = Colour.brand_red()
-    
-    await msg.edit(embed=confirmation, view=confirm)
-    return confirm.value
-
-
 @commands.is_owner()
 @client.command(name='reload', aliases=("rl",))
 async def reload_cog(ctx: commands.Context, cog_name: cogs):
-    val = await confirm_before_hot_reloading(ctx)
     try:
-        if not val:
-            return
         await client.reload_extension(f"cogs.{cog_name}")
     except commands.ExtensionNotLoaded:
         return await ctx.reply(embed=membed("That extension has not been loaded in yet."))
@@ -661,9 +630,6 @@ async def reload_cog(ctx: commands.Context, cog_name: cogs):
 async def unload_cog(ctx: commands.Context, cog_name: cogs):
 
     try:
-        val = await confirm_before_hot_reloading(ctx)
-        if not val:
-            return
         await client.unload_extension(f"cogs.{cog_name}")
     except commands.ExtensionNotLoaded:
         return await ctx.reply("That extension has not been loaded in yet.")
@@ -692,39 +658,51 @@ async def load_cog(ctx: commands.Context, cog_name: cogs):
     await ctx.message.add_reaction("\U00002705")
 
 
-@client.tree.command(
-    name='help', 
-    description='The help command for c2c. Shows help for different categories.', 
-    guilds=[Object(id=829053898333225010), Object(id=780397076273954886)])
+@client.tree.command(name='help', description='The help command for c2c. Shows help for different categories.')
 async def help_command_category(interaction: Interaction):
     
     epicker = choice(
-        ["<:githubB:1195500626382164119>", "<:githubBF:1195498685296021535>", 
-         "<:githubW:1195499565508460634>", "<:githubBlue:1195664427836506212>"])
+        (
+            "<:githubB:1195500626382164119>", 
+            "<:githubBF:1195498685296021535>", 
+            "<:githubW:1195499565508460634>", 
+            "<:githubBlue:1195664427836506212>"
+        )
+    )
+    joined_at = interaction.guild.me.joined_at
+
+    extra = ""
+    if interaction.guild:
+        extra = (
+            f"- Joined this server {format_dt(joined_at, style="f")} ({format_dt(joined_at, style="R")})\n"
+        )
 
     embed = Embed(
         title='Help Menu for c2c', 
+        colour=0xB8B9C9,
         description=(
-            '```fix\n[Patch #31]\n'
-            '- ON_MESSAGE events (triggers) added\n'
-            '- Buttons are generally available\n'
-            '- Shop command redesign and grouped```\n'
-            'A few things to note:\n'
-            '- This help command does not display uncategorized commands.\n'
+            '```fix\n[Patch #34]\n'
+            '- Blazing speeds\n'
+            '- Tags are here, at last\n'
+            '- Paginators are looking better```\n'
+            '**Note:**\n'
+            '- This does not display uncategorized commands.\n'
             '- The prefix for this bot is `>` (for text commands)\n'
-            '- Not all categories are accessible to everyone, check the details prior.'), 
-            colour=Colour.from_rgb(138, 175, 255))
+            '- Not all categories are accessible to everyone, check the details prior'
+        )
+    )
+
     embed.add_field(
         name="Who are you?", 
         value=(
-            "I'm a bot made by Splint#6019 and Geo#2181. "
-            f"I've been on Discord since <t:1669831154:f> and joined {interaction.guild.name} on "
-            f"{format_dt(interaction.guild.me.joined_at, style="f")}.\n\n"
-            "I have a variety of features such as an advanced economy system, moderation, debugging "
-            "tools and some other random features that may aid you in this journey. "
-            "You can get more information on my commands by using the dropdown below.\n\n"
-            f"I'm also open source. You can see my code on {epicker} "
-            "[GitHub](https://github.com/SGA-A/c2c)."), inline=False)
+            "Here's the gist:\n"
+            f"- Made by Splint#6019 and Geo#2181 on <t:1669831154:f> (<t:1669831154:R>)\n{extra}"
+            f"- I'm a private bot, only in `{len(interaction.client.guilds)}` servers!\n"
+            "- Use the dropdown below to see what I have to offer.\n\n"
+            f"I'm also open source. You can find my code on {epicker} "
+            "[GitHub](https://github.com/SGA-A/c2c)."
+        )
+    )
 
     help_view = Select()
     await interaction.response.send_message(embed=embed, view=help_view, ephemeral=True)
