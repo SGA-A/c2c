@@ -4924,7 +4924,7 @@ class Economy(commands.Cog):
                 for item in owned_items[offset:offset + length]:
                     em.description += f"{item[1]} **{item[0]}** \U00002500 {item[2]}\n"
 
-                n = Pagination.compute_total_pages(len(owned_items), length)
+                n = paginator.compute_total_pages(len(owned_items), length)
                 em.set_footer(text=f"Page {page} of {n}")
                 return em, n
             
@@ -5126,11 +5126,9 @@ class Economy(commands.Cog):
                 await self.change_job_new(interaction.user, conn, job_name='None')
     
     @app_commands.command(name="balance", description="Get someone's balance. Wallet, bank, and net worth.")
-    @app_commands.describe(user='The user to find the balance of.',
-                           with_force='Register this user if not already. Only for bot owners.')
-    @app_commands.guild_only()
-    async def find_balance(
-        self, interaction: discord.Interaction, user: Optional[discord.Member], with_force: Optional[bool]):
+    @app_commands.describe(user='The user to find the balance of.', with_force='Register this user if not already. Only for bot owners.')
+    @app_commands.guilds(*APP_GUILDS_ID)
+    async def find_balance(self, interaction: discord.Interaction, user: Optional[discord.Member], with_force: Optional[bool]):
         
         user = user or interaction.user
 
