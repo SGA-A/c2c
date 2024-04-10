@@ -14,7 +14,7 @@ from other.pagination import PaginationSimple
 
 
 TAG_NOT_FOUND_RESPONSE = (
-    "Could not find a tag with that name.\n"
+    "Could not find any tag with these properties.\n"
     "- You can't modify the tag if it doesn't belong to you.\n"
     "- You also can't modify a tag that doesn't exist, obviously."
 )
