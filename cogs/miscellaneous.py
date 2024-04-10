@@ -215,11 +215,13 @@ class Utility(commands.Cog):
 
         self.image_src = app_commands.ContextMenu(
             name='Extract Image Source',
-            callback=self.extract_source)
+            callback=self.extract_source
+        )
         
         self.get_embed_cmd = app_commands.ContextMenu(
             name='Extract Embed Colour',
-            callback=self.embed_colour)
+            callback=self.embed_colour
+        )
 
         self.client.tree.add_command(self.image_src)
         self.client.tree.add_command(self.get_embed_cmd)
@@ -416,26 +418,30 @@ class Utility(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_ID)
     async def extract_source(self, interaction: discord.Interaction, message: discord.Message):
 
-        await interaction.response.send_message("Looking into it..")
-        msg = await interaction.original_response()
         images = set()
         counter = 0
 
         if message.embeds:
             for embed in message.embeds:
-                if embed.image:
-                    counter += 1
-                    images.add(f"**{counter}**. [`{embed.image.height}x{embed.image.width}`]({embed.image.url})")
+                if not embed.image:
+                    continue
+                counter += 1
+                images.add(f"**{counter}**. [`{embed.image.height}x{embed.image.width}`]({embed.image.url})")
+        
         for attr in message.attachments:
             counter += 1
             images.add(f"**{counter}**. [`{attr.height}x{attr.width}`]({attr.url})")
 
-        if counter:
-            embed = discord.Embed(title=f"Found {counter} images from {message.author.name}",
-                                  description="\n".join(images),
-                                  colour=0x2B2D31)
-            return await msg.edit(content=None, embed=embed)
-        await msg.edit(content="Could not find anything. Sorry.")
+        embed = membed()
+        if not counter:
+            embed.description = "Could not find any attachments."
+            return await interaction.response.send_message(embed=embed)
+        
+        embed.title = f"Found {counter} images from {message.author.name}"
+        embed.description="\n".join(images)
+        embed.set_thumbnail(url=message.author.display_avatar.url)
+        
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.guilds(*APP_GUILDS_ID)
     async def embed_colour(self, interaction: discord.Interaction, message: discord.Message):
@@ -570,7 +576,7 @@ class Utility(commands.Cog):
 
     @anime.command(name='tagsearch', description='Retrieve tags from Konachan')
     @app_commands.describe(tag_pattern="A single word to use to find matching results.")
-    async def tag_fetch(self, interaction: discord.Interaction, tag_pattern: str):
+    async def tag_fetch(self, interaction: discord.Interaction, tag_pattern: str) -> None:
 
         embed = discord.Embed(title='Results', colour=discord.Colour.dark_embed())
         embed.set_author(
@@ -584,11 +590,7 @@ class Utility(commands.Cog):
         if isinstance(tags_xml, int):
             return await interaction.response.send_message(
                 ephemeral=True,
-                embed=membed(
-                    f"The [konachan website](https://konachan.net/help) returned an erroneous status code of "
-                    f"`{tags_xml}`: {RESPONSES.setdefault(tags_xml, "the cause of the error is not known")}."
-                    f"\nYou should try again later to see if the service improves."
-                )
+                embed=membed(API_EXCEPTION)
             )
 
         if len(tags_xml) == 0:
@@ -612,9 +614,9 @@ class Utility(commands.Cog):
         descriptionerfyrd = set()
         pos = 0
         for result in tags_xml:
-            descriptionerfyrd.add(f'{pos}. '
-                                  f'{result['name']} '
-                                  f'({type_of_tag.setdefault(int(result['tag_type']), "Unknown Tag Type")})')
+            descriptionerfyrd.add(
+                f'{pos}. {result['name']} ({type_of_tag.get(int(result['tag_type']), "Unknown Tag Type")})'
+            )
         embed.set_footer(text="Some tags here don't have any posts.")
         embed.description = "\n".join(descriptionerfyrd)
         await interaction.response.send_message(embed=embed)
@@ -631,7 +633,7 @@ class Utility(commands.Cog):
                     "creampie", "paizuri", "pussy", "random", "ecchi", "fucking"
                 ]
             ]
-            ) -> discord.WebhookMessage:
+        ) -> None:
 
         await interaction.response.defer()
 
@@ -689,7 +691,7 @@ class Utility(commands.Cog):
 
     @anime.command(name='random', description="Get a completely random waifu image")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    async def waifu_random_fetch(self, interaction: discord.Interaction):
+    async def waifu_random_fetch(self, interaction: discord.Interaction) -> None:
 
         is_nsfw = interaction.channel.is_nsfw()
 
@@ -739,7 +741,8 @@ class Utility(commands.Cog):
         raiden_shogun: Optional[bool], 
         oppai: Optional[bool], 
         selfies: Optional[bool], 
-        uniform: Optional[bool]):
+        uniform: Optional[bool]
+    ) -> None:
 
         tags = []
         for param, arg in iter(interaction.namespace):
@@ -775,7 +778,7 @@ class Utility(commands.Cog):
 
     @app_commands.command(name='emojis', description='Fetch all the emojis c2c can access')
     @app_commands.guilds(*APP_GUILDS_ID)
-    async def emojis_paginator(self, interaction: discord.Interaction):
+    async def emojis_paginator(self, interaction: discord.Interaction) -> None:
         length = 10
         emotes_all = []
         for i in self.client.emojis:
@@ -813,8 +816,14 @@ class Utility(commands.Cog):
     @app_commands.default_permissions(create_instant_invite=True)
     @app_commands.describe(
         invite_lifespan='A non-zero duration in days for which the invite should last for.', 
-        maximum_uses='The maximum number of uses for the created invite.')
-    async def gen_new_invite(self, interaction: discord.Interaction, invite_lifespan: app_commands.Range[int, 1], maximum_uses: int):
+        maximum_uses='The maximum number of uses for the created invite.'
+    )
+    async def gen_new_invite(
+        self, 
+        interaction: discord.Interaction, 
+        invite_lifespan: app_commands.Range[int, 1], 
+        maximum_uses: int
+        ) -> None:
 
         maximum_uses = abs(maximum_uses)
         invite_lifespan *= 86400
@@ -854,7 +863,7 @@ class Utility(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 3, key=lambda i: i.user.id)
     @app_commands.describe(word='An english term.')
-    async def define_word(self, interaction: discord.Interaction, word: str):
+    async def define_word(self, interaction: discord.Interaction, word: str) -> None:
         try:
             the_dictionary = PyDictionary()
             choicer = word
@@ -979,7 +988,7 @@ class Utility(commands.Cog):
         interaction: discord.Interaction, 
         user: Optional[discord.User], 
         user2: discord.User
-        ) -> discord.InteractionMessage | None:
+    ) -> discord.InteractionMessage | None:
         
         start = perf_counter()
         await interaction.response.send_message("Loading..")
@@ -1005,7 +1014,7 @@ class Utility(commands.Cog):
     @app_commands.command(name='com', description='Finds most common letters in a sentences')
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(word='The sentence(s) to find the frequent letters of.')
-    async def common(self, interaction: Interaction, word: str):
+    async def common(self, interaction: Interaction, word: str) -> None:
 
         letters = []
         frequency = []
@@ -1042,7 +1051,7 @@ class Utility(commands.Cog):
     @app_commands.command(name='charinfo', description='Show you info about character. Maximum 25 at once.')
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(characters='Any written letters or symbols.')
-    async def charinfo(self, interaction: Interaction, *, characters: str):
+    async def charinfo(self, interaction: Interaction, *, characters: str) -> None:
         """Shows you information about a number of characters.
         Only up to 25 characters at a time.
         """
@@ -1061,14 +1070,14 @@ class Utility(commands.Cog):
 
     @app_commands.command(name='feedback', description='Send feedback to the c2c developers')
     @app_commands.guilds(*APP_GUILDS_ID)
-    async def feedback(self, interaction: discord.Interaction):
+    async def feedback(self, interaction: discord.Interaction) -> None:
         feedback_modal = FeedbackModal()
         await interaction.response.send_modal(feedback_modal)
 
     @app_commands.command(name='about', description='Tells you information about the bot itself')
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 10, key=lambda i: i.guild.id)
-    async def about_the_bot(self, interaction: discord.Interaction):
+    async def about_the_bot(self, interaction: discord.Interaction) -> None:
 
         await interaction.response.defer(thinking=True)
         lenslash = len(await self.client.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1
@@ -1177,7 +1186,7 @@ class Utility(commands.Cog):
 
     @commands.command(name="pickupline", description="Get pick up lines to use", aliases=('pul',))
     @commands.guild_only()
-    async def pick_up_lines(self, ctx: commands.Context):
+    async def pick_up_lines(self, ctx: commands.Context) -> discord.Message | None:
         async with ctx.typing():
             async with self.client.session.get("https://api.popcat.xyz/pickuplines") as resp:
                 if resp.status != 200:
@@ -1187,7 +1196,7 @@ class Utility(commands.Cog):
 
     @commands.command(name="wyr", description="Get 'would you rather' questions to use")
     @commands.guild_only()
-    async def would_yr(self, ctx: commands.Context):
+    async def would_yr(self, ctx: commands.Context) -> discord.Message | None:
         async with ctx.typing():
             async with self.client.session.get("https://api.popcat.xyz/wyr") as resp:
                 if resp.status != 200:
@@ -1203,7 +1212,7 @@ class Utility(commands.Cog):
 
     @commands.command(name="alert", description="Create real incoming iphone alerts")
     @commands.guild_only()
-    async def alert_iph(self, ctx: commands.Context, *, custom_text: str):
+    async def alert_iph(self, ctx: commands.Context, *, custom_text: str) -> discord.Message | None:
         async with ctx.typing():
             custom_text = '+'.join(custom_text.split(' '))
             async with self.client.session.get(
@@ -1241,7 +1250,7 @@ class Utility(commands.Cog):
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @commands.command(name='avatar', description="Display a user's enlarged avatar")
-    async def avatar(self, ctx, *, username: Union[discord.Member, discord.User] = None):
+    async def avatar(self, ctx, *, username: Union[discord.Member, discord.User] = None) -> None:
         """Shows a user's enlarged avatar (if possible)."""
         embed = discord.Embed(colour=0x2B2D31)
         username = username or ctx.author
@@ -1251,7 +1260,7 @@ class Utility(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(name='banner', description="Display a user's enlarged banner")
-    async def banner(self, ctx, *, username: Union[discord.Member, discord.User] = None):
+    async def banner(self, ctx, *, username: Union[discord.Member, discord.User] = None) -> discord.Message | None:
         """Shows a user's enlarged avatar (if possible)."""
         username = username or ctx.author
         embed = membed()
