@@ -259,13 +259,6 @@ class Owner(commands.Cog):
     async def sync_tree(self, ctx: commands.Context) -> None:
         """Sync the client's tree to either the guild or globally, varies from time to time."""
         print("syncing")
-        
-        # Application command synchronization - uncomment stmts when syncing globally
-        # ctx.bot.tree.copy_global_to(guild=discord.Object(id=780397076273954886))
-        # ctx.bot.tree.copy_global_to(guild=discord.Object(id=829053898333225010))
-        
-        # ctx.bot.tree.remove_command('balance', guild=discord.Object(id=780397076273954886))
-        # ctx.bot.tree.remove_command('balance', guild=discord.Object(id=829053898333225010))
 
         await self.client.tree.sync(guild=discord.Object(id=780397076273954886))
         await self.client.tree.sync(guild=discord.Object(id=829053898333225010))
