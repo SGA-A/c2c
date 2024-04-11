@@ -5,7 +5,7 @@ from traceback import print_exception
 from discord.ext import commands
 from discord.ui import View, Button
 from discord.utils import format_dt, utcnow
-from discord import Embed, Interaction, app_commands
+from discord import Embed, Interaction, app_commands, AppCommandOptionType
 
 from cogs.economy import membed
 
@@ -70,7 +70,11 @@ class SlashExceptionHandler(commands.Cog):
                 exception.description = f"You can run this command again {after_cd}."
             else:
                 exception = membed("Conditions needed to call this command were not met.")
-
+        elif isinstance(error, app_commands.TransformerError):
+            if error.type.value == AppCommandOptionType.user.value:
+                exception = membed(f"{error.value} is not a member of this server.")
+            else:
+                exception = membed("An error occurred while processing your input.")
         elif isinstance(error, app_commands.CommandNotFound):
             exception = membed("This command no longer exists!")
 
