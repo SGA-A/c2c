@@ -45,7 +45,7 @@ from discord import (
 
 from discord.utils import setup_logging, format_dt
 from discord.ext import commands
-from cogs.economy import membed
+from cogs.economy import membed, APP_GUILDS_ID
 
 if TYPE_CHECKING:
     from discord.abc import Snowflake
@@ -394,7 +394,7 @@ class SelectMenu(ui.Select):
         embed = Embed()
         embed.title = f"Help: {their_choice}"
         if their_choice == 'Owner':
-
+            
             all_cmds = fill_up_commands(their_choice)
 
             embed.colour = 0x5BAAEF
@@ -703,6 +703,14 @@ async def help_command_category(interaction: Interaction):
             "[GitHub](https://github.com/SGA-A/c2c)."
         )
     )
+
+    if interaction.guild.id not in APP_GUILDS_ID:
+        second = membed(
+            "Slash commands are not supported in this guild.\n"
+            "You can join the [support server](https://discord.gg/W3DKAbpJ5E) to use them.\n"
+            "You can however use the text-based commands instead."
+        )
+        return await interaction.response.send_message(embeds=[embed, second], ephemeral=True)
 
     help_view = Select()
     await interaction.response.send_message(embed=embed, view=help_view, ephemeral=True)
