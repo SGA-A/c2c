@@ -63,18 +63,6 @@ def swap_elements(x, index1, index2) -> None:
     x[index1], x[index2] = x[index2], x[index1]
 
 
-async def economy_check(interaction: discord.Interaction, original: discord.Member) -> bool:
-    """Shared interaction check common amongst most interactions."""
-    if original != interaction.user:
-        await interaction.response.send_message(
-            embed=membed(f"This menu is controlled by {original.mention}."),
-            ephemeral=True,
-            delete_after=5.0
-        )
-        return False
-    return True
-
-
 def number_to_ordinal(n):
     """Convert 01 to 1st, 02 to 2nd etc."""
     if 10 <= n % 100 <= 20:
@@ -86,6 +74,7 @@ def number_to_ordinal(n):
 
 """ALL VARIABLES AND CONSTANTS FOR THE ECONOMY ENVIRONMENT"""
 
+USER_ENTRY = Union[discord.Member, discord.User]
 BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
 INV_TABLE_NAME = "inventory"
@@ -530,6 +519,18 @@ def modify_profile(typemod: Literal["update", "create", "delete"], key: str, new
                 return "invalid type of modification value entered"
 
 
+async def economy_check(interaction: discord.Interaction, original: USER_ENTRY) -> bool:
+    """Shared interaction check common amongst most interactions."""
+    if original != interaction.user:
+        await interaction.response.send_message(
+            embed=membed(f"This menu is controlled by {original.mention}."),
+            ephemeral=True,
+            delete_after=5.0
+        )
+        return False
+    return True
+
+
 async def add_command_usage(user_id: int, command_name: str, conn: asqlite_Connection) -> int:
     """Add command usage to db. Only include the parent name if it is a subcommand."""
     
@@ -683,9 +684,9 @@ class DepositOrWithdraw(discord.ui.Modal):
 
 
 class ConfirmResetData(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction, client: commands.Bot, user_to_remove: discord.Member):
+    def __init__(self, interaction: discord.Interaction, client: commands.Bot, user_to_remove: USER_ENTRY):
         self.interaction: discord.Interaction = interaction
-        self.removing_user: discord.Member = user_to_remove
+        self.removing_user: USER_ENTRY = user_to_remove
         self.client: commands.Bot = client
         self.count = 0
         super().__init__(timeout=30.0)
@@ -1029,7 +1030,7 @@ class BalanceView(discord.ui.View):
     """View for the balance command to mange and deposit/withdraw money."""
 
     def __init__(self, interaction: discord.Interaction, client: commands.Bot,
-                 wallet: int, bank: int, bankspace: int, viewing: discord.Member):
+                 wallet: int, bank: int, bankspace: int, viewing: USER_ENTRY):
         self.interaction = interaction
         self.client: commands.Bot = client
         self.their_wallet = wallet
@@ -2443,7 +2444,7 @@ class ShowcaseView(discord.ui.View):
         except IndexError:
             self.children[1].disabled = True
 
-    async def start_updating_order(self, user: discord.Member, interaction: discord.Interaction) -> None:
+    async def start_updating_order(self, user: USER_ENTRY, interaction: discord.Interaction) -> None:
         async with interaction.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
             
@@ -2507,7 +2508,7 @@ class ItemQuantityModal(discord.ui.Modal):
     )
 
     async def calculate_discounted_price_if_any(
-            self, user: discord.Member, 
+            self, user: USER_ENTRY, 
             conn: asqlite_Connection, interaction: discord.Interaction, current_price: int) -> int:
         """Check if the user is eligible for a discount on the item."""
 
@@ -2717,7 +2718,7 @@ class Economy(commands.Cog):
         return 10 + ceil((0.75 * level / 817.9) ** 2)
 
     @staticmethod
-    async def calculate_inventory_value(user: discord.abc.User, conn: asqlite_Connection):
+    async def calculate_inventory_value(user: USER_ENTRY, conn: asqlite_Connection):
         """A reusable funtion to calculate the net value of a user's inventory"""
 
         res = await conn.execute(
@@ -2888,7 +2889,7 @@ class Economy(commands.Cog):
     # ------------------ BANK FUNCS ------------------ #
 
     @staticmethod
-    async def open_bank_new(user: discord.Member, conn_input: asqlite_Connection) -> None:
+    async def open_bank_new(user: USER_ENTRY, conn_input: asqlite_Connection) -> None:
         """Register the user, if they don't exist. Only use in balance commands (reccommended.)"""
         ranumber = randint(10_000_000, 20_000_000)
 
@@ -2898,7 +2899,7 @@ class Economy(commands.Cog):
         )
 
     @staticmethod
-    async def can_call_out(user: discord.Member | discord.User, conn_input: asqlite_Connection):
+    async def can_call_out(user: USER_ENTRY, conn_input: asqlite_Connection):
         """Check if the user is NOT in the database and therefore not registered (evaluates True if not in db).
         Example usage:
         if await self.can_call_out(interaction.user, conn):
@@ -2914,7 +2915,7 @@ class Economy(commands.Cog):
         return not data[0]
 
     @staticmethod
-    async def can_call_out_either(user1: discord.Member, user2: discord.Member, conn_input: asqlite_Connection):
+    async def can_call_out_either(user1: USER_ENTRY, user2: USER_ENTRY, conn_input: asqlite_Connection):
         """Check if both users are in the database. (evaluates True if both users are in db.)
         Example usage:
 
@@ -2930,21 +2931,24 @@ class Economy(commands.Cog):
         return data[0] == 2
 
     @staticmethod
-    async def get_wallet_data_only(user: discord.Member, conn_input: asqlite_Connection) -> Optional[Any]:
+    async def get_wallet_data_only(user: USER_ENTRY, conn_input: asqlite_Connection) -> Optional[Any]:
         """Retrieves the wallet amount only from a registered user's bank data."""
         data = await conn_input.fetchone(f"SELECT wallet FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
         return data[0]
 
     @staticmethod
-    async def get_spec_bank_data(user: discord.Member, field_name: str, conn_input: asqlite_Connection) -> Any:
+    async def get_spec_bank_data(user: USER_ENTRY, field_name: str, conn_input: asqlite_Connection) -> Any:
         """Retrieves a specific field name only from the bank table."""
         data = await conn_input.fetchone(f"SELECT {field_name} FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
         return data[0]
 
     @staticmethod
-    async def update_bank_new(user: discord.Member | discord.User, conn_input: asqlite_Connection,
-                              amount: Union[float, int, str] = 0,
-                              mode: str = "wallet") -> Optional[Any]:
+    async def update_bank_new(
+        user: USER_ENTRY, 
+        conn_input: asqlite_Connection, 
+        amount: Union[float, int, str] = 0, 
+        mode: str = "wallet"
+    ) -> Optional[Any]:
         """Modifies a user's balance in a given mode: either wallet (default) or bank.
         It also returns the new balance in the given mode, if any (defaults to wallet).
         Note that conn_input is not the last parameter, it is the second parameter to be included."""
@@ -2956,7 +2960,7 @@ class Economy(commands.Cog):
 
     @staticmethod
     async def change_bank_new(
-        user: discord.Member | discord.User, 
+        user: USER_ENTRY, 
         conn_input: asqlite_Connection, 
         amount: Union[float, int, str] = 0, 
         mode: str = "wallet") -> Optional[Any]:
@@ -2978,7 +2982,7 @@ class Economy(commands.Cog):
 
     @staticmethod
     async def update_bank_multiple_new(
-        user: discord.Member | discord.User, 
+        user: USER_ENTRY, 
         conn_input: asqlite_Connection, 
         mode1: str, 
         amount1: Union[float, int], 
@@ -3000,7 +3004,7 @@ class Economy(commands.Cog):
 
     @staticmethod
     async def update_bank_three_new(
-        user: discord.Member | discord.User, conn_input: asqlite_Connection, 
+        user: USER_ENTRY, conn_input: asqlite_Connection, 
         mode1: str, 
         amount1: Union[float, int], 
         mode2: str, 
@@ -3026,13 +3030,13 @@ class Economy(commands.Cog):
     # ------------------ INVENTORY FUNCS ------------------ #
 
     @staticmethod
-    async def open_inv_new(user: discord.Member, conn_input: asqlite_Connection) -> None:
+    async def open_inv_new(user: USER_ENTRY, conn_input: asqlite_Connection) -> None:
         """Register a new user's inventory records into the db."""
 
         await conn_input.execute(f"INSERT INTO `{INV_TABLE_NAME}` (userID) VALUES(?)", (user.id,))
 
     @staticmethod
-    async def get_one_inv_data_new(user: discord.Member, item_name: str, conn_input: asqlite_Connection) -> Optional[Any]:
+    async def get_one_inv_data_new(user: USER_ENTRY, item_name: str, conn_input: asqlite_Connection) -> Optional[Any]:
         """Fetch inventory data from one specific item inputted. Use this method before making any updates."""
         query = (
             """
@@ -3083,8 +3087,11 @@ class Economy(commands.Cog):
 
     @staticmethod
     async def update_inv_new(
-        user: discord.Member, amount: Union[float, int], 
-        item_name: str, conn: asqlite_Connection) -> Optional[Any]:
+        user: USER_ENTRY, 
+        amount: Union[float, int], 
+        item_name: str, 
+        conn: asqlite_Connection
+    ) -> Optional[Any]:
         """Modify a user's inventory."""
 
         item_row = await conn.fetchone(
@@ -3141,7 +3148,7 @@ class Economy(commands.Cog):
         return random_item[1:]
     
     @staticmethod
-    async def kill_the_user(user: discord.Member, conn_input: asqlite_Connection) -> None:
+    async def kill_the_user(user: USER_ENTRY, conn_input: asqlite_Connection) -> None:
         """Define what it means to kill a user."""
 
         await conn_input.execute(
@@ -3155,7 +3162,7 @@ class Economy(commands.Cog):
 
     @staticmethod
     async def change_inv_new(
-        user: discord.Member, 
+        user: USER_ENTRY, 
         amount: Union[float, int, None], 
         item_name: str, 
         conn: asqlite_Connection
@@ -3180,7 +3187,7 @@ class Economy(commands.Cog):
     # ------------ JOB FUNCS ----------------
 
     @staticmethod
-    async def change_job_new(user: discord.Member, conn_input: asqlite_Connection, job_name: str) -> None:
+    async def change_job_new(user: USER_ENTRY, conn_input: asqlite_Connection, job_name: str) -> None:
         """Modifies a user's job, returning the new job after changes were made."""
 
         await conn_input.execute(
@@ -3191,7 +3198,7 @@ class Economy(commands.Cog):
     # ------------ cooldowns ----------------
 
     @staticmethod
-    async def open_cooldowns(user: discord.Member, conn_input: asqlite_Connection):
+    async def open_cooldowns(user: USER_ENTRY, conn_input: asqlite_Connection):
         """Create a new row in the CD table, adding specified actions for a user in the cooldowns table."""
         await conn_input.execute(f"INSERT INTO `{COOLDOWN_TABLE_NAME}` (userID) VALUES(?)", (user.id,))
 
@@ -3210,7 +3217,7 @@ class Economy(commands.Cog):
         return True
 
     @staticmethod
-    async def update_cooldown(conn_input: asqlite_Connection, *, user: discord.Member, cooldown_type: str, new_cd: str):
+    async def update_cooldown(conn_input: asqlite_Connection, *, user: USER_ENTRY, cooldown_type: str, new_cd: str):
         """Update a user's cooldown. Requires accessing the return value via the index, so [0].
 
         Use this func to reset and create a cooldown."""
@@ -3226,14 +3233,14 @@ class Economy(commands.Cog):
     # ------------ PMULTI FUNCS -------------
 
     @staticmethod
-    async def get_pmulti_data_only(user: discord.Member, conn_input: asqlite_Connection) -> Optional[Any]:
+    async def get_pmulti_data_only(user: USER_ENTRY, conn_input: asqlite_Connection) -> Optional[Any]:
         """Retrieves the pmulti amount only from a registered user's bank data."""
         data = await conn_input.fetchone(f"SELECT pmulti FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
         return data
 
     @staticmethod
     async def change_pmulti_new(
-        user: discord.Member, 
+        user: USER_ENTRY, 
         conn_input: asqlite_Connection, 
         amount: Union[float, int] = 0, 
         mode: str = "pmulti"
@@ -3249,13 +3256,13 @@ class Economy(commands.Cog):
     # ------------------- slay ----------------
 
     @staticmethod
-    async def open_slay(conn_input: asqlite_Connection, user: discord.Member, sn: str, gd: str, dateclaim: str):
+    async def open_slay(conn_input: asqlite_Connection, user: USER_ENTRY, sn: str, gd: str, dateclaim: str):
         """
         Open a new slay entry for a user in the slay database table.
 
         Parameters:
         - conn_input (asqlite_Connection): The SQLite database connection.
-        - user (discord.Member): The Discord member for whom a new slay entry is being created.
+        - user (USER_ENTRY): The Discord member for whom a new slay entry is being created.
         - sn (str): The name of the slay.
         - gd (str): The gender of the slay.
         - pd (float): The productivity value associated with the slay.
@@ -3263,10 +3270,11 @@ class Economy(commands.Cog):
 
         await conn_input.execute(
             "INSERT INTO slay (slay_name, userID, gender, claimed) VALUES (?, ?, ?, ?)",
-            (sn, user.id, gd, dateclaim))
+            (sn, user.id, gd, dateclaim)
+        )
 
     @staticmethod
-    async def delete_slay(conn_input: asqlite_Connection, user: discord.Member, slay_name):
+    async def delete_slay(conn_input: asqlite_Connection, user: USER_ENTRY, slay_name):
         """Remove a single slay row from the db and return 1 if the row existed, 0 otherwise."""
 
         await conn_input.execute("DELETE FROM slay WHERE userID = ? AND slay_name = ?", (user.id, slay_name))
@@ -3365,7 +3373,7 @@ class Economy(commands.Cog):
     @app_commands.describe(user_name="The user whose multipliers you want to see. Defaults to your own.")
     @app_commands.rename(user_name='user')
     @app_commands.checks.cooldown(1, 6)
-    async def my_multi(self, interaction: discord.Interaction, user_name: Optional[discord.Member]):
+    async def my_multi(self, interaction: discord.Interaction, user_name: Optional[USER_ENTRY]):
         """View a user's personal multiplier and global multipliers linked with the server invocation."""
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
@@ -3434,7 +3442,7 @@ class Economy(commands.Cog):
     async def share_robux(
         self, 
         interaction: discord.Interaction, 
-        recipient: discord.Member, 
+        recipient: USER_ENTRY, 
         share_amount: str
     ) -> None:
         """"Give an amount of robux to another user."""
@@ -3492,7 +3500,7 @@ class Economy(commands.Cog):
         interaction: discord.Interaction, 
         item_name: str, 
         quantity: int, 
-        recipient: discord.Member) -> None:
+        recipient: USER_ENTRY) -> None:
         """Give an amount of items to another user."""
 
         primm = interaction.user
@@ -4460,7 +4468,7 @@ class Economy(commands.Cog):
     async def find_profile(
         self, 
         interaction: discord.Interaction, 
-        user: Optional[discord.Member], 
+        user: Optional[USER_ENTRY], 
         category: Optional[Literal["Main Profile", "Gambling Stats"]] = "Main Profile"):
         """View your profile within the economy."""
 
@@ -4881,7 +4889,7 @@ class Economy(commands.Cog):
     @app_commands.command(name='inventory', description='View your currently owned items')
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(member='The user whose inventory you want to see.')
-    async def inventory(self, interaction: discord.Interaction, member: Optional[discord.Member]):
+    async def inventory(self, interaction: discord.Interaction, member: Optional[USER_ENTRY]):
         """View your inventory or another player's inventory."""
 
         member = member or interaction.user
@@ -5131,7 +5139,7 @@ class Economy(commands.Cog):
     @app_commands.command(name="balance", description="Get someone's balance. Wallet, bank, and net worth.")
     @app_commands.describe(user='The user to find the balance of.', with_force='Register this user if not already. Only for bot owners.')
     @app_commands.guilds(*APP_GUILDS_ID)
-    async def find_balance(self, interaction: discord.Interaction, user: Optional[discord.Member], with_force: Optional[bool]):
+    async def find_balance(self, interaction: discord.Interaction, user: Optional[USER_ENTRY], with_force: Optional[bool]):
         
         user = user or interaction.user
 
@@ -5244,7 +5252,7 @@ class Economy(commands.Cog):
     @app_commands.command(name="resetmydata", description="Opt out of the virtual economy, deleting all of your data")
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(member='The player to remove all of the data of. Defaults to the user calling the command.')
-    async def discontinue_bot(self, interaction: discord.Interaction, member: Optional[discord.Member]):
+    async def discontinue_bot(self, interaction: discord.Interaction, member: Optional[USER_ENTRY]):
         """Opt out of the virtual economy and delete all of the user data associated."""
 
         if active_sessions.get(interaction.user.id):
