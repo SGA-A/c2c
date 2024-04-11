@@ -2900,7 +2900,9 @@ class Economy(commands.Cog):
 
     @staticmethod
     async def can_call_out(user: USER_ENTRY, conn_input: asqlite_Connection):
-        """Check if the user is NOT in the database and therefore not registered (evaluates True if not in db).
+        """
+        Check if the user is NOT in the database and therefore not registered (evaluates True if not in db).
+        
         Example usage:
         if await self.can_call_out(interaction.user, conn):
             await interaction.response.send_message(embed=self.not_registered)
@@ -2916,16 +2918,22 @@ class Economy(commands.Cog):
 
     @staticmethod
     async def can_call_out_either(user1: USER_ENTRY, user2: USER_ENTRY, conn_input: asqlite_Connection):
-        """Check if both users are in the database. (evaluates True if both users are in db.)
+        """
+        Check if both users are in the database. (evaluates True if both users are in db.)
         Example usage:
 
         if not(await self.can_call_out_either(interaction.user, username, conn)):
             do something
 
-        This is what should be done all the time to check if a user IS NOT REGISTERED."""
+        This is what should be done all the time to check if both users are not registereed.
+        """
+
         data = await conn_input.fetchone(
-            f"SELECT COUNT(*) FROM `{BANK_TABLE_NAME}` WHERE userID IN (?, ?)", 
-            (user1.id, user2.id)
+            f"""
+            SELECT COUNT(*) 
+            FROM {BANK_TABLE_NAME} 
+            WHERE userID IN (?, ?)
+            """, (user1.id, user2.id)
         )
 
         return data[0] == 2
@@ -2946,16 +2954,24 @@ class Economy(commands.Cog):
     async def update_bank_new(
         user: USER_ENTRY, 
         conn_input: asqlite_Connection, 
-        amount: Union[float, int, str] = 0, 
+        amount: Union[float, int] = 0, 
         mode: str = "wallet"
     ) -> Optional[Any]:
-        """Modifies a user's balance in a given mode: either wallet (default) or bank.
+        """
+        Modifies a user's balance in a given mode: either wallet (default) or bank.
+        
         It also returns the new balance in the given mode, if any (defaults to wallet).
-        Note that conn_input is not the last parameter, it is the second parameter to be included."""
+        
+        Note that conn_input is not the last parameter, it is the second parameter to be included.
+        """
 
         data = await conn_input.fetchone(
-            f"UPDATE `{BANK_TABLE_NAME}` SET `{mode}` = `{mode}` + ? WHERE userID = ? RETURNING `{mode}`",
-            (amount, user.id))
+            f"""
+            UPDATE {BANK_TABLE_NAME} 
+            SET {mode} = {mode} + ? 
+            WHERE userID = ? RETURNING `{mode}`
+            """, (amount, user.id)
+        )
         return data
 
     @staticmethod
@@ -2964,20 +2980,25 @@ class Economy(commands.Cog):
         conn_input: asqlite_Connection, 
         amount: Union[float, int, str] = 0, 
         mode: str = "wallet") -> Optional[Any]:
-        """Modifies a user's field values in any given mode.
+        """
+        Modifies a user's field values in any given mode.
 
         Unlike the other updating the bank method, this function directly changes the value to the parameter ``amount``.
 
         It also returns the new balance in the given mode, if any (defaults to wallet).
 
-        Note that conn_input is not the last parameter, it is the second parameter to be included."""
+        Note that conn_input is not the last parameter, it is the second parameter to be included.
+        """
 
-        data = await conn_input.execute(
-            f"UPDATE `{BANK_TABLE_NAME}` SET `{mode}` = ? WHERE userID = ? RETURNING `{mode}`",
-            (amount, user.id)
+        data = await conn_input.fetchone(
+            f"""
+            UPDATE {BANK_TABLE_NAME} 
+            SET `{mode}` = ? 
+            WHERE userID = ? 
+            RETURNING `{mode}`
+            """, (amount, user.id)
         )
 
-        data = await data.fetchone()
         return data
 
     @staticmethod
@@ -2988,18 +3009,24 @@ class Economy(commands.Cog):
         amount1: Union[float, int], 
         mode2: str, 
         amount2: Union[float, int], 
-        table_name: Optional[str] = "bank") -> Optional[Any]:
+        table_name: Optional[str] = "bank"
+        ) -> Optional[Any]:
         """
         Modifies any two fields at once by their respective amounts. Returning the values of both fields.
         
         You are able to choose what table you wish to modify the contents of.
         """
         
-        data = await conn_input.execute(
-            f"UPDATE `{table_name}` SET `{mode1}` = `{mode1}` + ?, `{mode2}` = `{mode2}` + ? WHERE userID = ? "
-            f"RETURNING `{mode1}`, `{mode2}`",
-            (amount1, amount2, user.id))
-        data = await data.fetchone()
+        data = await conn_input.fetchone(
+            f"""
+            UPDATE `{table_name}` 
+            SET 
+                {mode1} = {mode1} + ?, 
+                {mode2} = {mode2} + ? 
+            WHERE userID = ? 
+            RETURNING {mode1}, {mode2}
+            """, (amount1, amount2, user.id)
+        )
         return data
 
     @staticmethod
@@ -3011,21 +3038,48 @@ class Economy(commands.Cog):
         amount2: Union[float, int], 
         mode3: str, 
         amount3: Union[float, int], 
-        table_name: Optional[str] = "bank") -> Optional[Any]:
+        table_name: Optional[str] = "bank"
+        ) -> Optional[Any]:
         """
         Modifies any three fields at once by their respective amounts. Returning the values of both fields.
         
         You are able to choose what table you wish to modify the contents of.
         """
 
-        data = await conn_input.execute(
-            f"""UPDATE `{table_name}` 
-            SET `{mode1}` = `{mode1}` + ?, `{mode2}` = `{mode2}` + ?, `{mode3}` = `{mode3}` + ? WHERE userID = ? 
-            RETURNING `{mode1}`, `{mode2}`, `{mode3}`
-            """,
-            (amount1, amount2, amount3, user.id))
-        data = await data.fetchone()
+        data = await conn_input.fetchone(
+            f"""
+            UPDATE `{table_name}` 
+            SET 
+                {mode1} = {mode1} + ?, 
+                {mode2} = {mode2} + ?, 
+                {mode3} = {mode3} + ? 
+            WHERE userID = ? 
+            RETURNING {mode1}, {mode2}, {mode3}
+            """, (amount1, amount2, amount3, user.id)
+        )
+
         return data
+
+    @staticmethod
+    async def update_wallet_many(conn_input: asqlite_Connection, *params_users) -> None:
+        """
+        Update the bank of two users at once. Useful to transfer money between multiple users at once.
+        
+        The parameters are tuples, each tuple containing the amount to be added to the wallet and the user ID.
+
+        Example:
+        await Economy.update_wallet_many(conn, (100, 546086191414509599), (200, 270904126974590976))
+        """
+
+        query = (
+            """
+            UPDATE bank 
+            SET wallet = wallet + ? 
+            WHERE userID = ?
+            """
+        )
+
+        await conn_input.executemany(query, params_users)
 
     # ------------------ INVENTORY FUNCS ------------------ #
 
@@ -3076,7 +3130,8 @@ class Economy(commands.Cog):
             SELECT EXISTS (
                 SELECT 1
                 FROM inventory
-                INNER JOIN shop ON inventory.itemID = shop.itemID
+                INNER JOIN shop 
+                    ON inventory.itemID = shop.itemID
                 WHERE inventory.userID = ? AND shop.itemName = ?
             )
             """
@@ -3092,7 +3147,13 @@ class Economy(commands.Cog):
         item_name: str, 
         conn: asqlite_Connection
     ) -> Optional[Any]:
-        """Modify a user's inventory."""
+        """
+        Modify a user's inventory. 
+        
+        If the item quantity is <= 0, delete the row.
+        
+        This method should always be called when updating the inventory to ensure rows are deleted when necessary.
+        """
 
         item_row = await conn.fetchone(
             "SELECT itemID FROM shop WHERE itemName = ?", (item_name,))
@@ -3104,8 +3165,7 @@ class Economy(commands.Cog):
             SELECT qty + ? <= 0
             FROM inventory
             WHERE userID = ? AND itemID = ?
-            """, 
-            (amount, user.id, item_id)
+            """, (amount, user.id, item_id)
         )
         
         if check_result and check_result[0]:
@@ -3127,25 +3187,31 @@ class Economy(commands.Cog):
         return val
 
     @staticmethod
-    async def update_user_inventory_with_random_item(user_id: int, conn: asqlite_Connection, qty: int) -> None:
-        """Update user's inventory with a random item."""
+    async def update_user_inventory_with_random_item(user_id: int, conn: asqlite_Connection, qty: int) -> tuple:
+        """
+        Update user's inventory with a random item by a random amount requested. 
         
-        random_item_query = """
+        Return the item name and emoji.
+        """
+        random_item_query = await conn.fetchone(
+            """
             SELECT itemID, itemName, emoji
             FROM shop
             ORDER BY RANDOM()
             LIMIT 1
-        """
-
-        random_item = await conn.fetchone(random_item_query)
+            """
+        )
         
-        update_query = """
+        update_query = (
+            """
             INSERT INTO inventory (userID, itemID, qty)
-            VALUES (?, ?, ?)
+            VALUES ($0, $1, $2)
             ON CONFLICT(userID, itemID) DO UPDATE SET qty = qty + 1
-        """
-        await conn.execute(update_query, (user_id, random_item[0], qty))
-        return random_item[1:]
+            """
+        )
+
+        await conn.execute(update_query, user_id, random_item_query[0], qty)
+        return random_item_query[1:]
     
     @staticmethod
     async def kill_the_user(user: USER_ENTRY, conn_input: asqlite_Connection) -> None:
@@ -3472,16 +3538,12 @@ class Economy(commands.Cog):
                 if share_amount > wallet_amt_host:
                     return await interaction.response.send_message(
                         embed=membed("You don't have that much money to share."))
-
-                sql_query = """
-                    UPDATE bank 
-                    SET wallet = wallet + ? 
-                    WHERE userID = ?
-                """
-
-                params_sender = (-int(share_amount), user.id)
-                params_recipient = (int(share_amount), recipient.id)
-                await conn.executemany(sql_query, [params_sender, params_recipient])
+                
+                await self.update_wallet_many(
+                    conn, 
+                    (-int(share_amount), user.id), 
+                    (int(share_amount), recipient.id)
+                )
                 await conn.commit()
 
                 return await interaction.response.send_message(
@@ -3565,6 +3627,18 @@ class Economy(commands.Cog):
                                 description=f"Shared **{quantity}x {attrs[1]} {name_res}** with {recipient.mention}!"
                             )
                         )
+
+    @commands.command(name="freemium", description="Get a free random item.")
+    @commands.is_owner()
+    async def free_item(self, ctx: commands.Context):
+        async with self.client.pool_connection.acquire() as conn:
+            conn: asqlite_Connection
+            rQty = randint(1, 7)
+
+            item, emoji = await self.update_user_inventory_with_random_item(ctx.author.id, conn, rQty)
+            await conn.commit()
+
+            return await ctx.send(embed=membed(f"Success! You just got **{rQty}x** {emoji} {item}!"))
 
     showcase = app_commands.Group(
         name="showcase", 
@@ -4204,9 +4278,9 @@ class Economy(commands.Cog):
                 await self.update_bank_new(interaction.user, conn, data[0])
                 
                 if res[0]:
-                    qty = randint(1, 3)
-                    ranitem = await self.update_user_inventory_with_random_item(interaction.user.id, conn, qty)
-                    embed.description += f"\n- {qty}x {ranitem[0]} {ranitem[1]} (bonus)\n"
+                    qty = randint(1, 5)
+                    item_name, ie = await self.update_user_inventory_with_random_item(interaction.user.id, conn, qty)
+                    embed.description += f"\n- {qty}x {ie} {item_name} (bonus)\n"
                 
                 await interaction.response.send_message(embed=embed)
                 msg = await interaction.original_response()
@@ -5488,21 +5562,21 @@ class Economy(commands.Cog):
             return await interaction.response.send_message(embed=embed)
         else:
             async with self.client.pool_connection.acquire() as conn:
+                conn: asqlite_Connection
+
                 if not (await self.can_call_out_either(interaction.user, other, conn)):
                     return await interaction.response.send_message(
                         embed=membed(f'Either you or {other.mention} are not registered.')
                     )
 
-                prim_d = await conn.execute("SELECT wallet, job, bounty from `bank` WHERE userID = ?",
-                                            (interaction.user.id,))
-                prim_d = await prim_d.fetchone()
-                host_d = await conn.execute("SELECT wallet, job from `bank` WHERE userID = ?", (other.id,))
-                host_d = await host_d.fetchone()
+                prim_d = await conn.fetchone("SELECT wallet, job, bounty from `bank` WHERE userID = $0", primary_id)
+                host_d = await conn.fetchone("SELECT wallet, job from `bank` WHERE userID = $0", other_id)
 
                 if host_d[0] < 1_000_000:
                     return await interaction.response.send_message(
                         embed=membed(f"{other.mention} doesn't even have {CURRENCY} **1,000,000**, not worth it.")
                     )
+                
                 if prim_d[0] < 10_000_000:
                     return await interaction.response.send_message(
                         embed=membed(f"You need at least {CURRENCY} **10,000,000** in your wallet to rob someone.")
@@ -5514,11 +5588,13 @@ class Economy(commands.Cog):
                 async with conn.transaction():
                     if not result[0]:
                         emote = choice(
-                            [
+                            (
                                 "<a:kekRealize:970295657233539162>", "<:smhlol:1160157952410386513>", 
                                 "<:z_HaH:783399959068016661>", "<:lmao:784308818418728972>", 
                                 "<:lamaww:789865027007414293>", "<a:StoleThisEmote5:791327136296075327>", 
-                                "<:jerryLOL:792239708364341258>", "<:dogkekw:797946573144850432>"])
+                                "<:jerryLOL:792239708364341258>", "<:dogkekw:797946573144850432>"
+                            )
+                        )
                         
                         fine = randint(1, prim_d[0])
                         embed.description = (
@@ -5535,35 +5611,41 @@ class Economy(commands.Cog):
                             )
 
                             await self.update_bank_new(other, conn, +fine)
-                            await self.update_bank_new(interaction.user, conn, -fine)
-                            await conn.execute("UPDATE `bank` SET bounty = 0 WHERE userID = ?", (interaction.user.id,))
-                            
+                            query = "UPDATE `bank` SET bounty = 0, wallet = wallet - $0 WHERE userID = $1"
+                            await conn.execute(query, fine, primary_id)
                             return await interaction.response.send_message(embed=embed)
-                        
-                        await self.update_bank_new(interaction.user, conn, -fine)
-                        await self.update_bank_new(other, conn, +fine)
+
+                        await self.update_wallet_many(
+                            conn, 
+                            (fine, other_id), 
+                            (-fine, primary_id)
+                        )
+
                         return await interaction.response.send_message(embed=embed)
 
                     amt_stolen = randint(1_000_000, host_d[0])
                     lost = floor((25 / 100) * amt_stolen)
                     total = amt_stolen - lost
                     percent_stolen = floor((total/amt_stolen) * 100)
-
-                    await self.update_bank_new(interaction.user, conn, +total)
-                    await self.update_bank_new(other, conn, -total)
                     
-                    if percent_stolen >= 75:
-                        embed.title = "You stole BASICALLY EVERYTHING YOU POSSIBLY COULD!"
-                        embed.set_thumbnail(url="https://i.imgur.com/jY3PzTv.png")
-                    if percent_stolen >= 50:
-                        embed.title = "You stole a fairly decent chunk!"
-                        embed.set_thumbnail(url="https://i.imgur.com/eNIT8qw.png")
-                    if percent_stolen >= 25:
-                        embed.title = "You stole a small portion!"
-                        embed.set_thumbnail(url="https://i.imgur.com/148ClcS.png")
-                    else:
+                    await self.update_wallet_many(
+                        conn, 
+                        (total, primary_id), 
+                        (-total, other_id)
+                    )
+                    
+                    if percent_stolen <= 25:
                         embed.title = "You stole a TINY portion!"
                         embed.set_thumbnail(url="https://i.imgur.com/nZmHhJX.png")
+                    elif percent_stolen <= 50:
+                        embed.title = "You stole a small portion!"
+                        embed.set_thumbnail(url="https://i.imgur.com/148ClcS.png")
+                    elif percent_stolen <= 75:
+                        embed.title = "You stole a fairly decent chunk!"
+                        embed.set_thumbnail(url="https://i.imgur.com/eNIT8qw.png")
+                    else:
+                        embed.title = "You stole BASICALLY EVERYTHING YOU POSSIBLY COULD!"
+                        embed.set_thumbnail(url="https://i.imgur.com/jY3PzTv.png")
                     
                     embed.description = (
                         f"""
@@ -5578,35 +5660,17 @@ class Economy(commands.Cog):
     @app_commands.command(name='bankrob', description="Gather people to rob someone's bank")
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(user='The user to attempt to bankrob.')
-    @app_commands.checks.cooldown(1, 60)
     async def bankrob_the_user(self, interaction: discord.Interaction, user: discord.Member):
         """Rob someone else's bank."""
         starter_id = interaction.user.id
         user_id = user.id
 
         if user_id == starter_id:
-            return await interaction.response.send_message(
-                embed=membed("You can't bankrob yourself."))
-        elif user.bot:
-            return await interaction.response.send_message(
-                embed=membed("You can't bankrob bots."))
-        else:
-            return await interaction.response.send_message(
-                embed=membed("This command is under construction."))
+            return await interaction.response.send_message(embed=membed("You can't bankrob yourself."))
+        if user.bot:
+            return await interaction.response.send_message(embed=membed("You can't bankrob bots."))
         
-            async with self.client.pool_connection.acquire() as conn:
-                if not (await self.can_call_out_either(interaction.user, user, conn)):
-                    return await interaction.response.send_message(
-                        embed=membed(f"Either you or {user.mention} aren't registered.")
-                    )
-                wallet = await self.get_wallet_data_only(interaction.user, conn)
-                
-                if wallet < 1e6:
-                    return await interaction.response.send_message(
-                        embed=membed(
-                            f"You need at least {CURRENCY} **1,000,000** in your wallet to start a bankrobbery."
-                        )
-                    )
+        return await interaction.response.send_message(embed=membed("This command is under construction."))
 
     @app_commands.command(name='coinflip', description='Bet your robux on a coin flip', extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -5918,8 +5982,12 @@ class Economy(commands.Cog):
 
                     amount_after_multi = floor(((smulti / 100) * amount) + amount)
                     updated = await self.update_bank_three_new(
-                        interaction.user, conn, "betwa", amount_after_multi,
-                        "betw", 1, "wallet", amount_after_multi)
+                        interaction.user, 
+                        conn, 
+                        "betwa", amount_after_multi,
+                        "betw", 1, 
+                        "wallet", amount_after_multi
+                    )
 
                     prcntw = (updated[1] / (id_lose_amount + updated[1])) * 100
 
@@ -5940,8 +6008,12 @@ class Economy(commands.Cog):
                                     icon_url=interaction.user.display_avatar.url)
                 else:
                     updated = await self.update_bank_three_new(
-                        interaction.user, conn, "betla", amount,
-                        "betl", 1, "wallet", -amount)
+                        interaction.user, 
+                        conn, 
+                        "betla", amount,
+                        "betl", 1, 
+                        "wallet", -amount
+                    )
 
                     new_total = id_won_amount + updated[1]
                     prcntl = (updated[1] / new_total) * 100
