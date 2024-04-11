@@ -260,8 +260,8 @@ class Owner(commands.Cog):
         """Sync the client's tree to either the guild or globally, varies from time to time."""
         print("syncing")
 
-        await self.client.tree.sync(guild=discord.Object(id=780397076273954886))
-        await self.client.tree.sync(guild=discord.Object(id=829053898333225010))
+        for guild_id in APP_GUILDS_ID:
+            await self.client.tree.sync(guild=discord.Object(id=guild_id))
 
         await self.client.tree.sync(guild=None)
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
