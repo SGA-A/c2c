@@ -63,10 +63,7 @@ def swap_elements(x, index1, index2) -> None:
     x[index1], x[index2] = x[index2], x[index1]
 
 
-async def economy_check(
-        interaction: discord.Interaction, 
-        original: discord.Member
-    ) -> bool:
+async def economy_check(interaction: discord.Interaction, original: discord.Member) -> bool:
     """Shared interaction check common amongst most interactions."""
     if original != interaction.user:
         await interaction.response.send_message(
@@ -99,7 +96,7 @@ MIN_BET_WITHOUT = 100_000
 MAX_BET_WITHOUT = 10_000_000
 WARN_FOR_CONCURRENCY = "You are already in the middle of a transaction. Please finish that first."
 ROBUX_DESCRIPTION = 'Can be a constant number like "1234" or a shorthand (max, all, 1e6).'
-APP_GUILDS_ID = [829053898333225010, 780397076273954886]
+APP_GUILDS_ID = [829053898333225010, 780397076273954886, 720100943152021544]
 DOWN = True
 GENDER_COLOURS = {"Female": 0xF3AAE0, "Male": 0x737ECF}
 GENDOR_EMOJIS = {"Male": "<:male:1201993062885380097>", "Female": "<:female:1201992742574755891>"}
@@ -2383,6 +2380,7 @@ class ShowcaseDropdown(discord.ui.Select):
         for option in self.options:
             option.default = option.value == self.current_item
         
+        self.current_item = self.current_item if self.current_item[0] != "0" else "0"
         current_item_index = self.showcase_list.index(self.current_item)
 
         if self.current_item[0] == "0":
@@ -2416,8 +2414,13 @@ class ShowcaseView(discord.ui.View):
     
     async def on_error(self, interaction: discord.Interaction, error: Exception, _) -> None:
         print_exception(type(error), error, error.__traceback__)
+        self.stop()
+        for item in self.children:
+            item.disabled = True
         await interaction.response.send_message(
-            embed=membed("Your showcase did not update correctly."))
+            view=self,
+            embed=membed("Your showcase could not update properly.")
+        )
 
     async def on_timeout(self) -> None:
         for item in self.children:
@@ -2801,11 +2804,11 @@ class Economy(commands.Cog):
             elif chosen_choice == 'Commands':
 
                 data = await conn.fetchall(
-                    f"""
-                    SELECT `userID`, `cmds_ran` AS total_commands 
-                    FROM `{BANK_TABLE_NAME}` 
-                    GROUP BY `userID` 
-                    HAVING cmds_ran > 0
+                    """
+                    SELECT userID, SUM(cmd_count) AS total_commands
+                    FROM command_uses
+                    GROUP BY userID
+                    HAVING total_commands > 0
                     ORDER BY total_commands DESC
                     """
                 )
@@ -2824,7 +2827,7 @@ class Economy(commands.Cog):
             for i, member in enumerate(data):
                 member_name = self.client.get_user(member[0])
                 their_badge = UNIQUE_BADGES.get(member_name.id, "")
-                msg1 = f"**{i+1}.** {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
+                msg1 = f"{i+1}. {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
                 not_database.append(msg1)
             
             lb.description = (
@@ -3596,6 +3599,8 @@ class Economy(commands.Cog):
                     WHERE shop.itemID = ? AND inventory.userID = ?
                     """, (item_id, interaction.user.id)
                 )
+                if showdata is None:
+                    continue
                 id_details.update({item_id: (showdata[0], showdata[1], showdata[2])})
 
             showcase_ui_new = []
@@ -3605,17 +3610,15 @@ class Economy(commands.Cog):
                 if showcase_item == "0":
                     showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
                     continue
-                item_data = id_details[showcase_item]
-                name, emoji, qty = item_data
-                
-                if qty:
-                    showcase_ui_new.append(
-                        f"[**`{i}.`**](https://www.google.com) {emoji} {name}")
+
+                item_data = id_details.get(showcase_item)
+                if item_data is None:
+                    showcase[i-1] = "0"
+                    changes_were_made = True
+                    showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
                     continue
-                
-                showcase[i] = "0"
-                changes_were_made = True
-                showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
+
+                showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) {item_data[1]} {item_data[0]}")
 
             showbed.description += "\n".join(showcase_ui_new)
             
@@ -5438,14 +5441,19 @@ class Economy(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 6)
     @app_commands.describe(stat="The stat you want to see.")
-    async def get_leaderboard(self, interaction: discord.Interaction,
-                              stat: Literal[
-                                  "Bank + Wallet", "Wallet", "Bank", "Inventory Net", "Bounty", "Commands", "Level"]):
+    async def get_leaderboard(
+        self, 
+        interaction: discord.Interaction, 
+        stat: Literal[
+            "Bank + Wallet", "Wallet", "Bank", 
+            "Inventory Net", "Bounty", "Commands", "Level"
+        ]) -> None:
         """View the leaderboard and filter the results based on different stats inputted."""
 
         if active_sessions.get(interaction.channel.id):
             return await interaction.response.send_message(
-                embed=membed("The command is still active in this channel."))
+                embed=membed("The command is still active in this channel.")
+            )
         active_sessions.update({interaction.channel.id: 1})
 
         lb_view = Leaderboard(self.client, stat, channel_id=interaction.channel.id)
