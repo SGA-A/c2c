@@ -69,7 +69,7 @@ class SlashExceptionHandler(commands.Cog):
                 after_cd = format_dt(utcnow() + timedelta(seconds=error.retry_after), style="R")
                 exception.description = f"You can run this command again {after_cd}."
             else:
-                exception = membed("Conditions needed to call this command were not met.")
+                return  # we already respond
         elif isinstance(error, app_commands.TransformerError):
             if error.type.value == AppCommandOptionType.user.value:
                 exception = membed(f"{error.value} is not a member of this server.")
