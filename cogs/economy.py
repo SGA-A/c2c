@@ -3772,8 +3772,8 @@ class Economy(commands.Cog):
             data = await conn.fetchone(
                 """
                 SELECT inventory.qty, bank.showcase
-                FROM shop
-                INNER JOIN bank ON bank.userID = inventory.userID
+                FROM inventory
+                INNER JOIN bank ON inventory.userID = bank.userID
                 WHERE inventory.itemID = $0 AND inventory.userID = $1
                 """, item_id, interaction.user.id
             )
@@ -3834,16 +3834,16 @@ class Economy(commands.Cog):
                 return
             
             item_id, item_name, ie = item_details
-
+            
             data = await conn.fetchone(
                 """
                 SELECT inventory.qty, bank.showcase
-                FROM shop
-                INNER JOIN bank ON bank.userID = inventory.userID
+                FROM inventory
+                INNER JOIN bank ON inventory.userID = bank.userID
                 WHERE inventory.itemID = $0 AND inventory.userID = $1
                 """, item_id, interaction.user.id
             )
-            
+
             if data is None:
                 return await respond(
                     interaction=interaction,
