@@ -46,7 +46,7 @@ import aiofiles
 from other.pagination import Pagination, PaginationItem, PaginationSimple
 
 
-def membed(custom_description: str) -> discord.Embed:
+def membed(custom_description: Optional[str] = None) -> discord.Embed:
     """Quickly construct an embed with a custom description using the preset."""
     membedder = discord.Embed(colour=0x2B2D31, description=custom_description)
     return membedder
@@ -86,7 +86,6 @@ MAX_BET_WITHOUT = 10_000_000
 WARN_FOR_CONCURRENCY = "You are already in the middle of a transaction. Please finish that first."
 ROBUX_DESCRIPTION = 'Can be a constant number like "1234" or a shorthand (max, all, 1e6).'
 APP_GUILDS_ID = [829053898333225010, 780397076273954886, 720100943152021544]
-DOWN = True
 GENDER_COLOURS = {"Female": 0xF3AAE0, "Male": 0x737ECF}
 GENDOR_EMOJIS = {"Male": "<:male:1201993062885380097>", "Female": "<:female:1201992742574755891>"}
 UNIQUE_BADGES = {
@@ -129,7 +128,7 @@ ARROW = "<:arrowe:1180428600625877054>"
 CURRENCY = '\U000023e3'
 PREMIUM_CURRENCY = '<:robuxpremium:1174417815327998012>'
 STICKY_MESSAGE = "> \U0001f4cc This command is undergoing changes!\n\n"
-DOWNM = membed('This command is currently outdated and will be made available at a later date.')
+DOWNM = membed("Hang tight, maintenance is in progress!")
 NOT_REGISTERED = membed('Could not find an account associated with the user provided.')
 active_sessions = dict()
 SLOTS = ('🔥', '😳', '🌟', '💔', '🖕', '🤡', '🍕', '🍆', '🍑')
@@ -755,7 +754,7 @@ class Confirm(discord.ui.View):
         super().__init__(timeout=40.0)
         self.value = None
 
-    async def interaction_check(self, interaction: discord.Interaction[discord.Client]) -> bool:
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await economy_check(interaction, self.interaction.user)
 
     @discord.ui.button(label='Cancel', style=discord.ButtonStyle.danger)
@@ -2236,7 +2235,7 @@ class ServantsManager(discord.ui.View):
              )
         )
 
-        await respond(embed=membed(possible), delete_after=5.0)
+        await respond(interaction, embed=membed(possible), delete_after=5.0)
         await self.add_exp_handle_interactions(interaction, mode="hygiene")
 
     @discord.ui.button(label='Invest', style=discord.ButtonStyle.primary, row=1)
@@ -2659,6 +2658,34 @@ class ShopItem(discord.ui.Button):
         )
 
 
+class MatchItem(discord.ui.Button):
+    """
+    A menu to select an item from a list of items provided. 
+    
+    Should be used when the user searches for an item that matches multiple items.
+    Helps users by not having to retype the item name more specifically.
+    """
+    
+    def __init__(self, item_id: int, item_name: str, ie: str, **kwargs):
+        self.item_id = item_id
+
+        super().__init__(label=item_name, emoji=ie, custom_id=str(item_id), **kwargs)
+
+    async def on_timeout(self):
+        for item in self.view.children:
+            item.disabled = True
+        try:
+            await self.message.edit(view=self.view)
+        except discord.NotFound:
+            pass
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.chosen_item = (int(self.custom_id), self.label, self.emoji)
+
+        self.view.stop()
+        await interaction.response.edit_message(view=self.view)
+
+
 class Economy(commands.Cog):
 
     def __init__(self, client: commands.Bot):
@@ -2673,6 +2700,12 @@ class Economy(commands.Cog):
         )
         self.batch_update.start()
 
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id in self.client.owner_ids:
+            return True
+        await interaction.response.send_message(embed=DOWNM) 
+        return False
+    
     @tasks.loop(hours=1)
     async def batch_update(self):
         async with self.client.pool_connection.acquire() as conn:
@@ -2695,16 +2728,48 @@ class Economy(commands.Cog):
         self.batch_update.stop()
 
     @staticmethod
-    async def partial_match_for(item_input: str, conn: asqlite_Connection):
-        """If the user types part of an item name, get that item name indicated.
+    async def partial_match_for(interaction: discord.Interaction, item_input: str, conn: asqlite_Connection) -> None | tuple:
+        """
+        If the user types part of an item name, get that item name indicated.
 
-        This is known as partial matching for item names."""
-        res = await conn.fetchall("SELECT itemName FROM shop WHERE LOWER(itemName) LIKE LOWER(?)", f"%{item_input}%")
+        This is known as partial matching for item names.
+        """
 
-        if res:
-            if len(res) == 1:
-                return res[0]
-            return res
+        res = await conn.fetchall("SELECT itemID, itemName, emoji FROM shop WHERE LOWER(itemName) LIKE LOWER($0) LIMIT 5", f"%{item_input}%")
+
+        if not res:
+            return await interaction.response.send_message(
+                embed=membed(
+                    "This item does not exist. Are you trying"
+                    " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
+                    "1121094935802822768/1202647997641523241) an item?"
+                )
+            )
+        
+        if len(res) == 1:
+            return res[0]
+
+        match_view = discord.ui.View(timeout=15.0)
+        match_view.chosen_item = 0  # default is a falsey value
+        
+        for item in res:
+            match_view.add_item(MatchItem(ie=item[-1], item_id=item[0], item_name=item[1]))
+        
+        await interaction.response.send_message(
+            view=match_view,
+            embed=membed(
+                "There is more than one item with that name pattern.\n"
+                "Select one of the following items:"
+            )
+        )
+
+        await match_view.wait()
+        await interaction.delete_original_response()
+
+        if match_view.chosen_item:
+            return match_view.chosen_item
+
+        await interaction.followup.send(embed=membed("No item selected, cancelled your request."))
         return None
 
     @staticmethod
@@ -2725,8 +2790,8 @@ class Economy(commands.Cog):
             """
             SELECT COALESCE(SUM(shop.cost * inventory.qty), 0) AS NetValue
             FROM shop
-            LEFT JOIN inventory ON shop.itemID = inventory.itemID AND inventory.userID = ?
-            """, (user.id,)
+            LEFT JOIN inventory ON shop.itemID = inventory.itemID AND inventory.userID = $0
+            """, user.id
         )
 
         res = await res.fetchone()
@@ -3569,64 +3634,39 @@ class Economy(commands.Cog):
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
             
-            name_res = await self.partial_match_for(item_name, conn)
+            item_details = await self.partial_match_for(interaction, item_name, conn)
+            if item_details is None:
+                return
+            item_id, item_name, ie = item_details
 
-            if name_res is None:
-                return await interaction.response.send_message(
-                    embed=membed(
-                        "This item does not exist. Are you trying"
-                        " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
-                        "1121094935802822768/1202647997641523241) an item?"
-                    )
-                )
+            attrs = await conn.fetchone(
+                """
+                SELECT inventory.qty, shop.rarity
+                FROM inventory
+                INNER JOIN shop ON inventory.itemID = shop.itemID
+                WHERE inventory.userID = $0 AND inventory.itemID = $1
+                """, primm.id, item_id
+            )
 
-            elif isinstance(name_res, list):
-
-                suggestions = [item[0] for item in name_res]
-                return await interaction.response.send_message(
-                    content="There is more than one item with that name pattern.\nSelect one of the following options:",
-                    embed=membed(
-                        '\n'.join(suggestions)
-                    )
-                )
+            # not sure if we responded already so we need to check
+            if attrs is None:
+                return await respond(interaction, embed=membed(f"You don't own a single {ie} **{item_name}**."))
+            
             else:
-                name_res = name_res[0]
+                if attrs[0] < quantity:
+                    return await respond(interaction, embed=membed(f"You don't have **{quantity}x {ie} {item_name}**."))
+                
+                await self.update_inv_new(recipient, +quantity, item_name, conn)
+                await self.update_inv_new(primm, -quantity, item_name, conn)
+                await conn.commit()
 
-                if not (await self.can_call_out_either(primm, recipient, conn)):
-                    return await interaction.response.send_message(
-                        embed=membed("Either you or the recipient are not registered.")
+                await respond(
+                    interaction,
+                    embed=discord.Embed(
+                        colour=RARITY_COLOUR.get(attrs[-1], 0x2B2D31),
+                        description=f"Shared **{quantity}x {ie} {item_name}** with {recipient.mention}!"
                     )
-                else:
-
-                    attrs = await conn.fetchone(
-                        """
-                        SELECT inventory.qty, shop.emoji, shop.rarity
-                        FROM inventory
-                        INNER JOIN shop ON inventory.itemID = shop.itemID
-                        WHERE inventory.userID = $0 AND shop.itemName = $1
-                        """, primm.id, name_res
-                    )
-                    
-                    if attrs is None:
-                        return await interaction.response.send_message(
-                            embed=membed(f"You don't own a single **{name_res}**.")
-                        )
-                    else:
-                        if attrs[0] < quantity:
-                            return await interaction.response.send_message(
-                                embed=membed(f"You don't have **{quantity}x {attrs[1]} {name_res}**.")
-                            )
-                        
-                        await self.update_inv_new(recipient, +quantity, name_res, conn)
-                        await self.update_inv_new(primm, -quantity, name_res, conn)
-                        await conn.commit()
-
-                        await interaction.response.send_message(
-                            embed=discord.Embed(
-                                colour=RARITY_COLOUR.get(attrs[-1], 0x2B2D31),
-                                description=f"Shared **{quantity}x {attrs[1]} {name_res}** with {recipient.mention}!"
-                            )
-                        )
+                )
 
     @commands.command(name="freemium", description="Get a free random item.")
     @commands.is_owner()
@@ -3722,63 +3762,55 @@ class Economy(commands.Cog):
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
-            name_res = await self.partial_match_for(item_name, conn)
+            item_details = await self.partial_match_for(interaction, item_name, conn)
 
-            if name_res is None:
-                return await interaction.response.send_message(
-                    embed=membed("This item does not exist. Check the spelling and try again."))
+            if item_details is None:
+                return
+            
+            item_id, item_name, ie = item_details
 
-            elif isinstance(name_res, list):
-
-                suggestions = [item[0] for item in name_res]
-                return await interaction.response.send_message(
-                    content="There is more than one item with that name pattern.\nSelect one of the following options:",
-                    embed=membed(
-                        '\n'.join(suggestions)
-                    )
+            data = await conn.fetchone(
+                """
+                SELECT inventory.qty, bank.showcase
+                FROM shop
+                INNER JOIN bank ON bank.userID = inventory.userID
+                WHERE inventory.itemID = $0 AND inventory.userID = $1
+                """, item_id, interaction.user.id
+            )
+            
+            if data is None:
+                return await respond(
+                    interaction=interaction, 
+                    embed=membed(f"You don't have a single {ie} **{item_name}**.")
                 )
-            else:
-                name_res = name_res[0]
 
-                data = await conn.fetchone(
-                    """
-                    SELECT shop.emoji, shop.itemID, inventory.qty, bank.showcase
-                    FROM shop
-                    INNER JOIN inventory ON shop.itemID = inventory.itemID
-                    INNER JOIN bank ON bank.userID = inventory.userID
-                    WHERE shop.itemName = $0 AND inventory.userID = $1
-                    """, name_res, interaction.user.id
+            showcase: str = data[-1]
+            showcase: list = showcase.split(" ")
+
+            if not showcase.count("0"):
+                return await respond(
+                    interaction=interaction,
+                    embed=membed("You can only showcase up to `6` items.")
                 )
-                
-                if data is None:
-                    return await interaction.response.send_message(
-                        embed=membed(f"You don't have a single **{name_res}**.")
-                    )
-
-                showcase: str = data[-1]
-                showcase: list = showcase.split(" ")
-
-                if showcase.count("0") == 0:
-                    return await interaction.response.send_message(
-                        embed=membed("You can only have 6 items to showcase.")
-                    )
-
-                item_id = str(data[1])
-                if item_id in showcase:
-                    return await interaction.response.send_message(
-                        embed=membed(f"You already have a {data[0]} **{name_res}** in your showcase.")
-                    )
-                
-                placeholder = showcase.index("0")
-                showcase[placeholder] = item_id
-
-                showcase = " ".join(showcase)
-                await self.change_bank_new(interaction.user, conn, showcase, "showcase")
-                await conn.commit()
-
-                return await interaction.response.send_message(
-                    embed=membed(f"Added {data[0]} **{name_res}** to your showcase!")
+            
+            item_id = str(item_id)
+            if item_id in showcase:
+                return await respond(
+                    interaction=interaction,
+                    embed=membed(f"You already have a {ie} **{item_name}** in your showcase.")
                 )
+            
+            placeholder = showcase.index("0")
+            showcase[placeholder] = item_id
+
+            showcase = " ".join(showcase)
+            await self.change_bank_new(interaction.user, conn, showcase, "showcase")
+            await conn.commit()
+
+            return await respond(
+                interaction=interaction,
+                embed=membed(f"Added {ie} **{item_name}** to your showcase!")
+            )
 
     @showcase.command(name="remove", description="Remove an item from your showcase", extras={"exp_gained": 1})
     @app_commands.checks.cooldown(1, 10)
@@ -3786,7 +3818,8 @@ class Economy(commands.Cog):
     async def remove_showcase_item(
         self, 
         interaction: discord.Interaction, 
-        item_name: str) -> None:
+        item_name: str
+        ) -> None:
         """This is a subcommand. Removes an existing item from your showcase."""
 
         async with self.client.pool_connection.acquire() as conn:
@@ -3795,55 +3828,49 @@ class Economy(commands.Cog):
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
 
-            name_res = await self.partial_match_for(item_name, conn)
+            item_details = await self.partial_match_for(interaction, item_name, conn)
 
-            if name_res is None:
-                return await interaction.response.send_message(
-                    embed=membed("This item does not exist. Check the spelling and try again."))
+            if item_details is None:
+                return
+            
+            item_id, item_name, ie = item_details
 
-            elif isinstance(name_res, list):
-
-                suggestions = [item[0] for item in name_res]
-                return await interaction.response.send_message(
-                    content="There is more than one item with that name pattern.\nSelect one of the following options:",
-                    embed=membed('\n'.join(suggestions)))
-            else:
-                name_res = name_res[0]
-
-                data = await conn.fetchone(
-                    """
-                    SELECT shop.emoji, shop.itemID, inventory.qty, bank.showcase
-                    FROM shop
-                    INNER JOIN inventory ON shop.itemID = inventory.itemID
-                    INNER JOIN bank ON bank.userID = inventory.userID
-                    WHERE shop.itemName = $0 AND inventory.userID = $1
-                    """, name_res, interaction.user.id
+            data = await conn.fetchone(
+                """
+                SELECT inventory.qty, bank.showcase
+                FROM shop
+                INNER JOIN bank ON bank.userID = inventory.userID
+                WHERE inventory.itemID = $0 AND inventory.userID = $1
+                """, item_id, interaction.user.id
+            )
+            
+            if data is None:
+                return await respond(
+                    interaction=interaction,
+                    embed=membed(f"You don't have a single {ie} **{item_name}**.")
                 )
-                
-                if data is None:
-                    return await interaction.response.send_message(
-                        embed=membed(f"You don't have a single **{name_res}**.")
-                    )
 
-                showcase: str = data[-1]
-                showcase: list = showcase.split(" ")
+            showcase: str = data[-1]
+            showcase: list = showcase.split(" ")
 
-                item_id = str(data[1])
-                if item_id not in showcase:
-                    return await interaction.response.send_message(
-                        embed=membed(f"You don't have a {data[0]} **{name_res}** in your showcase.")
-                    )
-                
-                initial = showcase.index(item_id)
-                showcase[initial] = "0"
-
-                showcase = " ".join(showcase)
-                await self.change_bank_new(interaction.user, conn, showcase, "showcase")
-                await conn.commit()
-
-                await interaction.response.send_message(
-                    embed=membed(f"Removed {data[0]} **{name_res}** from your showcase!")
+            item_id = str(item_id)
+            if item_id not in showcase:
+                return await respond(
+                    interaction=interaction,
+                    embed=membed(f"You don't have a {ie} **{item_name}** in your showcase.")
                 )
+            
+            initial = showcase.index(item_id)
+            showcase[initial] = "0"
+
+            showcase = " ".join(showcase)
+            await self.change_bank_new(interaction.user, conn, showcase, "showcase")
+            await conn.commit()
+
+            await respond(
+                interaction=interaction,
+                embed=membed(f"Removed {ie} **{item_name}** from your showcase!")
+            )
 
     shop = app_commands.Group(
         name='shop', 
@@ -3918,9 +3945,8 @@ class Economy(commands.Cog):
         self, 
         interaction: discord.Interaction, 
         item_name: str, 
-        sell_quantity: Optional[int] = 1) -> None:
+        sell_quantity: Optional[app_commands.Range[int, 1]] = 1) -> None:
         """Sell an item you already own."""
-
         sell_quantity = abs(sell_quantity)
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
@@ -3928,75 +3954,58 @@ class Economy(commands.Cog):
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
 
-            name_res = await self.partial_match_for(item_name, conn)
+            item_details = await self.partial_match_for(interaction, item_name, conn)
 
-            if name_res is None:
-                return await interaction.response.send_message(
-                    "This item does not exist. Are you trying"
-                    " to [SUGGEST](https://ptb.discord.com/channels/829053898333225010/"
-                    "1121094935802822768/1202647997641523241) an item?")
+            if item_details is None:
+                return
+            item_id, item_name, ie = item_details
 
-            elif isinstance(name_res, list):
+            item_attrs = await conn.fetchone(
+                """
+                SELECT shop.cost, inventory.qty
+                FROM shop
+                INNER JOIN inventory ON shop.itemID = inventory.itemID
+                WHERE shop.itemID = $0 AND inventory.userID = $1
+                """, item_id, interaction.user.id
+            )
 
-                suggestions = [item[0] for item in name_res]
-                return await interaction.response.send_message(
-                    content="There is more than one item with that name pattern.\nSelect one of the following options:",
-                    embed=membed('\n'.join(suggestions)))
-            else:
-                name_res = name_res[0]
-                wallet_amt = await conn.fetchone(
-                    """
-                    SELECT wallet 
-                    FROM bank 
-                    WHERE userID = $0
-                    """, interaction.user.id)
-                
-                if wallet_amt is None:
-                    return await interaction.response.send_message(
-                        embed=membed("You don't have this item.")
-                    )
-                wallet_amt = wallet_amt[0]
-
-                item_attrs = await conn.fetchone(
-                    """
-                    SELECT shop.emoji, shop.cost, inventory.qty
-                    FROM shop
-                    INNER JOIN inventory ON shop.itemID = inventory.itemID
-                    WHERE shop.itemName = $0 AND inventory.userID = $1
-                    """, name_res, interaction.user.id
-                )
-
-                emoji, cost, qty = item_attrs
-                new_qty = qty - sell_quantity
-                
-                if new_qty < 0:
-                    return await interaction.response.send_message(
-                        embed=membed(f"You're **{abs(new_qty)}** short on selling {emoji} **{sell_quantity:,}x** {name_res}, so uh no."))
-
-                cost = floor((cost * sell_quantity) / 4)
-                value = await process_confirmation(
+            if item_attrs is None:
+                return await respond(
                     interaction=interaction, 
-                    prompt=(
-                        f"Are you sure you want to sell **{sell_quantity:,}x "
-                        f"{emoji} {name_res}** for **{CURRENCY} {cost:,}**?"
-                    )
+                    embed=membed(f"You don't own a single {ie} **{item_name}**.")
+                )
+            
+            cost, qty = item_attrs
+            
+            new_qty = qty - sell_quantity
+            if new_qty < 0:
+                return await respond(
+                    interaction=interaction, 
+                    embed=membed(f"You're **{abs(new_qty)}x** short on selling {ie} **{sell_quantity:,}x** {item_name}, so uh no.")
                 )
 
-                if value:
-                    await self.change_inv_new(interaction.user, new_qty, name_res, conn)
-                    await self.update_bank_new(interaction.user, conn, +cost)
-                    await conn.commit()
+            cost = floor((cost * sell_quantity) / 4)
+            value = await process_confirmation(
+                interaction=interaction, 
+                prompt=(
+                    f"Are you sure you want to sell **{sell_quantity:,}x "
+                    f"{ie} {item_name}** for **{CURRENCY} {cost:,}**?"
+                )
+            )
 
-                    embed = discord.Embed()
-                    embed.title = f"{interaction.user.global_name}'s Sale Receipt"
-                    embed.description=(
-                        f"{interaction.user.mention} sold **{sell_quantity:,}x {emoji} {name_res}** "
-                        f"and got paid {CURRENCY} **{cost:,}**.")
-                    embed.colour = 0x2B2D31
-                    
-                    embed.set_footer(text="Thanks for your business.")
+            if value:
+                await self.change_inv_new(interaction.user, new_qty, item_name, conn)
+                await self.update_bank_new(interaction.user, conn, +cost)
+                await conn.commit()
 
-                    await interaction.followup.send(embed=embed)
+                embed = membed(
+                    f"{interaction.user.mention} sold **{sell_quantity:,}x {ie} {item_name}** "
+                    f"and got paid {CURRENCY} **{cost:,}**."
+                )
+                embed.title = f"{interaction.user.global_name}'s Sale Receipt"
+                embed.set_footer(text="Thanks for your business.")
+
+                await interaction.followup.send(embed=embed)
 
     @app_commands.command(name='item', description='Get more details on a specific item')
     @app_commands.describe(item_name='Select an item.')
@@ -4007,57 +4016,71 @@ class Economy(commands.Cog):
 
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
-            name_res = await self.partial_match_for(item_name, conn)
+            item_details = await self.partial_match_for(interaction, item_name, conn)
 
-            if name_res is None:
-                return await interaction.response.send_message(
-                    embed=membed("This item does not exist. Check the spelling and try again."))
+            if item_details is None:
+                return
+            item_id, item_name, _ = item_details
 
-            elif isinstance(name_res, list):
+            data = await conn.fetchone(
+                """
+                SELECT 
+                    cost, 
+                    description, 
+                    image, 
+                    rarity, 
+                    emoji, 
+                    available 
+                FROM shop 
+                WHERE itemID = $0
+                """, item_id
+            )
 
-                suggestions = [item[0] for item in name_res]
-                return await interaction.response.send_message(
-                    content="There is more than one item with that name pattern.\nSelect one of the following options:",
-                    embed=membed('\n'.join(suggestions)))
+            total_count, = await conn.fetchone(
+                """
+                SELECT COALESCE(COUNT(DISTINCT userID), 0)
+                FROM inventory
+                WHERE itemID = $0
+                """, item_id
+            )
+            
+            their_count = await conn.fetchone(
+                """
+                SELECT qty
+                FROM inventory
+                WHERE itemID = $0 AND userID = $1
+                """, item_id, interaction.user.id
+            )
+            
+            if their_count is None:
+                their_count = 0
             else:
-                name_res = name_res[0]
-                data = await conn.fetchone("SELECT cost, description, image, rarity, emoji, available FROM shop WHERE itemName = ?", name_res)
-                
-                dynamic_text = f"> {data[1]}\n\n"
-                dynamic_text += f"This item {"can" if data[5] else "cannot"} be purchased.\n"
+                their_count, = their_count
 
-                total_count = await conn.fetchone(
-                    """
-                    SELECT COALESCE(COUNT(DISTINCT userID), 0)
-                    FROM inventory
-                    INNER JOIN shop ON inventory.itemID = shop.itemID
-                    WHERE shop.itemName = $0
-                    """, name_res
-                )
+            dynamic_text = (
+                f"> {data[1]}\n\n"
+                f"This item {"can" if data[5] else "cannot"} be purchased.\n"
+                f"**{total_count}** {make_plural("person", total_count)} {plural_for_own(total_count)} this item.\n"
+                f"You own **{their_count}**."
+            )
 
-                total_count = total_count[0]
-                dynamic_text += f"**{total_count}** {make_plural("person", total_count)} {plural_for_own(total_count)} this item.\n"
-                
-                their_count = await self.get_one_inv_data_new(interaction.user, name_res, conn)
-                dynamic_text += f"You own **{their_count}**."
+            net = await self.calculate_inventory_value(interaction.user, conn)
+            if their_count:
+                amt = ((their_count*data[0])/net)*100
+                dynamic_text += f" ({amt:.1f}% of your net worth)"
 
-                net = await self.calculate_inventory_value(interaction.user, conn)
-
-                if their_count:
-                    amt = ((their_count*data[0])/net)*100
-                    dynamic_text += f" ({amt:.1f}% of your net worth)"
-
-                em = discord.Embed(
-                    title=name_res,
-                    description=dynamic_text, 
-                    colour=RARITY_COLOUR.get(data[3], 0x2B2D31), 
-                    url="https://www.youtube.com")
-                
-                em.set_thumbnail(url=data[2])
-                em.add_field(name="Buying price", value=f"<:robux:1146394968882151434> {data[0]:,}")
-                em.add_field(name="Selling price", value=f"<:robux:1146394968882151434> {floor(int(data[0]) / 4):,}")
-                em.set_footer(text=f"This is {data[3].lower()}!")
-                return await interaction.response.send_message(embed=em)
+            em = discord.Embed(
+                title=item_name,
+                description=dynamic_text, 
+                colour=RARITY_COLOUR.get(data[3], 0x2B2D31), 
+                url="https://www.youtube.com"
+            )
+            
+            em.set_thumbnail(url=data[2])
+            em.add_field(name="Buying price", value=f"<:robux:1146394968882151434> {data[0]:,}")
+            em.add_field(name="Selling price", value=f"<:robux:1146394968882151434> {floor(int(data[0]) / 4):,}")
+            em.set_footer(text=f"This is {data[3].lower()}!")
+            return await respond(interaction=interaction, embed=em)
 
     servant = app_commands.Group(
         name='servant', 
@@ -4312,17 +4335,21 @@ class Economy(commands.Cog):
             )
 
     @register_item('Bank Note')
-    async def increase_bank_space(interaction, quantity: int, conn: asqlite_Connection):
+    async def increase_bank_space(interaction: discord.Interaction, quantity: int, conn: asqlite_Connection):
         expansion = randint(1_600_000, 6_000_000)
         expansion *= quantity
-        new_bankspace = await conn.execute(
-            "UPDATE bank SET bankspace = bankspace + ? WHERE userID = ? RETURNING bankspace", 
-            (expansion, interaction.user.id)
+        new_bankspace = await conn.fetchone(
+            """
+            UPDATE bank 
+            SET bankspace = bankspace + $0 
+            WHERE userID = $1 
+            RETURNING bankspace
+            """, expansion, interaction.user.id
         )
-        new_bankspace = await new_bankspace.fetchone()
+
         new_amt = await Economy.update_inv_new(interaction.user, -quantity, "Bank Note", conn)
         
-        embed = discord.Embed(colour=0x2B2D31)
+        embed = membed()
         
         embed.add_field(
             name="Used", 
@@ -4341,13 +4368,14 @@ class Economy(commands.Cog):
 
         embed.set_footer(text=f"{new_amt[0]:,}x bank note left")
         await conn.commit()
-        await interaction.response.send_message(embed=embed)
+        await respond(interaction=interaction, embed=embed)
 
     @register_item('Trophy')
     async def handle_trophy(interaction, quantity):
         content = f'\nThey have **{quantity}** of them, WHAT A BADASS' if quantity > 1 else ''
         
-        await interaction.response.send_message(
+        await respond(
+            interaction=interaction,
             embed=membed(
                 f"{interaction.user.name} is flexing on you all "
                 f"with their <:tr1:1165936712468418591> **~~PEPE~~ TROPHY**{content}"
@@ -4365,55 +4393,43 @@ class Economy(commands.Cog):
         async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
             
-            name_res = await self.partial_match_for(item, conn)
+            item_details = await self.partial_match_for(interaction, item, conn)
 
-            if name_res is None:
-                return await interaction.response.send_message(
-                    embed=membed("This item does not exist. Check the spelling and try again.")
-                )
+            if item_details is None:
+                return
+            item_id, item_name, ie = item_details
 
-            elif isinstance(name_res, list):
+            data = await conn.fetchone(
+                """
+                SELECT qty
+                FROM inventory
+                WHERE itemID = $0 AND userID = $1
+                """, item_id, interaction.user.id
+            )
 
-                suggestions = [item[0] for item in name_res]
-                return await interaction.response.send_message(
-                    content="There is more than one item with that name pattern.\nSelect one of the following options:",
-                    embed=membed(
-                        '\n'.join(suggestions)
-                    )
+            if not data:
+                return await respond(
+                    interaction=interaction,
+                    embed=membed(f"You don't own a single {ie} **{item_name}**, therefore cannot use it.")
                 )
             
-            else:
-                name_res = name_res[0]
-
-                data = await conn.fetchone(
-                    """
-                    SELECT shop.emoji, inventory.qty
-                    FROM shop
-                    INNER JOIN inventory ON shop.itemID = inventory.itemID
-                    WHERE shop.itemName = $0 AND inventory.userID = $1
-                    """, name_res, interaction.user.id
+            qty, = data
+            if qty < quantity:
+                return await respond(
+                    interaction=interaction,
+                    embed=membed(f"You don't own **{quantity}x {ie} {item_name}**, therefore cannot use this many.")
                 )
-
-                if not data:
-                    return await interaction.response.send_message(
-                        embed=membed(f"You don't own a single {name_res}, therefore cannot use it.")
-                    )
-                
-                ie, qty = data
-                if qty < quantity:
-                    return await interaction.response.send_message(
-                        embed=membed(f"You don't own **{quantity}x {ie} {name_res}**, therefore cannot use this many.")
-                    )
-                
-                handler = item_handlers.get(name_res)
-                if handler is None:
-                    return await interaction.response.send_message(
-                        embed=membed(f"{ie} **{name_res}** does not have a use yet.")
-                    )
-                
-                if name_res == "Bank Note":
-                    return await handler(interaction, quantity, conn)
-                await handler(interaction, qty)
+            
+            handler = item_handlers.get(item_name)
+            if handler is None:
+                return await respond(
+                    interaction=interaction,
+                    embed=membed(f"{ie} **{item_name}** does not have a use yet.")
+                )
+            
+            if item_name == "Bank Note":
+                return await handler(interaction, quantity, conn)
+            await handler(interaction, qty)
 
     @app_commands.command(name="prestige", description="Sacrifice currency stats in exchange for incremental perks")
     @app_commands.guilds(*APP_GUILDS_ID)
