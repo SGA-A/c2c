@@ -697,6 +697,7 @@ async def help_command_category(interaction: Interaction):
         value=(
             "Here's the gist:\n"
             f"- Made by Splint#6019 and Geo#2181 on <t:1669831154:f> (<t:1669831154:R>)\n{extra}"
+            "- I have some features that might make your day a little brighter, like music!\n"
             f"- I'm a private bot, only in `{len(interaction.client.guilds)}` servers!\n"
             "- Use the dropdown below to see what I have to offer.\n\n"
             f"I'm also open source. You can find my code on {epicker} "
