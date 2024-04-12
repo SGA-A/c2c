@@ -354,8 +354,11 @@ class TempVoice(commands.Cog):
     )
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return self.active_voice_channels.get(interaction.user.id) is not None
-
+        if self.active_voice_channels.get(interaction.user.id) is not None:
+            return True
+        await interaction.response.send_message(embed=membed("You haven't created your own channel yet."))
+        return False
+    
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.command(name="setup", description="Setup a creator channel for temporary voice channels")
     @app_commands.describe(creator_channel="The channel to use for making temporary voice channels.")
