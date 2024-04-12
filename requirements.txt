@@ -16,7 +16,7 @@ discord.py @ file:///C:/Users/georg/Documents/c2c/discord.py
 frozenlist==1.4.1
 futures==3.0.5
 goslate==1.5.4
-idna==3.6
+idna==3.7
 image-charts==6.1.29
 multidict==6.0.5
 pluralizer==1.2.0
