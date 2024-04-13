@@ -180,8 +180,8 @@ async def send_boilerplate_confirm(ctx: commands.Context, custom_description: st
 
 class Tags(commands.Cog):
 
-    def __init__(self, bot: commands.Bot):
-        self.bot: commands.Bot = bot
+    def __init__(self, client: commands.Bot):
+        self.client: commands.Bot = client
 
         # ownerID: set(name)
         self._reserved_tags_being_made: set[str] = set()
@@ -191,11 +191,11 @@ class Tags(commands.Cog):
             callback=self.view_their_tags
         )
 
-        self.bot.tree.add_command(self.view_tags)
+        self.client.tree.add_command(self.view_tags)
 
     async def non_aliased_tag_autocomplete(self, _: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
             
             query = (
                 """
@@ -212,7 +212,7 @@ class Tags(commands.Cog):
         
     async def owned_non_aliased_tag_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
 
             query = (
                 """
@@ -291,7 +291,7 @@ class Tags(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_ID)
     async def view_their_tags(self, interaction: discord.Interaction, user: discord.Member):
 
-        async with interaction.client.pool.acquire() as conn:
+        async with interaction.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
             query = (
@@ -316,7 +316,7 @@ class Tags(commands.Cog):
     @app_commands.describe(name='The tag to retrieve.')
     @app_commands.autocomplete(name=non_aliased_tag_autocomplete)
     async def tag(self, ctx: commands.Context, *, name: str):
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
             
             try:
                 name, content = await self.get_tag_content(name, conn)
@@ -345,14 +345,14 @@ class Tags(commands.Cog):
         if len(content) > 2000:
             return await ctx.send(embed=membed('Tag content is a maximum of 2000 characters.'))
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
             await self.create_tag(ctx, name, content, conn=conn)
     
     @tag.command(description="Interactively make your own tag", ignore_extra=True)
     @app_commands.guilds(*APP_GUILDS_ID)
     async def make(self, ctx: commands.Context):
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
 
             if ctx.interaction is not None:
                 modal = TagMakeModal(self, ctx, conn=conn)
@@ -367,7 +367,7 @@ class Tags(commands.Cog):
                 return msg.author == ctx.author and ctx.channel == msg.channel
 
             try:
-                name = await self.bot.wait_for('message', timeout=15.0, check=check)
+                name = await self.client.wait_for('message', timeout=15.0, check=check)
             except asyncio.TimeoutError:
                 return await ctx.send(embed=membed('You took too long.'))
 
@@ -410,7 +410,7 @@ class Tags(commands.Cog):
             )
 
             try:
-                msg = await self.bot.wait_for('message', check=check, timeout=60.0)
+                msg = await self.client.wait_for('message', check=check, timeout=60.0)
             except asyncio.TimeoutError:
                 self.remove_in_progress_tag(name)
                 return await ctx.send(embed=membed('You took too long.'))
@@ -457,7 +457,7 @@ class Tags(commands.Cog):
             if ctx.interaction is None:
                 return await ctx.send(embed=membed("Missing content to edit with"))
             
-            async with self.bot.pool.acquire() as conn:
+            async with self.client.pool_connection.acquire() as conn:
                 query = "SELECT content FROM tags WHERE LOWER(name)=$0 AND ownerID=$1"
                 row: Optional[tuple[str]] = await conn.fetchone(query, name, ctx.author.id)
                 
@@ -474,7 +474,7 @@ class Tags(commands.Cog):
         if len(content) > 2000:
             return await ctx.send(embed=membed('Tag content can only be up to 2000 characters'))
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
 
             query = "UPDATE tags SET content = $0 WHERE LOWER(name) = $1 AND ownerID = $2 RETURNING name"
             
@@ -492,7 +492,7 @@ class Tags(commands.Cog):
     @app_commands.autocomplete(name=owned_non_aliased_tag_autocomplete)
     async def remove(self, ctx: commands.Context, *, name: Annotated[str, TagName(lower=True)]):
 
-        bypass_owner_check = ctx.author.id in self.bot.owner_ids
+        bypass_owner_check = ctx.author.id in self.client.owner_ids
         clause = "LOWER(name)=$0"
 
         if bypass_owner_check:
@@ -501,7 +501,7 @@ class Tags(commands.Cog):
             args = (name, ctx.author.id)
             clause = f"{clause} AND ownerID=$1"
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
 
             query = f"DELETE FROM tags WHERE {clause} RETURNING rowid"
             deleted_id = await conn.fetchone(query, *args)
@@ -516,7 +516,7 @@ class Tags(commands.Cog):
     @app_commands.rename(tag_id='id')
     async def remove_id(self, ctx: commands.Context, tag_id: int):
 
-        bypass_owner_check = ctx.author.id in self.bot.owner_ids
+        bypass_owner_check = ctx.author.id in self.client.owner_ids
         clause = 'rowid=$0'
 
         if bypass_owner_check:
@@ -525,7 +525,7 @@ class Tags(commands.Cog):
             args = (tag_id, ctx.author.id)
             clause = f'{clause} AND ownerID=$1'
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
             query = f'DELETE FROM tags WHERE {clause} RETURNING rowid'
             deleted = await conn.fetchone(query, *args)
 
@@ -544,7 +544,7 @@ class Tags(commands.Cog):
         embed.timestamp = datetime.datetime.fromtimestamp(created_at, tz=datetime.timezone.utc)
         embed.set_footer(text='Tag created')
 
-        user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
+        user = self.client.get_user(owner_id) or (await self.client.fetch_user(owner_id))
         embed.set_author(name=str(user), icon_url=user.display_avatar.url)
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
@@ -573,8 +573,7 @@ class Tags(commands.Cog):
     @app_commands.describe(name='The tag to retrieve information for.')
     @app_commands.autocomplete(name=non_aliased_tag_autocomplete)
     async def info(self, ctx: commands.Context, *, name: Annotated[str, TagName(lower=True)]):
-        
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
             query = (
                 """
                 SELECT rowid, name, uses, ownerID, created_at
@@ -594,10 +593,10 @@ class Tags(commands.Cog):
     @app_commands.describe(user='The user to remove all tags .')
     async def purge(self, ctx: commands.Context, user: Optional[discord.Member] = commands.Author):
 
-        if (ctx.author.id != user.id) and (ctx.author.id not in self.bot.owner_ids):
+        if (ctx.author.id != user.id) and (ctx.author.id not in self.client.owner_ids):
             return await ctx.send(embed=membed("Only bot owners can do this."))
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
             query = "SELECT COUNT(*) FROM tags WHERE ownerID=$0"
@@ -647,7 +646,7 @@ class Tags(commands.Cog):
         if interaction is None:
             return await ctx.send(embed=membed(NOT_SUPPORTED))
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
 
             sql = (
                 """
@@ -674,7 +673,7 @@ class Tags(commands.Cog):
         if member.bot:
             return await ctx.send(embed=membed('You cannot transfer tags to bots.'))
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
             query = "SELECT rowid FROM tags WHERE LOWER(name)=$0 AND ownerID=$1"
@@ -697,7 +696,7 @@ class Tags(commands.Cog):
         if interaction is None:
             return await ctx.send(embed=membed(NOT_SUPPORTED))
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
             query = (
                 """
                 SELECT name, rowid
@@ -716,7 +715,7 @@ class Tags(commands.Cog):
     @tag.command(description="Display a random tag")
     @app_commands.guilds(*APP_GUILDS_ID)
     async def random(self, ctx: commands.Context):
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
             query = (
                 """
                 SELECT name, content
@@ -736,5 +735,5 @@ class Tags(commands.Cog):
             await ctx.send(content=content)
 
 
-async def setup(bot: commands.Bot):
-    await bot.add_cog(Tags(bot))
+async def setup(client: commands.Bot):
+    await client.add_cog(Tags(client))

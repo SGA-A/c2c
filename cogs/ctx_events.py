@@ -11,8 +11,8 @@ from .slash_events import MessageDevelopers
 
 class ContextCommandHandler(commands.Cog):
     """The error handler for text-based commands that are called."""
-    def __init__(self, bot: commands.Bot):
-        self.bot = bot
+    def __init__(self, client: commands.Bot):
+        self.client = client
         self.err = commands.errors
 
     @commands.Cog.listener()
@@ -95,6 +95,6 @@ class ContextCommandHandler(commands.Cog):
             )
 
 
-async def setup(bot: commands.Bot):
+async def setup(client):
     """Setup function to initiate the cog."""
-    await bot.add_cog(ContextCommandHandler(bot))
+    await client.add_cog(ContextCommandHandler(client))

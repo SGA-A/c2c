@@ -12,8 +12,8 @@ from discord import (
 
 
 class Music(commands.Cog):
-    def __init__(self, bot: commands.Bot):
-        self.bot: commands.Bot = bot
+    def __init__(self, client: commands.Bot):
+        self.client: commands.Bot = client
 
     async def cog_check(self, ctx: commands.Context) -> bool:
         role = ctx.guild.get_role(990900517301522432)
@@ -23,7 +23,8 @@ class Music(commands.Cog):
 
     async def play_source(self, voice_client):
         source = FFmpegPCMAudio("C:\\Users\\georg\\PycharmProjects\\c2c\\other\\battlet.mp3")
-        voice_client.play(source, after=lambda e: print('Player error: %s' % e) if e else self.bot.loop.create_task(self.play_source(voice_client)))
+        voice_client.play(source, after=lambda e: print('Player error: %s' % e) if e else self.client.loop.create_task(
+            self.play_source(voice_client)))
 
     @commands.command(name='join', description="Join a voice channel")
     async def join(self, ctx, *, channel: VoiceChannel):
@@ -36,12 +37,12 @@ class Music(commands.Cog):
         await channel.connect(self_deaf=True)
 
     @commands.command(name='preset', description='Quickly join and play some music')
-    async def use_preset(self, ctx: commands.Context):
+    async def use_preset(self, ctx):
         async with ctx.typing():
             if ctx.author.voice:
                 channel = ctx.message.author.voice.channel
                 voice = await channel.connect(self_deaf=True)
-                await self.bot.loop.create_task(self.play_source(voice))
+                await self.client.loop.create_task(self.play_source(voice))
                 await ctx.send("Done. Now playing `Scaramouche Battle Theme.mp3`")
             else:
                 await ctx.send('You aren\'t in a voice channel.')
@@ -70,7 +71,7 @@ class Music(commands.Cog):
             return message.channel == channel and message.content in {"1", "2", "3", "4", "5", "6", "7"}
 
         try:
-            msg = await self.bot.wait_for('message', check=check, timeout=15.0)
+            msg = await self.client.wait_for('message', check=check, timeout=15.0)
 
         except asyncTE:
             await my_msg.edit(content="Timed out waiting for a response.", embed=None)
@@ -149,5 +150,5 @@ class Music(commands.Cog):
             ctx.voice_client.stop()
 
 
-async def setup(bot: commands.Bot):
-    await bot.add_cog(Music(bot))
+async def setup(client: commands.Bot):
+    await client.add_cog(Music(client))

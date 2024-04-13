@@ -13,10 +13,10 @@ def return_default_user_voice_settings(name: str) -> tuple:
 
 
 class MemberSelect(discord.ui.UserSelect):
-    def __init__(self, bot: commands.Bot, mode: Literal["Block", "Trust"], user: discord.Member):
-        self.bot = bot
+    def __init__(self, client: commands.Bot, mode: Literal["Block", "Trust"], user: discord.Member):
+        self.client = client
         self.mode = mode
-        self.tempvoice = bot.get_cog("TempVoice")
+        self.tempvoice = client.get_cog("TempVoice")
         self.verb = f"{self.mode.lower()}ed"
         self.user_data: set[str] = self.tempvoice.active_voice_channels[user.id][self.verb]
 
@@ -58,7 +58,7 @@ class MemberSelect(discord.ui.UserSelect):
                 embed=membed(
                     f"No changes were made to {self.verb} users. Ensure that:\n"
                     f"- You did not select admins.\n"
-                    f"- You did not select {self.bot.user.mention}.\n"
+                    f"- You did not select {self.client.user.mention}.\n"
                     f"- You did not select yourself."
                 )
             )
@@ -86,17 +86,12 @@ class MemberSelect(discord.ui.UserSelect):
 
 
 class PrivacyOptions(discord.ui.Select):
-    def __init__(
-            self, 
-            bot: commands.Bot, 
-            voice_channel: discord.VoiceChannel, 
-            privacy_setting: list
-        ) -> None:
-        
+    def __init__(self, client: commands.Bot, 
+                 voice_channel: discord.VoiceChannel, privacy_setting: list):
         self.privacy_setting = privacy_setting  #  [Can_connect, Can_view, Can_send_messages] either 0 or 1
         self.voice_channel = voice_channel
-        self.tempvoice = bot.get_cog("TempVoice")
-        self.bot = bot
+        self.tempvoice = client.get_cog("TempVoice")
+        self.client = client
         
         options = [
             discord.SelectOption(label="Lock", description="Only trusted users will be able to join"),
@@ -138,19 +133,12 @@ class PrivacyOptions(discord.ui.Select):
 
 
 class TrustOrBlock(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction, bot: commands.Bot, mode: Literal["Block", "Trust"]):
+    def __init__(self, interaction: discord.Interaction, client: commands.Bot, mode: Literal["Block", "Trust"]):
         self.interaction = interaction
         super().__init__(timeout=60.0)
-        
-        self.add_item(
-            MemberSelect(
-                bot=bot, 
-                mode=mode, 
-                user=interaction.user
-            )
-        )
+        self.add_item(MemberSelect(client, mode=mode, user=interaction.user))
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    async def interaction_check(self, interaction: discord.Interaction[discord.Client]) -> bool:
         if interaction.user.voice is not None:
             return True
         await interaction.response.edit_message(embed=membed("You disconnected."), view=None)
@@ -166,25 +154,14 @@ class TrustOrBlock(discord.ui.View):
 
 class PrivacyView(discord.ui.View):
     def __init__(
-            self, 
-            voice_channel: discord.VoiceChannel, 
-            bot: commands.Bot, 
-            privacy_setting: list, 
-            interaction: discord.Interaction
-        ) -> None:
-        
+            self, voice_channel: discord.VoiceChannel, 
+            client: commands.Bot, privacy_setting: list, 
+            interaction: discord.Interaction):
         self.interaction = interaction
         super().__init__(timeout=60.0)
-        
-        self.add_item(
-            PrivacyOptions(
-                bot=bot, 
-                voice_channel=voice_channel, 
-                privacy_setting=privacy_setting
-            )
-        )
+        self.add_item(PrivacyOptions(client, voice_channel, privacy_setting))
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    async def interaction_check(self, interaction: discord.Interaction[discord.Client]) -> bool:
         if interaction.user.voice is not None:
             return True
         await interaction.response.edit_message(embed=membed("You disconnected."), view=None)
@@ -197,13 +174,13 @@ class PrivacyView(discord.ui.View):
         except discord.NotFound:
             pass
     
-    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item) -> None:
+    async def on_error(self, interaction: discord.Interaction[discord.Client], error: Exception, item: discord.ui.Item) -> None:
         await interaction.response.edit_message(embed=membed("Something went wrong."), view=None)        
 
 
 class TempVoice(commands.Cog):
-    def __init__(self, bot: commands.Bot):
-        self.bot: commands.Bot = bot
+    def __init__(self, client: commands.Bot):
+        self.client: commands.Bot = client
         self.active_voice_channels = {}
 
     async def store_data_locally(self, *, member: discord.Member, conn: asqlite_Connection):
@@ -323,7 +300,7 @@ class TempVoice(commands.Cog):
         if before.channel == after.channel:
             return
         
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
             conn: asqlite_Connection
 
             creatorChannelId = await conn.fetchone(
@@ -392,7 +369,7 @@ class TempVoice(commands.Cog):
         )
         
         embed = discord.Embed(title="Setup Complete")
-        async with self.bot.pool.acquire() as conn:
+        async with self.client.pool_connection.acquire() as conn:
             await conn.execute(
                 """
                 INSERT INTO guildVoiceSettings 
@@ -478,14 +455,7 @@ class TempVoice(commands.Cog):
         user = interaction.user
         
         setting = self.active_voice_channels[user.id]["privacy"].split()
-        
-        privacy_view = PrivacyView(
-            voice_channel=user.voice.channel, 
-            bot=self.bot, 
-            privacy_setting=setting, 
-            interaction=interaction
-        )
-
+        privacy_view = PrivacyView(user.voice.channel, self.client, setting, interaction)
         await interaction.response.send_message(view=privacy_view, ephemeral=True)
     
     @voice.command(name="kick", description="Kick a user from your temporary voice channel")
@@ -509,12 +479,12 @@ class TempVoice(commands.Cog):
 
     @voice.command(name="trust", description="Trust users with permanent access to your temporary voice channel")
     async def change_trusted_users(self, interaction: discord.Interaction):
-        trust_view = TrustOrBlock(interaction, self.bot, mode="Trust")
+        trust_view = TrustOrBlock(interaction, self.client, mode="Trust")
         await interaction.response.send_message(view=trust_view, ephemeral=True)
     
     @voice.command(name="block", description="Block users from accessing your temporary voice channel")
     async def block_users(self, interaction: discord.Interaction):
-        block_view = TrustOrBlock(interaction, self.bot, mode="Block")
+        block_view = TrustOrBlock(interaction, self.client, mode="Block")
         await interaction.response.send_message(view=block_view, ephemeral=True)    
     
     @voice.command(name="untrust", description="Remove trusted users access to your temporary channel")
@@ -545,12 +515,12 @@ class TempVoice(commands.Cog):
 
         embed.add_field(
             name="Trusted Members\U000000b9", 
-            value=", ".join({self.bot.get_user(int(trusted)).mention for trusted in data["trusted"]}) or "*None.*", 
+            value=", ".join({self.client.get_user(int(trusted)).mention for trusted in data["trusted"]}) or "*None.*", 
             inline=False)
         
         embed.add_field(
             name="Blocked Members\U000000b2", 
-            value=", ".join({self.bot.get_user(int(blocked)).mention for blocked in data["blocked"]}) or "*None.*", 
+            value=", ".join({self.client.get_user(int(blocked)).mention for blocked in data["blocked"]}) or "*None.*", 
             inline=False)
         
         embed.set_footer(
@@ -574,5 +544,5 @@ class TempVoice(commands.Cog):
         )
 
 
-async def setup(bot: commands.Bot):
-    await bot.add_cog(TempVoice(bot))
+async def setup(client: commands.Bot):
+    await client.add_cog(TempVoice(client))
