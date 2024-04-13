@@ -53,13 +53,16 @@ FORUM_TAG_IDS = {
 
 class Owner(commands.Cog):
     """Cog containing commands only executable by the bot owners. Contains debugging tools."""
-    def __init__(self, client: commands.Bot):
-        self.client = client
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
         self._last_result: Optional[Any] = None
 
     async def cog_check(self, ctx: commands.Context) -> bool:
-        return ctx.author.id in self.client.owner_ids
-
+        if ctx.author.id in self.bot.owner_ids:
+            return True
+        await ctx.send(embed=membed("You do not own this bot."))
+        return False
+    
     @staticmethod
     def cleanup_code(content: str) -> str:
         """Automatically removes code blocks from the code."""
@@ -73,7 +76,7 @@ class Owner(commands.Cog):
     @commands.command(name='uptime', description='Returns the time the bot has been active for')
     async def uptime(self, ctx: commands.Context):
         """Returns uptime in terms of days, hours, minutes and seconds"""
-        diff = datetime.now() - self.client.time_launch
+        diff = datetime.now() - self.bot.time_launch
         minutes, seconds = divmod(diff.total_seconds(), 60)
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
@@ -118,10 +121,10 @@ class Owner(commands.Cog):
         eligible = len(active_members) + len(activated_members)
         actual = 0
 
-        async with self.client.pool_connection.acquire() as conn:
+        async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
             payouts = {}
-            economy = self.client.get_cog("Economy")
+            economy = self.bot.get_cog("Economy")
 
             async with conn.transaction():
                 for member in activated_members:
@@ -190,7 +193,7 @@ class Owner(commands.Cog):
         member = member or interaction.user
         real_amount = determine_exponent(amount)
 
-        async with self.client.pool_connection.acquire() as conn:
+        async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
             
             embed = discord.Embed(
@@ -199,14 +202,14 @@ class Owner(commands.Cog):
                 timestamp=discord.utils.utcnow()
             )
 
-            economy = self.client.get_cog("Economy")
+            economy = self.bot.get_cog("Economy")
 
             if configuration.startswith("a"):
                 new_amount = await economy.update_bank_new(member, conn, +int(real_amount), deposit_mode)
 
                 embed.description = (
-                    f"- Added {CURRENCY}{int(real_amount):,} robux to **{member.display_name}**'s balance.\n"
-                    f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY}{new_amount[0]:,}."
+                    f"- Added {CURRENCY} {int(real_amount):,} robux to **{member.display_name}**'s balance.\n"
+                    f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY} {new_amount[0]:,}."
                 )
                 embed.set_footer(text="configuration type: ADD_TO")
             elif configuration.startswith("r"):
@@ -214,8 +217,8 @@ class Owner(commands.Cog):
                 new_amount = await economy.update_bank_new(member, conn, -int(real_amount), deposit_mode)
 
                 embed.description = (
-                    f"- Deducted {CURRENCY}{int(real_amount):,} robux from **{member.display_name}**'s balance.\n"
-                    f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY}{new_amount[0]:,}."
+                    f"- Deducted {CURRENCY} {int(real_amount):,} robux from **{member.display_name}**'s balance.\n"
+                    f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY} {new_amount[0]:,}."
                 )
                 embed.set_footer(text="configuration type: REMOVE_FROM")
             else:
@@ -223,8 +226,8 @@ class Owner(commands.Cog):
                 
                 embed.description = (
                     f"- \U0000279c **{member.display_name}**'s "
-                    f"**`{deposit_mode}`** balance has been changed to {CURRENCY}{real_amount:,}.\n"
-                    f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY}{new_amount[0]:,}."
+                    f"**`{deposit_mode}`** balance has been changed to {CURRENCY} {real_amount:,}.\n"
+                    f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY} {new_amount[0]:,}."
                 )
                 
                 embed.set_footer(text="configuration type: ALTER_TO")
@@ -255,15 +258,15 @@ class Owner(commands.Cog):
             delete_after=5.0
         )
 
-    @commands.command(name='sync', description='Sync the client tree for changes', aliases=("sy",))
+    @commands.command(name='sync', description='Sync the bot tree for changes', aliases=("sy",))
     async def sync_tree(self, ctx: commands.Context) -> None:
-        """Sync the client's tree to either the guild or globally, varies from time to time."""
+        """Sync the bot's tree to either the guild or globally, varies from time to time."""
         print("syncing")
 
         for guild_id in APP_GUILDS_ID:
-            await self.client.tree.sync(guild=discord.Object(id=guild_id))
+            await self.bot.tree.sync(guild=discord.Object(id=guild_id))
 
-        await self.client.tree.sync(guild=None)
+        await self.bot.tree.sync(guild=None)
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
     @commands.command(name='eval', description='Evaluates arbitrary code')
@@ -271,7 +274,7 @@ class Owner(commands.Cog):
         """Evaluates arbitrary code."""
 
         env = {
-            'client': self.client,
+            'bot': self.bot,
             'ctx': ctx,
             'channel': ctx.channel,
             'author': ctx.author,
@@ -409,7 +412,7 @@ class Owner(commands.Cog):
         """Push an update directly to the info channel."""
 
         await ctx.message.delete()
-        channel = await self.client.fetch_channel(1121445944576188517)
+        channel = await self.bot.fetch_channel(1121445944576188517)
         original = await channel.fetch_message(1142392804446830684)
 
         embed = discord.Embed(
@@ -442,7 +445,7 @@ class Owner(commands.Cog):
     async def push_update3(self, ctx: commands.Context):
         """Push an update to the rules channel."""
         await ctx.message.delete()
-        channel = self.client.get_partial_messageable(902138223571116052)
+        channel = self.bot.get_partial_messageable(902138223571116052)
         original = channel.get_partial_message(1140258074297376859)
         
         r = discord.Embed()
@@ -482,7 +485,7 @@ class Owner(commands.Cog):
     async def push_update2(self, ctx):
         """Push to update the welcome and info embed within its respective channel."""
         await ctx.message.delete()
-        channel = await self.client.fetch_channel(1121445944576188517)
+        channel = await self.bot.fetch_channel(1121445944576188517)
         original = await channel.fetch_message(1140952278862401657)
         a = "C:\\Users\\georg\\Downloads\\Media\\rsz_tic.png"
         that_file = discord.File(a, filename="image.png")
@@ -532,7 +535,7 @@ class Owner(commands.Cog):
                   - People with full music control over music bots.
 
                 - <@&1168204249096785980>
-                  - People with access to new features on {self.client.user.mention}\n
+                  - People with access to new features on {self.bot.user.mention}\n
                 - Other custom roles
                   - <@&1124762696110309579> and <@&1047576437177200770>.
                   - Reaching **Level 40** to make your own!
@@ -559,7 +562,7 @@ class Owner(commands.Cog):
                 {tbp} Your own custom channel
 
                 <@&923931553791348756>
-                {tbp} Request a feature for {self.client.user.mention}
+                {tbp} Request a feature for {self.bot.user.mention}
 
                 <@&923931585953280050>
                 {tbp} \U000023e3 **1,469,000,000**
@@ -572,7 +575,7 @@ class Owner(commands.Cog):
                 {tbp} 3,500 free EXP
 
                 <@&923931729016795266>
-                {tbp} Request a feature for {self.client.user.mention}
+                {tbp} Request a feature for {self.bot.user.mention}
                 {tbp} Your own custom role
 
                 <@&923931772020985866>
@@ -633,8 +636,8 @@ class Owner(commands.Cog):
     async def override_economy(self, ctx):
         """Update the progress tracker on the Economy system."""
         await ctx.message.delete()
-        channel = await self.client.fetch_channel(1124782048041762867)
-        original = await channel.fetch_message(1166793975466831894)
+        channel = self.bot.get_partial_messageable(1124782048041762867)
+        original = channel.get_partial_message(1166793975466831894)
         temporary = discord.Embed(
             title="Temporary Removal of the Economy System",
             description=(
@@ -689,12 +692,12 @@ class Owner(commands.Cog):
     async def quit_client(self, ctx):
         """Quits the bot gracefully."""
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
-        utility_cog = self.client.get_cog("Utility")
+        utility_cog = self.bot.get_cog("Utility")
         await utility_cog.wf.close()
-        await self.client.session.close()
-        await self.client.pool_connection.close()
-        await self.client.http.close()
-        await self.client.close()
+        await self.bot.session.close()
+        await self.bot.pool.close()
+        await self.bot.http.close()
+        await self.bot.close()
 
     @commands.hybrid_command(name='repeat', description='Repeat what you typed', aliases=('say',))
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -718,7 +721,7 @@ class Owner(commands.Cog):
         matches = findall(r'<(.*?)>', message)
 
         for match in matches:
-            emoji = discord.utils.get(self.client.emojis, name=match)
+            emoji = discord.utils.get(self.bot.emojis, name=match)
             if emoji:
                 message = message.replace(f'<{match}>', f"{emoji}")
                 continue
@@ -754,7 +757,7 @@ class Owner(commands.Cog):
 
         await interaction.response.defer(thinking=True)
 
-        forum: discord.ForumChannel = self.client.get_channel(FORUM_ID)
+        forum: discord.ForumChannel = self.bot.get_channel(FORUM_ID)
         tags = tags.lower().split()
         
         files = [
@@ -778,7 +781,7 @@ class Owner(commands.Cog):
 
     @commands.command(name="upload2")
     async def upload2(self, ctx: commands.Context):
-        channel: discord.PartialMessageable = self.client.get_partial_messageable(1147203137195745431)
+        channel: discord.PartialMessageable = self.bot.get_partial_messageable(1147203137195745431)
         msg = channel.get_partial_message(1147203137195745431)
         a = membed(
             "> **What are Forum Channels?**\n\n"
@@ -798,7 +801,7 @@ class Owner(commands.Cog):
         await ctx.send("done")
 
 
-async def setup(client):
+async def setup(bot: commands.Bot):
     """Setup for cog."""
-    await client.add_cog(Owner(client))
+    await bot.add_cog(Owner(bot))
     
