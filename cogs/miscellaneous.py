@@ -36,7 +36,7 @@ RESPONSES = {
 
 
 def owners_nolimit(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
-    """Any of the owners of the client bypass all cooldown restrictions."""
+    """Any of the owners of the bot bypass all cooldown restrictions."""
     if interaction.user.id in {546086191414509599, 992152414566232139}:
         return None
     return app_commands.Cooldown(1, 7)
@@ -160,9 +160,9 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
 
 
 class InviteButton(discord.ui.View):
-    def __init__(self, client: commands.Bot):
+    def __init__(self, bot: commands.Bot):
         super().__init__()
-        self.client: commands.Bot = client
+        self.bot: commands.Bot = bot
 
         perms = discord.Permissions.none()
 
@@ -190,7 +190,7 @@ class InviteButton(discord.ui.View):
         self.add_item(
             discord.ui.Button(
                 label="Invite",
-                url=discord.utils.oauth_url(self.client.user.id, permissions=perms)
+                url=discord.utils.oauth_url(self.bot.user.id, permissions=perms)
             )
         )
 
@@ -208,10 +208,10 @@ class ImageSource(discord.ui.View):
 
 
 class Utility(commands.Cog):
-    def __init__(self, client: commands.Bot):
-        self.client = client
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
         self.process = Process()
-        self.wf = WaifuAioClient(session=client.session, token=client.WAIFU_API_KEY, app_name="c2c")
+        self.wf = WaifuAioClient(session=bot.session, token=bot.WAIFU_API_KEY, app_name="c2c")
 
         self.image_src = app_commands.ContextMenu(
             name='Extract Image Source',
@@ -223,12 +223,12 @@ class Utility(commands.Cog):
             callback=self.embed_colour
         )
 
-        self.client.tree.add_command(self.image_src)
-        self.client.tree.add_command(self.get_embed_cmd)
+        self.bot.tree.add_command(self.image_src)
+        self.bot.tree.add_command(self.get_embed_cmd)
 
     async def cog_unload(self) -> None:
-        self.client.tree.remove_command(self.get_embed_cmd.name, type=self.get_embed_cmd.type)
-        self.client.tree.remove_command(self.image_src.name, type=self.image_src.type)
+        self.bot.tree.remove_command(self.get_embed_cmd.name, type=self.get_embed_cmd.type)
+        self.bot.tree.remove_command(self.image_src.name, type=self.image_src.type)
 
     async def retrieve_via_kona(
             self, 
@@ -246,7 +246,7 @@ class Utility(commands.Cog):
             base_url = "https://konachan.net/tag.xml"
             params = {"name": tag_pattern, "page": page, "order": "count", "limit": 20}
 
-        async with self.client.session.get(base_url, params=params) as response:
+        async with self.bot.session.get(base_url, params=params) as response:
             if response.status == 200:
                 posts_xml = await response.text()
                 data = parse_xml(posts_xml, mode=mode)
@@ -282,8 +282,8 @@ class Utility(commands.Cog):
                 return await message.channel.send(
                     "You didn't specify a number.", delete_after=3.0, silent=True)
 
-            ctx = await self.client.get_context(message)
-            cmd = self.client.get_command("purge")
+            ctx = await self.bot.get_context(message)
+            cmd = self.bot.get_command("purge")
             await ctx.invoke(cmd, purge_max_amount=int(match.group()))
 
     @commands.command(name='invite', description='Links the invite for c2c')
@@ -294,7 +294,7 @@ class Utility(commands.Cog):
         )
         content = membed(content)
         
-        await ctx.send(embed=content, view=InviteButton(self.client))
+        await ctx.send(embed=content, view=InviteButton(self.bot))
 
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.command(name='serverinfo', description="Show information about the server and its members")
@@ -411,7 +411,7 @@ class Utility(commands.Cog):
         
         content = membed(
             f"- REST: {duration:.2f}ms\n"
-            f"- WS: {self.client.latency * 1000:.2f}ms"
+            f"- WS: {self.bot.latency * 1000:.2f}ms"
         )
         await message.edit(embed=content)
 
@@ -480,7 +480,7 @@ class Utility(commands.Cog):
         if activity_type:
             activity_type = f"?type={activity_type}"
         
-        async with self.client.session.get(
+        async with self.bot.session.get(
                 f"http://www.boredapi.com/api/activity{activity_type}") as response:
             if response.status == 200:
                 resp = await response.json()
@@ -664,7 +664,7 @@ class Utility(commands.Cog):
         if isinstance(api_urls, tuple):
             api_urls = choice(api_urls)
         
-        async with self.client.session.get(api_urls) as resp:
+        async with self.bot.session.get(api_urls) as resp:
             if resp.status != 200:
                 return await interaction.followup.send(
                     embed=membed("The request failed, you should try again later.")
@@ -781,7 +781,7 @@ class Utility(commands.Cog):
     async def emojis_paginator(self, interaction: discord.Interaction) -> None:
         length = 10
         emotes_all = []
-        for i in self.client.emojis:
+        for i in self.bot.emojis:
             if i.animated:
                 fmt = "<a:"
             else:
@@ -795,7 +795,7 @@ class Utility(commands.Cog):
                 title="Emojis", 
                 description=(
                     "> This is a command that fetches **all** of the emojis found"
-                    " in the client's internal cache and their associated atributes.\n\n"
+                    " in the bot's internal cache and their associated atributes.\n\n"
                 )
             )
 
@@ -902,8 +902,8 @@ class Utility(commands.Cog):
     async def random_fact(self, interaction: Interaction):
         limit = 1
         api_url = 'https://api.api-ninjas.com/v1/facts?limit={}'.format(limit)
-        parameters = {'X-Api-Key': self.client.NINJAS_API_KEY}
-        async with self.client.session.get(api_url, params=parameters) as resp:
+        parameters = {'X-Api-Key': self.bot.NINJAS_API_KEY}
+        async with self.bot.session.get(api_url, params=parameters) as resp:
             text = await resp.json()
             the_fact = text[0].get('fact')
             await interaction.response.send_message(embed=membed(f"{the_fact}."))
@@ -931,10 +931,10 @@ class Utility(commands.Cog):
         user = user or interaction.user
 
         params = {'image_url': user.display_avatar.url}
-        headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}
+        headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
-        async with self.client.session.get(api_url, params=params, headers=headers) as response:
+        async with self.bot.session.get(api_url, params=params, headers=headers) as response:
             if response.status == 200:
                 buffer = BytesIO(await response.read())
                 end = perf_counter()
@@ -966,10 +966,10 @@ class Utility(commands.Cog):
         user = user or interaction.user
 
         params = {'image_url': user.display_avatar.url}
-        headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}
+        headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
-        async with self.client.session.get(api_url, params=params, headers=headers) as response:
+        async with self.bot.session.get(api_url, params=params, headers=headers) as response:
             if response.status == 200:
                 buffer = BytesIO(await response.read())
                 end = perf_counter()
@@ -997,10 +997,10 @@ class Utility(commands.Cog):
         user = user or interaction.user
 
         params = {'image_url': user.display_avatar.url, 'image_url_2': user2.display_avatar.url}
-        headers = {'Authorization': f'Bearer {self.client.JEYY_API_KEY}'}
+        headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = "https://api.jeyy.xyz/v2/image/heart_locket"
 
-        async with self.client.session.get(api_url, params=params, headers=headers) as response:
+        async with self.bot.session.get(api_url, params=params, headers=headers) as response:
             if response.status == 200:
                 buffer = BytesIO(await response.read())
                 end = perf_counter()
@@ -1080,12 +1080,12 @@ class Utility(commands.Cog):
     async def about_the_bot(self, interaction: discord.Interaction) -> None:
 
         await interaction.response.defer(thinking=True)
-        lenslash = len(await self.client.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1
-        lentxt = len(self.client.commands)
+        lenslash = len(await self.bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1
+        lentxt = len(self.bot.commands)
         amount = (lenslash + lentxt)
 
         username = 'SGA-A'
-        token = self.client.GITHUB_TOKEN
+        token = self.bot.GITHUB_TOKEN
         repository_name = 'c2c'
 
         g = Github(username, token)
@@ -1112,17 +1112,17 @@ class Utility(commands.Cog):
         embed.url = 'https://discord.gg/W3DKAbpJ5E'
         embed.colour = discord.Colour.blurple()
 
-        geo = self.client.get_user(546086191414509599)
+        geo = self.bot.get_user(546086191414509599)
         embed.set_author(name=geo.name, icon_url=geo.display_avatar.url)
 
         total_members = 0
-        total_unique = len(self.client.users)
+        total_unique = len(self.bot.users)
 
         text = 0
         voice = 0
         guilds = 0
 
-        for guild in self.client.guilds:
+        for guild in self.bot.guilds:
             guilds += 1
             if guild.unavailable:
                 continue
@@ -1138,7 +1138,7 @@ class Utility(commands.Cog):
         cpu_usage = self.process.cpu_percent() / cpu_count()
         embed.timestamp = discord.utils.utcnow()
 
-        diff = datetime.datetime.now() - self.client.time_launch
+        diff = datetime.datetime.now() - self.bot.time_launch
         minutes, seconds = divmod(diff.total_seconds(), 60)
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
@@ -1162,8 +1162,8 @@ class Utility(commands.Cog):
             name='<:serversb:1195752568303927377> Guilds', 
             value=(
                 f'{guilds} total\n'
-                f'{ARROW}{len(self.client.emojis)} emojis\n'
-                f'{ARROW}{len(self.client.stickers)} stickers'
+                f'{ARROW}{len(self.bot.emojis)} emojis\n'
+                f'{ARROW}{len(self.bot.stickers)} stickers'
             )
         )
 
@@ -1188,7 +1188,7 @@ class Utility(commands.Cog):
     @commands.guild_only()
     async def pick_up_lines(self, ctx: commands.Context) -> discord.Message | None:
         async with ctx.typing():
-            async with self.client.session.get("https://api.popcat.xyz/pickuplines") as resp:
+            async with self.bot.session.get("https://api.popcat.xyz/pickuplines") as resp:
                 if resp.status != 200:
                     return await ctx.send(embed=membed(API_EXCEPTION))
                 data = await resp.json()
@@ -1198,7 +1198,7 @@ class Utility(commands.Cog):
     @commands.guild_only()
     async def would_yr(self, ctx: commands.Context) -> discord.Message | None:
         async with ctx.typing():
-            async with self.client.session.get("https://api.popcat.xyz/wyr") as resp:
+            async with self.bot.session.get("https://api.popcat.xyz/wyr") as resp:
                 if resp.status != 200:
                     return await ctx.send(embed=membed(API_EXCEPTION))
                 data = await resp.json()
@@ -1215,7 +1215,7 @@ class Utility(commands.Cog):
     async def alert_iph(self, ctx: commands.Context, *, custom_text: str) -> discord.Message | None:
         async with ctx.typing():
             custom_text = '+'.join(custom_text.split(' '))
-            async with self.client.session.get(
+            async with self.bot.session.get(
                     f"https://api.popcat.xyz/alert?text={custom_text}") as resp:
                 if resp.status != 200:
                     return await ctx.send(embed=membed(API_EXCEPTION))
@@ -1274,5 +1274,5 @@ class Utility(commands.Cog):
         await ctx.send(embed=embed)
 
 
-async def setup(client):
-    await client.add_cog(Utility(client))
+async def setup(bot: commands.Bot):
+    await bot.add_cog(Utility(bot))

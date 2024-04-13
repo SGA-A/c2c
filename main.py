@@ -189,7 +189,7 @@ class C2C(commands.Bot):
         super().__init__(**kwargs)
 
         # Database and HTTP Connections
-        self.pool_connection = None
+        self.pool = None
         self.session = None
 
         # Misc
@@ -206,7 +206,7 @@ class C2C(commands.Bot):
             except Exception as e:
                 print_exception(type(e), e, e.__traceback__, file=stderr)
 
-        self.pool_connection = await create_pool(
+        self.pool = await create_pool(
             'C:\\Users\\georg\\Documents\\c2c\\db-shit\\economy.db'
         )
 
@@ -223,7 +223,7 @@ intents.guilds = True
 intents.voice_states = True
 
 
-client = C2C(
+bot = C2C(
     command_prefix='>', 
     intents=intents, 
     case_insensitive=True, 
@@ -264,7 +264,7 @@ classnames = Literal[
 def return_txt_cmds_first(command_holder: dict, category: classnames) -> dict:
     """Displays all the text-based commands that are defined within a cog as a dict. This should always be called
     first for consistency."""
-    for cmd in client.get_cog(category).get_commands():
+    for cmd in bot.get_cog(category).get_commands():
         command_holder.update({cmd.name: deque((f'{category}', f'{cmd.description}', 'txt'))})
     return command_holder
 
@@ -272,7 +272,7 @@ def return_txt_cmds_first(command_holder: dict, category: classnames) -> dict:
 def return_interaction_cmds_last(command_holder: dict, category: classnames) -> dict:
     """Displays all the app commands and grouped app commands that are defined within a cog as a dict. This should
     always be called last for consistency."""
-    for cmd in client.get_cog(category).get_app_commands():
+    for cmd in bot.get_cog(category).get_app_commands():
         command_holder.update({cmd.name: deque((f'{category}', f'{cmd.description}', 'sla'))})
     return command_holder
 
@@ -292,7 +292,7 @@ def generic_loop_slash_only_subcommands(all_cmds: dict, cmd_formatter: set, guil
     for cmd, cmd_details in all_cmds.items():
         total_command_count += 1
 
-        command_manage = client.tree.get_app_command(cmd, guild=Object(id=guild_id))
+        command_manage = bot.tree.get_app_command(cmd, guild=Object(id=guild_id))
         try:
             got_something = False
             if not command_manage.options:
@@ -322,7 +322,7 @@ def generic_loop_with_subcommand(all_cmds: dict, cmd_formatter: set, guild_id) -
             cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
             continue
         
-        command_manage = client.tree.get_app_command(cmd, guild=Object(id=guild_id))
+        command_manage = bot.tree.get_app_command(cmd, guild=Object(id=guild_id))
         
         try:
             got_something = False
@@ -341,8 +341,8 @@ def generic_loop_with_subcommand(all_cmds: dict, cmd_formatter: set, guild_id) -
 
 
 async def total_command_count(interaction: Interaction) -> int:
-    """Return the total amount of commands detected within the client, including text and slash commands."""
-    amount = (len(await client.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(client.commands)
+    """Return the total amount of commands detected within the bot, including text and slash commands."""
+    amount = (len(await bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(bot.commands)
     return amount
 
 
@@ -408,7 +408,7 @@ class SelectMenu(ui.Select):
                     cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
 
-                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
+                command_manage = bot.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
                 cmd_formatter.add(f"\U00002022 **{command_manage.mention}** - {cmd_details[1]}")
 
         elif their_choice == 'Moderation':
@@ -420,14 +420,14 @@ class SelectMenu(ui.Select):
 
             cmd_formatter, total_cmds_cata = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild_id)
 
-            roles = client.tree.get_app_command("role", guild=Object(id=interaction.guild.id))
+            roles = bot.tree.get_app_command("role", guild=Object(id=interaction.guild.id))
             for option in roles.options:
                 total_cmds_cata += 1
                 cmd_formatter.add(f"\U00002022 {option.mention} - {option.description}")
 
         elif their_choice == 'Tags':
 
-            all_cmds = client.get_cog(their_choice).get_commands()[0]
+            all_cmds = bot.get_cog(their_choice).get_commands()[0]
             for cmd in all_cmds.commands:
                 total_cmds_cata += 1
                 cmd_formatter.add(f"\U00002022 [`>{cmd.qualified_name}`](https://youtu.be/dQw4w9WgXcQ) - {cmd.description}")
@@ -461,7 +461,7 @@ class SelectMenu(ui.Select):
                     cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
                     continue
 
-                command_manage = client.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
+                command_manage = bot.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
 
                 try:
                     got_something = False
@@ -533,12 +533,12 @@ class TimeConverter(commands.Converter):
         return time
 
 
-@client.command(name='convert')
+@bot.command(name='convert')
 async def convert_time(ctx, time: TimeConverter):
     await ctx.send(f"Converted time: {time} seconds")
 
 
-@client.command(name="test")
+@bot.command(name="test")
 async def testit(ctx):
     embed = Embed()
     embed.title = "Your balance"
@@ -552,7 +552,7 @@ async def testit(ctx):
     await ctx.send(embed=embed)
 
 
-@client.command(name='dispatch-webhook', aliases=("dw",))
+@bot.command(name='dispatch-webhook', aliases=("dw",))
 async def dispatch_the_webhook_when(ctx: commands.Context):
     await ctx.message.delete()
     embed = Embed(
@@ -582,7 +582,7 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
         text="That's all for Q2 2024. Next review due: 30 September 2024."
     )
     
-    webhook = Webhook.from_url(url=client.WEBHOOK_URL, session=client.session)
+    webhook = Webhook.from_url(url=bot.WEBHOOK_URL, session=bot.session)
     rtype = "feature"  # or "bugfix"
     
     # For editing the original message
@@ -608,10 +608,10 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
 
 
 @commands.is_owner()
-@client.command(name='reload', aliases=("rl",))
+@bot.command(name='reload', aliases=("rl",))
 async def reload_cog(ctx: commands.Context, cog_name: cogs):
     try:
-        await client.reload_extension(f"cogs.{cog_name}")
+        await bot.reload_extension(f"cogs.{cog_name}")
     except commands.ExtensionNotLoaded:
         return await ctx.reply(embed=membed("That extension has not been loaded in yet."))
     except commands.ExtensionNotFound:
@@ -626,11 +626,11 @@ async def reload_cog(ctx: commands.Context, cog_name: cogs):
     await ctx.reply(embed=membed("Done."))
 
 @commands.is_owner()
-@client.command(name='unload', aliases=("ul",))
+@bot.command(name='unload', aliases=("ul",))
 async def unload_cog(ctx: commands.Context, cog_name: cogs):
 
     try:
-        await client.unload_extension(f"cogs.{cog_name}")
+        await bot.unload_extension(f"cogs.{cog_name}")
     except commands.ExtensionNotLoaded:
         return await ctx.reply("That extension has not been loaded in yet.")
     except commands.ExtensionNotFound:
@@ -640,10 +640,10 @@ async def unload_cog(ctx: commands.Context, cog_name: cogs):
 
 
 @commands.is_owner()
-@client.command(name='load', aliases=("ld",))
+@bot.command(name='load', aliases=("ld",))
 async def load_cog(ctx: commands.Context, cog_name: cogs):
     try:
-        await client.load_extension(f"cogs.{cog_name}")
+        await bot.load_extension(f"cogs.{cog_name}")
     except commands.ExtensionAlreadyLoaded:
         return await ctx.send("That extension is already loaded.")
     except commands.ExtensionNotFound:
@@ -658,7 +658,7 @@ async def load_cog(ctx: commands.Context, cog_name: cogs):
     await ctx.message.add_reaction("\U00002705")
 
 
-@client.tree.command(name='help', description='The help command for c2c. Shows help for different categories.')
+@bot.tree.command(name='help', description='The help command for c2c. Shows help for different categories.')
 async def help_command_category(interaction: Interaction):
     
     epicker = choice(
@@ -724,15 +724,15 @@ async def main():
 
         load_dotenv()
         TOKEN = environ.get("BOT_TOKEN")
-        client.WEBHOOK_URL = environ.get("WEBHOOK_URL")
-        client.GITHUB_TOKEN = environ.get("GITHUB_TOKEN")
-        client.JEYY_API_KEY = environ.get("JEYY_API_KEY")
-        client.NINJAS_API_KEY = environ.get("API_KEY")
-        client.WAIFU_API_KEY = environ.get("WAIFU_API_KEY")
+        bot.WEBHOOK_URL = environ.get("WEBHOOK_URL")
+        bot.GITHUB_TOKEN = environ.get("GITHUB_TOKEN")
+        bot.JEYY_API_KEY = environ.get("JEYY_API_KEY")
+        bot.NINJAS_API_KEY = environ.get("API_KEY")
+        bot.WAIFU_API_KEY = environ.get("WAIFU_API_KEY")
 
-        await client.start(TOKEN)
+        await bot.start(TOKEN)
     finally:
-        await client.close()
+        await bot.close()
 
 
 run(main())

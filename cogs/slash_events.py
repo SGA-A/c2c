@@ -41,17 +41,20 @@ class MessageDevelopers(View):
         
 
 class SlashExceptionHandler(commands.Cog):
-    def __init__(self, client: commands.Bot):
-        self.client = client
-        client.tree.error(coro=self.__dispatch_to_app_command_handler)
+    def __init__(self, bot: commands.Bot) -> None:
+        self.bot = bot
+        bot.tree.error(coro=self.__dispatch_to_app_command_handler)
 
     async def __dispatch_to_app_command_handler(
-            self, interaction: Interaction, error: app_commands.AppCommandError):
-        self.client.dispatch("app_command_error", interaction, error)
+            self, 
+            interaction: Interaction, 
+            error: app_commands.AppCommandError
+        ) -> None:
+        self.bot.dispatch("app_command_error", interaction, error)
 
     @commands.Cog.listener("on_app_command_error")
     async def get_app_command_error(
-        self, interaction: Interaction, error: app_commands.AppCommandError):
+        self, interaction: Interaction, error: app_commands.AppCommandError) -> None:
         
         if isinstance(error, app_commands.CheckFailure):
 
@@ -95,5 +98,5 @@ class SlashExceptionHandler(commands.Cog):
         await interaction.followup.send(embed=exception, view=MessageDevelopers())
 
 
-async def setup(client: commands.Bot):
-    await client.add_cog(SlashExceptionHandler(client))
+async def setup(bot: commands.Bot):
+    await bot.add_cog(SlashExceptionHandler(bot))
