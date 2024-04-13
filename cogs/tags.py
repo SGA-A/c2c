@@ -291,7 +291,7 @@ class Tags(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_ID)
     async def view_their_tags(self, interaction: discord.Interaction, user: discord.Member):
 
-        async with interaction.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
 
             query = (
