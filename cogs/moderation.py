@@ -476,8 +476,8 @@ class RoleManagement(app_commands.Group):
 
 
 class Moderation(commands.Cog):
-    def __init__(self, client: commands.Bot):
-        self.client = client
+    def __init__(self, bot: commands.Bot):
+        self.bot = bot
 
         self.purge_from_here_cmd = app_commands.ContextMenu(
             name='Purge Up To Here',
@@ -490,8 +490,8 @@ class Moderation(commands.Cog):
             guild_only=True, 
             default_permissions=discord.Permissions(manage_roles=True))
         
-        self.client.tree.add_command(self.purge_from_here_cmd)
-        self.client.tree.add_command(roles)
+        self.bot.tree.add_command(self.purge_from_here_cmd)
+        self.bot.tree.add_command(roles)
     
     async def cog_check(self, ctx: commands.Context) -> bool:
         if ctx.author.guild_permissions.manage_guild:
@@ -520,7 +520,7 @@ class Moderation(commands.Cog):
     @tasks.loop()
     async def check_for_role(self):
         # fetch the task with the lowest/earliest `end_time`
-        async with self.client.pool_connection.acquire() as conn:
+        async with self.bot.pool.acquire() as conn:
             next_task = await conn.fetchone('SELECT * FROM tasks ORDER BY end_time ASC LIMIT 1')
 
             # if no remaining tasks, stop the loop
@@ -536,7 +536,7 @@ class Moderation(commands.Cog):
             await discord.utils.sleep_until(timestamp)
 
             # do your actual task stuff here
-            guild = self.client.get_guild(in_guild)
+            guild = self.bot.get_guild(in_guild)
             
             try:
                 mem: discord.Member = guild.get_member(mod_to)
@@ -625,11 +625,11 @@ class Moderation(commands.Cog):
         # ! SCHEDULE THE TASK HERE
         timestamp = (discord.utils.utcnow() + timedelta(seconds=duration)).timestamp()
 
-        conn = await self.client.pool_connection.acquire()
+        conn = await self.bot.pool.acquire()
         await conn.execute(
             'INSERT INTO tasks (mod_to, role_id, end_time, in_guild) VALUES ($0, $1, $2, $3)', user.id, role.id, timestamp, guild.id)
         await conn.commit()
-        await self.client.pool_connection.release(conn)
+        await self.bot.pool.release(conn)
 
         if self.check_for_role.is_running():
             self.check_for_role.restart()
@@ -637,5 +637,5 @@ class Moderation(commands.Cog):
             self.check_for_role.start()
 
 
-async def setup(client):
-    await client.add_cog(Moderation(client))
+async def setup(bot: commands.Bot):
+    await bot.add_cog(Moderation(bot))
