@@ -1713,7 +1713,7 @@ class HighLow(discord.ui.View):
     @discord.ui.button(label='Lower', style=discord.ButtonStyle.primary)
     async def low(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button for highlow interface to allow users to guess lower."""
-        async with interaction.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
 
             async with conn.transaction():
@@ -1726,7 +1726,7 @@ class HighLow(discord.ui.View):
     async def jackpot(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button for highlow interface to guess jackpot, meaning the guessed number is the actual number."""
 
-        async with interaction.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
 
             async with conn.transaction():
@@ -1739,7 +1739,7 @@ class HighLow(discord.ui.View):
     async def high(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button for highlow interface to allow users to guess higher."""
         
-        async with interaction.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
 
             async with conn.transaction():
@@ -2469,7 +2469,7 @@ class ShowcaseView(discord.ui.View):
             self.children[1].disabled = True
 
     async def start_updating_order(self, user: USER_ENTRY, interaction: discord.Interaction) -> None:
-        async with interaction.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
             
             changedShowcase = " ".join(self.showcase_list)
@@ -3598,7 +3598,7 @@ class Economy(commands.Cog):
 
         user = interaction.user
 
-        async with interaction.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
 
             if not (await self.can_call_out_either(user, recipient, conn)):
@@ -5741,7 +5741,7 @@ class Economy(commands.Cog):
         user = interaction.user
         bet_on = "heads" if "h" in bet_on.lower() else "tails"
         
-        async with interaction.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
             
             wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
@@ -6129,7 +6129,7 @@ class Economy(commands.Cog):
     async def servant_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         """Autocomplete callback for the servant menu."""
 
-        async with interaction.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool.acquire() as conn:
             options = await conn.fetchall("SELECT slay_name FROM slay")
 
             return [
@@ -6138,7 +6138,7 @@ class Economy(commands.Cog):
 
     @item.autocomplete('item_name')
     async def item_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
-        async with interaction.client.pool_connection.acquire() as conn:
+        async with interaction.client.pool.acquire() as conn:
             res = await conn.fetchall("SELECT itemName FROM shop")
             return [app_commands.Choice(name=iterable[0], value=iterable[0]) for iterable in res if current.lower() in iterable[0].lower()]
 
