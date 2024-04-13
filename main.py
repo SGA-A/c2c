@@ -674,7 +674,7 @@ async def help_command_category(interaction: Interaction):
     extra = ""
     if interaction.guild:
         extra = (
-            f"- Joined this server {format_dt(joined_at, style="f")} ({format_dt(joined_at, style="R")})\n"
+            f"- Joined this server on {format_dt(joined_at, style="F")} ({format_dt(joined_at, style="R")})\n"
         )
 
     embed = Embed(
