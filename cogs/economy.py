@@ -313,14 +313,15 @@ def format_number_short(number: int) -> str:
     >>> format_number_short(9000000000000)
     '9.0T'
     """
+    absolute = abs(number)
 
-    if abs(number) < 1e3:
+    if absolute < 1e3:
         return str(number)
-    elif abs(number) < 1e6:
+    elif absolute < 1e6:
         return '{:.1f}K'.format(number / 1e3)
-    elif abs(number) < 1e9:
+    elif absolute < 1e9:
         return '{:.1f}M'.format(number / 1e6)
-    elif abs(number) < 1e12:
+    elif absolute < 1e12:
         return '{:.1f}B'.format(number / 1e9)
     else:
         return '{:.1f}T'.format(number / 1e12)
@@ -381,17 +382,24 @@ def determine_exponent(rinput: str) -> str | int:
     if is_exponential(rinput):
         before_e_str, after_e_str = map(str, rinput.split('e'))
         before_e = float(before_e_str)
-        converted = after_e_str or "1"
-        ten_exponent = min(int(converted), 30)
+        ten_exponent = min(after_e_str, 30)
         actual_value = before_e * (10 ** ten_exponent)
     else:
-        try:
-            rinput = rinput.translate(str.maketrans('', '', ','))
-            actual_value = int(rinput)
-        except ValueError:
-            return rinput
+        rinput = rinput.translate(str.maketrans('', '', ','))
+        actual_value = int(rinput)
 
     return floor(abs(actual_value))
+    
+
+async def handle_exponent(interaction: discord.Interaction, rinput: str) -> str | int:
+    """Use this function to handle exponential input from the user, removing the need for other try/except blocks."""
+    try:
+        return determine_exponent(rinput)
+    except (ValueError, TypeError):
+        return await respond(
+            interaction=interaction,
+            embed=membed("You need to provide a real number.")
+        )
 
 
 def generate_slot_combination():
@@ -2650,7 +2658,11 @@ class ItemQuantityModal(discord.ui.Modal):
             current_balance = await Economy.get_wallet_data_only(interaction.user, conn)
 
             new_price = await self.calculate_discounted_price_if_any(
-                interaction.user, conn, interaction, current_price)
+                user=interaction.user, 
+                conn=conn, 
+                interaction=interaction, 
+                current_price=current_price
+            )
             
             if new_price is None:
                 return await respond(
@@ -4013,7 +4025,9 @@ class Economy(commands.Cog):
         item_name: str, 
         sell_quantity: Optional[app_commands.Range[int, 1]] = 1) -> None:
         """Sell an item you already own."""
+        
         sell_quantity = abs(sell_quantity)
+        
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
@@ -5496,27 +5510,26 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(
                     embed=membed("You need to provide a real amount to withdraw."))
 
-            amount_conv = abs(int(actual_amount))
-
-            if not amount_conv:
+            if not actual_amount:
                 return await interaction.response.send_message(
-                    embed=membed("The amount to withdraw needs to be greater than 0."))
+                    embed=membed("The amount to withdraw needs to be greater than 0.")
+                )
 
-            elif amount_conv > bank_amt:
+            elif actual_amount > bank_amt:
                 return await interaction.response.send_message(
                     embed=membed(f"You only have {CURRENCY} **{bank_amt:,}** in your bank right now.")
                 )
 
             else:
-                wallet_new = await self.update_bank_new(user, conn, +amount_conv)
-                bank_new = await self.update_bank_new(user, conn, -amount_conv, "bank")
+                wallet_new = await self.update_bank_new(user, conn, +actual_amount)
+                bank_new = await self.update_bank_new(user, conn, -actual_amount, "bank")
                 await conn.commit()
 
                 embed = discord.Embed(colour=0x2B2D31)
                 
                 embed.add_field(
                     name="<:withdraw:1195657655134470155> Withdrawn", 
-                    value=f"{CURRENCY} {amount_conv:,}", 
+                    value=f"{CURRENCY} {actual_amount:,}", 
                     inline=False
                 )
                 
@@ -5581,16 +5594,15 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(
                     embed=membed("You need to provide a real amount to deposit."))
 
-            amount_conv = abs(int(actual_amount))
             available_bankspace = details[2] - details[1]
-            available_bankspace -= amount_conv
+            available_bankspace -= actual_amount
 
-            if amount_conv > wallet_amt:
+            if actual_amount > wallet_amt:
                 return await interaction.response.send_message(
                     embed=membed(f"You only have {CURRENCY} **{wallet_amt:,}** in your wallet right now.")
                 )
 
-            elif not amount_conv:
+            elif not actual_amount:
                 return await interaction.response.send_message(
                     embed=membed("The amount to deposit needs to be greater than 0.")
                 )
@@ -5600,15 +5612,15 @@ class Economy(commands.Cog):
                         f"You can only hold **{CURRENCY} {details[2]:,}** in your bank right now.\n"
                         f"To hold more, use currency commands and level up more."))
             else:
-                wallet_new = await self.update_bank_new(user, conn, -amount_conv)
-                bank_new = await self.update_bank_new(user, conn, +amount_conv, "bank")
+                wallet_new = await self.update_bank_new(user, conn, -actual_amount)
+                bank_new = await self.update_bank_new(user, conn, +actual_amount, "bank")
                 await conn.commit()
 
                 embed = discord.Embed(colour=0x2B2D31)
                 
                 embed.add_field(
                     name="<:deposit:1195657772231036948> Deposited", 
-                    value=f"{CURRENCY} {amount_conv:,}", 
+                    value=f"{CURRENCY} {actual_amount:,}", 
                     inline=False
                 )
 
@@ -6141,19 +6153,6 @@ class Economy(commands.Cog):
                 embed.add_field(name=interaction.user.name, value=f"Rolled `{your_choice[0]}` {''.join(badges)}")
                 embed.add_field(name=self.bot.user.name, value=f"Rolled `{bot_choice[0]}`")
                 await interaction.response.send_message(embed=embed)
-
-    @play_blackjack.autocomplete('bet_amount')
-    @bet.autocomplete('exponent_amount')
-    @slots.autocomplete('amount')
-    @highlow.autocomplete('robux')
-    async def calback_max_50(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
-        """Autocomplete callback for when the maximum accepted bet value is 50 million."""
-
-        chosen = {"all", "max", "15e6"}
-        return [
-            app_commands.Choice(name=str(the_chose), value=str(the_chose))
-            for the_chose in chosen if current.lower() in the_chose
-        ]
 
     @add_showcase_item.autocomplete('item_name')
     @remove_showcase_item.autocomplete('item_name')
