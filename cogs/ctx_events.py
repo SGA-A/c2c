@@ -25,11 +25,13 @@ class ContextCommandHandler(commands.Cog):
             if isinstance(err, self.err.MissingRequiredArgument):
                 return await ctx.reply(
                     embed=membed("Some required arguments are missing."),
+                    mention_author=False,
                     view=contact_view
                 )
 
             await ctx.reply(
                 embed=membed("That didn't work. Check your inputs are valid."), 
+                mention_author=False,
                 view=contact_view
             )
 
@@ -47,7 +49,8 @@ class ContextCommandHandler(commands.Cog):
                 await ctx.reply(
                     embed=errorc, 
                     view=contact_view, 
-                    mention_author=False)
+                    mention_author=False
+                )
 
             elif isinstance(err, self.err.MissingRole):
 
