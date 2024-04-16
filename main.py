@@ -503,8 +503,8 @@ class SelectMenu(ui.Select):
 
 
 class Select(ui.View):
-    def __init__(self):
-        super().__init__(timeout=60.0)
+    def __init__(self, timeout = 60.0):
+        super().__init__(timeout=timeout)
         self.add_item(SelectMenu())
 
     async def on_timeout(self) -> None:
@@ -669,10 +669,15 @@ async def help_command_category(interaction: Interaction):
             "<:githubBlue:1195664427836506212>"
         )
     )
-    joined_at = interaction.guild.me.joined_at
 
+    # remains True if not called in a guild
+    app_commands_not_supported = True
     extra = ""
+    
     if interaction.guild:
+        app_commands_not_supported = interaction.guild.id not in APP_GUILDS_ID
+    
+        joined_at = interaction.guild.me.joined_at
         extra = (
             f"- Joined this server on {format_dt(joined_at, style="F")} ({format_dt(joined_at, style="R")})\n"
         )
@@ -696,7 +701,7 @@ async def help_command_category(interaction: Interaction):
         name="Who are you?", 
         value=(
             "Here's the gist:\n"
-            f"- Made by Splint#6019 and Geo#2181 on <t:1669831154:f> (<t:1669831154:R>)\n{extra}"
+            f"- Made by Splint#6019 and Geo#2181 on <t:1669831154:F> (<t:1669831154:R>)\n{extra}"
             "- I have some features that might make your day a little brighter, like music!\n"
             f"- I'm a private bot, only in `{len(interaction.client.guilds)}` servers!\n"
             "- Use the dropdown below to see what I have to offer.\n\n"
@@ -705,15 +710,20 @@ async def help_command_category(interaction: Interaction):
         )
     )
 
-    if interaction.guild.id not in APP_GUILDS_ID:
+    if app_commands_not_supported:
+        supported_guilds = "\n".join(f" - {interaction.client.get_guild(guild_id).name}" for guild_id in APP_GUILDS_ID)
+
         second = membed(
-            "Slash commands are not supported in this guild.\n"
-            "You can join the [support server](https://discord.gg/W3DKAbpJ5E) to use them.\n"
-            "You can however use the text-based commands instead."
+            "Some commands are not available here:\n"
+            "- Slash commands are **only** supported in these servers:\n"
+            f"{supported_guilds}\n"
+            "- Text commands are supported everywhere **except** DMs.\n\n"
+            "This was done to prevent hidden abuse.\n"
+            "You may contact the developers to request another guild to be added."
         )
         return await interaction.response.send_message(embeds=[embed, second], ephemeral=True)
 
-    help_view = Select()
+    help_view = Select(timeout=30.0)
     await interaction.response.send_message(embed=embed, view=help_view, ephemeral=True)
     help_view.message = await interaction.original_response()
 
