@@ -38,7 +38,6 @@ from other.utilities import (
     labour_productivity_via
 )
 
-
 import discord
 import datetime
 import aiofiles
@@ -382,7 +381,8 @@ def determine_exponent(rinput: str) -> str | int:
     if is_exponential(rinput):
         before_e_str, after_e_str = map(str, rinput.split('e'))
         before_e = float(before_e_str)
-        ten_exponent = min(int(after_e_str), 30)
+        converted = after_e_str or "1"
+        ten_exponent = min(int(converted), 30)
         actual_value = before_e * (10 ** ten_exponent)
     else:
         try:
@@ -721,22 +721,43 @@ class ConfirmResetData(discord.ui.View):
             item.disabled = True
         self.stop()
         
-        del active_sessions[interaction.user.id]
+        tables_to_delete = [INV_TABLE_NAME, BANK_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME]
         
-        tables_to_delete = {BANK_TABLE_NAME, INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME}
-        async with self.bot.pool.acquire() as conn:
-            for table in tables_to_delete:
-                await conn.execute(f"DELETE FROM `{table}` WHERE userID = ?", (self.removing_user.id,))
-            await conn.commit()
-
         embed.title = "Confirmed"
         embed.colour = discord.Colour.brand_red()
 
         await interaction.response.edit_message(embed=embed, view=self)
-        whose = "your" if interaction.user.id == self.removing_user.id else f"{self.removing_user.mention}'s"
-        end_note = " Thanks for using the bot." if whose == "your" else ""
 
-        await interaction.followup.send(embed=membed(f"All of {whose} data has been reset.{end_note}"))
+        async with self.bot.pool.acquire() as conn:
+            conn: asqlite_Connection
+
+            tr = conn.transaction()
+            await tr.start()
+
+            try:
+                for table in tables_to_delete:
+                    await conn.execute(f"DELETE FROM {table} WHERE userID = $0", self.removing_user.id)
+            except Exception as e:
+                print(str(e))
+
+                del active_sessions[interaction.user.id]
+                await tr.rollback()
+                return await interaction.followup.send(
+                    embed=membed(
+                        "Failed to wipe user data.\n"
+                        "Report this to the developers so they can get it fixed."
+                    )
+                )
+            else:
+                await tr.commit()
+                del active_sessions[interaction.user.id]
+
+                whose = "your" if interaction.user.id == self.removing_user.id else f"{self.removing_user.mention}'s"
+                end_note = " Thanks for using the bot." if whose == "your" else ""
+
+                await interaction.followup.send(
+                    embed=membed(f"All of {whose} data has been wiped.{end_note}")
+                )
 
     @discord.ui.button(label='CANCEL', style=discord.ButtonStyle.primary)
     async def cancel_button_reset(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -1186,7 +1207,7 @@ class BlackjackUi(discord.ui.View):
 
     def __init__(self, interaction: discord.Interaction, bot: commands.Bot):
         self.interaction = interaction
-        self.bo: commands.Bot = bot
+        self.bot: commands.Bot = bot
         self.finished = False
         super().__init__(timeout=30)
 
@@ -3450,12 +3471,9 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as connection:
             connection: asqlite_Connection
 
-            if await self.can_call_out(interaction.user, connection):
-                return
-
             async with connection.transaction():
                 cmd = cmd.parent or cmd
-                total = await add_command_usage(interaction.user.id, command_name=cmd.name, conn=connection)
+                total = await add_command_usage(interaction.user.id, command_name=f"/{cmd.name}", conn=connection)
 
                 if not total % 15:
 
@@ -3469,6 +3487,9 @@ class Economy(commands.Cog):
                     tip.set_footer(text="You will be able to disable these tips.")
                     
                     return await interaction.followup.send(embed=tip, ephemeral=True)
+
+                if await self.can_call_out(interaction.user, connection):
+                    return
 
                 exp_gainable = command.extras.get("exp_gained")
                 
@@ -3509,7 +3530,31 @@ class Economy(commands.Cog):
                 
                 await interaction.followup.send(embed=rankup)
 
+    @commands.Cog.listener()
+    async def on_command(self, ctx: commands.Context):
+        """
+        Track text commands ran. 
+        
+        No tips sent here since ephemeral messages are not supported.
+        
+        None of the economy commands use text commands so levelups aren't accounted for either.
+        """
+
+        cmd = ctx.command
+
+        async with self.bot.pool.acquire() as connection:
+            connection: asqlite_Connection
+
+            async with connection.transaction():
+                cmd = cmd.parent or cmd
+                await add_command_usage(ctx.author.id, command_name=f">{cmd.name}", conn=connection)
+        
+
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
+
+    @app_commands.command(name="settings", description="Adjust user-specfic settings")
+    async def view_user_settings(self, interaction: discord.Interaction):
+        await interaction.response.send_message(embed=membed("This is a work in progress!"))
 
     pmulti = app_commands.Group(
         name='multi', 
@@ -3576,7 +3621,7 @@ class Economy(commands.Cog):
 
     share = app_commands.Group(
         name='share', 
-        description='share different assets with others.', 
+        description='Share different assets with others.', 
         guild_only=True, 
         guild_ids=APP_GUILDS_ID
     )
@@ -3652,6 +3697,9 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
             
+            if not (await self.can_call_out_either(primm, recipient, conn)):
+                return await interaction.response.send_message(embed=NOT_REGISTERED)
+
             item_details = await self.partial_match_for(interaction, item_name, conn)
             if item_details is None:
                 return
@@ -4691,7 +4739,7 @@ class Economy(commands.Cog):
                     name='Commands', 
                     value=(
                         f"Total: `{format_number_short(cmd_count)}`\n"
-                        f"Favourite: `{fav}`"
+                        f"Favourite: `{fav[1:]}`"
                     )
                 )
 
@@ -4781,32 +4829,31 @@ class Economy(commands.Cog):
 
                 stats.set_footer(text="The number next to the name is how many matches are recorded")
 
-                await interaction.response.send_message(embed=stats, ephemeral=ephemerality)
-                msg = await interaction.original_response()
-                
+                piee = discord.Embed(title="Games played")  # piee - pie embed
+                piee.colour = 0x2B2D31
+
                 try:
-                    piee = discord.Embed(title="Games played")
-                    piee.colour = 0x2B2D31
 
                     its_sum = total_bets + total_slots + total_blackjacks
-                    pie = (ImageCharts()
-                           .chd(
-                        f"t:{(total_bets / its_sum) * 100},"
-                        f"{(total_slots / its_sum)* 100},{(total_blackjacks / its_sum) * 100}")
-                           .chco("EA469E|03A9F4|FFC00C").chl(
-                        f"BET ({total_bets})|SLOTS ({total_slots})|BJ ({total_blackjacks})")
-                           .chdl("Total bet games|Total slot games|Total blackjack games").chli(f"{its_sum}").chs(
-                        "600x480")
-                           .cht("pd").chtt(f"{user.name}'s total games played"))
-                    piee.set_image(url=pie.to_url())
-                    
-                    await msg.reply(embed=piee)
-                except ZeroDivisionError:
-                    await msg.reply(
-                        embed=membed(
-                            f"{user.mention} has not got enough data yet to form a pie chart."
+                    pie = (
+                        ImageCharts().chd(
+                            f"t:{(total_bets / its_sum) * 100},"
+                            f"{(total_slots / its_sum) * 100},{(total_blackjacks / its_sum) * 100}"
                         )
+                        .chco("EA469E|03A9F4|FFC00C")
+                        .chl(f"BET ({total_bets})|SLOTS ({total_slots})|BJ ({total_blackjacks})")
+                        .chdl("Total bet games|Total slot games|Total blackjack games")
+                        .chli(f"{its_sum}")
+                        .chs("600x480")
+                        .cht("pd")
+                        .chtt(f"{user.name}'s total games played")
                     )
+
+                    piee.set_image(url=pie.to_url())
+                except ZeroDivisionError:
+                    piee.description = f"{user.mention} has not got enough data yet to form a pie chart."
+                
+                await interaction.response.send_message(embeds=[stats, piee], ephemeral=ephemerality)
 
     @app_commands.command(name='highlow', description='Guess the number. Jackpot wins big!', extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -4920,7 +4967,7 @@ class Economy(commands.Cog):
                         f"""
                         **\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n
                         **It's a match!** You've won {CURRENCY} **{amount_after_multi:,}** robux.
-                        Your new balance is {CURRENCY} **{updated[1]:,}**.\n
+                        Your new balance is {CURRENCY} **{updated[1]:,}**.
                         You've won {prcntw:.1f}% of all slots games.
                         """)
                     )
@@ -5381,7 +5428,8 @@ class Economy(commands.Cog):
         if interaction.user.id not in self.bot.owner_ids:
             if (member is not None) and (member != interaction.user):
                 return await interaction.response.send_message(
-                    embed=membed("You are not allowed to do this."))
+                    embed=membed("You are not allowed to do this.")
+                )
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
