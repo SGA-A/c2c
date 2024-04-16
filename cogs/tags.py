@@ -272,7 +272,9 @@ class Tags(commands.Cog):
         except sqlite3.IntegrityError:
             await tr.rollback()
             await ctx.send(embed=membed("A tag with this name already exists."))
-        except:
+        except Exception as e:
+            print(e)
+
             await tr.rollback()
             await ctx.send(embed=membed("Could not create tag."))
         else:
