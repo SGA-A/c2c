@@ -17,8 +17,9 @@ from discord import app_commands, Interaction, Object
 import discord
 import datetime
 
-from cogs.economy import APP_GUILDS_ID
-from other.pagination import Pagination
+from cogs.economy import APP_GUILDS_ID, USER_ENTRY, total_commands_used_by_user
+from other.pagination import Pagination, PaginationSimple
+
 
 ARROW = "<:arrowe:1180428600625877054>"
 API_EXCEPTION = "The API fucked up, try again later."
@@ -373,11 +374,50 @@ class Utility(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.describe(user="Whose command usage to display. Defaults to you.")
     @app_commands.command(name="usage", description="See your total command usage")
-    async def view_user_usage(self, interaction: discord.Interaction):
-        await interaction.response.send_message(
-            embed=membed("This command is a work in progress!")
-        )
+    async def view_user_usage(self, interaction: discord.Interaction, user: Optional[USER_ENTRY]):
+        user = user or interaction.user
+
+        async with self.bot.pool.acquire() as conn:
+
+            total_cmd_count = await total_commands_used_by_user(user.id, conn)
+
+            command_usage = await conn.fetchall(
+                """
+                SELECT cmd_name, cmd_count
+                FROM command_uses
+                WHERE userID = $0
+                ORDER BY cmd_count DESC
+                """, user.id
+            )
+
+            if not command_usage:
+                return await interaction.response.send_message(
+                    embed=membed(
+                        f"{user.mention} has never used any bot commands before.\n"
+                        "Or, they have not used the bot since the rewrite (<t:1712935339:R>)."
+                    )
+                )
+
+            em = membed()
+            em.title = f"{user.display_name}'s Command Usage"
+            paginator = PaginationSimple(interaction)
+
+            async def get_page_part(page: int, length: Optional[int] = 12):
+
+                offset = (page - 1) * length
+                em.description = f"> Total: {total_cmd_count:,}\n\n"
+                
+                for item in command_usage[offset:offset + length]:
+                    em.description += f"` {item[1]:,} ` \U00002014 {item[0]}\n"
+
+                n = paginator.compute_total_pages(len(command_usage), length)
+                em.set_footer(text=f"Page {page} of {n}")
+                return em, n
+            paginator.get_page = get_page_part
+
+        await paginator.navigate()
 
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.command(name='calc', description='Calculate an expression')
@@ -385,9 +425,12 @@ class Utility(commands.Cog):
     async def calculator(self, interaction: discord.Interaction, expression: str):
         try:
             interpretable = expression.replace('^', '**').replace(',', '_')
-            result = eval(interpretable) or "Invalid Equation"
+            
+            # Evaluate the expression
+            result = eval(interpretable)
 
-            result = f"{float(result):,}"
+            # Format the result with commas for thousands separator
+            result = f"{result:,}" if isinstance(result, (int, float)) else "Invalid Equation"
         except Exception:
             result = "Invalid Equation"
 
@@ -898,15 +941,26 @@ class Utility(commands.Cog):
 
     @app_commands.command(name='randomfact', description='Queries a random fact')
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
+    @app_commands.checks.cooldown(1, 5)
     async def random_fact(self, interaction: Interaction):
-        limit = 1
-        api_url = 'https://api.api-ninjas.com/v1/facts?limit={}'.format(limit)
+        api_url = 'https://api.api-ninjas.com/v1/facts?limit=1'
         parameters = {'X-Api-Key': self.bot.NINJAS_API_KEY}
+        
         async with self.bot.session.get(api_url, params=parameters) as resp:
             text = await resp.json()
-            the_fact = text[0].get('fact')
-            await interaction.response.send_message(embed=membed(f"{the_fact}."))
+            await interaction.response.send_message(embed=membed(f"{text[0].get('fact')}."))
+
+    async def format_api_response(self, interaction: discord.Interaction, start: float, api_url: str, **attrs):
+        async with self.bot.session.get(api_url, **attrs) as response:  # params=params, headers=headers
+            if response.status == 200:
+                buffer = BytesIO(await response.read())
+                end = perf_counter()
+                return await interaction.followup.send(
+                    content=f"Done. Took `{end-start:.2f}s`.", 
+                    file=discord.File(buffer, 'clip.gif')
+                )
+
+            await interaction.followup.send(embed=membed(API_EXCEPTION))
 
     @app_commands.command(name="image", description="Manipulate a user's avatar")
     @app_commands.describe(
@@ -923,32 +977,29 @@ class Utility(commands.Cog):
                 "cloth", "contour", "cow", "cube", "dilate", "fall", "fan", "flush", "gallery",
                 "globe", "half-invert", "hearts", "infinity", "laundry", "lsd", "optics", "parapazzi"
             ]] = "abstract"
-        ) -> discord.InteractionMessage | None:
-    
+        ) -> None:
         start = perf_counter()
-        await interaction.response.send_message("Loading..")
-        msg = await interaction.original_response()
+        await interaction.response.defer(thinking=True)
+        
         user = user or interaction.user
 
         params = {'image_url': user.display_avatar.url}
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
-        async with self.bot.session.get(api_url, params=params, headers=headers) as response:
-            if response.status == 200:
-                buffer = BytesIO(await response.read())
-                end = perf_counter()
-                return await msg.edit(
-                    content=f"Done. Took `{end-start:.2f}s`.", 
-                    attachments=[discord.File(buffer, f'{endpoint}.gif')]
-                )
-            
-            await msg.edit(embed=membed(API_EXCEPTION))
+        await self.format_api_response(
+            interaction,
+            start=start,
+            api_url=api_url,
+            params=params,
+            headers=headers
+        )
 
     @app_commands.command(name="image2", description="Manipulate a user's avatar further")
     @app_commands.describe(
         user="The user to apply the manipulation to.",
-        endpoint="What kind of manipulation sorcery to use.")
+        endpoint="What kind of manipulation sorcery to use."
+    )
     @app_commands.guilds(*APP_GUILDS_ID)
     async def image2_manip(
         self, 
@@ -961,24 +1012,20 @@ class Utility(commands.Cog):
         ) -> discord.InteractionMessage | None:
 
         start = perf_counter()
-        await interaction.response.send_message("Loading..")
-        msg = await interaction.original_response()
+        await interaction.response.defer(thinking=True)
         user = user or interaction.user
 
         params = {'image_url': user.display_avatar.url}
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
-        async with self.bot.session.get(api_url, params=params, headers=headers) as response:
-            if response.status == 200:
-                buffer = BytesIO(await response.read())
-                end = perf_counter()
-                return await msg.edit(
-                    content=f"Done. Took `{end-start:.2f}s`.", 
-                    attachments=[discord.File(buffer, f'{endpoint}.gif')]
-                )
-            
-            await msg.edit(embed=membed(API_EXCEPTION))
+        await self.format_api_response(
+            interaction,
+            start=start,
+            api_url=api_url,
+            params=params,
+            headers=headers
+        )
 
     @app_commands.command(name="locket", description="Insert people into a heart-shaped locket")
     @app_commands.describe(user="The user to add to the locket.", user2="The second user to add to the locket.")
@@ -991,25 +1038,20 @@ class Utility(commands.Cog):
     ) -> discord.InteractionMessage | None:
         
         start = perf_counter()
-        await interaction.response.send_message("Loading..")
-        msg = await interaction.original_response()
-
+        await interaction.response.defer(thinking=True)
         user = user or interaction.user
 
         params = {'image_url': user.display_avatar.url, 'image_url_2': user2.display_avatar.url}
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = "https://api.jeyy.xyz/v2/image/heart_locket"
 
-        async with self.bot.session.get(api_url, params=params, headers=headers) as response:
-            if response.status == 200:
-                buffer = BytesIO(await response.read())
-                end = perf_counter()
-                return await msg.edit(
-                    content=f"Done. Took `{end-start:.2f}s`.", 
-                    attachments=[discord.File(buffer, 'heart_locket.gif')]
-                )
-            
-            await msg.edit(embed=membed(API_EXCEPTION))
+        await self.format_api_response(
+            interaction,
+            start=start,
+            api_url=api_url,
+            params=params,
+            headers=headers
+        )
 
     @app_commands.command(name='com', description='Finds most common letters in a sentences')
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -1241,13 +1283,13 @@ class Utility(commands.Cog):
             ]] = "t"
         ) -> None:
 
-        format_dtime = discord.utils.format_dt(datetime.datetime.now(), style=spec)
+        format_dtime = discord.utils.format_dt(discord.utils.utcnow(), style=spec[0])
         embed = membed(
             f"## <:watchb:1195754643209334906> Timestamp Conversion\n{format_dtime}\n"
             f"- The epoch time in this format is: `{format_dtime}`"
         )
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await interaction.response.send_message(embed=embed)
 
     @commands.command(name='avatar', description="Display a user's enlarged avatar")
     async def avatar(self, ctx, *, username: Union[discord.Member, discord.User] = None) -> None:
