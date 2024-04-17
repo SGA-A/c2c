@@ -185,57 +185,48 @@ class Owner(commands.Cog):
         configuration: Literal["add", "remove", "make"], 
         amount: str,
         member: Optional[discord.Member],
-        ephemeral: Optional[bool] = True,
+        ephemeral: Optional[bool] = False,
         deposit_mode: Optional[Literal["wallet", "bank"]] = "wallet"
     ) -> None:
         """Generates or deducts a given amount of robux to the mentioned user."""
         
         member = member or interaction.user
-        real_amount = determine_exponent(amount)
+        real_amount = await determine_exponent(
+            interaction=interaction, 
+            rinput=amount
+        )
+        if real_amount is None:
+            return
+        embed = membed()
+        
+        if isinstance(real_amount, str):
+            embed.description = "Invalid inputted amount."
+            return await interaction.response.send_message(embed=embed)
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-            
-            embed = discord.Embed(
-                title='Success', 
-                colour=discord.Colour.random(), 
-                timestamp=discord.utils.utcnow()
-            )
-
-            economy = self.bot.get_cog("Economy")
 
             if configuration.startswith("a"):
-                new_amount = await economy.update_bank_new(member, conn, +int(real_amount), deposit_mode)
-
-                embed.description = (
-                    f"- Added {CURRENCY} {int(real_amount):,} robux to **{member.display_name}**'s balance.\n"
-                    f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY} {new_amount[0]:,}."
-                )
-                embed.set_footer(text="configuration type: ADD_TO")
+                condition = f"{deposit_mode} = {deposit_mode} - $0"
+                embed.description = f"Added {CURRENCY} **{real_amount:,}** to {member.mention}!"
             elif configuration.startswith("r"):
-
-                new_amount = await economy.update_bank_new(member, conn, -int(real_amount), deposit_mode)
-
-                embed.description = (
-                    f"- Deducted {CURRENCY} {int(real_amount):,} robux from **{member.display_name}**'s balance.\n"
-                    f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY} {new_amount[0]:,}."
-                )
-                embed.set_footer(text="configuration type: REMOVE_FROM")
+                condition = f"{deposit_mode} = {deposit_mode} - $0"
+                embed.description = f"Deducted {CURRENCY} **{real_amount:,}** from {member.mention}!"
             else:
-                new_amount = await economy.change_bank_new(member, conn, real_amount, deposit_mode)
-                
-                embed.description = (
-                    f"- \U0000279c **{member.display_name}**'s "
-                    f"**`{deposit_mode}`** balance has been changed to {CURRENCY} {real_amount:,}.\n"
-                    f"- **{member.display_name}**'s new **`{deposit_mode}`** balance is {CURRENCY} {new_amount[0]:,}."
-                )
-                
-                embed.set_footer(text="configuration type: ALTER_TO")
+                condition = f"{deposit_mode} = {deposit_mode} - $0"
+                embed.description = f"Set {CURRENCY} **{real_amount:,}** to {member.mention}!"
 
+            data = await conn.execute(
+                f"""
+                UPDATE bank 
+                SET {condition} 
+                WHERE userID = $1
+                """, amount, member.id
+            )
             await conn.commit()
-            embed.set_thumbnail(url=member.display_avatar.url)
-            embed.set_author(name=f"Requested by {interaction.user.name}", icon_url=interaction.user.avatar.url)
 
+            if data is None:
+                embed.description = f"{member.mention} is not in the database."
             await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @commands.command(name='cthr', aliases=('ct', 'create_thread'), description='Use a preset to create forum channels')
