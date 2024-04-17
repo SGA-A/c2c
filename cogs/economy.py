@@ -365,40 +365,34 @@ def reverse_format_number_short(formatted_number: str) -> int:
     return int(formatted_number)
 
 
-def determine_exponent(rinput: str) -> str | int:
+async def determine_exponent(interaction: discord.Interaction, rinput: str) -> str | int:
     """Finds out what the exponential value entered is equivalent to in numerical form. (e.g, 1e6)
 
     Can handle normal integers and "max"/"all" is always returned 'as-is', not converted to numerical form."""
-
-    def is_exponential(val: str) -> bool:
-        """Is the input an exponential input?"""
-        return 'e' in val
 
     rinput = rinput.lower()
 
     if rinput in {"max", "all"}:
         return rinput
-
-    if is_exponential(rinput):
-        before_e_str, after_e_str = map(str, rinput.split('e'))
-        before_e = float(before_e_str)
-        ten_exponent = min(after_e_str, 30)
-        actual_value = before_e * (10 ** ten_exponent)
-    else:
-        rinput = rinput.translate(str.maketrans('', '', ','))
-        actual_value = int(rinput)
-
-    return floor(abs(actual_value))
-    
-
-async def handle_exponent(interaction: discord.Interaction, rinput: str) -> str | int:
-    """Use this function to handle exponential input from the user, removing the need for other try/except blocks."""
     try:
-        return determine_exponent(rinput)
-    except (ValueError, TypeError):
+        if 'e' in rinput:
+            before_e_str, after_e_str = map(str, rinput.split('e'))
+            before_e = float(before_e_str)
+            ten_exponent = min(int(after_e_str), 50)
+            actual_value = abs(before_e * (10 ** ten_exponent))
+        else:
+            rinput = rinput.translate(str.maketrans('', '', ','))
+            actual_value = abs(int(rinput))
+        
+        if not actual_value:
+            raise ValueError()
+        return actual_value
+
+    except (ValueError, TypeError) as e:
+        print_exception(type(e), e, e.__traceback__)
         return await respond(
             interaction=interaction,
-            embed=membed("You need to provide a real number.")
+            embed=membed("You need to provide a real positive number.")
         )
 
 
@@ -595,34 +589,38 @@ async def find_fav_cmd_for(user_id, conn: asqlite_Connection) -> str:
 
 
 class DepositOrWithdraw(discord.ui.Modal):
-    def __init__(self, *, title: str = ..., default_val: int, conn: asqlite_Connection, 
-                 message: discord.InteractionMessage, view_children) -> None:
+    def __init__(
+            self, *, 
+            title: str, 
+            default_val: int, 
+            conn: asqlite_Connection, 
+            message: discord.InteractionMessage, 
+            view: discord.ui.View
+        ) -> None:
+        
         self.their_default = default_val
         self.conn = conn
         self.message = message
-        self.view_children = view_children  #  note this is the view itself
-        self.amount.default = f"{self.their_default:,}"  # access its children via 
-        super().__init__(title=title, timeout=120.0)  # self.view_children.children
+        self.view = view
+        self.amount.default = f"{self.their_default:,}"
+        super().__init__(title=title, timeout=120.0)
 
     amount = discord.ui.TextInput(label="Amount", min_length=1, max_length=30)
 
     def checks(self, bank, wallet, any_bankspace_left):
-        self.view_children.children[0].disabled = (bank == 0)
-        self.view_children.children[1].disabled = (wallet == 0) or (any_bankspace_left == 0)
+        self.view.children[0].disabled = (bank == 0)
+        self.view.children[1].disabled = (wallet == 0) or (any_bankspace_left == 0)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        val = determine_exponent(self.amount.value.replace(",", ""))
+        val = await determine_exponent(
+            interaction=interaction, 
+            rinput=self.amount.value
+        )
+        if val is None:
+            return
         val = int(val)
 
-        if not val:
-            return await interaction.response.send_message(
-                embed=membed("You need to provide a positive number as your amount."),
-                ephemeral=True,
-                delete_after=3.0
-        )
-        
         embed = self.message.embeds[0]
-
         if self.title.startswith("W"):
             if val > self.their_default:
                 return await interaction.response.send_message(
@@ -634,18 +632,17 @@ class DepositOrWithdraw(discord.ui.Modal):
                     )
                 )
 
-            data = await self.conn.execute(
+            data = await self.conn.fetchone(
                 """
                 UPDATE bank 
-                SET bank = bank + ?, wallet = wallet + ? 
-                WHERE userID = ? 
+                SET 
+                    bank = bank - $0, 
+                    wallet = wallet + $0 
+                WHERE userID = $1 
                 RETURNING wallet, bank, bankspace
-                """, 
-                (-val, val, interaction.user.id)
+                """, val, interaction.user.id
             )
-
             await self.conn.commit()
-            data = await data.fetchone()
 
             prcnt_full = (data[1] / data[2]) * 100
 
@@ -655,25 +652,33 @@ class DepositOrWithdraw(discord.ui.Modal):
             embed.timestamp = discord.utils.utcnow()
 
             self.checks(data[1], data[0], data[2]-data[1])
-            return await interaction.response.edit_message(embed=embed, view=self.view_children)
+            return await interaction.response.edit_message(embed=embed, view=self.view)
         
         # ! Deposit Branch
         
         if val > self.their_default:
             return await interaction.response.send_message(
+                ephemeral=True, 
+                delete_after=10.0,
                 embed=membed(
                     "Either one (or both) of the following is true:\n" 
                     "1. You only have don't have that much money in your wallet.\n"
-                    "2. You don't have enough bankspace to deposit that amount."),
-                ephemeral=True, delete_after=10.0)
+                    "2. You don't have enough bankspace to deposit that amount."
+                )
+            )
 
-        updated = await self.conn.execute(
-            "UPDATE bank SET bank = bank + ?, wallet = wallet + ? WHERE userID = ? "
-            "RETURNING wallet, bank, bankspace", 
-            (val, -val, interaction.user.id))
-              
+        updated = await self.conn.fetchone(
+            """
+            UPDATE bank 
+            SET 
+                bank = bank + $0, 
+                wallet = wallet - $0 
+            WHERE userID = $1 
+            RETURNING wallet, bank, bankspace
+            """, val, interaction.user.id
+        )
+     
         await self.conn.commit()
-        updated = await updated.fetchone()
         prcnt_full = (updated[1] / updated[2]) * 100
 
         embed.set_field_at(0, name="Wallet", value=f"{CURRENCY} {updated[0]:,}")
@@ -682,16 +687,23 @@ class DepositOrWithdraw(discord.ui.Modal):
         embed.timestamp = discord.utils.utcnow()
 
         self.checks(updated[1], updated[0], updated[2]-updated[1])
-        await interaction.response.edit_message(embed=embed, view=self.view_children)
+        await interaction.response.edit_message(embed=embed, view=self.view)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
+        print_exception(type(error), error, error.__traceback__)
 
         if isinstance(error, ValueError):
             return await interaction.response.send_message(
-                embed=membed(f"You need to provide a real amount to {self.title.lower()}."),
-                delete_after=3.0, ephemeral=True)
+                delete_after=5.0, 
+                ephemeral=True,
+                embed=membed(f"You need to provide a real amount to {self.title.lower()}.")
+            )
         
-        await interaction.response.send_message(embed=membed("Something went wrong."), ephemeral=True)
+        await interaction.response.send_message(
+            ephemeral=True,
+            delete_after=10.0,
+            embed=membed("Something went wrong. Try again later.")
+        )
 
 
 class ConfirmResetData(discord.ui.View):
@@ -746,10 +758,11 @@ class ConfirmResetData(discord.ui.View):
                 for table in tables_to_delete:
                     await conn.execute(f"DELETE FROM {table} WHERE userID = $0", self.removing_user.id)
             except Exception as e:
-                print(str(e))
+                print_exception(type(e), e, e.__traceback__)
 
-                del active_sessions[interaction.user.id]
                 await tr.rollback()
+                del active_sessions[interaction.user.id]
+                
                 return await interaction.followup.send(
                     embed=membed(
                         "Failed to wipe user data.\n"
@@ -1082,9 +1095,7 @@ class BalanceView(discord.ui.View):
     def checks(self, new_bank, new_wallet, any_new_bankspace_left):
         """Check if the buttons should be disabled or not."""
         if self.viewing.id != self.interaction.user.id:
-            self.children[0].disabled = True
-            self.children[1].disabled = True
-            return
+            return  # ! already initialized disabled logic
         
         self.children[0].disabled = (new_bank == 0)
         self.children[1].disabled = (new_wallet == 0) or (any_new_bankspace_left == 0)
@@ -1125,7 +1136,7 @@ class BalanceView(discord.ui.View):
                 default_val=bank_amt, 
                 conn=conn, 
                 message=self.message, 
-                view_children=self
+                view=self
             )
         )
 
@@ -1136,19 +1147,21 @@ class BalanceView(discord.ui.View):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
             data = await conn.fetchone(
-                "SELECT wallet, bank, bankspace FROM `bank` WHERE userID = ?", 
-                (interaction.user.id,)
+                """
+                SELECT wallet, bank, bankspace 
+                FROM `bank` 
+                WHERE userID = $0
+                """, interaction.user.id
             )
 
         if not data[0]:
             return await interaction.response.send_message(
-                embed=membed("You have nothing to deposit."), 
                 ephemeral=True, 
-                delete_after=3.0
+                delete_after=3.0,
+                embed=membed("You have nothing to deposit.")
             )
         
         available_bankspace = data[2] - data[1]
-
         if not available_bankspace:
             return await interaction.response.send_message(
                 ephemeral=True, 
@@ -1167,23 +1180,24 @@ class BalanceView(discord.ui.View):
                 default_val=available_bankspace, 
                 conn=conn, 
                 message=self.message, 
-                view_children=self
+                view=self
             )
         )
     
     @discord.ui.button(emoji="<:refreshicon:1205432056369389590>")
-    async def refresh_balance(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def refresh_balance(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Refresh the current message to display the user's latest balance."""
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-            nd = await conn.execute(
+            nd = await conn.fetchone(
                 """
-                SELECT wallet, bank, bankspace FROM `bank` WHERE userID = $0
+                SELECT wallet, bank, bankspace 
+                FROM `bank` 
+                WHERE userID = $0
                 """, self.viewing.id
             )
 
-            nd = await nd.fetchone()
             bank = nd[0] + nd[1]
             inv = await Economy.calculate_inventory_value(self.viewing, conn)
 
@@ -1204,7 +1218,7 @@ class BalanceView(discord.ui.View):
         await interaction.response.edit_message(content=None, embed=balance, view=self)
 
     @discord.ui.button(emoji=discord.PartialEmoji.from_str("<:terminate:1205810058357907487>"))
-    async def close_view(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def close_view(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Close the balance view."""
         self.stop()
         await interaction.response.edit_message(view=None)
@@ -1874,34 +1888,47 @@ class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
 
     async def on_submit(self, interaction: discord.Interaction):
 
-        expo = determine_exponent(self.investa.value)
+        expo = await determine_exponent(
+            interaction=interaction,
+            rinput=self.investa.value
+        )
+        if expo is None:
+            return
+
         wallet_amt = await Economy.get_wallet_data_only(interaction.user, self.conn)
 
         try:
             assert isinstance(expo, int)
             amount = expo
         except AssertionError:
-            if expo.lower() in {'max', 'all'}:
-                amount = wallet_amt
-            else:
-                return await interaction.response.send_message(
-                    embed=membed("You need to provide a valid input to bet with."))
+            amount = wallet_amt
 
         if amount > wallet_amt:
             return await interaction.response.send_message(
-                embed=membed("You don't have that much money in your wallet."), delete_after=3.0, ephemeral=True)
+                embed=membed("You don't have that much money in your wallet."), 
+                delete_after=3.0, 
+                ephemeral=True
+            )
 
         productivity = labour_productivity_via(investment=amount)
 
-        dtls = await self.conn.execute(
-            "UPDATE `slay` SET investment = investment + ?, productivity = productivity + ? WHERE slay_name = ? AND "
-            "userID = ? RETURNING *",
-            (amount, productivity, self.choice, interaction.user.id))
-        await self.conn.execute(f"UPDATE `{BANK_TABLE_NAME}` SET `wallet` = ? WHERE userID = ?",
-                                (wallet_amt - amount, interaction.user.id))
-
+        dtls = await self.conn.fetchone(
+            """
+            UPDATE `slay` 
+            SET 
+                investment = investment + $0, 
+                productivity = productivity + $1 
+            WHERE slay_name = $2 AND userID = $3 
+            RETURNING *
+            """, amount, productivity, self.choice, interaction.user.id
+        )
+        
+        await self.conn.execute(
+            f"""
+            UPDATE `{BANK_TABLE_NAME}` SET `wallet` = ? WHERE userID = ?
+            """, wallet_amt - amount, interaction.user.id
+        )
         await self.conn.commit()
-        dtls = await dtls.fetchone()
 
         sembed = await self.economy.servant_preset(interaction.user.id, dtls)
         await interaction.response.edit_message(content=None, embed=sembed, view=self.the_view)
@@ -2562,7 +2589,10 @@ class ItemQuantityModal(discord.ui.Modal):
 
     async def calculate_discounted_price_if_any(
             self, user: USER_ENTRY, 
-            conn: asqlite_Connection, interaction: discord.Interaction, current_price: int) -> int:
+            conn: asqlite_Connection, 
+            interaction: discord.Interaction, 
+            current_price: int
+        ) -> int:
         """Check if the user is eligible for a discount on the item."""
 
         data = await conn.fetchone(
@@ -2570,8 +2600,9 @@ class ItemQuantityModal(discord.ui.Modal):
             SELECT inventory.qty
             FROM shop
             INNER JOIN inventory ON shop.itemID = inventory.itemID
-            WHERE shop.itemID = ? AND inventory.userID = ?
-            """, (12, user.id))
+            WHERE shop.itemID = $0 AND inventory.userID = $1
+            """, 12, user.id
+        )
 
         if not data:
             return current_price
@@ -2600,8 +2631,13 @@ class ItemQuantityModal(discord.ui.Modal):
     # --------------------------------------------------------------------------------------------
     
     async def confirm_purchase(
-            self, interaction: discord.Interaction, 
-            new_price: int, true_qty: int, conn: asqlite_Connection, current_balance: int) -> None:
+            self, 
+            interaction: discord.Interaction, 
+            new_price: int, 
+            true_qty: int, 
+            conn: asqlite_Connection, 
+            current_balance: int
+        ) -> None:
 
         value = await process_confirmation(
             interaction=interaction, 
@@ -2624,7 +2660,8 @@ class ItemQuantityModal(discord.ui.Modal):
                     f"- {true_qty:,}x {self.ie} {self.item_name}\n\n"
                     "**You paid:**\n"
                     f"- {CURRENCY} {new_price:,}"),
-                colour=0xFFFFFF)
+                colour=0xFFFFFF
+            )
             confirm.set_footer(text="Thanks for your business.")
 
             if self.activated_coupon:
@@ -2635,7 +2672,13 @@ class ItemQuantityModal(discord.ui.Modal):
     # --------------------------------------------------------------------------------------------
 
     async def on_submit(self, interaction: discord.Interaction):
-        true_quantity = determine_exponent(self.quantity.value)
+        true_quantity = await determine_exponent(
+            interaction=interaction, 
+            rinput=self.quantity.value
+        )
+
+        if true_quantity is None:
+            return
     
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
@@ -2677,8 +2720,8 @@ class ItemQuantityModal(discord.ui.Modal):
 
             if new_price > current_balance:
                 return await interaction.followup.send(
-                    embed=membed(
-                        f"You don't have enough money to buy **{true_quantity:,}x {self.ie} {self.item_name}**."))
+                    embed=membed(f"You don't have enough money to buy **{true_quantity:,}x {self.ie} {self.item_name}**.")
+                )
 
             await self.confirm_purchase(
                 interaction, 
@@ -2690,9 +2733,10 @@ class ItemQuantityModal(discord.ui.Modal):
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         print_exception(type(error), error, error.__traceback__)
-        if interaction.response.is_done():
-            await interaction.response.defer(thinking=True)
-        await interaction.followup.send(content="Something went wrong")
+        await respond(
+            interaction=interaction,
+            embed=membed("Something went wrong.\nDevelopers have been made aware of the issue.")
+        )
 
 
 class ShopItem(discord.ui.Button):
@@ -3661,14 +3705,16 @@ class Economy(commands.Cog):
             if not (await self.can_call_out_either(user, recipient, conn)):
                 return await interaction.response.send_message(embed=NOT_REGISTERED)
             else:
-                share_amount = determine_exponent(share_amount)
+                share_amount = await determine_exponent(
+                    interaction=interaction, 
+                    rinput=share_amount
+                )
+                if share_amount is None:
+                    return
+
                 wallet_amt_host = await Economy.get_wallet_data_only(user, conn)
 
                 if isinstance(share_amount, str):
-                    if share_amount.lower() not in {"all", "max"}:
-                        return await interaction.response.send_message(
-                            embed=membed("You need to provide a valid amount to share.")
-                        )
                     share_amount = wallet_amt_host
                 
                 if not share_amount:
@@ -5476,67 +5522,80 @@ class Economy(commands.Cog):
         """Withdraw a given amount of robux from your bank."""
 
         user = interaction.user
-        actual_amount = determine_exponent(robux)
+        actual_amount = await determine_exponent(
+            interaction=interaction, 
+            rinput=robux
+        )
+
+        if actual_amount is None:
+            return
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-            if await self.can_call_out(interaction.user, conn):
-                await interaction.response.send_message(embed=self.not_registered)
 
-            bank_amt = await self.get_spec_bank_data(interaction.user, "bank", conn)
+            bank_amt = await conn.fetchone(
+                """
+                SELECT bank
+                FROM bank
+                WHERE userID = $0
+                """, user.id
+            )
 
+            if bank_amt is None:
+                return await interaction.response.send_message(embed=self.not_registered)
+            bank_amt, = bank_amt
+
+            query = (
+                f"""
+                UPDATE `{BANK_TABLE_NAME}`
+                SET 
+                    wallet = wallet + $0,
+                    `bank` = `bank` - $0
+                WHERE userID = $1
+                RETURNING wallet, `bank`
+                """
+            )
+
+            embed = membed()
             if isinstance(actual_amount, str):
-                if actual_amount.lower() == "all" or actual_amount.lower() == "max":
 
-                    if not bank_amt:
-                        return await interaction.response.send_message(
-                            embed=membed("You have nothing to withdraw."))
-
-                    wallet_new = await self.update_bank_new(user, conn, +bank_amt)
-                    bank_new = await self.update_bank_new(user, conn, -bank_amt, "bank")
-                    await conn.commit()
-
-                    embed = discord.Embed(colour=0x2B2D31)
-
-                    embed.add_field(
-                        name="<:withdraw:1195657655134470155> Withdrawn", 
-                        value=f"{CURRENCY} {bank_amt:,}", 
-                        inline=False
-                    )
-                    embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new[0]:,}")
-                    embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new[0]:,}")
-
+                if not bank_amt:
+                    embed.description = "You have nothing to withdraw."
                     return await interaction.response.send_message(embed=embed)
-                return await interaction.response.send_message(
-                    embed=membed("You need to provide a real amount to withdraw."))
 
-            if not actual_amount:
-                return await interaction.response.send_message(
-                    embed=membed("The amount to withdraw needs to be greater than 0.")
+                new_data = await conn.fetchone(query, bank_amt, user.id)
+                await conn.commit()
+                wallet_new, bank_new = new_data
+
+                embed.add_field(
+                    name="<:withdraw:1195657655134470155> Withdrawn", 
+                    value=f"{CURRENCY} {bank_amt:,}", 
+                    inline=False
                 )
+                embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}")
+                embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
+
+                return await interaction.response.send_message(embed=embed)
 
             elif actual_amount > bank_amt:
-                return await interaction.response.send_message(
-                    embed=membed(f"You only have {CURRENCY} **{bank_amt:,}** in your bank right now.")
-                )
+                embed.description = f"You only have {CURRENCY} **{bank_amt:,}** in your bank right now."
+                return await interaction.response.send_message(embed=embed)
 
             else:
-                wallet_new = await self.update_bank_new(user, conn, +actual_amount)
-                bank_new = await self.update_bank_new(user, conn, -actual_amount, "bank")
+                new_data = await conn.fetchone(query, actual_amount, user.id)
                 await conn.commit()
+                wallet_new, bank_new = new_data
 
-                embed = discord.Embed(colour=0x2B2D31)
-                
                 embed.add_field(
                     name="<:withdraw:1195657655134470155> Withdrawn", 
                     value=f"{CURRENCY} {actual_amount:,}", 
                     inline=False
                 )
                 
-                embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new[0]:,}")
-                embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new[0]:,}")
+                embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}")
+                embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
 
-                return await interaction.response.send_message(embed=embed)
+                await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='deposit', description="Deposit robux into your bank account")
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -5545,89 +5604,87 @@ class Economy(commands.Cog):
         """Deposit an amount of robux into your bank."""
 
         user = interaction.user
-        actual_amount = determine_exponent(robux)
+        actual_amount = await determine_exponent(
+            interaction=interaction, 
+            rinput=robux
+        )
+        if actual_amount is None:
+            return
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            if await self.can_call_out(interaction.user, conn):
+            details = await conn.fetchone(
+                """
+                SELECT wallet, bank, bankspace FROM `bank` WHERE userID = $0
+                """, interaction.user.id
+            )
+            if details is None:
                 return await interaction.response.send_message(embed=self.not_registered)
+            
+            wallet_amt, bank, bankspace = details
 
-            details = await conn.execute("SELECT wallet, bank, bankspace FROM `bank` WHERE userID = ?",
-                                         (interaction.user.id,))
-            details = await details.fetchone()
-            wallet_amt = details[0]
+            available_bankspace = bankspace - bank
+            embed = membed()
+            
+            if available_bankspace <= 0:
+                embed.description = (
+                    f"You can only hold **{CURRENCY} {details[2]:,}** in your bank right now.\n"
+                    f"To hold more, use currency commands and level up more. Bank notes can aid with this."
+                )
+                return await interaction.response.send_message(embed=embed)
+            
+            query = (
+                f"""
+                UPDATE `{BANK_TABLE_NAME}`
+                SET 
+                    wallet = wallet - $0,
+                    `bank` = `bank` + $0
+                WHERE userID = $1
+                RETURNING wallet, `bank`
+                """
+            )
 
             if isinstance(actual_amount, str):
-                if actual_amount.lower() == "all" or actual_amount.lower() == "max":
-                    available_bankspace = details[2] - details[1]
 
-                    if not available_bankspace:
-                        return await interaction.response.send_message(
-                            embed=membed(
-                                f"You can only hold **{CURRENCY} {details[2]:,}** in your bank right now.\n"
-                                f"To hold more, use currency commands and level up more."
-                            )
-                        )
-
-                    available_bankspace = min(wallet_amt, available_bankspace)
-                    
-                    if not available_bankspace:
-                        return await interaction.response.send_message(embed=membed("You have nothing to deposit."))
-
-                    wallet_new = await self.update_bank_new(user, conn, -available_bankspace)
-                    bank_new = await self.update_bank_new(user, conn, +available_bankspace, "bank")
-                    await conn.commit()
-
-                    embed = discord.Embed(colour=0x2B2D31)
-                    
-                    embed.add_field(
-                        name="<:deposit:1195657772231036948> Deposited", 
-                        value=f"{CURRENCY} {available_bankspace:,}", 
-                        inline=False
-                    )
-
-                    embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new[0]:,}")
-                    embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new[0]:,}")
-
+                available_bankspace = min(wallet_amt, available_bankspace)
+                
+                if not available_bankspace:
+                    embed.description = "You have nothing to deposit."
                     return await interaction.response.send_message(embed=embed)
-                return await interaction.response.send_message(
-                    embed=membed("You need to provide a real amount to deposit."))
 
-            available_bankspace = details[2] - details[1]
+                wallet_new, bank_new = await conn.fetchone(query, available_bankspace, user.id)
+                await conn.commit()
+                
+                embed.add_field(
+                    name="<:deposit:1195657772231036948> Deposited", 
+                    value=f"{CURRENCY} {available_bankspace:,}", 
+                    inline=False
+                )
+
+                embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}")
+                embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
+
+                return await interaction.response.send_message(embed=embed)
+
             available_bankspace -= actual_amount
 
             if actual_amount > wallet_amt:
-                return await interaction.response.send_message(
-                    embed=membed(f"You only have {CURRENCY} **{wallet_amt:,}** in your wallet right now.")
-                )
-
-            elif not actual_amount:
-                return await interaction.response.send_message(
-                    embed=membed("The amount to deposit needs to be greater than 0.")
-                )
-            elif available_bankspace < 0:
-                return await interaction.response.send_message(
-                    embed=membed(
-                        f"You can only hold **{CURRENCY} {details[2]:,}** in your bank right now.\n"
-                        f"To hold more, use currency commands and level up more."))
+                embed.description = f"You only have {CURRENCY} **{wallet_amt:,}** in your wallet right now."
             else:
-                wallet_new = await self.update_bank_new(user, conn, -actual_amount)
-                bank_new = await self.update_bank_new(user, conn, +actual_amount, "bank")
+                wallet_new, bank_new = await conn.fetchone(query, actual_amount, user.id)
                 await conn.commit()
 
-                embed = discord.Embed(colour=0x2B2D31)
-                
                 embed.add_field(
                     name="<:deposit:1195657772231036948> Deposited", 
                     value=f"{CURRENCY} {actual_amount:,}", 
                     inline=False
                 )
 
-                embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new[0]:,}")
-                embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new[0]:,}")
-
-                return await interaction.response.send_message(embed=embed)
+                embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}")
+                embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
+            
+            await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='leaderboard', description='Rank users based on various stats')
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -5992,20 +6049,22 @@ class Economy(commands.Cog):
         ) -> int | None:
         """Reusable wallet checks that are common amongst most gambling commands."""
 
-        expo = determine_exponent(exponent_amount)
+        expo = await determine_exponent(
+            interaction=interaction, 
+            rinput=exponent_amount
+        )
+        
+        if expo is None:
+            return
+
         try:
-            assert isinstance(expo, int)
+            assert isinstance(expo, (int, float))
             amount = expo
         except AssertionError:
-            if exponent_amount.lower() in {'max', 'all'}:
-                if has_keycard:
-                    amount = min(MAX_BET_KEYCARD, wallet_amount)
-                else:
-                    amount = min(MAX_BET_WITHOUT, wallet_amount)
+            if has_keycard:
+                amount = min(MAX_BET_KEYCARD, wallet_amount)
             else:
-                return await interaction.response.send_message(
-                    embed=membed("You need to provide a real amount to bet upon.")
-                )
+                amount = min(MAX_BET_WITHOUT, wallet_amount)
 
         if amount > wallet_amount:
             return await interaction.response.send_message(
@@ -6048,8 +6107,10 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             data = await conn.fetchone(
-                f"SELECT pmulti, wallet, betw, betl FROM `{BANK_TABLE_NAME}` WHERE userID = $0", 
-                interaction.user.id
+                f"""
+                SELECT pmulti, wallet, betw, betl 
+                FROM `{BANK_TABLE_NAME}` 
+                WHERE userID = $0""", interaction.user.id
             )
 
             pmulti, wallet_amt = data[0], data[1]
@@ -6097,8 +6158,7 @@ class Economy(commands.Cog):
             
             async with conn.transaction():
                 if your_choice[0] > bot_choice[0]:
-
-                    amount_after_multi = floor(((smulti / 100) * amount) + amount)
+                    amount_after_multi = int(((smulti / 100) * amount) + amount)
                     updated = await self.update_bank_three_new(
                         interaction.user, 
                         conn, 
@@ -6117,13 +6177,21 @@ class Economy(commands.Cog):
                             f"You've won {prcntw:.1f}% of all games."
                         )
                     )
-                    embed.set_author(name=f"{interaction.user.name}'s winning gambling game",
-                                    icon_url=interaction.user.display_avatar.url)
+                    embed.set_author(
+                        name=f"{interaction.user.name}'s winning gambling game", 
+                        icon_url=interaction.user.display_avatar.url
+                    )
+
                 elif your_choice[0] == bot_choice[0]:
-                    embed = discord.Embed(description="**Tie.** You lost nothing nor gained anything!",
-                                        colour=discord.Color.yellow())
-                    embed.set_author(name=f"{interaction.user.name}'s gambling game",
-                                    icon_url=interaction.user.display_avatar.url)
+                    embed = discord.Embed(
+                        description="**Tie.** You lost nothing nor gained anything!", 
+                        colour=discord.Color.yellow()
+                    )
+                    embed.set_author(
+                        name=f"{interaction.user.name}'s gambling game", 
+                        icon_url=interaction.user.display_avatar.url
+                    )
+                
                 else:
                     updated = await self.update_bank_three_new(
                         interaction.user, 
