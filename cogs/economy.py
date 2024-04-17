@@ -388,8 +388,7 @@ async def determine_exponent(interaction: discord.Interaction, rinput: str) -> s
             raise ValueError()
         return actual_value
 
-    except (ValueError, TypeError) as e:
-        print_exception(type(e), e, e.__traceback__)
+    except (ValueError, TypeError):
         return await respond(
             interaction=interaction,
             embed=membed("You need to provide a real positive number.")
@@ -605,7 +604,12 @@ class DepositOrWithdraw(discord.ui.Modal):
         self.amount.default = f"{self.their_default:,}"
         super().__init__(title=title, timeout=120.0)
 
-    amount = discord.ui.TextInput(label="Amount", min_length=1, max_length=30)
+    amount = discord.ui.TextInput(
+        label="Amount", 
+        min_length=1, 
+        max_length=30, 
+        placeholder=ROBUX_DESCRIPTION
+    )
 
     def checks(self, bank, wallet, any_bankspace_left):
         self.view.children[0].disabled = (bank == 0)
@@ -1881,7 +1885,7 @@ class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
         style=discord.TextStyle.short,
         label='Increment Value',
         required=True,
-        placeholder="A shorthand (max, all, 5e6) or a constant.",
+        placeholder=ROBUX_DESCRIPTION,
         min_length=1,
         max_length=100
     )
@@ -4203,8 +4207,8 @@ class Economy(commands.Cog):
             )
             
             em.set_thumbnail(url=data[2])
-            em.add_field(name="Buying price", value=f"<:robux:1146394968882151434> {data[0]:,}")
-            em.add_field(name="Selling price", value=f"<:robux:1146394968882151434> {floor(int(data[0]) / 4):,}")
+            em.add_field(name="Buying price", value=f"{CURRENCY} {data[0]:,}")
+            em.add_field(name="Selling price", value=f"{CURRENCY} {floor(int(data[0]) / 4):,}")
             em.set_footer(text=f"This is {data[3].lower()}!")
             return await respond(interaction=interaction, embed=em)
 
@@ -5026,7 +5030,7 @@ class Economy(commands.Cog):
                     description=(
                         f"""
                         **\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n
-                        **It's a match!** You've won {CURRENCY} **{amount_after_multi:,}** robux.
+                        **It's a match!** You've won {CURRENCY} **{amount_after_multi:,}**.
                         Your new balance is {CURRENCY} **{updated[1]:,}**.
                         You've won {prcntw:.1f}% of all slots games.
                         """)
@@ -5060,7 +5064,7 @@ class Economy(commands.Cog):
                     colour=discord.Color.brand_green(),
                     description=(
                         f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
-                        f"**It's a match!** You've won {CURRENCY} **{amount_after_multi:,}** robux.\n"
+                        f"**It's a match!** You've won {CURRENCY} **{amount_after_multi:,}**.\n"
                         f"Your new balance is {CURRENCY} **{updated[1]:,}**.\n"
                         f"You've won {prcntw:.1f}% of all slots games."
                     )
@@ -5087,7 +5091,7 @@ class Economy(commands.Cog):
                     colour=discord.Color.brand_red(),
                     description=(
                         f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
-                        f"**No match!** You've lost {CURRENCY} **{amount:,}** robux.\n"
+                        f"**No match!** You've lost {CURRENCY} **{amount:,}**.\n"
                         f"Your new balance is {CURRENCY} **{updated[1]:,}**.\n"
                         f"You've lost {prcntl:.1f}% of all slots games."
                     )
@@ -5454,7 +5458,8 @@ class Economy(commands.Cog):
 
             if isinstance(has_cd, tuple):
                 return await interaction.response.send_message(
-                    embed=membed(f"You already got your weekly robux this week, try again {has_cd[1]}."))
+                    embed=membed(f"You already got your weekly robux this week, try again {has_cd[1]}.")
+                )
             
             success = discord.Embed()
             success.colour = 0x2B2D31
@@ -5716,7 +5721,7 @@ class Economy(commands.Cog):
         await interaction.response.send_message(embed=lb, view=lb_view)
         lb_view.message = await interaction.original_response()
 
-    @app_commands.command(name='rob', description='Rob robux from another user', extras={"exp_gained": 4})
+    @app_commands.command(name='rob', description="Attempt to steal from someone's pocket", extras={"exp_gained": 4})
     @app_commands.rename(other="user")
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(other='The user you want to rob money from.')
@@ -6172,7 +6177,7 @@ class Economy(commands.Cog):
                     embed = discord.Embed(
                         colour=discord.Color.brand_green(),
                         description=(
-                            f"**You've rolled higher!** You won {CURRENCY} **{amount_after_multi:,}** robux.\n"
+                            f"**You've rolled higher!** You won {CURRENCY} **{amount_after_multi:,}**.\n"
                             f"Your new `wallet` balance is {CURRENCY} **{updated[2]:,}**.\n"
                             f"You've won {prcntw:.1f}% of all games."
                         )
