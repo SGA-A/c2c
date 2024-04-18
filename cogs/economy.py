@@ -313,15 +313,14 @@ def format_number_short(number: int) -> str:
     >>> format_number_short(9000000000000)
     '9.0T'
     """
-    absolute = abs(number)
 
-    if absolute < 1e3:
+    if number < 1e3:
         return str(number)
-    elif absolute < 1e6:
+    elif number < 1e6:
         return '{:.1f}K'.format(number / 1e3)
-    elif absolute < 1e9:
+    elif number < 1e9:
         return '{:.1f}M'.format(number / 1e6)
-    elif absolute < 1e12:
+    elif number < 1e12:
         return '{:.1f}B'.format(number / 1e9)
     else:
         return '{:.1f}T'.format(number / 1e12)
@@ -377,7 +376,7 @@ async def determine_exponent(interaction: discord.Interaction, rinput: str) -> s
     try:
         if 'e' in rinput:
             before_e_str, after_e_str = map(str, rinput.split('e'))
-            before_e = float(before_e_str)
+            before_e = int(before_e_str)
             ten_exponent = min(int(after_e_str), 50)
             actual_value = abs(before_e * (10 ** ten_exponent))
         else:
@@ -2872,14 +2871,14 @@ class Economy(commands.Cog):
         return None
 
     @staticmethod
-    def calculate_exp_for(*, level: int):
+    def calculate_exp_for(*, level: int) -> int:
         """Calculate the experience points required for a given level."""
-        return 12 + ceil((0.25 * level / 90.8) ** 2)
+        return ceil((level/0.3)**1.3)
 
     @staticmethod
-    def calculate_serv_exp_for(*, level: int):
+    def calculate_serv_exp_for(*, level: int) -> int:
         """Calculate the experience points required for a given level."""
-        return 10 + ceil((0.75 * level / 817.9) ** 2)
+        return ceil((level/0.2)**1.2)
 
     @staticmethod
     async def calculate_inventory_value(user: USER_ENTRY, conn: asqlite_Connection):
@@ -4776,7 +4775,7 @@ class Economy(commands.Cog):
                     name='Level',
                     value=(
                         f"Level: `{level:,}`\n"
-                        f"Experience: `{exp}/{boundary}`\n"
+                        f"Experience: `{format_number_short(exp)}/{format_number_short(boundary)}`\n"
                         f"{generate_progress_bar((exp / boundary) * 100)}"
                     )
                 )
