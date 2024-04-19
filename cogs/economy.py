@@ -2811,11 +2811,6 @@ class Economy(commands.Cog):
             "[`>reasons`](https://www.google.com/)."
         )
         self.batch_update.start()
-    
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id in self.bot.owner_ids:
-            return True
-        await interaction.response.send_message(embed=DOWNM)
 
     @tasks.loop(hours=1)
     async def batch_update(self):
