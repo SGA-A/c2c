@@ -74,6 +74,7 @@ def number_to_ordinal(n):
 """ALL VARIABLES AND CONSTANTS FOR THE ECONOMY ENVIRONMENT"""
 
 USER_ENTRY = Union[discord.Member, discord.User]
+MULTIPLIER_TYPES = Literal["xp", "luck", "robux"]
 BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
 INV_TABLE_NAME = "inventory"
@@ -99,10 +100,6 @@ UNIQUE_BADGES = {
     1047572530422108311: "<:cc:1146092310464049203>",
     1148206353647669298: "<:e1_stafff:1145039666916110356>",
     10: " (MAX)"}
-SERVER_MULTIPLIERS = {
-    829053898333225010: 120,
-    780397076273954886: 160
-}
 RARITY_COLOUR = {
     "Godly": 0xE2104B,
     "Legendary": 0xDA4B3D,
@@ -394,13 +391,14 @@ async def determine_exponent(interaction: discord.Interaction, rinput: str) -> s
         )
 
 
-def generate_slot_combination():
+def generate_slot_combination() -> str:
     """A slot machine that generates and returns one row of slots."""
 
     weights = [
         (800, 1000, 800, 100, 900, 800, 1000, 800, 800),
         (800, 1000, 800, 100, 900, 800, 1000, 800, 800),
-        (800, 1000, 800, 100, 900, 800, 1000, 800, 800)]
+        (800, 1000, 800, 100, 900, 800, 1000, 800, 800)
+    ]
 
     slot_combination = ''.join(choices(SLOTS, weights=w, k=1)[0] for w in weights)
     return slot_combination
@@ -1246,9 +1244,56 @@ class BlackjackUi(discord.ui.View):
             del self.bot.games[self.interaction.user.id]
             try:
                 await self.message.edit(
-                    content=None, embed=membed("You backed off so the game ended."), view=None)
+                    content=None, 
+                    view=None, 
+                    embed=membed("You backed off so the game ended.")
+                )
             except discord.NotFound:
                 pass
+
+    async def update_winning_data(
+            self,  
+            amount_after_multi: int, 
+            conn: asqlite_Connection
+        ) -> None:
+
+        bj_lose, new_bj_win, new_amount_balance = await conn.fetchone(
+            f"""
+            UPDATE `{BANK_TABLE_NAME}`
+            SET 
+                wallet = wallet + $0,
+                bjw = bjw + 1,
+                bjwa = bjwa + $0
+            WHERE userID = $1
+            RETURNING bjl, bjw, wallet
+            """, amount_after_multi, self.interaction.user.id
+        )
+
+        await conn.commit()
+        prctnw = (new_bj_win / (new_bj_win + bj_lose)) * 100
+        return new_amount_balance, prctnw
+
+    async def update_losing_data(
+            self, 
+            namount: int, 
+            conn: asqlite_Connection
+        ) -> None:
+
+        bj_win, new_bj_lose, new_amount_balance = await conn.fetchone(
+            f"""
+            UPDATE `{BANK_TABLE_NAME}`
+            SET 
+                wallet = wallet - $0,
+                bjla = bjla + $0,
+                bjl = bjl + 1
+            WHERE userID = $1
+            RETURNING bjw, bjl, wallet
+            """, namount, self.interaction.user.id
+        )
+
+        await conn.commit()
+        prnctl = (new_bj_lose / (new_bj_lose + bj_win)) * 100
+        return new_amount_balance, prnctl
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await economy_check(interaction, self.interaction.user)
@@ -1277,20 +1322,14 @@ class BlackjackUi(discord.ui.View):
             async with self.bot.pool.acquire() as conn:
                 conn: asqlite_Connection
 
-                await Economy.update_bank_new(interaction.user, conn, namount, "bjla")
-                bj_win = await conn.fetchone('SELECT bjw FROM bank WHERE userID = ?', (interaction.user.id,))
-                new_bj_lose = await Economy.update_bank_new(interaction.user, conn, 1, "bjl")
-                new_amount_balance = await Economy.update_bank_new(interaction.user, conn, -namount)
-                new_total = new_bj_lose[0] + bj_win[0]
-                prnctl = (new_bj_lose[0] / new_total) * 100
-                await conn.commit()
+                new_amount_balance, prnctl = await self.update_losing_data(namount, conn)
 
                 embed = discord.Embed(
                     colour=discord.Colour.brand_red(),
                     description=(
                         f"**You lost. You went over 21 and busted.**\n"
                         f"You lost {CURRENCY} **{namount:,}**. You now "
-                        f"have {CURRENCY} **{new_amount_balance[0]:,}**\n"
+                        f"have {CURRENCY} **{new_amount_balance:,}**\n"
                         f"You lost {prnctl:.1f}% of the games."
                     )
                 )
@@ -1331,25 +1370,16 @@ class BlackjackUi(discord.ui.View):
             async with self.bot.pool.acquire() as conn:
                 conn: asqlite_Connection
 
-                bj_lose = await conn.execute('SELECT bjl FROM bank WHERE userID = ?', (interaction.user.id,))
-                bj_lose = await bj_lose.fetchone()
-                new_bj_win = await Economy.update_bank_new(interaction.user, conn, 1, "bjw")
-                new_total = new_bj_win[0] + bj_lose[0]
-                prctnw = (new_bj_win[0] / new_total) * 100
-                pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
-                new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
-                
-                amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
-                await Economy.update_bank_new(interaction.user, conn, amount_after_multi, "bjwa")
-                new_amount_balance = await Economy.update_bank_new(interaction.user, conn, amount_after_multi)
-                await conn.commit()
+                new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
+                amount_after_multi = int(((new_multi / 100) * namount) + namount)
+                new_amount_balance, prctnw = await self.update_winning_data(amount_after_multi, conn)
 
                 win = discord.Embed(
                     colour=discord.Colour.brand_green(),
                     description=(
                         f"**You win! You got to {player_sum}**.\n"
                         f"You won {CURRENCY} **{amount_after_multi:,}**. "
-                        f"You now have {CURRENCY} **{new_amount_balance[0]:,}**.\n"
+                        f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
                         f"You won {prctnw:.1f}% of the games."
                     )
                 )
@@ -1374,6 +1404,7 @@ class BlackjackUi(discord.ui.View):
                     name=f"{interaction.user.name}'s winning blackjack game", 
                     icon_url=interaction.user.display_avatar.url
                 )
+                win.set_footer(text=f"Multiplier: {new_multi:,}%")
 
                 await interaction.response.edit_message(content=None, embed=win, view=None)
 
@@ -1382,8 +1413,8 @@ class BlackjackUi(discord.ui.View):
             d_fver_p = [number for number in self.bot.games[interaction.user.id][-2]]
             necessary_show = self.bot.games[interaction.user.id][-3][0]
 
-            prg = discord.Embed(colour=0x2B2D31,
-                                description=f"**Your move. Your hand is now {player_sum}**.")
+            prg = membed(f"**Your move. Your hand is now {player_sum}**.")
+
             prg.add_field(
                 name=f"{interaction.user.name} (Player)", 
                 value=(
@@ -1446,24 +1477,17 @@ class BlackjackUi(discord.ui.View):
             async with self.bot.pool.acquire() as conn:
                 conn: asqlite_Connection
 
-                bj_lose = await conn.fetchone('SELECT bjl FROM bank WHERE userID = ?', (interaction.user.id,))
-                new_bj_win = await Economy.update_bank_new(interaction.user, conn, 1, "bjw")
-                new_total = new_bj_win[0] + bj_lose[0]
-                prctnw = (new_bj_win[0] / new_total) * 100
-
-                pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
-                new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
-                amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
-                await Economy.update_bank_new(interaction.user, conn, amount_after_multi, "bjwa")
-                new_amount_balance = await Economy.update_bank_new(interaction.user, conn, amount_after_multi)
-                await conn.commit()
+                new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
+                amount_after_multi = int(((new_multi / 100) * namount) + namount)
+                
+                new_amount_balance, prctnw = await self.update_winning_data(amount_after_multi, conn)
 
             win = discord.Embed(
                 colour=discord.Colour.brand_green(),
                 description=(
                     f"**You win! The dealer went over 21 and busted.**\n"
                     f"You won {CURRENCY} **{amount_after_multi:,}**. "
-                    f"You now have {CURRENCY} **{new_amount_balance[0]:,}**.\n"
+                    f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
                     f"You won {prctnw:.1f}% of the games."
                 )
             )
@@ -1488,6 +1512,7 @@ class BlackjackUi(discord.ui.View):
                 icon_url=interaction.user.display_avatar.url, 
                 name=f"{interaction.user.name}'s winning blackjack game"
             )
+            win.set_footer(text=f"Multiplier: {new_multi:,}%")
 
             await interaction.response.edit_message(content=None, embed=win, view=None)
 
@@ -1495,13 +1520,7 @@ class BlackjackUi(discord.ui.View):
             async with self.bot.pool.acquire() as conn:
                 conn: asqlite_Connection
 
-                bj_win = await conn.fetchone('SELECT bjw FROM bank WHERE userID = ?', (interaction.user.id,))
-                new_bj_lose = await Economy.update_bank_new(interaction.user, conn, 1, "bjl")
-                new_total = new_bj_lose[0] + bj_win[0]
-                prnctl = (new_bj_lose[0] / new_total) * 100
-                await Economy.update_bank_new(interaction.user, conn, namount, "bjla")
-                new_amount_balance = await Economy.update_bank_new(interaction.user, conn, -namount)
-                await conn.commit()
+                new_amount_balance, prnctl = await self.update_losing_data(namount, conn)
 
             loser = discord.Embed(
                 colour=discord.Colour.brand_red(),
@@ -1509,7 +1528,7 @@ class BlackjackUi(discord.ui.View):
                     f"**You lost. You stood with a lower score (`{player_sum}`) than "
                     f"the dealer (`{dealer_total}`).**\n"
                     f"You lost {CURRENCY} **{namount:,}**. You now "
-                    f"have {CURRENCY} **{new_amount_balance[0]:,}**.\n"
+                    f"have {CURRENCY} **{new_amount_balance:,}**.\n"
                     f"You lost {prnctl:.1f}% of the games."
                 )
             )
@@ -1541,17 +1560,9 @@ class BlackjackUi(discord.ui.View):
             async with self.bot.pool.acquire() as conn:
                 conn: asqlite_Connection
 
-                bj_lose = await conn.fetchone('SELECT bjl FROM bank WHERE userID = ?', (interaction.user.id,))
-                new_bj_win = await Economy.update_bank_new(interaction.user, conn, 1, "bjw")
-                new_total = new_bj_win[0] + bj_lose[0]
-                prctnw = (new_bj_win[0] / new_total) * 100
-
-                pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
-                new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
-                amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
-                new_amount_balance = await Economy.update_bank_new(interaction.user, conn, amount_after_multi)
-                await Economy.update_bank_new(interaction.user, conn, amount_after_multi, "bjwa")
-                await conn.commit()
+                new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
+                amount_after_multi = int(((new_multi / 100) * namount) + namount)
+                new_amount_balance, prctnw = await self.update_winning_data(amount_after_multi, conn)
 
             win = discord.Embed(
                 colour=discord.Colour.brand_green(),
@@ -1584,6 +1595,8 @@ class BlackjackUi(discord.ui.View):
                 icon_url=interaction.user.display_avatar.url,
                 name=f"{interaction.user.name}'s winning blackjack game"
             )
+
+            win.set_footer(text=f"Multiplier: {new_multi:,}%")
 
             await interaction.response.edit_message(content=None, embed=win, view=None)
         else:
@@ -1642,21 +1655,14 @@ class BlackjackUi(discord.ui.View):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            bj_win = await conn.fetchone('SELECT bjw FROM bank WHERE userID = ?', (interaction.user.id,))
-            new_bj_lose = await Economy.update_bank_new(interaction.user, conn, 1, "bjl")
-            new_total = new_bj_lose[0] + bj_win[0]
-            prcntl = (new_bj_lose[0] / new_total) * 100
-            await Economy.update_bank_new(interaction.user, conn, namount, "bjla")
-            await Economy.update_bank_new(self.interaction.guild.me, conn, namount)
-            new_amount_balance = await Economy.update_bank_new(interaction.user, conn, -namount)
-            await conn.commit()
+            new_amount_balance, prcntl = await self.update_losing_data(namount, conn)
 
         loser = discord.Embed(
             colour=discord.Colour.brand_red(),
             description=(
                 f"**You forfeit. The dealer took half of your bet for surrendering.**\n"
                 f"You lost {CURRENCY} **{namount:,}**. You now "
-                f"have {CURRENCY} **{new_amount_balance[0]:,}**.\n"
+                f"have {CURRENCY} **{new_amount_balance:,}**.\n"
                 f"You lost {prcntl:.1f}% of the games."
             )
         )
@@ -1716,8 +1722,7 @@ class HighLow(discord.ui.View):
         await self.message.edit(embed=membed("The game ended because you didn't answer in time."), view=None)
 
     async def send_win(self, interaction: discord.Interaction, button: discord.ui.Button, conn: asqlite_Connection):
-        pmulti = await Economy.get_pmulti_data_only(interaction.user, conn)
-        new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti[0]
+        new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
         total = self.their_bet * (new_multi // 100 + 1)
         new_balance = await Economy.update_bank_new(interaction.user, conn, total)
         await self.make_clicked_blurple_only(button)
@@ -1736,6 +1741,8 @@ class HighLow(discord.ui.View):
             name=f"{interaction.user.name}'s winning high-low game", 
             icon_url=interaction.user.display_avatar.url
         )
+
+        win.set_footer(text=f"Multiplier: {new_multi:,}%")
 
         await interaction.response.edit_message(embed=win, view=self)
 
@@ -2805,6 +2812,11 @@ class Economy(commands.Cog):
         )
         self.batch_update.start()
     
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.id in self.bot.owner_ids:
+            return True
+        await interaction.response.send_message(embed=DOWNM)
+
     @tasks.loop(hours=1)
     async def batch_update(self):
         async with self.bot.pool.acquire() as conn:
@@ -3420,8 +3432,11 @@ class Economy(commands.Cog):
         """Modifies a user's job, returning the new job after changes were made."""
 
         await conn_input.execute(
-            f"UPDATE `{BANK_TABLE_NAME}` SET `job` = ? WHERE userID = ?",
-            (job_name, user.id)
+            f"""
+            UPDATE `{BANK_TABLE_NAME}` 
+            SET job = $0 
+            WHERE userID = $1
+            """, job_name, user.id
         )
 
     # ------------ cooldowns ----------------
@@ -3459,57 +3474,97 @@ class Economy(commands.Cog):
         data = await data.fetchone()
         return data
 
-    # ------------ PMULTI FUNCS -------------
+    # -----------------------------------------
 
     @staticmethod
-    async def get_pmulti_data_only(user: USER_ENTRY, conn_input: asqlite_Connection) -> Optional[Any]:
-        """Retrieves the pmulti amount only from a registered user's bank data."""
-        data = await conn_input.fetchone(f"SELECT pmulti FROM `{BANK_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        return data
-
-    @staticmethod
-    async def change_pmulti_new(
-        user: USER_ENTRY, 
-        conn_input: asqlite_Connection, 
-        amount: Union[float, int] = 0, 
-        mode: str = "pmulti"
-        ) -> Optional[Any]:
-        """Modifies a user's personal multiplier, returning the new multiplier after changes were made."""
-
-        data = await conn_input.execute(
-            f"UPDATE `{BANK_TABLE_NAME}` SET `{mode}` = ? WHERE userID = ? RETURNING `{mode}`",
-            (amount, user.id))
-        data = await data.fetchone()
-        return data
-
-    # ------------------- slay ----------------
-
-    @staticmethod
-    async def open_slay(conn_input: asqlite_Connection, user: USER_ENTRY, sn: str, gd: str, dateclaim: str):
+    async def add_multiplier(
+        conn: asqlite_Connection, *, 
+        user_id: int, 
+        multi_amount: int,
+        multi_type: MULTIPLIER_TYPES,
+        cause: str,
+        description: str
+    ) -> None:
         """
-        Open a new slay entry for a user in the slay database table.
-
-        Parameters:
-        - conn_input (asqlite_Connection): The SQLite database connection.
-        - user (USER_ENTRY): The Discord member for whom a new slay entry is being created.
-        - sn (str): The name of the slay.
-        - gd (str): The gender of the slay.
-        - pd (float): The productivity value associated with the slay.
+        Add a multiplier to the database.
+        
+        Parameters
+        ------------
+        conn
+            The connection to the database.
+        user_id
+            The user's ID to add the multiplier to.
+        multi_amount
+            The amount of the multiplier.
+        multi_type 
+            The type of the multiplier. 
+            Can be either 'xp', 'luck', or 'robux'.
+        cause
+            Why the multiplier was added. Must be consistent in order to find it later.
+        description
+            A description of the multiplier. 
+            This will show up on their multiplier list.
         """
 
-        await conn_input.execute(
-            "INSERT INTO slay (slay_name, userID, gender, claimed) VALUES (?, ?, ?, ?)",
-            (sn, user.id, gd, dateclaim)
+        await conn.execute(
+            """
+            INSERT INTO multipliers (userID, amount, multi_type, cause, description)
+            VALUES ($0, $1, $2, $3, $4)
+            ON CONFLICT(userID, cause) DO UPDATE SET amount = $1
+            """, user_id, multi_amount, multi_type, cause, description
         )
 
     @staticmethod
-    async def delete_slay(conn_input: asqlite_Connection, user: USER_ENTRY, slay_name):
-        """Remove a single slay row from the db and return 1 if the row existed, 0 otherwise."""
+    async def remove_multiplier_from_cause(conn: asqlite_Connection, *, user_id: int, cause: str) -> None:
+        """Remove a multiplier from a user based on the cause."""
 
-        await conn_input.execute("DELETE FROM slay WHERE userID = ? AND slay_name = ?", (user.id, slay_name))
+        await conn.execute('DELETE FROM multipliers WHERE userID = $0 AND cause = $1', user_id, cause)
     
+    @staticmethod
+    async def get_multi_of(*, user_id: int, multi_type: MULTIPLIER_TYPES, conn: asqlite_Connection) -> int:
+        """Get the amount of a multiplier of a specific type for a user."""
 
-    # -----------------------------------------
+        multiplier, = await conn.fetchone(
+            """
+            SELECT COALESCE(SUM(amount), 0) 
+            FROM multipliers 
+            WHERE userID = $0 AND multi_type = $1
+            """, user_id, multi_type
+        )
+        return multiplier
+
+    @tasks.loop()
+    async def check_for_expiry(self):
+        """Check for expired multipliers and remove them from the database."""
+
+        async with self.bot.pool.acquire() as conn:
+            next_task = await conn.fetchone(
+                """
+                SELECT rowid, expiry_timestamp 
+                FROM multipliers 
+                WHERE expiry_timestamp IS NOT NULL 
+                ORDER BY expiry_timestamp ASC 
+                LIMIT 1
+                """
+            )
+
+            if next_task is None:
+                self.check_for_role.cancel()
+                return
+            
+            row_id, expiry = next_task
+            timestamp = datetime.datetime.fromtimestamp(expiry, tz=timezone("UTC"))
+            await discord.utils.sleep_until(timestamp)
+
+            await conn.execute('DELETE FROM tasks WHERE rowid = $0', row_id)
+            await conn.commit()
+
+    async def start_check_for_expiry(self) -> None:
+        check = self.check_for_expiry
+        if check.is_running():
+            check.restart()
+        else:
+            check.start()
 
     @commands.Cog.listener()
     async def on_app_command_completion(
@@ -3611,72 +3666,23 @@ class Economy(commands.Cog):
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
+    @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.command(name="settings", description="Adjust user-specfic settings")
     async def view_user_settings(self, interaction: discord.Interaction):
         await interaction.response.send_message(embed=membed("This is a work in progress!"))
 
-    pmulti = app_commands.Group(
-        name='multi', 
-        description='Manage multipliers and their sources.', 
-        guild_only=True, 
-        guild_ids=APP_GUILDS_ID
-    )
-
-    @pmulti.command(name='view', description='Check personal and global multipliers')
-    @app_commands.describe(user_name="The user whose multipliers you want to see. Defaults to your own.")
-    @app_commands.rename(user_name='user')
-    @app_commands.checks.cooldown(1, 6)
-    async def my_multi(self, interaction: discord.Interaction, user_name: Optional[USER_ENTRY]):
-        """View a user's personal multiplier and global multipliers linked with the server invocation."""
-        async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            if user_name is None:
-                user_name = interaction.user
-
-            if await Economy.can_call_out(user_name, conn):
-                return await interaction.response.send_message(embed=NOT_REGISTERED)
-            their_multi = await Economy.get_pmulti_data_only(user_name, conn)
-
-            if their_multi[0] == 0 and (user_name.id == interaction.user.id):
-                rand = randint(30, 90)
-                await Economy.change_pmulti_new(user_name, conn, rand)
-                await conn.commit()
-                multi_own = discord.Embed(
-                    colour=0x2B2D31, 
-                    description=f'# Your new personal multiplier has been created.\n'
-                                f'- Starting now, your new personal multiplier is **{rand}**%\n'
-                                f' - You cannot change this multiplier, it is fixed and unique '
-                                f'to your account.\n'
-                                f' - Your personal multiplier will be used to determine the incre'
-                                f'ase bonus rewards you receive when claiming rewards, gambling, '
-                                f'and receiving robux (indicated by a <:robuxpremium:11744178153'
-                                f'27998012>).\n'
-                                f' - That means under these given conditions, you will receive '
-                                f'**{rand}**% more of an asset/robux depending on the case.\n\n'
-                                f'If you\'ve received a low roll, there is a very *small chance* '
-                                f'you can request for a buff (in very unfortunate cases).')
-            elif (their_multi[0] == 0) and (user_name.id != interaction.user.id):
-                multi_own = discord.Embed(colour=0x2B2D31, description="No multipliers found for this user.")
-                multi_own.set_author(
-                    name=f'Viewing {user_name.name}\'s multipliers', 
-                    icon_url=user_name.display_avatar.url)
-            else:
-                server_bs = SERVER_MULTIPLIERS.get(interaction.guild.id, 0)
-                multi_own = discord.Embed(
-                    colour=0x2B2D31, 
-                    description=f'{STICKY_MESSAGE}'
-                                f'Personal multiplier: **{their_multi[0]:,}**%\n'
-                                f'*A multiplier that is unique to a user and is usually a fixed '
-                                f'amount.*\n\n'
-                                f'Global multiplier: **{server_bs:,}**%\n'
-                                f'*A multiplier that changes based on the server you are calling'
-                                f' commands in.*')
-                multi_own.set_author(
-                    name=f'Viewing {user_name.name}\'s multipliers', 
-                    icon_url=user_name.display_avatar.url)
-
-            await interaction.response.send_message(embed=multi_own)
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.command(name="multipliers", description="View all of your multipliers within the bot")
+    @app_commands.describe(
+        user="The user whose multipliers you want to see. Defaults to your own.",
+        multiplier="The type of multiplier you want to see. Defaults to robux.")
+    async def my_multi(
+        self, 
+        interaction: discord.Interaction, 
+        user: Optional[USER_ENTRY], 
+        multiplier: Optional[MULTIPLIER_TYPES] = "robux"
+    ) -> None:
+        await interaction.response.send_message(embed=membed("This is a work in progress!"))
 
     share = app_commands.Group(
         name='share', 
@@ -4167,7 +4173,7 @@ class Economy(commands.Cog):
 
             total_count, = await conn.fetchone(
                 """
-                SELECT COALESCE(COUNT(DISTINCT userID), 0)
+                SELECT COUNT(DISTINCT userID)
                 FROM inventory
                 WHERE itemID = $0
                 """, item_id
@@ -4251,6 +4257,7 @@ class Economy(commands.Cog):
 
             slaye = discord.Embed(
                 title=intro,
+                color=0x00FF7F,
                 description=(
                     "You are a stranger to your them right now.\n\n"
                     "Give them something to do or comfort them with whatever your choosing.\n"
@@ -4259,11 +4266,17 @@ class Economy(commands.Cog):
                     "- Give them time to relax when they are zapped out\n"
                     "- They are human, they want to feel loved just like you do\n"
                     "- Give them the necessities needed to survive, food, water and the likes.\n\n"
-                    "Lack of care may also lead to your servant fleeing away."),
-                color=0x00FF7F)
+                    "Lack of care may also lead to your servant fleeing away."
+                )
+            )
 
             slaye.set_footer(text=f"{size + 1}/6 slay slots consumed")
-            await self.open_slay(conn, interaction.user, name, gender, datetime_to_string(discord.utils.utcnow()))
+
+            await conn.execute(
+                "INSERT INTO slay (slay_name, userID, gender, claimed) VALUES (?, ?, ?, ?)",
+                (name, interaction.user.id, gender, datetime_to_string(discord.utils.utcnow()))
+            )
+
             await conn.commit()
             await interaction.response.send_message(embed=slaye)
 
@@ -4296,7 +4309,11 @@ class Economy(commands.Cog):
                             f" {servant_name.title()} is not for you.")
                         )
                 
-                await self.delete_slay(conn, interaction.user, servant_name)
+                await conn.execute(
+                    "DELETE FROM slay WHERE userID = ? AND slay_name = ?", 
+                    (interaction.user.id, servant_name)
+                )
+
                 await conn.commit()
                 return await interaction.response.send_message(
                     embed=membed(f"{servant_name.title()} was told to leave.")
@@ -4723,7 +4740,10 @@ class Economy(commands.Cog):
 
                 net_attrs = await conn.fetchone(
                     """
-                    SELECT COALESCE(COUNT(DISTINCT inventory.itemID), 0), COALESCE(SUM(qty), 0), COALESCE(SUM(qty * cost), 0)
+                    SELECT 
+                        COUNT(DISTINCT inventory.itemID), 
+                        COALESCE(SUM(qty), 0), 
+                        COALESCE(SUM(qty * cost), 0)
                     FROM inventory
                     JOIN shop ON inventory.itemID = shop.itemID
                     WHERE userID = $0
@@ -4976,7 +4996,7 @@ class Economy(commands.Cog):
 
     @app_commands.command(name='slots', description='Try your luck on a slot machine', extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.checks.cooldown(1, 2)
+    @app_commands.checks.cooldown(1, 4)
     @app_commands.rename(amount='robux')
     @app_commands.describe(amount=ROBUX_DESCRIPTION)
     async def slots(self, interaction: discord.Interaction, amount: str):
@@ -4985,8 +5005,6 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            if await self.can_call_out(interaction.user, conn):
-                await interaction.response.send_message(embed=self.not_registered)
 
         # --------------- Checks before betting i.e. has keycard, meets bet constraints. -------------
         has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
@@ -5006,14 +5024,13 @@ class Economy(commands.Cog):
         # ------------------ THE SLOT MACHINE ITESELF ------------------------
 
         emoji_outcome = generate_slot_combination()
-        freq1, freq2, freq3 = emoji_outcome[0], emoji_outcome[1], emoji_outcome[2]
+        freq1, freq2, freq3 = emoji_outcome
 
         async with conn.transaction():
             if emoji_outcome.count(freq1) > 1:
 
-                new_multi = (SERVER_MULTIPLIERS.get(interaction.guild.id, 0) +
-                            BONUS_MULTIPLIERS[f'{freq1 * emoji_outcome.count(freq1)}'])
-                amount_after_multi = floor(((new_multi / 100) * amount) + amount)
+                new_multi = BONUS_MULTIPLIERS[f'{freq1 * emoji_outcome.count(freq1)}']
+                amount_after_multi = int(((new_multi / 100) * amount) + amount)
                 updated = await self.update_bank_three_new(
                     interaction.user, 
                     conn, 
@@ -5043,10 +5060,7 @@ class Economy(commands.Cog):
 
             elif emoji_outcome.count(freq2) > 1:
 
-                new_multi = (
-                    SERVER_MULTIPLIERS.get(interaction.guild.id, 0) +
-                    BONUS_MULTIPLIERS[f'{freq2 * emoji_outcome.count(freq2)}']
-                )
+                new_multi = BONUS_MULTIPLIERS[f'{freq2 * emoji_outcome.count(freq2)}']
                 amount_after_multi = floor(((new_multi / 100) * amount) + amount)
 
                 updated = await self.update_bank_three_new(
@@ -5916,32 +5930,28 @@ class Economy(commands.Cog):
         """Play a round of blackjack with the bot. Win by reaching 21 or a score higher than the bot without busting."""
 
         # ------ Check the user is registered or already has an ongoing game ---------
+
+        async with self.bot.pool.acquire() as conn:
+            conn: asqlite_Connection
         
-        if len(self.bot.games) >= 2:
-            return await interaction.response.send_message(
-                embed=membed("The maximum number of concurrent games has been reached.")
-            )
+        wallet_amt = await conn.fetchone(
+            """
+            SELECT wallet
+            FROM bank
+            WHERE userID = $0
+            """, interaction.user.id
+        )
+
+        if wallet_amt is None:
+            return await interaction.response.send_message(embed=self.not_registered)
+        
+        wallet_amt, = wallet_amt
+        has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
 
         if self.bot.games.get(interaction.user.id) is not None:
             return await interaction.response.send_message(
                 embed=membed("You already have an ongoing game taking place.")
             )
-
-        async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
-            
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
-
-        has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
-        
-        wallet_amt, pmulti = await conn.fetchone(
-            """
-            SELECT wallet, pmulti
-            FROM bank
-            WHERE userID = $0
-            """, interaction.user.id
-        )
 
         # ----------- Check what the bet amount is, converting where necessary -----------
 
@@ -5968,14 +5978,21 @@ class Economy(commands.Cog):
         dealer_sum = calculate_hand(dealer_hand)
 
         if player_sum == 21:
-            bj_lose = await conn.fetchone('SELECT bjl FROM bank WHERE userID = $0', interaction.user.id)
-            new_bj_win = await self.update_bank_new(interaction.user, conn, 1, "bjw")
-            new_total = new_bj_win[0] + bj_lose[0]
+            new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
+            amount_after_multi = int((new_multi / 100) * namount) + namount
 
-            prctnw = (new_bj_win[0] / new_total) * 100
-            new_multi = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti
-            amount_after_multi = floor(((new_multi / 100) * namount) + namount) + randint(1, 999)
-            new_amount_balance = await self.update_bank_new(interaction.user, conn, amount_after_multi)
+            new_bj_win, bj_lose, new_amount_balance = await conn.fetchone(
+                f"""
+                UPDATE `{BANK_TABLE_NAME}` 
+                SET 
+                    bjw = bjw + 1,
+                    wallet = wallet + $0 
+                WHERE userID = $1 
+                RETURNING bjw, bjl, wallet
+                """, amount_after_multi, interaction.user.id,
+            )
+
+            prctnw = (new_bj_win / (new_bj_win + bj_lose)) * 100
             await conn.commit()
 
             d_fver_p = display_user_friendly_deck_format(player_hand)
@@ -5985,7 +6002,7 @@ class Economy(commands.Cog):
             winner.description = (
                 f"**Blackjack! You've already won with a total of {player_sum}!**\n"
                 f"You won {CURRENCY} **{amount_after_multi:,}**. "
-                f"You now have {CURRENCY} **{new_amount_balance[0]:,}**.\n"
+                f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
                 f"You won {prctnw:.2f}% of the games."
             )
             
@@ -6009,6 +6026,8 @@ class Economy(commands.Cog):
                 name=f"{interaction.user.name}'s winning blackjack game", 
                 icon_url=interaction.user.display_avatar.url
             )
+
+            winner.set_footer(text=f"Multiplier: {new_multi:,}%")
             
             return await interaction.response.send_message(embed=winner)
 
@@ -6039,9 +6058,15 @@ class Economy(commands.Cog):
         )
         
         await interaction.response.send_message(
-            content="What do you want to do?\nPress **Hit** to to request an additional card, **Stand** to finalize "
-                    "your deck or **Forfeit** to end your hand prematurely, sacrificing half of your original bet.",
-            embed=initial, view=bj_view)
+            embed=initial, 
+            view=bj_view,
+            content=(
+                "What do you want to do?\n"
+                "Press **Hit** to to request an additional card, "
+                "**Stand** to finalize your deck "
+                "or **Forfeit** to end your hand prematurely, sacrificing half of your original bet."
+            )
+        )
         bj_view.message = await interaction.original_response()
 
     async def do_wallet_checks(
@@ -6112,12 +6137,13 @@ class Economy(commands.Cog):
 
             data = await conn.fetchone(
                 f"""
-                SELECT pmulti, wallet, betw, betl 
+                SELECT wallet, betw, betl 
                 FROM `{BANK_TABLE_NAME}` 
                 WHERE userID = $0""", interaction.user.id
             )
+            pmulti = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
 
-            pmulti, wallet_amt = data[0], data[1]
+            wallet_amt = data[1]
             has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
 
             amount = await self.do_wallet_checks(
@@ -6131,11 +6157,8 @@ class Economy(commands.Cog):
                 return
             
             # --------------------------------------------------------
-            smulti = SERVER_MULTIPLIERS.get(interaction.guild.id, 0) + pmulti
             badges = set()
             id_won_amount, id_lose_amount = data[2], data[3]
-            if pmulti:
-                badges.add(PREMIUM_CURRENCY)
 
             if has_keycard:
                 badges.add("<:lanyard:1165935243140796487>")
@@ -6162,7 +6185,7 @@ class Economy(commands.Cog):
             
             async with conn.transaction():
                 if your_choice[0] > bot_choice[0]:
-                    amount_after_multi = int(((smulti / 100) * amount) + amount)
+                    amount_after_multi = int(((pmulti / 100) * amount) + amount)
                     updated = await self.update_bank_three_new(
                         interaction.user, 
                         conn, 
@@ -6221,6 +6244,8 @@ class Economy(commands.Cog):
                         name=f"{interaction.user.name}'s losing gambling game", 
                         icon_url=interaction.user.display_avatar.url
                     )
+                
+                embed.set_footer(text=f"Multiplier: {pmulti:,}%")
 
                 embed.add_field(name=interaction.user.name, value=f"Rolled `{your_choice[0]}` {''.join(badges)}")
                 embed.add_field(name=self.bot.user.name, value=f"Rolled `{bot_choice[0]}`")
