@@ -207,13 +207,13 @@ class Owner(commands.Cog):
             conn: asqlite_Connection
 
             if configuration.startswith("a"):
-                condition = f"{deposit_mode} = {deposit_mode} - $0"
+                condition = f"{deposit_mode} = {deposit_mode} + $0"
                 embed.description = f"Added {CURRENCY} **{real_amount:,}** to {member.mention}!"
             elif configuration.startswith("r"):
                 condition = f"{deposit_mode} = {deposit_mode} - $0"
                 embed.description = f"Deducted {CURRENCY} **{real_amount:,}** from {member.mention}!"
             else:
-                condition = f"{deposit_mode} = {deposit_mode} - $0"
+                condition = f"{deposit_mode} = $0"
                 embed.description = f"Set {CURRENCY} **{real_amount:,}** to {member.mention}!"
 
             data = await conn.execute(
