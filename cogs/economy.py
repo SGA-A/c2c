@@ -702,15 +702,14 @@ class DepositOrWithdraw(discord.ui.Modal):
         await interaction.response.edit_message(embed=embed, view=self.view)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
-        print_exception(type(error), error, error.__traceback__)
-
-        if isinstance(error, ValueError):
+        if isinstance(error, (ValueError, TypeError)):
             return await interaction.response.send_message(
                 delete_after=5.0, 
                 ephemeral=True,
                 embed=membed(f"You need to provide a real amount to {self.title.lower()}.")
             )
-        
+    
+        print_exception(type(error), error, error.__traceback__)
         await interaction.response.send_message(embed=membed("Something went wrong. Try again later."))
 
 
