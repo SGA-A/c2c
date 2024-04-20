@@ -3582,7 +3582,11 @@ class Economy(commands.Cog):
 
             async with connection.transaction():
                 cmd = cmd.parent or cmd
-                total = await add_command_usage(interaction.user.id, command_name=f"/{cmd.name}", conn=connection)
+                total = await add_command_usage(
+                    user_id=interaction.user.id, 
+                    command_name=f"/{cmd.name}", 
+                    conn=connection
+                )
 
                 if not total % 15:
 
@@ -3597,21 +3601,21 @@ class Economy(commands.Cog):
                     
                     return await interaction.followup.send(embed=tip, ephemeral=True)
 
-                if await self.can_call_out(interaction.user, connection):
-                    return
-
                 exp_gainable = command.extras.get("exp_gained")
                 
                 if not exp_gainable:
                     return
 
                 record = await connection.fetchone(
-                    'INSERT INTO `bank` (userID, exp, level) VALUES (?, 1, 1) '
-                    'ON CONFLICT (userID) DO UPDATE SET exp = exp + ? RETURNING exp, level',
-                    (interaction.user.id, exp_gainable)
+                    """
+                    UPDATE bank
+                    SET exp = exp + $0
+                    WHERE userID = $1 
+                    RETURNING exp, level
+                    """, exp_gainable, interaction.user.id
                 )
 
-                if not record:
+                if record is None:
                     return
                 
                 xp, level = record
@@ -3623,10 +3627,12 @@ class Economy(commands.Cog):
                 await connection.execute(
                     """
                     UPDATE `bank` 
-                    SET level = level + 1, exp = 0, bankspace = bankspace + ? 
-                    WHERE userID = ?
-                    """,
-                    (randint(300_000, 20_000_000), interaction.user.id)
+                    SET 
+                        level = level + 1, 
+                        exp = 0, 
+                        bankspace = bankspace + $0 
+                    WHERE userID = $1
+                    """, randint(300_000, 20_000_000), interaction.user.id
                 )
                 
                 rankup = discord.Embed()
@@ -3656,8 +3662,11 @@ class Economy(commands.Cog):
 
             async with connection.transaction():
                 cmd = cmd.parent or cmd
-                await add_command_usage(ctx.author.id, command_name=f">{cmd.name}", conn=connection)
-        
+                await add_command_usage(
+                    user_id=ctx.author.id, 
+                    command_name=f">{cmd.name}", 
+                    conn=connection
+                )
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
@@ -6126,8 +6135,6 @@ class Economy(commands.Cog):
 
         # --------------- Contains checks before betting i.e. has keycard, meets bet constraints. -------------
         async with self.bot.pool.acquire() as conn:
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
             conn: asqlite_Connection
 
             data = await conn.fetchone(
@@ -6136,9 +6143,12 @@ class Economy(commands.Cog):
                 FROM `{BANK_TABLE_NAME}` 
                 WHERE userID = $0""", interaction.user.id
             )
-            pmulti = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
 
-            wallet_amt = data[1]
+            if data is None:
+                return await interaction.response.send_message(embed=self.not_registered)
+            wallet_amt, id_won_amount, id_lose_amount = data
+
+            pmulti = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
             has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
 
             amount = await self.do_wallet_checks(
@@ -6153,7 +6163,6 @@ class Economy(commands.Cog):
             
             # --------------------------------------------------------
             badges = set()
-            id_won_amount, id_lose_amount = data[2], data[3]
 
             if has_keycard:
                 badges.add("<:lanyard:1165935243140796487>")
