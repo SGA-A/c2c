@@ -2272,11 +2272,14 @@ class ServantsManager(discord.ui.View):
                         
                     await respond(interaction, embed=up)
 
-            dtls = await self.child.conn.execute(
-                    f"UPDATE `slay` SET {mode} = 100 WHERE slay_name = ? AND userID = ? RETURNING *",
-                    (self.child.choice, self.child.owner_id))
-
-            dtls = await dtls.fetchone()
+            dtls = await self.child.conn.fetchone(
+                f"""
+                UPDATE `{SLAY_TABLE_NAME}` 
+                SET {mode} = 100 
+                WHERE slay_name = $0 AND userID = $1 
+                RETURNING *
+                """, self.child.choice, self.child.owner_id
+            )
 
             sembed = await self.economy.servant_preset(self.child.owner_id, dtls) 
             await interaction.response.edit_message(content=None, embed=sembed, view=self)
@@ -2378,11 +2381,13 @@ class ServantsManager(discord.ui.View):
              "joy of being close to someone dear.")
         )
 
-        dtls = await self.child.conn.execute(
-            "UPDATE `slay` SET love = love + 35 WHERE slay_name = ? AND userID = ? AND love <= 100 RETURNING *",
-            (self.child.choice, self.child.owner_id))
-
-        dtls = await dtls.fetchone()
+        dtls = await self.child.conn.fetchone(
+            """
+            UPDATE `slay` 
+            SET love = love + 35 
+            WHERE slay_name = $0 AND userID = $1 AND love <= 100 RETURNING *
+            """, self.child.choice, self.child.owner_id
+        )
 
         if dtls is not None:
             await self.child.conn.commit()
@@ -2415,10 +2420,13 @@ class ServantsManager(discord.ui.View):
              "A gentle peck on the nose became a cherished routine, a simple act that spoke volumes.")
         )
 
-        dtls = await self.child.conn.execute(
-            "UPDATE `slay` SET love = love + 35 WHERE slay_name = ? AND userID = ? AND love <= 100 RETURNING *",
-            (self.child.choice, self.child.owner_id))
-        dtls = await dtls.fetchone()
+        dtls = await self.child.conn.fetchone(
+            """
+            UPDATE `slay` 
+            SET love = love + 35 
+            WHERE slay_name = $0 AND userID = $1 AND love <= 100 RETURNING *
+            """, self.child.choice, self.child.owner_id
+        )
         
         if dtls is not None:
             await self.child.conn.commit()
@@ -2903,7 +2911,7 @@ class Economy(commands.Cog):
     async def calculate_inventory_value(user: USER_ENTRY, conn: asqlite_Connection):
         """A reusable funtion to calculate the net value of a user's inventory"""
 
-        res = await conn.execute(
+        res = await conn.fetchone(
             """
             SELECT COALESCE(SUM(shop.cost * inventory.qty), 0) AS NetValue
             FROM shop
@@ -2912,7 +2920,6 @@ class Economy(commands.Cog):
             """, user.id
         )
 
-        res = await res.fetchone()
         return res[0]
 
     async def create_leaderboard_preset(self, chosen_choice: str):
@@ -3358,17 +3365,15 @@ class Economy(commands.Cog):
             await conn.execute("DELETE FROM inventory WHERE userID = ? AND itemID = ?", (user.id, item_id))
             return (0,)
         
-        val = await conn.execute(
+        val = await conn.fetchone(
             """
             INSERT INTO inventory (userID, itemID, qty)
             VALUES (?, ?, ?)
             ON CONFLICT(userID, itemID) DO UPDATE SET qty = qty + ? 
             RETURNING qty
-            """, 
-            (user.id, item_id, amount, amount)
+            """, (user.id, item_id, amount, amount)
         )
 
-        val = await val.fetchone()
         return val
 
     @staticmethod
@@ -3985,9 +3990,6 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
-
             item_details = await self.partial_match_for(interaction, item_name, conn)
 
             if item_details is None:
@@ -4112,9 +4114,6 @@ class Economy(commands.Cog):
         
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
 
             item_details = await self.partial_match_for(interaction, item_name, conn)
 
@@ -4262,12 +4261,13 @@ class Economy(commands.Cog):
             if await self.can_call_out(interaction.user, conn):
                 return await interaction.response.send_message(embed=self.not_registered)
 
-            servants = await conn.fetchall("SELECT slay_name FROM slay WHERE userID = ?", (interaction.user.id,))
+            servants = await conn.fetchall("SELECT slay_name FROM slay WHERE userID = $0", interaction.user.id)
             size = len(servants)
 
             if size >= 6:
                 return await interaction.response.send_message(
-                    embed=membed("You cannot have more than 6 servants."))
+                    embed=membed("You cannot have more than 6 servants.")
+                )
 
             dupe_check_result = await conn.fetchone("SELECT slay_name FROM slay WHERE LOWER(slay_name) = LOWER(?)", name)
             
@@ -4393,9 +4393,6 @@ class Economy(commands.Cog):
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
 
             data = await conn.fetchone(
                 """
@@ -4618,26 +4615,25 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
             
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
-
             data = await conn.fetchone(
                 """
-                SELECT prestige, level, wallet, bank 
+                SELECT prestige, level, wallet + bank AS total_robux 
                 FROM `bank` 
                 WHERE userID = $0
                 """, interaction.user.id
             )
 
-            prestige = data[0]
-            actual_level = data[1]
-            actual_robux = data[2] + data[3]
+            if data is None:
+                return await interaction.response.send_message(embed=self.not_registered)
+
+            prestige, actual_level, actual_robux = data
 
             if prestige == 10:
                 return await interaction.response.send_message(
                     embed=membed(
                         "You've reached the highest prestige!\n"
-                        "No more perks can be obtained from this command.")
+                        "No more perks can be obtained from this command."
+                    )
                 )
 
             req_robux = (prestige + 1) * 24_000_000
@@ -4768,9 +4764,6 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            if await self.can_call_out(user, conn):
-                return await interaction.response.send_message(embed=NOT_REGISTERED)
-
             if category == "Main Profile":
                 procfile = discord.Embed(colour=user.colour)
 
@@ -4781,6 +4774,9 @@ class Economy(commands.Cog):
                     WHERE userID = $0
                     """, user.id
                 )
+
+                if data is None:
+                    return await interaction.response.send_message(embed=NOT_REGISTERED)
 
                 wallet, bank, showcase, title, bounty, prestige, level, exp = data
 
@@ -4903,6 +4899,9 @@ class Economy(commands.Cog):
                     """, user.id
                 )
 
+                if data is None:
+                    return await interaction.response.send_message(embed=NOT_REGISTERED)
+
                 total_slots = data[0] + data[1]
                 total_bets = data[2] + data[3]
                 total_blackjacks = data[4] + data[5]
@@ -4996,11 +4995,10 @@ class Economy(commands.Cog):
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-            
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
 
-            wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
+            wallet_amt = await conn.fetchone(f"SELECT wallet FROM `{BANK_TABLE_NAME}` WHERE userID = $0", interaction.user.id)
+            if wallet_amt is None:
+                return await interaction.response.send_message(embed=self.not_registered)
             has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
 
             robux = await self.do_wallet_checks(
@@ -5179,10 +5177,7 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            if await self.can_call_out(member, conn):
-                return await interaction.response.send_message(embed=NOT_REGISTERED)
-
-            em = discord.Embed(color=0x2F3136)
+            em = membed()
             length = 8
 
             owned_items = await conn.fetchall(
@@ -5197,12 +5192,15 @@ class Economy(commands.Cog):
 
             if not owned_items:
                 if member.id == interaction.user.id:
-                    em.description = "You don't own any items yet."
+                    em.description = "You don't have any items yet."
                 else:
                     em.description = f"{member.name} has nothing for you to see."
                 return await interaction.response.send_message(embed=em)
 
-            em.set_author(name=f"{member.display_name}'s Inventory", icon_url=member.display_avatar.url)
+            em.set_author(
+                name=f"{member.display_name}'s Inventory", 
+                icon_url=member.display_avatar.url
+            )
             paginator = PaginationSimple(interaction)
 
             async def get_page_part(page: int):
@@ -5289,9 +5287,6 @@ class Economy(commands.Cog):
     async def shift_at_work(self, interaction: discord.Interaction):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
             
             data = await conn.fetchall(
                 """
@@ -5304,6 +5299,9 @@ class Economy(commands.Cog):
                 WHERE userID = $0
                 """, interaction.user.id
             )
+            
+            if not data:
+                return await interaction.response.send_message(embed=self.not_registered)
 
             job_name = data[1][0]
             if job_name == "None":
@@ -5345,9 +5343,6 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
-            
             data = await conn.fetchall(
                 """
                 SELECT job_change 
@@ -5358,6 +5353,9 @@ class Economy(commands.Cog):
                 WHERE userID = $0
                 """, interaction.user.id
             )
+
+            if not data:
+                return await interaction.response.send_message(embed=self.not_registered)
 
             has_cd = self.is_no_cooldown(cooldown_value=data[0][0])
             
@@ -5394,9 +5392,6 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
-
             data = await conn.fetchall(
                 """
                 SELECT job_change 
@@ -5408,6 +5403,9 @@ class Economy(commands.Cog):
                 WHERE userID = $0
                 """, interaction.user.id
             )
+
+            if not data:
+                return await interaction.response.send_message(embed=self.not_registered)
 
             if data[1][0] == "None":
                 return await interaction.response.send_message(embed=membed("You're already unemployed."))
@@ -5444,8 +5442,9 @@ class Economy(commands.Cog):
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
+            not_registered_check = await self.can_call_out(user, conn)
 
-            if await self.can_call_out(user, conn) and (user.id != interaction.user.id):
+            if not_registered_check and (user.id != interaction.user.id):
                 if with_force and (interaction.user.id in self.bot.owner_ids):
                     await self.open_bank_new(user, conn)
                     await self.open_inv_new(user, conn)
@@ -5456,7 +5455,7 @@ class Economy(commands.Cog):
                 
                 await interaction.response.send_message(embed=membed(f"{user.mention} isn't registered."))
 
-            elif await self.can_call_out(user, conn) and (user.id == interaction.user.id):
+            elif not_registered_check and (user.id == interaction.user.id):
 
                 await self.open_bank_new(user, conn)
                 await self.open_inv_new(user, conn)
@@ -5486,8 +5485,14 @@ class Economy(commands.Cog):
                 
                 return await interaction.response.send_message(embed=norer)
             else:
-                nd = await conn.execute("SELECT wallet, bank, bankspace FROM `bank` WHERE userID = ?", (user.id,))
-                nd = await nd.fetchone()
+                nd = await conn.fetchone(
+                    """
+                    SELECT wallet, bank, bankspace 
+                    FROM `bank` 
+                    WHERE userID = $0
+                    """, user.id
+                )
+
                 bank = nd[0] + nd[1]
                 inv = await self.calculate_inventory_value(user, conn)
 
@@ -5527,10 +5532,11 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            if await self.can_call_out(interaction.user, conn):
+            ncd = await conn.fetchone("SELECT weekly FROM cooldowns WHERE userID = $0", interaction.user.id)
+            
+            if ncd is None:
                 return await interaction.response.send_message(embed=self.not_registered)
-
-            ncd = await conn.fetchone("SELECT weekly FROM cooldowns WHERE userID = ?", (interaction.user.id,))
+            
             has_cd = self.is_no_cooldown(ncd[0])
 
             if isinstance(has_cd, tuple):
@@ -5538,8 +5544,7 @@ class Economy(commands.Cog):
                     embed=membed(f"You already got your weekly robux this week, try again {has_cd[1]}.")
                 )
             
-            success = discord.Embed()
-            success.colour = 0x2B2D31
+            success = membed()
             success.title = f"{interaction.user.display_name}'s Weekly Robux"
             success.url = "https://www.youtube.com/watch?v=ue_X8DskUN4"
             
@@ -5578,7 +5583,8 @@ class Economy(commands.Cog):
 
             if await self.can_call_out(member, conn):
                 await interaction.response.send_message(
-                    embed=membed(f"Could not find {member.mention} in the database."))
+                    embed=membed(f"Could not find {member.mention} in the database.")
+                )
             else:
 
                 active_sessions.update({interaction.user.id: 1})
@@ -5591,10 +5597,13 @@ class Economy(commands.Cog):
 
                 link = "https://www.youtube.com/shorts/vTrH4paRl90"            
                 await interaction.response.send_message(
+                    view=view,
                     embed=membed(
                         f"This command will reset **[EVERYTHING]({link})**.\n"
                         "Are you **SURE** you want to do this?\n\n"
-                        "If you do, click `RESET MY DATA` **3** times."), view=view)
+                        "If you do, click `RESET MY DATA` **3** times."
+                    )
+                )
                 view.message = await interaction.original_response()
 
     @app_commands.command(name="withdraw", description="Withdraw robux from your bank account")
@@ -5941,7 +5950,18 @@ class Economy(commands.Cog):
         async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
             
-            wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
+            wallet_amt = await conn.fetchone(
+                """
+                SELECT wallet
+                FROM bank
+                WHERE userID = $0
+                """, user.id
+            )
+
+            if wallet_amt is None:
+                return await interaction.response.send_message(embed=self.not_registered)
+            wallet_amt, = wallet_amt
+
             has_keycard = await self.user_has_item_from_id(
                 user_id=interaction.user.id,
                 item_id=1,
@@ -5957,9 +5977,6 @@ class Economy(commands.Cog):
 
             if amount is None:
                 return
-
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
 
             result = choice(("heads", "tails"))
 
