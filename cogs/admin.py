@@ -410,12 +410,12 @@ class Owner(commands.Cog):
             title='Update Schedule',
             colour=discord.Colour.from_rgb(101, 242, 171),
             description=(
-                'This embed will post any changes to the server in the near future.\n\n'
-                '- Add more custom role colours\n'
+                'This embed will post any changes to the server in the near future.\n'
+                '- ~~Add more custom role colours~~ **DONE**\n'
                 '- Remove more redundant bots\n'
-                '- ~~Add new tasks to complete in Server Onboarding~~\n'
-                '- ~~Add emotes to the channel topic of every channel~~\n'
-                '- ~~Pick a more suitable role colour for The Crew~~'
+                '- ~~Add new tasks to complete in Server Onboarding~~ **DONE**\n'
+                '- ~~Add emotes to the channel topic of every channel~~ **DONE**\n'
+                '- ~~Pick a more suitable role colour for The Crew~~ **DONE**'
             )
         )
 
@@ -488,49 +488,35 @@ class Owner(commands.Cog):
             title="Origins",
             colour=0x2B2D31,
             description=(
-                """
-                **What is this server all about?!**
-                This is another hangout to theorize your day-to-day discussions. 
-                The server was created on the **6th of April 2021** to provide 
-                a space that fosters a chill and mature community that can talk 
-                about anything and everything.
-
-                **What does cc actually stand for?** 
-                We don't know either, our guess is something along the lines
-                of a collective community, this being the aim by the server to date.
-                
-                We hope you enjoy your stay, and we wish you a wonderful journey.
-                And don't forget; you're here forever.
-                """
+                "**What is this server all about?!**\n"
+                "This is another hangout to theorize your day-to-day discussions.\n"
+                "The server was created on the **6th of April 2021** to provide "
+                "a space that fosters a chill and mature community that can talk "
+                "about anything and everything.\n\n"
+                "**What does cc actually stand for?**\n"
+                "We don't know either, our guess is something along the lines"
+                "of a collective community, this being the aim by the server to date.\n\n"
+                "We hope you enjoy your stay, and we wish you a wonderful journey.\n"
+                "And don't forget; you're here forever."
             )
         )
-
         embed.set_thumbnail(url="https://i.imgur.com/7RufohA.png")
-        tbp = "\U0000279c"
 
         roles = discord.Embed(
             title="Server Roles",
             colour=0x2B2D31,
             description=(
-                f"""
-                - <@&893550756953735278>
-                  - People who manage and moderate cc.
-
-                - <@&1140197893261758505>
-                  - People who have a high rating on the legacy starboard.
-
-                - <@&1121426143598354452>
-                  - People with access to private features.
-
-                - <@&990900517301522432>
-                  - People with full music control over music bots.
-
-                - <@&1168204249096785980>
-                  - People with access to new features on {self.bot.user.mention}\n
-                - Other custom roles
-                  - <@&1124762696110309579> and <@&1047576437177200770>.
-                  - Reaching **Level 40** to make your own!
-                """
+                "- <@&893550756953735278>\n"
+                "  - People who manage and moderate cc.\n\n"
+                "- <@&1140197893261758505>\n"
+                "  - People who have a high rating on the legacy starboard.\n\n"
+                "- <@&1121426143598354452>\n"
+                "  - People with access to private features.\n\n"
+                "- <@&990900517301522432>\n"
+                "  - People with full music control over music bots.\n\n"
+                "- Other custom roles\n"
+                "  - <@&1124762696110309579> and <@&1047576437177200770>.\n"
+                "  - Reaching **Level 40** to make your own!"
             )
         )
         
@@ -540,44 +526,32 @@ class Owner(commands.Cog):
             title="Level Roles & Perks",
             colour=0x2B2D31,
             description=(
-                f"""
-                Your activity in the server will not be left unrewarded! 
-                Level up by participating in text channels. 
-                The more active you are, the higher levels attained and the better perks you receive.
-                <@&923930948909797396>
-
-                <@&923931088613699584>
-                {tbp} \U000023e3 **335,000,000**
-
-                <@&923931156125204490>
-                {tbp} Your own custom channel
-
-                <@&923931553791348756>
-                {tbp} Request a feature for {self.bot.user.mention}
-
-                <@&923931585953280050>
-                {tbp} \U000023e3 **1,469,000,000**
-
-                <@&923931646783287337>
-                {tbp} \U000023e3 **17,555,000,000**, 5 \U0001f3c6
-
-                <@&923931683311456267>
-                {tbp} \U000023e3 **56,241,532,113**
-                {tbp} 3,500 free EXP
-
-                <@&923931729016795266>
-                {tbp} Request a feature for {self.bot.user.mention}
-                {tbp} Your own custom role
-
-                <@&923931772020985866>
-                {tbp} \U000023e3 **72,681,998,999**, 64 \U0001f3c6
-
-                <@&923931819571810305>
-                {tbp} The Personal Token of Appreciation
-
-                <@&923931862001414284>
-                {tbp} See Appendix 1
-                """
+                "Your activity in the server will not be left unrewarded!\n"
+                "Level up by participating in text channels.\n"
+                "The more active you are, the higher levels attained and the better perks you receive.\n\n"
+                "- <@&923930948909797396>\n\n"
+                "- <@&923931088613699584>\n"
+                "  - \U000023e3 **335,000,000**\n\n"
+                "- <@&923931156125204490>\n"
+                "  - Your own custom channel\n\n"
+                "- <@&923931553791348756>\n"
+                " - Request a feature for <@1047572530422108311>\n\n"
+                "- <@&923931585953280050>\n"
+                "  - \U000023e3 **1,469,000,000**\n\n"
+                "- <@&923931646783287337>\n"
+                "  - \U000023e3 **17,555,000,000**, 5 \U0001f3c6\n\n"
+                "- <@&923931683311456267>\n"
+                "  - \U000023e3 **56,241,532,113**\n"
+                "  - 3,500 free EXP\n"
+                "- <@&923931729016795266>\n"
+                "  - Request a feature for <@1047572530422108311>\n"
+                "  - Your own custom role\n\n"
+                "- <@&923931772020985866>\n"
+                "  - \U000023e3 **72,681,998,999**, 64 \U0001f3c6\n\n"
+                "- <@&923931819571810305>\n"
+                "  - The Personal Token of Appreciation\n\n"
+                "- <@&923931862001414284>\n"
+                "  - See Appendix 1"
             )
         )
         ranks.set_thumbnail(url="https://i.imgur.com/2V5LM2s.png")
@@ -586,32 +560,22 @@ class Owner(commands.Cog):
             title="The Appendix 1",
             colour=0x2B2D31,
             description=(
-                """
-                If you somehow manage to reach **<@&923931862001414284>**, out of 6 events, 1 will take place. 
-                A dice will be rolled and the outcome will ultimately depend on a dice roll.
-                1. Your level of experience and wisdom will prove you worthy of receiving <@&912057500914843680>, a role only members of high authority can attain.
-
-                2. Your familiarity with this server will allow you to get 1 Month of Discord Nitro immediately when available.
-
-                3. This is a karma roll, you will receive nothing.
-
-                4. For the sake of nonplus, this event will not be disclosed until it is received.
-
-                5. This is a karma roll, you will receive nothing.
-
-                6. This is a special one: a face reveal or a voice reveal by the owner. The choice will be made by another dice roll.
-
-                **Notes**
-                You cannot earn EXP while executing slash commands.
-                Refer to this message for details: https://discord.com/channels/829053898333225010/1121094935802822768/1166397053329477642
-                """
+                "If you somehow manage to reach **<@&923931862001414284>**, out of 6 events, 1 will take place.\n"
+                "A dice will be rolled and the outcome will ultimately depend on a dice roll.\n\n"
+                "1. Your level of experience and wisdom will prove you worthy of receiving <@&912057500914843680>, a role only members of high authority can attain.\n"
+                "2. Your familiarity with this server will allow you to get 1 Month of Discord Nitro immediately when available.\n"
+                "3. This is a karma roll, you will receive nothing.\n"
+                "4. For the sake of nonplus, this event will not be disclosed until it is received.\n"
+                "5. This is a karma roll, you will receive nothing.\n"
+                "6. This is a special one: a face reveal or a voice reveal by the owner. The choice will be made by another dice roll.\n\n"
+                "**Notes**\n"
+                "You cannot earn EXP while executing slash commands.\n"
+                "Refer to this message for details: https://discord.com/channels/829053898333225010/1121094935802822768/1166397053329477642"
             )
         )
         second_embed.set_thumbnail(url="https://i.imgur.com/aoECtze.png")
         second_embed.set_footer(
-            text=(
-                "Reminder: the perks from all roles are one-time use only and cannot be reused or recycled."
-            )
+            text="Reminder: the perks from all roles are one-time use only and cannot be reused or recycled."
         )
         
         try:
