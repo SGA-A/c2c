@@ -616,7 +616,7 @@ class DepositOrWithdraw(discord.ui.Modal):
         label="Amount", 
         min_length=1, 
         max_length=30, 
-        placeholder=ROBUX_DESCRIPTION
+        placeholder="A constant number or an exponent (e.g., 1e6, 1234)"
     )
 
     def checks(self, bank, wallet, any_bankspace_left):
@@ -5088,9 +5088,9 @@ class Economy(commands.Cog):
                 embed = discord.Embed(
                     colour=discord.Color.brand_green(),
                     description=(
-                        f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n"
-                        f"**It's a match!** You've won {CURRENCY} **{amount_after_multi:,}**."
-                        f"Your new balance is {CURRENCY} **{updated[1]:,}**."
+                        f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
+                        f"**It's a match!** You've won {CURRENCY} **{amount_after_multi:,}**.\n"
+                        f"Your new balance is {CURRENCY} **{updated[1]:,}**.\n"
                         f"You've won {prcntw:.1f}% of all slots games."
                     )
                 )
