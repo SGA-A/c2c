@@ -445,18 +445,18 @@ class Utility(commands.Cog):
 
         await interaction.response.send_message(embed=output)
 
-    @commands.command(name='ping', description='Checks latency of the bot')
-    async def ping(self, ctx: commands.Context):
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.command(name='ping', description='Checks latency of the bot')
+    async def ping(self, interaction: discord.Interaction):
         start = perf_counter()
-        message = await ctx.send(embed=membed("Ping..."))
-        end = perf_counter()
-        duration = (end - start) * 1000
-        
         content = membed(
-            f"- REST: {duration:.2f}ms\n"
-            f"- WS: {self.bot.latency * 1000:.2f}ms"
+            "Pong!\n"
+            f"Initial response: {self.bot.latency * 1000:.0f}ms"
         )
-        await message.edit(embed=content)
+        await interaction.response.send_message(embed=content)
+        end = perf_counter()
+        content.description += f"\nRound-trip: {(end - start) * 1000:.0f}ms"
+        await interaction.edit_original_response(embed=content)
 
     @app_commands.guilds(*APP_GUILDS_ID)
     async def extract_source(self, interaction: discord.Interaction, message: discord.Message):
