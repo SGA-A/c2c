@@ -533,14 +533,14 @@ def modify_profile(typemod: Literal["update", "create", "delete"], key: str, new
 
 async def economy_check(interaction: discord.Interaction, original: USER_ENTRY) -> bool:
     """Shared interaction check common amongst most interactions."""
-    if original != interaction.user:
-        await interaction.response.send_message(
-            embed=membed(f"This menu is controlled by {original.mention}."),
-            ephemeral=True,
-            delete_after=5.0
-        )
-        return False
-    return True
+    if original == interaction.user:
+        return True
+    await interaction.response.send_message(
+        embed=membed(f"This menu is controlled by {original.mention}."),
+        ephemeral=True,
+        delete_after=5.0
+    )
+    return False
 
 
 async def add_command_usage(user_id: int, command_name: str, conn: asqlite_Connection) -> int:
@@ -2814,8 +2814,87 @@ class MatchItem(discord.ui.Button):
         await interaction.response.edit_message(view=self.view)
 
 
-class ManageProfile(discord.ui.View):
-    pass
+class SettingsDropdown(discord.ui.Select):
+    def __init__(self, data: tuple, default_setting: str):
+        """data is a list of tuples containing the settings and their brief descriptions."""
+        options = [
+            discord.SelectOption(label=" ".join(setting.split("_")).title(), description=brief, default=setting == default_setting, value=setting)
+            for setting, brief in data
+        ]
+
+        self.current_setting = default_setting
+        self.current_setting_state = None
+
+        super().__init__(options=options, placeholder="Select a setting", row=0)
+    
+    async def callback(self, interaction: discord.Interaction):
+        self.current_setting = self.values[0]
+        for option in self.options:
+            option.default = option.value == self.current_setting
+
+        async with interaction.client.pool.acquire() as conn:
+            conn: asqlite_Connection
+            em = await Economy.get_setting_embed(interaction=interaction, select_menu=self, conn=conn)
+            await interaction.response.edit_message(embed=em, view=self.view)
+
+
+class UserSettings(discord.ui.View):
+    def __init__(self, data: list, chosen_setting: str, interaction: discord.Interaction):
+        super().__init__(timeout=60.0)
+        self.interaction = interaction
+        self.setting_dropdown = SettingsDropdown(data=data, default_setting=chosen_setting)
+        self.add_item(self.setting_dropdown)
+    
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        try:
+            await self.message.edit(view=self)
+        except discord.NotFound:
+            pass
+    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await economy_check(interaction, self.interaction.user)
+    
+    async def update_setting_state(self, interaction: discord.Interaction, msg: discord.InteractionMessage):
+        async with interaction.client.pool.acquire() as conn:
+            conn: asqlite_Connection
+
+            em = interaction.message.embeds[0]
+            await conn.execute(
+                """
+                INSERT INTO settings (userID, setting, value) 
+                VALUES ($0, $1, $2)
+                ON CONFLICT (userID, setting) DO UPDATE SET value = $2
+                """, 
+                interaction.user.id, 
+                self.setting_dropdown.current_setting, 
+                self.setting_dropdown.current_setting_state
+            )
+            await conn.commit()
+
+            enabled = self.setting_dropdown.current_setting_state == 1
+
+            em.set_field_at(
+                0, 
+                name="Current", 
+                value="<:Enabled:1231347743356616734> Enabled" if enabled else "<:Disabled:1231347741402071060> Disabled"
+            )
+
+            self.children[0].disabled = enabled
+            self.children[1].disabled = not enabled
+
+            await interaction.response.edit_message(embed=em, view=self)
+
+    @discord.ui.button(label="Enable", style=discord.ButtonStyle.success, row=1)
+    async def enable_func(self, interaction: discord.Interaction, _: discord.ui.Button):
+        self.setting_dropdown.current_setting_state = 1
+        await self.update_setting_state(interaction, msg=self.message)
+    
+    @discord.ui.button(label="Disable", style=discord.ButtonStyle.danger, row=1)
+    async def disable_func(self, interaction: discord.Interaction, _: discord.ui.Button):
+        self.setting_dropdown.current_setting_state = 0
+        await self.update_setting_state(interaction, msg=self.message)
 
 
 class Economy(commands.Cog):
@@ -2831,6 +2910,7 @@ class Economy(commands.Cog):
             "[`>reasons`](https://www.google.com/)."
         )
         self.batch_update.start()
+
 
     @tasks.loop(hours=1)
     async def batch_update(self):
@@ -2851,6 +2931,39 @@ class Economy(commands.Cog):
     @batch_update.before_loop
     async def before_update(self):
         self.batch_update.stop()
+
+    @tasks.loop()
+    async def check_for_expiry(self):
+        """Check for expired multipliers and remove them from the database."""
+
+        async with self.bot.pool.acquire() as conn:
+            next_task = await conn.fetchone(
+                """
+                SELECT rowid, expiry_timestamp 
+                FROM multipliers 
+                WHERE expiry_timestamp IS NOT NULL 
+                ORDER BY expiry_timestamp ASC 
+                LIMIT 1
+                """
+            )
+
+            if next_task is None:
+                self.check_for_role.cancel()
+                return
+            
+            row_id, expiry = next_task
+            timestamp = datetime.datetime.fromtimestamp(expiry, tz=timezone("UTC"))
+            await discord.utils.sleep_until(timestamp)
+
+            await conn.execute('DELETE FROM tasks WHERE rowid = $0', row_id)
+            await conn.commit()
+
+    async def start_check_for_expiry(self) -> None:
+        check = self.check_for_expiry
+        if check.is_running():
+            check.restart()
+        else:
+            check.start()
 
     @staticmethod
     async def partial_match_for(interaction: discord.Interaction, item_input: str, conn: asqlite_Connection) -> None | tuple:
@@ -3548,50 +3661,132 @@ class Economy(commands.Cog):
             """, user_id, multi_type
         )
         return multiplier
+    
+    @staticmethod
+    async def is_setting_enabled(conn: asqlite_Connection, *, user_id: int, setting: str) -> bool:
+        """Check if a user has a setting enabled."""
 
-    @tasks.loop()
-    async def check_for_expiry(self):
-        """Check for expired multipliers and remove them from the database."""
+        result = await conn.fetchone(
+            """
+            SELECT value 
+            FROM settings 
+            WHERE userID = $0 AND setting = $1
+            """, user_id, setting
+        )
 
-        async with self.bot.pool.acquire() as conn:
-            next_task = await conn.fetchone(
-                """
-                SELECT rowid, expiry_timestamp 
-                FROM multipliers 
-                WHERE expiry_timestamp IS NOT NULL 
-                ORDER BY expiry_timestamp ASC 
-                LIMIT 1
-                """
+        return bool(result[0]) if result else False
+
+    @staticmethod
+    async def get_setting_embed(
+        interaction: discord.Interaction, 
+        select_menu: SettingsDropdown, 
+        conn: asqlite_Connection
+    ) -> discord.Embed:
+
+        data = await conn.fetchone(
+            """
+            SELECT 
+                COALESCE((SELECT settings.value FROM settings WHERE settings.userID = $0 AND setting = $1), 0) AS settingUser, 
+                settings_descriptions.description 
+            FROM settings_descriptions 
+            WHERE setting = $1
+            """, interaction.user.id, select_menu.current_setting
+        )
+
+        value, description = data
+        select_menu.current_setting_state = value
+        embed = membed(
+            f"> {description}"
+        )
+
+        enabled = value == 1
+        embed.title = " ".join(select_menu.current_setting.split("_")).title()
+        current_text = "<:Enabled:1231347743356616734> Enabled" if enabled else "<:Disabled:1231347741402071060> Disabled"
+        embed.add_field(name="Current", value=current_text)
+
+        select_menu.view.children[0].disabled = enabled
+        select_menu.view.children[1].disabled = not enabled
+        return embed
+    
+    async def send_tip_if_enabled(self, interaction: discord.Interaction, conn: asqlite_Connection) -> None:
+        """Send a tip if the user has enabled tips."""
+
+        tips_enabled = await self.is_setting_enabled(
+            conn, 
+            user_id=interaction.user.id, 
+            setting="tips"
+        )
+
+        if tips_enabled:
+            async with aiofiles.open("C:\\Users\\georg\\Documents\\c2c\\tips.txt") as f:
+                contents = await f.readlines()
+                shuffle(contents)
+                atip = choice(contents)
+
+            tip = membed()
+            tip.description = f"\U0001f4a1 `TIP`: {atip}"
+            tip.set_footer(text="You can disable these tips in /settings.")
+            
+            await interaction.followup.send(embed=tip, ephemeral=True)
+
+    async def add_exp_or_levelup(self, interaction: discord.Interaction, connection: asqlite_Connection, exp_gainable: int) -> None:
+        record = await connection.fetchone(
+            """
+            UPDATE bank
+            SET exp = exp + $0
+            WHERE userID = $1 
+            RETURNING exp, level
+            """, exp_gainable, interaction.user.id
+        )
+
+        if record is None:
+            return
+        
+        xp, level = record
+        exp_needed = self.calculate_exp_for(level=level)
+        
+        if xp < exp_needed:
+            return
+        
+        await connection.execute(
+            """
+            UPDATE `bank` 
+            SET 
+                level = level + 1, 
+                exp = 0, 
+                bankspace = bankspace + $0 
+            WHERE userID = $1
+            """, randint(300_000, 20_000_000), interaction.user.id
+        )
+        
+        notifs_enabled = await self.is_setting_enabled(
+            connection, 
+            user_id=interaction.user.id, 
+            setting="levelup_notifications"
+        )
+
+        if notifs_enabled:
+            rankup = discord.Embed(title="Level Up!", colour=0x55BEFF)
+            rankup.description = (
+                f"{choice(LEVEL_UP_PROMPTS)}, {interaction.user.name}!\n"
+                f"You've leveled up from level **{level:,}** to level **{level+1:,}**."
             )
 
-            if next_task is None:
-                self.check_for_role.cancel()
-                return
-            
-            row_id, expiry = next_task
-            timestamp = datetime.datetime.fromtimestamp(expiry, tz=timezone("UTC"))
-            await discord.utils.sleep_until(timestamp)
-
-            await conn.execute('DELETE FROM tasks WHERE rowid = $0', row_id)
-            await conn.commit()
-
-    async def start_check_for_expiry(self) -> None:
-        check = self.check_for_expiry
-        if check.is_running():
-            check.restart()
-        else:
-            check.start()
+            await interaction.followup.send(embed=rankup)
 
     @commands.Cog.listener()
     async def on_app_command_completion(
         self, 
         interaction: discord.Interaction, 
         command: Union[app_commands.Command, app_commands.ContextMenu]
-        ) -> None | discord.WebhookMessage:
+        ) -> None:
         
         """
-        Increment the total command ran by a user by 1 for each call. Increase the interaction user's invoker if
-        they are registered. Also provide a tip if the total commands ran counter is a multiple of 15.
+        Increment the total command ran by a user by 1 for each call. 
+        
+        Increase the interaction user's XP/Level if they are registered. 
+        
+        Provide a tip if the total commands ran counter is a multiple of 15.
         """
 
         cmd = interaction.command
@@ -3600,9 +3795,9 @@ class Economy(commands.Cog):
 
         async with self.bot.pool.acquire() as connection:
             connection: asqlite_Connection
-
             async with connection.transaction():
                 cmd = cmd.parent or cmd
+                
                 total = await add_command_usage(
                     user_id=interaction.user.id, 
                     command_name=f"/{cmd.name}", 
@@ -3610,91 +3805,51 @@ class Economy(commands.Cog):
                 )
 
                 if not total % 15:
-
-                    async with aiofiles.open("C:\\Users\\georg\\Documents\\c2c\\tips.txt") as f:
-                        contents = await f.readlines()
-                        shuffle(contents)
-                        atip = choice(contents)
-
-                    tip = discord.Embed()
-                    tip.description = f"\U0001f4a1 `TIP`: {atip}"
-                    tip.set_footer(text="You will be able to disable these tips.")
-                    
-                    return await interaction.followup.send(embed=tip, ephemeral=True)
+                    await self.send_tip_if_enabled(interaction, connection)
 
                 exp_gainable = command.extras.get("exp_gained")
                 
                 if not exp_gainable:
                     return
-
-                record = await connection.fetchone(
-                    """
-                    UPDATE bank
-                    SET exp = exp + $0
-                    WHERE userID = $1 
-                    RETURNING exp, level
-                    """, exp_gainable, interaction.user.id
-                )
-
-                if record is None:
-                    return
-                
-                xp, level = record
-                exp_needed = self.calculate_exp_for(level=level)
-                
-                if xp < exp_needed:
-                    return
-                
-                await connection.execute(
-                    """
-                    UPDATE `bank` 
-                    SET 
-                        level = level + 1, 
-                        exp = 0, 
-                        bankspace = bankspace + $0 
-                    WHERE userID = $1
-                    """, randint(300_000, 20_000_000), interaction.user.id
-                )
-                
-                rankup = discord.Embed()
-                rankup.title = "Level Up!"
-                rankup.colour = 0x55BEFF
-                rankup.description = (
-                    f"{choice(LEVEL_UP_PROMPTS)}, {interaction.user.name}!\n"
-                    f"You've leveled up from level **{level:,}** to level **{level+1:,}**."
-                )
-                
-                await interaction.followup.send(embed=rankup)
+                await self.add_exp_or_levelup(interaction, connection, exp_gainable)
 
     @commands.Cog.listener()
-    async def on_command(self, ctx: commands.Context):
-        """
-        Track text commands ran. 
-        
-        No tips sent here since ephemeral messages are not supported.
-        
-        None of the economy commands use text commands so levelups aren't accounted for either.
-        """
+    async def on_command_completion(self, ctx: commands.Context):
+        """Track text commands ran."""
 
         cmd = ctx.command
 
         async with self.bot.pool.acquire() as connection:
             connection: asqlite_Connection
 
-            async with connection.transaction():
-                cmd = cmd.parent or cmd
-                await add_command_usage(
-                    user_id=ctx.author.id, 
-                    command_name=f">{cmd.name}", 
-                    conn=connection
-                )
+            cmd = cmd.parent or cmd
+            await add_command_usage(
+                user_id=ctx.author.id, 
+                command_name=f">{cmd.name}", 
+                conn=connection
+            )
+            await connection.commit()
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.command(name="settings", description="Adjust user-specfic settings")
-    async def view_user_settings(self, interaction: discord.Interaction):
-        await interaction.response.send_message(embed=membed("This is a work in progress!"))
+    @app_commands.describe(setting="The specific setting you want to adjust. Defaults to view.")
+    async def view_user_settings(self, interaction: discord.Interaction, setting: Optional[str]) -> None:
+        """View or adjust user-specific settings."""
+        if interaction.user.id not in self.bot.owner_ids:
+            return await interaction.response.send_message(embed=membed("This command is in development."))
+        
+        async with self.bot.pool.acquire() as conn:
+            conn: asqlite_Connection
+            query = "SELECT setting, brief FROM settings_descriptions"
+            settings = await conn.fetchall(query)
+            chosen_setting = setting or settings[0][0]
+
+            view = UserSettings(data=settings, chosen_setting=chosen_setting, interaction=interaction)
+            em = await Economy.get_setting_embed(interaction, select_menu=view.setting_dropdown, conn=conn)
+            await interaction.response.send_message(embed=em, view=view)
+            view.message = await interaction.original_response()
 
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.command(name="multipliers", description="View all of your multipliers within the bot")
@@ -4998,8 +5153,9 @@ class Economy(commands.Cog):
             wallet_amt = await conn.fetchone(f"SELECT wallet FROM `{BANK_TABLE_NAME}` WHERE userID = $0", interaction.user.id)
             if wallet_amt is None:
                 return await interaction.response.send_message(embed=self.not_registered)
-            has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
+            wallet_amt, = wallet_amt
 
+            has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
             robux = await self.do_wallet_checks(
                 interaction=interaction,
                 wallet_amount=wallet_amt,
@@ -5831,8 +5987,35 @@ class Economy(commands.Cog):
                         embed=membed(f'Either you or {other.mention} are not registered.')
                     )
 
-                prim_d = await conn.fetchone("SELECT wallet, job, bounty from `bank` WHERE userID = $0", primary_id)
-                host_d = await conn.fetchone("SELECT wallet, job from `bank` WHERE userID = $0", other_id)
+                prim_d = await conn.fetchone(
+                    """
+                    SELECT wallet, job, bounty, settings.value
+                    FROM `bank` 
+                    LEFT JOIN settings 
+                        ON bank.userID = settings.userID AND settings.setting = 'passive_mode'
+                    WHERE bank.userID = $0
+                    """, primary_id
+                )
+
+                host_d = await conn.fetchone(
+                    """
+                    SELECT wallet, job, settings.value
+                    FROM `bank`
+                    LEFT JOIN settings 
+                        ON bank.userID = settings.userID AND settings.setting = 'passive_mode' 
+                    WHERE bank.userID = $0
+                    """, other_id
+                )
+
+                if prim_d[-1]:
+                    return await interaction.response.send_message(
+                        embed=membed("You are in passive mode! If you want to rob, turn that off!")
+                    )
+                
+                if host_d[-1]:
+                    return await interaction.response.send_message(
+                        embed=membed(f"{other.mention} is in passive mode, you can't rob them!")
+                    )
 
                 if host_d[0] < 1_000_000:
                     return await interaction.response.send_message(
@@ -5846,7 +6029,7 @@ class Economy(commands.Cog):
 
                 result = choices([0, 1], weights=(49, 51), k=1)
                 
-                embed = discord.Embed(colour=0x2B2D31)
+                embed = membed()
                 async with conn.transaction():
                     if not result[0]:
                         emote = choice(
@@ -6369,6 +6552,18 @@ class Economy(commands.Cog):
                 app_commands.Choice(name=iterable[0], value=iterable[0]) 
                 for iterable in res if current.lower() in iterable[0].lower()
             ]
+    
+    @view_user_settings.autocomplete('setting')
+    async def setting_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        
+        async with interaction.client.pool.acquire() as conn:
+            query = "SELECT setting FROM settings_descriptions"
+            res = await conn.fetchall(query)
+        
+        return [
+            app_commands.Choice(name=" ".join(iterable[0].split("_")).title(), value=iterable[0])
+            for iterable in res if current.lower() in iterable[0].lower()
+        ]
 
 
 async def setup(bot: commands.Bot):
