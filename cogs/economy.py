@@ -3814,7 +3814,7 @@ class Economy(commands.Cog):
                 await self.add_exp_or_levelup(interaction, connection, exp_gainable)
 
     @commands.Cog.listener()
-    async def on_command_completion(self, ctx: commands.Context):
+    async def on_command(self, ctx: commands.Context):
         """Track text commands ran."""
 
         cmd = ctx.command
@@ -5463,7 +5463,7 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(
                         embed=membed("You don't have a job, get one first.")
                     )
-            
+
             has_cd = self.is_no_cooldown(data[0][0])
             if isinstance(has_cd, tuple):
                 return await interaction.response.send_message(
