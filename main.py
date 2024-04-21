@@ -739,6 +739,8 @@ async def main():
         bot.JEYY_API_KEY = environ.get("JEYY_API_KEY")
         bot.NINJAS_API_KEY = environ.get("API_KEY")
         bot.WAIFU_API_KEY = environ.get("WAIFU_API_KEY")
+        bot.GOOGLE_CUSTOM_SEARCH_API_KEY = environ.get("GOOGLE_CUSTOM_SEARCH_API_KEY")
+        bot.GOOGLE_CUSTOM_SEARCH_ENGINE = environ.get("GOOGLE_CUSTOM_SEARCH_ENGINE")
 
         await bot.start(TOKEN)
     finally:
