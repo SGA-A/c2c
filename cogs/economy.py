@@ -921,13 +921,13 @@ class RememberPositionView(discord.ui.View):
     
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
 
-        self.base_reward = floor((25 / 100) * self.base_reward)
-        await Economy.update_bank_new(self.interaction.user, self.conn, self.base_reward)
+        self.base = floor((25 / 100) * self.base)
+        await Economy.update_bank_new(self.interaction.user, self.conn, self.base)
         await self.conn.commit()
 
         embed = self.message.embeds[0]
         embed.title = "Terrible effort!"
-        embed.description = f"**You were given:**\n- {CURRENCY} {self.base_reward:,} for a sub-par shift"
+        embed.description = f"**You were given:**\n- {CURRENCY} {self.base:,} for a sub-par shift"
         embed.colour = discord.Colour.brand_red()
         embed.set_footer(text=f"Working as a {self.their_job}")
 
@@ -5463,7 +5463,7 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(
                         embed=membed("You don't have a job, get one first.")
                     )
-
+            
             has_cd = self.is_no_cooldown(data[0][0])
             if isinstance(has_cd, tuple):
                 return await interaction.response.send_message(
@@ -5474,7 +5474,7 @@ class Economy(commands.Cog):
                 ncd = (discord.utils.utcnow() + datetime.timedelta(minutes=40)).timestamp()
                 await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
-            possible_minigames = choices((1, 2), k=1, weights=(35, 65))[0]
+            possible_minigames = choices((1, 2), k=1, weights=(85, 15))[0]
             num_to_func_link = {
                 2: "do_order",
                 1: "do_tiles"
