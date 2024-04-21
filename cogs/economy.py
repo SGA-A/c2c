@@ -89,7 +89,7 @@ WARN_FOR_CONCURRENCY = membed(
     "- If you are repeatedly getting this message from the same interaction, you should contact the bot owner."
 )
 ROBUX_DESCRIPTION = 'Can be a constant number like "1234" or a shorthand (max, all, 1e6).'
-APP_GUILDS_ID = [829053898333225010, 780397076273954886, 720100943152021544]
+APP_GUILDS_ID = [829053898333225010, 780397076273954886]
 GENDER_COLOURS = {"Female": 0xF3AAE0, "Male": 0x737ECF}
 GENDOR_EMOJIS = {"Male": "<:male:1201993062885380097>", "Female": "<:female:1201992742574755891>"}
 UNIQUE_BADGES = {
@@ -772,7 +772,7 @@ class ConfirmResetData(discord.ui.View):
                 
                 return await interaction.followup.send(
                     embed=membed(
-                        "Failed to wipe user data.\n"
+                        f"Failed to wipe {self.removing_user}'s data.\n"
                         "Report this to the developers so they can get it fixed."
                     )
                 )
@@ -780,7 +780,7 @@ class ConfirmResetData(discord.ui.View):
                 await tr.commit()
                 del active_sessions[interaction.user.id]
 
-                whose = "your" if interaction.user.id == self.removing_user.id else f"{self.removing_user.mention}'s"
+                whose = "your" if interaction.user.id == self.removing_user.id else f"{self.removing_user}'s"
                 end_note = " Thanks for using the bot." if whose == "your" else ""
 
                 await interaction.followup.send(
@@ -5738,7 +5738,7 @@ class Economy(commands.Cog):
 
             if await self.can_call_out(member, conn):
                 await interaction.response.send_message(
-                    embed=membed(f"Could not find {member.mention} in the database.")
+                    embed=membed(f"Could not find {str(member)} in the database.")
                 )
             else:
 
