@@ -1315,6 +1315,86 @@ class Utility(commands.Cog):
         embed.set_image(url=username.banner.with_static_format('png'))
         await ctx.send(embed=embed)
 
+    @app_commands.checks.cooldown(1, 15, key=lambda i: i.guild.id)
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.command(name="imagesearch", description="Browse images from the web")
+    @app_commands.describe(
+        query="The search query to use for the image search.",
+        image_type="The type of image to search for. Defaults to photo.",
+        limit="The maximum number of images to retrieve. Defaults to 5.",
+        image_colour="The colour of the image to search for. Defaults to colour.",
+        from_only="[Limited to Bot Owner] Search from this website only.",
+        image_size="The size of the image. Defaults to medium"
+    )
+    async def image_search(
+        self, 
+        interaction: discord.Interaction, 
+        query: str, 
+        image_type: Optional[Literal["clipart", "face", "lineart", "news", "photo", "animated"]] = "photo", 
+        limit: Optional[app_commands.Range[int, 1, 10]] = 5,
+        image_colour: Optional[Literal["color", "gray", "mono", "trans"]] = "color", 
+        from_only: Optional[str] = None, 
+        image_size: Optional[Literal["huge", "icon", "large", "medium", "small", "xlarge", "xxlarge"]] = "medium"
+    ) -> None:
+        
+        user = interaction.user
+
+        params = {
+            'key': self.bot.GOOGLE_CUSTOM_SEARCH_API_KEY,
+            'cx': self.bot.GOOGLE_CUSTOM_SEARCH_ENGINE,
+            'q': query.replace(' ', '+'),
+            'searchType': 'image',
+            'imgType': image_type,
+            'num': limit,
+            'imgSize': image_size,
+            'imgColorType': image_colour
+        }
+
+        if from_only:
+            if user.id not in self.bot.owner_ids:
+                return await interaction.response.send_message(embed=membed("You are not allowed to use this feature."))
+            params.update({'siteSearch': from_only, 'siteSearchFilter': "i"})
+
+        async with self.bot.session.get('https://www.googleapis.com/customsearch/v1', params=params) as response:
+            if response.status != 200:
+                return await interaction.response.send_message(embed=membed(API_EXCEPTION))
+            response_json = await response.json()
+            search_details = response_json.get('searchInformation', {})
+            results_count = search_details.get('formattedTotalResults', 'Not available')
+            search_time = search_details.get('searchTime', 'Not calculated')
+
+            images = response_json.get('items', [])
+            image_info = [
+                (
+                    image.get('title'), 
+                    image.get('link')
+                ) 
+                for image in images
+            ]
+
+        em = membed(f"- Estimated Results: {results_count}\n- Search Time: {search_time}ms")
+
+        em.set_author(name=user.name, icon_url=user.display_avatar.url)
+        paginator = PaginationSimple(interaction)
+        length = 1
+
+        async def get_page_part(page: int):
+            """Helper function to determine what page of the paginator we're on."""
+
+            offset = (page - 1) * length
+
+            for item in image_info[offset:offset + length]:
+                em.title = item[0]
+                em.set_image(url=item[1])
+                em.url = item[1]
+
+            n = paginator.compute_total_pages(len(image_info), length)
+            em.set_footer(text=f"Page {page} of {n}")
+            return em, n
+        
+        paginator.get_page = get_page_part
+        await paginator.navigate()
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Utility(bot))
