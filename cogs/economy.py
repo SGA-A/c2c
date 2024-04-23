@@ -2466,63 +2466,19 @@ class ServantsManager(discord.ui.View):
         self.add_item(self.manage_button)
         await interaction.response.edit_message(view=self)
 
+
 class ShowcaseDropdown(discord.ui.Select):
-    def __init__(self, showcase_list: list, showcase_details):
-        self.showcase_list = showcase_list
-        self.current_item = "0" if self.showcase_list[0][0] == "0" else self.showcase_list[0]
-        self.showcase_dtls = showcase_details
-
-        options = []
-        for i in range(1, 7):
-            
-            item_id = self.showcase_list[i-1]
-
-            if item_id[0] == "0":
-                options.append(discord.SelectOption(label=f"Slot {i}", default=i==1, value=f"{item_id}{generateID()}"))
-                continue
-            
-            details: tuple = self.showcase_dtls.get(item_id)
-            options.append(discord.SelectOption(label=details[0], emoji=details[1], default=i==1, value=item_id))
-
-        super().__init__(options=options, row=0)
+    def __init__(self):
+        pass
     
-    async def callback(self, interaction: discord.Interaction):
-        self.current_item = self.values[0]  # the current item being clicked on (its ID)
-        for option in self.options:
-            option.default = option.value == self.current_item
-        self.current_item = self.current_item if self.current_item[0] != "0" else "0"
-
-        current_item_index = self.showcase_list.index(self.current_item)
-
-        if self.current_item[0] == "0":
-            for item in self.view.children:
-                if not hasattr(item, "label"):
-                    continue
-                item.disabled = True
-        else:
-            self.view.children[0].disabled = (current_item_index - 1) < 0
-            try:
-                self.view.children[1].disabled = (self.showcase_list[current_item_index+1] == "0")
-            except IndexError:
-                self.view.children[1].disabled = True
-
-        await interaction.response.edit_message(view=self.view)
+    async def callback(self, _: discord.Interaction):
+        pass
 
 
 class ShowcaseView(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction, showcase_list_backend: list, showcase_details: dict):
-        self.interaction: discord.Interaction = interaction
-        self.showcase_list: list = showcase_list_backend  # the actual backend contents of the showcase ["1", "10", "5"] etc
-        self.showcase_details = showcase_details  # the details of each individual showcase item, excluding free slots
+    def __init__(self, _: discord.Interaction):
+        pass
 
-        super().__init__(timeout=45.0)
-
-        self.select_item = ShowcaseDropdown(showcase_list=self.showcase_list, showcase_details=self.showcase_details)
-        
-        self.add_item(self.select_item)
-        self.children[0].disabled = True
-        self.children[1].disabled = self.showcase_list[self.showcase_list.index(self.select_item.current_item)+1] == "0"
-    
     async def on_error(self, interaction: discord.Interaction, error: Exception, _) -> None:
         print_exception(type(error), error, error.__traceback__)
         self.stop()
@@ -2543,67 +2499,25 @@ class ShowcaseView(discord.ui.View):
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await economy_check(interaction, self.interaction.user)
-    
-    def do_button_checks(self, current_item_index: int):
-        previous_item_index = current_item_index - 1
-        self.children[0].disabled = previous_item_index < 0
-        
-        next_item_index = current_item_index + 1
-        try:
-            self.children[1].disabled = self.showcase_list[next_item_index] == "0"
-        except IndexError:
-            self.children[1].disabled = True
-
-    async def start_updating_order(self, interaction: discord.Interaction, conn: asqlite_Connection) -> None:
-        
-        changedShowcase = " ".join(self.showcase_list)
-        await Economy.change_bank_new(interaction.user, conn, changedShowcase, "showcase")
-        await conn.commit()
-        showcase_ui_new = []
-
-        showbed = self.message.embeds[0]
-        showbed.description = "You can reorder your showcase here.\n\n"
-
-        for i, showcase_item in enumerate(self.showcase_list, start=1):
-            
-            if showcase_item == "0":
-                showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
-                continue
-
-            item_data = self.showcase_details[showcase_item]
-            name, emoji, _ = item_data
-            
-            showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) {emoji} {name}")
-
-        showbed.description += "\n".join(showcase_ui_new)
-        await interaction.response.edit_message(embed=showbed, view=self)
 
     @discord.ui.button(emoji="<:move_up:1213223442241818705>", row=1)
     async def move_up(self, interaction: discord.Interaction, _: discord.ui.Button):
-
-        async with interaction.client.pool.acquire() as conn:
-            conn: asqlite_Connection
-            current_item_index = self.showcase_list.index(self.select_item.current_item)
-            swap_elements(self.showcase_list, current_item_index, current_item_index-1)
-            self.do_button_checks(current_item_index-1)
-
-            await self.start_updating_order(interaction, conn)
+        pass
 
     @discord.ui.button(emoji="<:move_down:1213223440669085756>", row=1)
     async def move_down(self, interaction: discord.Interaction, _: discord.ui.Button):
-        
-        async with interaction.client.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            current_item_index = self.showcase_list.index(self.select_item.current_item)
-            swap_elements(self.showcase_list, current_item_index, current_item_index+1)
-            self.do_button_checks(current_item_index+1)
-
-            await self.start_updating_order(interaction, conn)
+        pass
 
 
 class ItemQuantityModal(discord.ui.Modal):
-    def __init__(self, bot: commands.Bot, item_name: str, item_cost: int, item_emoji: str):
+    def __init__(
+            self, 
+            bot: commands.Bot, 
+            item_name: str, 
+            item_cost: int, 
+            item_emoji: str
+        ) -> None:
+
         self.bot = bot
         self.item_cost = item_cost
         self.item_name = item_name
@@ -2918,7 +2832,6 @@ class Economy(commands.Cog):
             "[`>reasons`](https://www.google.com/)."
         )
         self.batch_update.start()
-
 
     @tasks.loop(hours=1)
     async def batch_update(self):
@@ -4060,202 +3973,20 @@ class Economy(commands.Cog):
 
     @showcase.command(name="view", description="View your item showcase")
     @app_commands.checks.cooldown(1, 5)
-    async def view_showcase(self, interaction: discord.Interaction):
-        """View your current showcase. This is not what it look like on the profile."""
-
-        async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            showcase = await conn.fetchone("SELECT showcase FROM bank WHERE userID = $0", interaction.user.id)
-            if showcase is None:
-                return await interaction.response.send_message(embed=self.not_registered)
-            showcase, = showcase
-            showcase: list = showcase.split(" ")
-
-            id_details = dict()
-            for item_id in showcase:
-                if item_id == "0":
-                    continue
-                showdata = await conn.fetchone(
-                    """
-                    SELECT shop.itemName, shop.emoji, inventory.qty
-                    FROM shop
-                    INNER JOIN inventory ON shop.itemID = inventory.itemID
-                    WHERE shop.itemID = $0 AND inventory.userID = $1
-                    """, item_id, interaction.user.id
-                )
-
-                if showdata is None:
-                    continue
-                id_details.update({item_id: (showdata[0], showdata[1], showdata[2])})
-
-            showcase_ui_new = []
-            changes_were_made = False
-
-            for i, showcase_item in enumerate(showcase, start=1):
-                if showcase_item == "0":
-                    showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
-                    continue
-
-                item_data = id_details.get(showcase_item)
-                if item_data is None:
-                    showcase[i-1] = "0"
-                    changes_were_made = True
-                    showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
-                    continue
-
-                showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) {item_data[1]} {item_data[0]}")
-
-            showbed = discord.Embed(
-                colour=0x2B2D31,
-                title=f"{interaction.user.global_name}'s Showcase",
-                description="You can reorder your showcase here.\n\n"
-            )
-            
-            showbed.set_thumbnail(url=interaction.user.display_avatar.url)
-
-            showbed.description += "\n".join(showcase_ui_new)
-            
-            if changes_were_made:
-                changed_showcase = " ".join(showcase)
-                await conn.execute(
-                    """
-                    UPDATE bank 
-                    SET showcase = $0 
-                    WHERE userID = $1
-                    """, changed_showcase, interaction.user.id
-                )
-                await conn.commit()
-
-            showcase_view = ShowcaseView(interaction, showcase, id_details)
-            await interaction.response.send_message(embed=showbed, view=showcase_view)
-            showcase_view.message = await interaction.original_response()
+    async def view_showcase(self, interaction: discord.Interaction) -> None:
+        return await interaction.response.send_message(embed=membed("This is getting rewritten. Give it some time."))
 
     @showcase.command(name="add", description="Add an item to your showcase", extras={"exp_gained": 1})
     @app_commands.checks.cooldown(1, 10)
     @app_commands.describe(item_name="Select an item.")
-    async def add_showcase_item(self, interaction: discord.Interaction, item_name: str):
-        """This is a subcommand. Adds an item to your showcase."""
-
-        async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            item_details = await self.partial_match_for(interaction, item_name, conn)
-
-            if item_details is None:
-                return
-            
-            item_id, item_name, ie = item_details
-
-            async with self.bot.pool.acquire() as conn:
-                conn: asqlite_Connection
-
-                item_details = await self.partial_match_for(interaction, item_name, conn)
-
-                if item_details is None:
-                    return
-                
-                item_id, item_name, ie = item_details
-
-                data = await conn.fetchone(
-                    """
-                    SELECT inventory.qty, bank.showcase
-                    FROM inventory
-                    INNER JOIN bank ON inventory.userID = bank.userID
-                    WHERE inventory.itemID = $0 AND inventory.userID = $1
-                    """, item_id, interaction.user.id
-                )
-                
-                if data is None:
-                    return await respond(
-                        interaction=interaction, 
-                        embed=membed(f"You don't have a single {ie} **{item_name}**.")
-                    )
-
-                showcase: str = data[-1]
-                showcase: list = showcase.split(" ")
-
-                if not showcase.count("0"):
-                    return await respond(
-                        interaction=interaction,
-                        embed=membed("You can only showcase up to `6` items.")
-                    )
-                
-                item_id = str(item_id)
-                if item_id in showcase:
-                    return await respond(
-                        interaction=interaction,
-                        embed=membed(f"You already have a {ie} **{item_name}** in your showcase.")
-                    )
-                
-                placeholder = showcase.index("0")
-                showcase[placeholder] = item_id
-
-                showcase = " ".join(showcase)
-                await self.change_bank_new(interaction.user, conn, showcase, "showcase")
-                await conn.commit()
-
-                return await respond(
-                    interaction=interaction,
-                    embed=membed(f"Added {ie} **{item_name}** to your showcase!")
-                )
+    async def add_showcase_item(self, interaction: discord.Interaction, item_name: str) -> None:
+        return await interaction.response.send_message(embed=membed("This is getting rewriten. Give it some time."))
 
     @showcase.command(name="remove", description="Remove an item from your showcase", extras={"exp_gained": 1})
     @app_commands.checks.cooldown(1, 10)
     @app_commands.describe(item_name="Select an item.")
-    async def remove_showcase_item(
-        self, 
-        interaction: discord.Interaction, 
-        item_name: str
-        ) -> None:
-        """This is a subcommand. Removes an existing item from your showcase."""
-
-        async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            item_details = await self.partial_match_for(interaction, item_name, conn)
-
-            if item_details is None:
-                return
-            
-            item_id, item_name, ie = item_details
-            
-            data = await conn.fetchone(
-                """
-                SELECT inventory.qty, bank.showcase
-                FROM inventory
-                INNER JOIN bank ON inventory.userID = bank.userID
-                WHERE inventory.itemID = $0 AND inventory.userID = $1
-                """, item_id, interaction.user.id
-            )
-
-            if data is None:
-                return await respond(
-                    interaction=interaction,
-                    embed=membed(f"You don't have a single {ie} **{item_name}**.")
-                )
-
-            showcase: str = data[-1]
-            showcase: list = showcase.split(" ")
-
-            item_id = str(item_id)
-            if item_id not in showcase:
-                return await respond(
-                    interaction=interaction,
-                    embed=membed(f"You don't have a {ie} **{item_name}** in your showcase.")
-                )
-            
-            initial = showcase.index(item_id)
-            showcase[initial] = "0"
-
-            showcase = " ".join(showcase)
-            await self.change_bank_new(interaction.user, conn, showcase, "showcase")
-            await conn.commit()
-
-            await respond(
-                interaction=interaction,
-                embed=membed(f"Removed {ie} **{item_name}** from your showcase!")
-            )
+    async def remove_showcase_item(self, interaction: discord.Interaction, item_name: str) -> None:
+        return await interaction.response.send_message(embed=membed("This is getting rewritten. Give it some time."))
 
     shop = app_commands.Group(
         name='shop', 
@@ -4266,16 +3997,12 @@ class Economy(commands.Cog):
 
     @shop.command(name='view', description='View all the shop items')
     @app_commands.checks.cooldown(1, 12)
-    async def view_the_shop(self, interaction: discord.Interaction):
+    async def view_the_shop(self, interaction: discord.Interaction) -> None:
         """This is a subcommand. View the currently available items within the shop."""
 
         paginator = PaginationItem(interaction)
         async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
-            
+        
             shop_sorted = await conn.fetchall(
                 """
                 SELECT itemName, emoji, cost
@@ -4296,6 +4023,7 @@ class Economy(commands.Cog):
 
             async def get_page_part(page: int):
                 wallet = await self.get_wallet_data_only(interaction.user, conn)
+                wallet = wallet or 0
 
                 emb = discord.Embed(
                     title="Shop",
@@ -4310,16 +4038,17 @@ class Economy(commands.Cog):
                     if item.style == discord.ButtonStyle.blurple:
                         paginator.remove_item(item)
 
-                for item_mod in additional_notes[offset:offset + length]:
-                    emb.description += f"{item_mod[0]}\n"
-                    item_mod[1].disabled = wallet < item_mod[1].cost
-                    paginator.add_item(item_mod[1])
+                for item_attrs in additional_notes[offset:offset + length]:
+                    emb.description += f"{item_attrs[0]}\n"
+                    item_attrs[1].disabled = wallet < item_attrs[1].cost
+                    paginator.add_item(item_attrs[1])
 
                 n = Pagination.compute_total_pages(len(additional_notes), length)
                 emb.set_footer(text=f"Page {page} of {n}")
                 return emb, n
-        paginator.get_page = get_page_part
-        await paginator.navigate()
+
+            paginator.get_page = get_page_part
+            await paginator.navigate()
 
     @shop.command(name='sell', description='Sell an item from your inventory', extras={"exp_gained": 4})
     @app_commands.describe(
