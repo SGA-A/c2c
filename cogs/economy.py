@@ -904,7 +904,8 @@ class RememberPositionView(discord.ui.View):
             conn: asqlite_Connection, 
             all_emojis: list[str], 
             actual_emoji: str, 
-            their_job: str):
+            their_job: str
+        ) -> None:
 
         self.interaction = interaction
         self.conn: asqlite_Connection = conn
@@ -936,7 +937,7 @@ class RememberPositionView(discord.ui.View):
         except discord.NotFound:
             pass
 
-    async def determine_outcome(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def determine_outcome(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
         """Determine the position of the real emoji."""
         self.stop()
         embed = self.message.embeds[0]
@@ -962,11 +963,11 @@ class RememberPositionView(discord.ui.View):
 class RememberPosition(discord.ui.Button):
     """A minigame to remember the position the tiles shown were on once hidden."""
 
-    def __init__(self, random_emoji: str, button_cb: Callable):
+    def __init__(self, random_emoji: str, button_cb: Callable) -> None:
         self.button_cb = button_cb
         super().__init__(emoji=random_emoji)
     
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction) -> None:
         await self.button_cb(interaction, button=self)
 
 
@@ -1085,7 +1086,7 @@ class BalanceView(discord.ui.View):
     """View for the balance command to mange and deposit/withdraw money."""
 
     def __init__(self, interaction: discord.Interaction, bot: commands.Bot,
-                 wallet: int, bank: int, bankspace: int, viewing: USER_ENTRY):
+                 wallet: int, bank: int, bankspace: int, viewing: USER_ENTRY) -> None:
         self.interaction = interaction
         self.bot: commands.Bot = bot
         self.their_wallet = wallet
@@ -1096,7 +1097,7 @@ class BalanceView(discord.ui.View):
         
         self.checks(self.their_bank, self.their_wallet, self.their_bankspace-self.their_bank)
 
-    def checks(self, new_bank, new_wallet, any_new_bankspace_left):
+    def checks(self, new_bank, new_wallet, any_new_bankspace_left) -> None:
         """Check if the buttons should be disabled or not."""
         if self.viewing.id != self.interaction.user.id:
             return  # ! already initialized disabled logic
@@ -1239,7 +1240,7 @@ class BlackjackUi(discord.ui.View):
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item[Any], /) -> None:
         print_exception(type(error), error, error.__traceback__)
-        await interaction.response.send_message(embed=membed("Something went wrong. Try again later."))
+        await interaction.response.send_message(embed=membed("Something went wrong."))
 
     async def on_timeout(self) -> None:
         if not self.finished:
@@ -2616,6 +2617,28 @@ class ItemQuantityModal(discord.ui.Modal):
         max_length=5
     )
 
+    async def begin_purchase(self, interaction: discord.Interaction, true_qty: int, conn: asqlite_Connection, current_balance, new_price):
+        await Economy.update_inv_new(interaction.user, true_qty, self.item_name, conn)
+        new_am = await Economy.change_bank_new(interaction.user, conn, current_balance-new_price)
+        await conn.commit()
+
+        confirm = discord.Embed(
+            title="Successful Purchase",
+            description=(
+                f"> You have {CURRENCY} {new_am[0]:,} left.\n\n"
+                "**You bought:**\n"
+                f"- {true_qty:,}x {self.ie} {self.item_name}\n\n"
+                "**You paid:**\n"
+                f"- {CURRENCY} {new_price:,}"),
+            colour=0xFFFFFF
+        )
+        confirm.set_footer(text="Thanks for your business.")
+
+        if self.activated_coupon:
+            await Economy.update_inv_new(interaction.user, -1, "Shop Coupon", conn)
+            confirm.description += "\n\n**Additional info:**\n- <:coupon:1210894601829879818> 5% Coupon Discount was applied"
+        await respond(interaction, embed=confirm)
+
     async def calculate_discounted_price_if_any(
             self, user: USER_ENTRY, 
             conn: asqlite_Connection, 
@@ -2626,9 +2649,10 @@ class ItemQuantityModal(discord.ui.Modal):
 
         data = await conn.fetchone(
             """
-            SELECT inventory.qty
+            SELECT inventory.qty, settings.value
             FROM shop
-            INNER JOIN inventory ON shop.itemID = inventory.itemID
+            LEFT JOIN inventory ON shop.itemID = inventory.itemID
+            LEFT JOIN settings ON inventory.userID = settings.userID AND settings.setting = 'always_use_coupon'
             WHERE shop.itemID = $0 AND inventory.userID = $1
             """, 12, user.id
         )
@@ -2637,6 +2661,10 @@ class ItemQuantityModal(discord.ui.Modal):
             return current_price
 
         discounted_price = floor((95/100) * current_price)
+
+        if data[-1]:
+            self.activated_coupon = True
+            return discounted_price
 
         value = await process_confirmation(
             interaction=interaction, 
@@ -2668,6 +2696,7 @@ class ItemQuantityModal(discord.ui.Modal):
             current_balance: int
         ) -> None:
 
+
         value = await process_confirmation(
             interaction=interaction, 
             prompt=(
@@ -2675,28 +2704,8 @@ class ItemQuantityModal(discord.ui.Modal):
                 f"{self.item_name}** for **{CURRENCY} {new_price:,}**?"
             )
         )
-        
         if value:
-            await Economy.update_inv_new(interaction.user, true_qty, self.item_name, conn)
-            new_am = await Economy.change_bank_new(interaction.user, conn, current_balance-new_price)
-            await conn.commit()
-
-            confirm = discord.Embed(
-                title="Successful Purchase",
-                description=(
-                    f"> You have {CURRENCY} {new_am[0]:,} left.\n\n"
-                    "**You bought:**\n"
-                    f"- {true_qty:,}x {self.ie} {self.item_name}\n\n"
-                    "**You paid:**\n"
-                    f"- {CURRENCY} {new_price:,}"),
-                colour=0xFFFFFF
-            )
-            confirm.set_footer(text="Thanks for your business.")
-
-            if self.activated_coupon:
-                await Economy.update_inv_new(interaction.user, -1, "Shop Coupon", conn)
-                confirm.description += "\n\n**Additional info:**\n- <:coupon:1210894601829879818> 5% Coupon Discount was applied"
-            await respond(interaction, embed=confirm)
+            await self.begin_purchase(interaction, true_qty, conn, current_balance, new_price)
     
     # --------------------------------------------------------------------------------------------
 
@@ -2711,20 +2720,6 @@ class ItemQuantityModal(discord.ui.Modal):
     
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-
-            if isinstance(true_quantity, str):
-                return await interaction.response.send_message(
-                    embed=membed("You need to provide a real amount."), 
-                    ephemeral=True
-                )
-            
-            true_quantity = abs(true_quantity)
-
-            if not true_quantity:
-                return await interaction.response.send_message(
-                    embed=membed("You need to provide a positive amount"), 
-                    ephemeral=True
-                )
 
             current_price = self.item_cost * true_quantity
             current_balance = await Economy.get_wallet_data_only(interaction.user, conn)
@@ -2743,22 +2738,25 @@ class ItemQuantityModal(discord.ui.Modal):
                         "You didn't respond in time so your purchase was cancelled."
                     )
                 )
-            
-            if not interaction.response.is_done():
-                await interaction.response.defer(thinking=True)
 
             if new_price > current_balance:
-                return await interaction.followup.send(
+                return await respond(
+                    interaction=interaction,
                     embed=membed(f"You don't have enough money to buy **{true_quantity:,}x {self.ie} {self.item_name}**.")
                 )
 
-            await self.confirm_purchase(
-                interaction, 
-                new_price, 
-                true_quantity, 
-                conn, 
-                current_balance
-            )
+            setting_enabled = await Economy.is_setting_enabled(conn, user_id=interaction.user.id, setting="buying_confirmations")
+            if setting_enabled:
+                await self.confirm_purchase(
+                    interaction, 
+                    new_price, 
+                    true_quantity, 
+                    conn, 
+                    current_balance
+                )
+                return
+            
+            await self.begin_purchase(interaction, true_quantity, conn, current_balance, new_price)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
         print_exception(type(error), error, error.__traceback__)
@@ -2814,6 +2812,14 @@ class MatchItem(discord.ui.Button):
         await interaction.response.edit_message(view=self.view)
 
 
+class ProfileCustomizeButton(discord.ui.Button):
+    def __init__(self, **kwargs):
+        super().__init__(label="Edit Profile (in development)", row=2, disabled=True, **kwargs)
+
+    async def callback(self, _: discord.Interaction):
+        pass
+
+
 class SettingsDropdown(discord.ui.Select):
     def __init__(self, data: tuple, default_setting: str):
         """data is a list of tuples containing the settings and their brief descriptions."""
@@ -2821,7 +2827,6 @@ class SettingsDropdown(discord.ui.Select):
             discord.SelectOption(label=" ".join(setting.split("_")).title(), description=brief, default=setting == default_setting, value=setting)
             for setting, brief in data
         ]
-
         self.current_setting = default_setting
         self.current_setting_state = None
 
@@ -2829,34 +2834,24 @@ class SettingsDropdown(discord.ui.Select):
     
     async def callback(self, interaction: discord.Interaction):
         self.current_setting = self.values[0]
+        self.view.first_pass_complete = True
+
         for option in self.options:
             option.default = option.value == self.current_setting
 
         async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
-            em = await Economy.get_setting_embed(interaction=interaction, select_menu=self, conn=conn)
+            em = await Economy.get_setting_embed(interaction=interaction, view=self.view, conn=conn)
             await interaction.response.edit_message(embed=em, view=self.view)
 
 
-class UserSettings(discord.ui.View):
-    def __init__(self, data: list, chosen_setting: str, interaction: discord.Interaction):
-        super().__init__(timeout=60.0)
-        self.interaction = interaction
-        self.setting_dropdown = SettingsDropdown(data=data, default_setting=chosen_setting)
-        self.add_item(self.setting_dropdown)
-    
-    async def on_timeout(self):
-        for item in self.children:
-            item.disabled = True
-        try:
-            await self.message.edit(view=self)
-        except discord.NotFound:
-            pass
-    
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, self.interaction.user)
-    
-    async def update_setting_state(self, interaction: discord.Interaction, msg: discord.InteractionMessage):
+class ToggleButton(discord.ui.Button):
+    def __init__(self, setting_dropdown: SettingsDropdown, **kwargs):
+        self.setting_dropdown = setting_dropdown
+        super().__init__(**kwargs)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.setting_dropdown.current_setting_state = int(not self.setting_dropdown.current_setting_state)
         async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
 
@@ -2881,20 +2876,31 @@ class UserSettings(discord.ui.View):
                 value="<:Enabled:1231347743356616734> Enabled" if enabled else "<:Disabled:1231347741402071060> Disabled"
             )
 
-            self.children[0].disabled = enabled
-            self.children[1].disabled = not enabled
+            self.view.disable_button.disabled = not enabled
+            self.view.enable_button.disabled = enabled
 
-            await interaction.response.edit_message(embed=em, view=self)
+            await interaction.response.edit_message(embed=em, view=self.view)
 
-    @discord.ui.button(label="Enable", style=discord.ButtonStyle.success, row=1)
-    async def enable_func(self, interaction: discord.Interaction, _: discord.ui.Button):
-        self.setting_dropdown.current_setting_state = 1
-        await self.update_setting_state(interaction, msg=self.message)
+
+class UserSettings(discord.ui.View):
+    def __init__(self, data: list, chosen_setting: str, interaction: discord.Interaction):
+        super().__init__(timeout=60.0)
+        self.interaction = interaction
+        
+        self.setting_dropdown = SettingsDropdown(data=data, default_setting=chosen_setting)
+        self.disable_button = ToggleButton(self.setting_dropdown, label="Disable", style=discord.ButtonStyle.danger, row=1)
+        self.enable_button = ToggleButton(self.setting_dropdown, label="Enable", style=discord.ButtonStyle.success, row=1)
     
-    @discord.ui.button(label="Disable", style=discord.ButtonStyle.danger, row=1)
-    async def disable_func(self, interaction: discord.Interaction, _: discord.ui.Button):
-        self.setting_dropdown.current_setting_state = 0
-        await self.update_setting_state(interaction, msg=self.message)
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        try:
+            await self.message.edit(view=self)
+        except discord.NotFound:
+            pass
+    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await economy_check(interaction, self.interaction.user)
 
 
 class Economy(commands.Cog):
@@ -3673,39 +3679,53 @@ class Economy(commands.Cog):
             WHERE userID = $0 AND setting = $1
             """, user_id, setting
         )
-
-        return bool(result[0]) if result else False
+        if result is None:
+            return False
+        return bool(result[0])
 
     @staticmethod
     async def get_setting_embed(
         interaction: discord.Interaction, 
-        select_menu: SettingsDropdown, 
+        view: UserSettings, 
         conn: asqlite_Connection
     ) -> discord.Embed:
 
         data = await conn.fetchone(
-            """
-            SELECT 
-                COALESCE((SELECT settings.value FROM settings WHERE settings.userID = $0 AND setting = $1), 0) AS settingUser, 
-                settings_descriptions.description 
-            FROM settings_descriptions 
-            WHERE setting = $1
-            """, interaction.user.id, select_menu.current_setting
+        """
+        SELECT 
+            COALESCE((SELECT settings.value FROM settings WHERE settings.userID = $0 AND setting = $1), 0) AS settingUser, 
+            settings_descriptions.description 
+        FROM settings_descriptions 
+        WHERE setting = $1
+        """, interaction.user.id, view.setting_dropdown.current_setting
         )
+        if data is None:
+            view.clear_items()
+            view.stop()
+            return membed("This setting does not exist.")
 
         value, description = data
-        select_menu.current_setting_state = value
+        view.setting_dropdown.current_setting_state = value
+        
         embed = membed(
             f"> {description}"
         )
 
-        enabled = value == 1
-        embed.title = " ".join(select_menu.current_setting.split("_")).title()
-        current_text = "<:Enabled:1231347743356616734> Enabled" if enabled else "<:Disabled:1231347741402071060> Disabled"
-        embed.add_field(name="Current", value=current_text)
+        embed.title = " ".join(view.setting_dropdown.current_setting.split("_")).title()
 
-        select_menu.view.children[0].disabled = enabled
-        select_menu.view.children[1].disabled = not enabled
+        view.clear_items()
+        view.add_item(view.setting_dropdown)
+
+        if embed.title == "Profile Customization":
+            view.add_item(ProfileCustomizeButton())
+        else:
+            enabled = value == 1
+            current_text = "<:Enabled:1231347743356616734> Enabled" if enabled else "<:Disabled:1231347741402071060> Disabled"
+            embed.add_field(name="Current", value=current_text)
+            view.disable_button.disabled = not enabled
+            view.enable_button.disabled = enabled
+            view.add_item(view.disable_button)
+            view.add_item(view.enable_button)
         return embed
     
     async def send_tip_if_enabled(self, interaction: discord.Interaction, conn: asqlite_Connection) -> None:
@@ -3847,7 +3867,7 @@ class Economy(commands.Cog):
             chosen_setting = setting or settings[0][0]
 
             view = UserSettings(data=settings, chosen_setting=chosen_setting, interaction=interaction)
-            em = await Economy.get_setting_embed(interaction, select_menu=view.setting_dropdown, conn=conn)
+            em = await Economy.get_setting_embed(interaction, view=view, conn=conn)
             await interaction.response.send_message(embed=em, view=view)
             view.message = await interaction.original_response()
 
@@ -3914,6 +3934,15 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(
                         embed=membed("You don't have that much money to share."))
                 
+                setting_enabled = await Economy.is_setting_enabled(conn, user_id=interaction.user.id, setting="share_robux_confirmations")
+                if setting_enabled:
+                    value = await process_confirmation(
+                        interaction=interaction, 
+                        prompt=f"Are you sure you want to share {CURRENCY} **{share_amount:,}** with {recipient.mention}?"
+                    )
+                    if not value:
+                        return
+
                 await self.update_wallet_many(
                     conn, 
                     (-int(share_amount), user.id), 
@@ -3921,7 +3950,8 @@ class Economy(commands.Cog):
                 )
                 await conn.commit()
 
-                return await interaction.response.send_message(
+                return await respond(
+                    interaction=interaction,
                     embed=membed(f"Shared {CURRENCY} **{share_amount:,}** with {recipient.mention}!")
                 )
 
@@ -3954,14 +3984,14 @@ class Economy(commands.Cog):
 
             attrs = await conn.fetchone(
                 """
-                SELECT inventory.qty, shop.rarity
+                SELECT inventory.qty, shop.rarity, settings.value
                 FROM inventory
                 INNER JOIN shop ON inventory.itemID = shop.itemID
+                LEFT JOIN settings ON inventory.userID = settings.userID AND settings.setting = 'share_item_confirmations'
                 WHERE inventory.userID = $0 AND inventory.itemID = $1
                 """, primm.id, item_id
             )
 
-            # not sure if we responded already so we need to check
             if attrs is None:
                 return await respond(interaction, embed=membed(f"You don't own a single {ie} **{item_name}**."))
             
@@ -3969,6 +3999,14 @@ class Economy(commands.Cog):
                 if attrs[0] < quantity:
                     return await respond(interaction, embed=membed(f"You don't have **{quantity}x {ie} {item_name}**."))
                 
+                if attrs[-1]:
+                    value = await process_confirmation(
+                        interaction=interaction, 
+                        prompt=f"Are you sure you want to share **{quantity}x {ie} {item_name}** with {recipient.mention}?"
+                    )
+                    if not value:
+                        return
+
                 await self.update_inv_new(recipient, +quantity, item_name, conn)
                 await self.update_inv_new(primm, -quantity, item_name, conn)
                 await conn.commit()
@@ -4300,27 +4338,30 @@ class Economy(commands.Cog):
                 )
 
             cost = floor((cost * sell_quantity) / 4)
-            value = await process_confirmation(
-                interaction=interaction, 
-                prompt=(
-                    f"Are you sure you want to sell **{sell_quantity:,}x "
-                    f"{ie} {item_name}** for **{CURRENCY} {cost:,}**?"
+            if await self.is_setting_enabled(conn, user_id=interaction.user.id, setting="selling_confirmations"):
+                value = await process_confirmation(
+                    interaction=interaction, 
+                    prompt=(
+                        f"Are you sure you want to sell **{sell_quantity:,}x "
+                        f"{ie} {item_name}** for **{CURRENCY} {cost:,}**?"
+                    )
                 )
+
+                if not value:
+                    return
+
+            await self.change_inv_new(interaction.user, new_qty, item_name, conn)
+            await self.update_bank_new(interaction.user, conn, +cost)
+            await conn.commit()
+
+            embed = membed(
+                f"{interaction.user.mention} sold **{sell_quantity:,}x {ie} {item_name}** "
+                f"and got paid {CURRENCY} **{cost:,}**."
             )
+            embed.title = f"{interaction.user.global_name}'s Sale Receipt"
+            embed.set_footer(text="Thanks for your business.")
 
-            if value:
-                await self.change_inv_new(interaction.user, new_qty, item_name, conn)
-                await self.update_bank_new(interaction.user, conn, +cost)
-                await conn.commit()
-
-                embed = membed(
-                    f"{interaction.user.mention} sold **{sell_quantity:,}x {ie} {item_name}** "
-                    f"and got paid {CURRENCY} **{cost:,}**."
-                )
-                embed.title = f"{interaction.user.global_name}'s Sale Receipt"
-                embed.set_footer(text="Thanks for your business.")
-
-                await interaction.followup.send(embed=embed)
+            await interaction.followup.send(embed=embed)
 
     @app_commands.command(name='item', description='Get more details on a specific item')
     @app_commands.describe(item_name='Select an item.')
