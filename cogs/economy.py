@@ -4092,7 +4092,7 @@ class Economy(commands.Cog):
             showcase = " ".join(showcase)
             await conn.execute(
                 """
-                UPDATE profile 
+                UPDATE bank 
                 SET showcase = $0 
                 WHERE userID = $1
                 """, showcase, interaction.user.id
@@ -4170,7 +4170,7 @@ class Economy(commands.Cog):
                 changed_showcase = " ".join(showcase)
                 await conn.execute(
                     """
-                    UPDATE profile 
+                    UPDATE bank 
                     SET showcase = $0 
                     WHERE userID = $1
                     """, changed_showcase, interaction.user.id
