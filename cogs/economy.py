@@ -375,9 +375,9 @@ async def determine_exponent(interaction: discord.Interaction, rinput: str) -> s
     try:
         if 'e' in rinput:
             before_e_str, after_e_str = map(str, rinput.split('e'))
-            before_e = int(before_e_str)
+            before_e = float(before_e_str)
             ten_exponent = min(int(after_e_str), 50)
-            actual_value = abs(before_e * (10 ** ten_exponent))
+            actual_value = abs(int(before_e * (10 ** ten_exponent)))
         else:
             rinput = rinput.translate(str.maketrans('', '', ','))
             actual_value = abs(int(rinput))
@@ -536,7 +536,7 @@ async def economy_check(interaction: discord.Interaction, original: USER_ENTRY) 
     if original == interaction.user:
         return True
     await interaction.response.send_message(
-        embed=membed(f"This menu is controlled by {original.mention}."),
+        embed=membed(f"This menu is controlled by {original}."),
         ephemeral=True,
         delete_after=5.0
     )
@@ -2490,8 +2490,8 @@ class ShowcaseDropdown(discord.ui.Select):
         self.current_item = self.values[0]  # the current item being clicked on (its ID)
         for option in self.options:
             option.default = option.value == self.current_item
-        
         self.current_item = self.current_item if self.current_item[0] != "0" else "0"
+
         current_item_index = self.showcase_list.index(self.current_item)
 
         if self.current_item[0] == "0":
@@ -2528,7 +2528,7 @@ class ShowcaseView(discord.ui.View):
         self.stop()
         for item in self.children:
             item.disabled = True
-        await interaction.response.send_message(
+        await interaction.response.edit_message(
             view=self,
             embed=membed("Your showcase could not update properly.")
         )
@@ -2554,49 +2554,52 @@ class ShowcaseView(discord.ui.View):
         except IndexError:
             self.children[1].disabled = True
 
-    async def start_updating_order(self, user: USER_ENTRY, interaction: discord.Interaction) -> None:
-        async with interaction.client.pool.acquire() as conn:
-            conn: asqlite_Connection
+    async def start_updating_order(self, interaction: discord.Interaction, conn: asqlite_Connection) -> None:
+        
+        changedShowcase = " ".join(self.showcase_list)
+        await Economy.change_bank_new(interaction.user, conn, changedShowcase, "showcase")
+        await conn.commit()
+        showcase_ui_new = []
+
+        showbed = self.message.embeds[0]
+        showbed.description = "You can reorder your showcase here.\n\n"
+
+        for i, showcase_item in enumerate(self.showcase_list, start=1):
             
-            changedShowcase = " ".join(self.showcase_list)
-            await Economy.change_bank_new(user, conn, changedShowcase, "showcase")    
-            await conn.commit()
-            showcase_ui_new = []
+            if showcase_item == "0":
+                showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
+                continue
 
-            showbed = self.message.embeds[0]
-            showbed.description = "You can reorder your showcase here.\n\n"
+            item_data = self.showcase_details[showcase_item]
+            name, emoji, _ = item_data
+            
+            showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) {emoji} {name}")
 
-            for i, showcase_item in enumerate(self.showcase_list, start=1):
-                
-                if showcase_item == "0":
-                    showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) Empty slot")
-                    continue
-
-                item_data = self.showcase_details[showcase_item]
-                name, emoji, _ = item_data
-                
-                showcase_ui_new.append(f"[**`{i}.`**](https://www.google.com) {emoji} {name}")
-
-            showbed.description += "\n".join(showcase_ui_new)
-            await interaction.response.edit_message(embed=showbed, view=self)
+        showbed.description += "\n".join(showcase_ui_new)
+        await interaction.response.edit_message(embed=showbed, view=self)
 
     @discord.ui.button(emoji="<:move_up:1213223442241818705>", row=1)
     async def move_up(self, interaction: discord.Interaction, _: discord.ui.Button):
 
-        current_item_index = self.showcase_list.index(self.select_item.current_item)
-        swap_elements(self.showcase_list, current_item_index, current_item_index-1)
-        self.do_button_checks(current_item_index-1)
+        async with interaction.client.pool.acquire() as conn:
+            conn: asqlite_Connection
+            current_item_index = self.showcase_list.index(self.select_item.current_item)
+            swap_elements(self.showcase_list, current_item_index, current_item_index-1)
+            self.do_button_checks(current_item_index-1)
 
-        await self.start_updating_order(interaction.user, interaction)
+            await self.start_updating_order(interaction, conn)
 
     @discord.ui.button(emoji="<:move_down:1213223440669085756>", row=1)
     async def move_down(self, interaction: discord.Interaction, _: discord.ui.Button):
         
-        current_item_index = self.showcase_list.index(self.select_item.current_item)
-        swap_elements(self.showcase_list, current_item_index, current_item_index+1)
-        self.do_button_checks(current_item_index+1)
+        async with interaction.client.pool.acquire() as conn:
+            conn: asqlite_Connection
 
-        await self.start_updating_order(interaction.user, interaction)
+            current_item_index = self.showcase_list.index(self.select_item.current_item)
+            swap_elements(self.showcase_list, current_item_index, current_item_index+1)
+            self.do_button_checks(current_item_index+1)
+
+            await self.start_updating_order(interaction, conn)
 
 
 class ItemQuantityModal(discord.ui.Modal):
@@ -2869,7 +2872,6 @@ class ToggleButton(discord.ui.Button):
             await conn.commit()
 
             enabled = self.setting_dropdown.current_setting_state == 1
-
             em.set_field_at(
                 0, 
                 name="Current", 
@@ -3465,8 +3467,7 @@ class Economy(commands.Cog):
         This method should always be called when updating the inventory to ensure rows are deleted when necessary.
         """
 
-        item_row = await conn.fetchone(
-            "SELECT itemID FROM shop WHERE itemName = ?", (item_name,))
+        item_row = await conn.fetchone("SELECT itemID FROM shop WHERE itemName = $0", item_name)
         
         item_id = item_row[0] if item_row else None
 
@@ -3490,6 +3491,43 @@ class Economy(commands.Cog):
             ON CONFLICT(userID, itemID) DO UPDATE SET qty = qty + ? 
             RETURNING qty
             """, (user.id, item_id, amount, amount)
+        )
+
+        return val
+
+    @staticmethod
+    async def update_inv_by_id(
+        user: USER_ENTRY, 
+        amount: Union[float, int], 
+        item_id: int, 
+        conn: asqlite_Connection
+    ) -> Optional[Any]:
+        """
+        Modify a user's inventory by the item ID. 
+        
+        Shares the same logic as the `update_inv_new` method.
+        """
+
+        check_result = await conn.fetchone(
+            """
+            SELECT qty + $0 <= 0
+            FROM inventory
+            WHERE userID = $1 AND itemID = $2
+            """, amount, user.id, item_id
+        )
+        
+        if check_result and check_result[0]:
+            # If the resulting quantity would be <= 0, delete the row
+            await conn.execute("DELETE FROM inventory WHERE userID = $0 AND itemID = $1", user.id, item_id)
+            return (0,)
+        
+        val = await conn.fetchone(
+            """
+            INSERT INTO inventory (userID, itemID, qty)
+            VALUES ($0, $1, $2)
+            ON CONFLICT(userID, itemID) DO UPDATE SET qty = qty + $2
+            RETURNING qty
+            """, user.id, item_id, amount
         )
 
         return val
@@ -3532,30 +3570,6 @@ class Economy(commands.Cog):
         await conn_input.execute(f"DELETE FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
         await conn_input.execute(f"INSERT INTO `{INV_TABLE_NAME}` (userID) VALUES(?)", (user.id,))        
         await conn_input.execute(f"DELETE FROM `{SLAY_TABLE_NAME}` WHERE userID = ?", (user.id,))
-
-
-    @staticmethod
-    async def change_inv_new(
-        user: USER_ENTRY, 
-        amount: Union[float, int, None], 
-        item_name: str, 
-        conn: asqlite_Connection
-        ) -> Optional[Any]:
-        """Change a specific attribute in the user's inventory data and return the updated value."""
-        # Retrieve the item ID based on the item name
-        item_row = await conn.fetchone("SELECT itemID FROM shop WHERE itemName = $0", item_name)
-        
-        item_id = item_row[0] if item_row else None  # Extract the item ID from the result if found
-
-        # Update or insert the item into the user's inventory
-        await conn.execute(
-            """
-            INSERT INTO inventory (userID, itemID, qty)
-            VALUES ($0, $1, $2)
-            ON CONFLICT(userID, itemID) DO UPDATE SET qty = $2
-            """, user.id, item_id, amount
-        )
-
 
     # ------------ JOB FUNCS ----------------
 
@@ -3691,13 +3705,13 @@ class Economy(commands.Cog):
     ) -> discord.Embed:
 
         data = await conn.fetchone(
-        """
-        SELECT 
-            COALESCE((SELECT settings.value FROM settings WHERE settings.userID = $0 AND setting = $1), 0) AS settingUser, 
-            settings_descriptions.description 
-        FROM settings_descriptions 
-        WHERE setting = $1
-        """, interaction.user.id, view.setting_dropdown.current_setting
+            """
+            SELECT 
+                COALESCE((SELECT settings.value FROM settings WHERE settings.userID = $0 AND setting = $1), 0) AS settingUser, 
+                settings_descriptions.description 
+            FROM settings_descriptions 
+            WHERE setting = $1
+            """, interaction.user.id, view.setting_dropdown.current_setting
         )
         if data is None:
             view.clear_items()
@@ -3857,9 +3871,6 @@ class Economy(commands.Cog):
     @app_commands.describe(setting="The specific setting you want to adjust. Defaults to view.")
     async def view_user_settings(self, interaction: discord.Interaction, setting: Optional[str]) -> None:
         """View or adjust user-specific settings."""
-        if interaction.user.id not in self.bot.owner_ids:
-            return await interaction.response.send_message(embed=membed("This command is in development."))
-        
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
             query = "SELECT setting, brief FROM settings_descriptions"
@@ -3938,7 +3949,7 @@ class Economy(commands.Cog):
                 if setting_enabled:
                     value = await process_confirmation(
                         interaction=interaction, 
-                        prompt=f"Are you sure you want to share {CURRENCY} **{share_amount:,}** with {recipient.mention}?"
+                        prompt=f"Are you sure you want to share {CURRENCY} **{share_amount:,}** with {recipient}?"
                     )
                     if not value:
                         return
@@ -3952,7 +3963,7 @@ class Economy(commands.Cog):
 
                 return await respond(
                     interaction=interaction,
-                    embed=membed(f"Shared {CURRENCY} **{share_amount:,}** with {recipient.mention}!")
+                    embed=membed(f"Shared {CURRENCY} **{share_amount:,}** with {recipient}!")
                 )
 
     @share.command(name='items', description='Share items with another user', extras={"exp_gained": 5})
@@ -4002,20 +4013,29 @@ class Economy(commands.Cog):
                 if attrs[-1]:
                     value = await process_confirmation(
                         interaction=interaction, 
-                        prompt=f"Are you sure you want to share **{quantity}x {ie} {item_name}** with {recipient.mention}?"
+                        prompt=f"Are you sure you want to share **{quantity}x {ie} {item_name}** with {recipient}?"
                     )
                     if not value:
                         return
 
-                await self.update_inv_new(recipient, +quantity, item_name, conn)
-                await self.update_inv_new(primm, -quantity, item_name, conn)
+                await self.update_inv_by_id(primm, -quantity, item_id, conn)
+                
+                await conn.execute(
+                    """
+                    INSERT INTO inventory (userID, itemID, qty) 
+                    VALUES ($0, $1, $2) 
+                    ON CONFLICT(userID, itemID) DO 
+                        UPDATE SET qty = qty + $2
+                    """, recipient.id, item_id, quantity
+                )
+
                 await conn.commit()
 
                 await respond(
                     interaction,
                     embed=discord.Embed(
                         colour=RARITY_COLOUR.get(attrs[-1], 0x2B2D31),
-                        description=f"Shared **{quantity}x {ie} {item_name}** with {recipient.mention}!"
+                        description=f"Shared **{quantity}x {ie} {item_name}** with {recipient}!"
                     )
                 )
 
@@ -4030,6 +4050,56 @@ class Economy(commands.Cog):
             await conn.commit()
 
             return await ctx.send(embed=membed(f"Success! You just got **{rQty}x** {emoji} {item}!"))
+
+    @staticmethod
+    async def update_showcase_order(interaction: discord.Interaction, conn: asqlite_Connection, new_showcase_db: str, id_details: dict) -> None:
+        """
+        The showcase you send should be the latest version.
+        
+        Validate whether the previous stored showcase is the same as the new one.
+        
+        If not, call this function to return an updating dictionary.
+        
+        Update the order of the showcase.
+        
+        The key of the dictionary contains the item ID and the value containing the quantity, emoji, and item name.
+        """
+
+        showcase: list = new_showcase_db.split(" ")
+
+        showdata = await conn.fetchmany(
+            """
+            SELECT inventory.qty, shop.itemID, shop.itemName, shop.emoji
+            FROM shop
+            LEFT JOIN inventory ON shop.itemID = inventory.itemID
+            WHERE shop.itemID = $0 AND inventory.userID = $1
+            """, showcase, interaction.user.id, size=len(showcase)
+        )
+        
+        changes_were_made = False
+        
+        for item in showdata:
+            if item is None:
+                continue
+
+            if item[0] is None:
+                changes_were_made = True
+                id_details.pop(item[1], None)
+                showcase[showcase.index(f"{item[1]}")] = "0"
+            id_details.update({showdata[1]: (showcase[0], showcase[-1], showcase[-2])})
+
+        if changes_were_made:
+            showcase = " ".join(showcase)
+            await conn.execute(
+                """
+                UPDATE profile 
+                SET showcase = $0 
+                WHERE userID = $1
+                """, showcase, interaction.user.id
+            )
+            await conn.commit()
+
+        return id_details
 
     showcase = app_commands.Group(
         name="showcase", 
@@ -4046,9 +4116,10 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            showcase: str = await conn.fetchone("SELECT showcase FROM profile WHERE userID = $0", interaction.user.id)
+            showcase = await conn.fetchone("SELECT showcase FROM bank WHERE userID = $0", interaction.user.id)
             if showcase is None:
                 return await interaction.response.send_message(embed=self.not_registered)
+            showcase, = showcase
             showcase: list = showcase.split(" ")
 
             id_details = dict()
@@ -4126,48 +4197,58 @@ class Economy(commands.Cog):
             
             item_id, item_name, ie = item_details
 
-            data = await conn.fetchone(
-                """
-                SELECT inventory.qty, bank.showcase
-                FROM inventory
-                INNER JOIN bank ON inventory.userID = bank.userID
-                WHERE inventory.itemID = $0 AND inventory.userID = $1
-                """, item_id, interaction.user.id
-            )
-            
-            if data is None:
-                return await respond(
-                    interaction=interaction, 
-                    embed=membed(f"You don't have a single {ie} **{item_name}**.")
+            async with self.bot.pool.acquire() as conn:
+                conn: asqlite_Connection
+
+                item_details = await self.partial_match_for(interaction, item_name, conn)
+
+                if item_details is None:
+                    return
+                
+                item_id, item_name, ie = item_details
+
+                data = await conn.fetchone(
+                    """
+                    SELECT inventory.qty, bank.showcase
+                    FROM inventory
+                    INNER JOIN bank ON inventory.userID = bank.userID
+                    WHERE inventory.itemID = $0 AND inventory.userID = $1
+                    """, item_id, interaction.user.id
                 )
+                
+                if data is None:
+                    return await respond(
+                        interaction=interaction, 
+                        embed=membed(f"You don't have a single {ie} **{item_name}**.")
+                    )
 
-            showcase: str = data[-1]
-            showcase: list = showcase.split(" ")
+                showcase: str = data[-1]
+                showcase: list = showcase.split(" ")
 
-            if not showcase.count("0"):
+                if not showcase.count("0"):
+                    return await respond(
+                        interaction=interaction,
+                        embed=membed("You can only showcase up to `6` items.")
+                    )
+                
+                item_id = str(item_id)
+                if item_id in showcase:
+                    return await respond(
+                        interaction=interaction,
+                        embed=membed(f"You already have a {ie} **{item_name}** in your showcase.")
+                    )
+                
+                placeholder = showcase.index("0")
+                showcase[placeholder] = item_id
+
+                showcase = " ".join(showcase)
+                await self.change_bank_new(interaction.user, conn, showcase, "showcase")
+                await conn.commit()
+
                 return await respond(
                     interaction=interaction,
-                    embed=membed("You can only showcase up to `6` items.")
+                    embed=membed(f"Added {ie} **{item_name}** to your showcase!")
                 )
-            
-            item_id = str(item_id)
-            if item_id in showcase:
-                return await respond(
-                    interaction=interaction,
-                    embed=membed(f"You already have a {ie} **{item_name}** in your showcase.")
-                )
-            
-            placeholder = showcase.index("0")
-            showcase[placeholder] = item_id
-
-            showcase = " ".join(showcase)
-            await self.change_bank_new(interaction.user, conn, showcase, "showcase")
-            await conn.commit()
-
-            return await respond(
-                interaction=interaction,
-                embed=membed(f"Added {ie} **{item_name}** to your showcase!")
-            )
 
     @showcase.command(name="remove", description="Remove an item from your showcase", extras={"exp_gained": 1})
     @app_commands.checks.cooldown(1, 10)
@@ -4327,14 +4408,12 @@ class Economy(commands.Cog):
                     interaction=interaction, 
                     embed=membed(f"You don't own a single {ie} **{item_name}**.")
                 )
-            
+
             cost, qty = item_attrs
-            
-            new_qty = qty - sell_quantity
-            if new_qty < 0:
+            if qty < sell_quantity:
                 return await respond(
                     interaction=interaction, 
-                    embed=membed(f"You're **{abs(new_qty)}x** short on selling {ie} **{sell_quantity:,}x** {item_name}, so uh no.")
+                    embed=membed(f"You don't have {ie} **{sell_quantity:,}x** {item_name}, so uh no.")
                 )
 
             cost = floor((cost * sell_quantity) / 4)
@@ -4350,18 +4429,18 @@ class Economy(commands.Cog):
                 if not value:
                     return
 
-            await self.change_inv_new(interaction.user, new_qty, item_name, conn)
-            await self.update_bank_new(interaction.user, conn, +cost)
-            await conn.commit()
-
             embed = membed(
                 f"{interaction.user.mention} sold **{sell_quantity:,}x {ie} {item_name}** "
                 f"and got paid {CURRENCY} **{cost:,}**."
             )
+
             embed.title = f"{interaction.user.global_name}'s Sale Receipt"
             embed.set_footer(text="Thanks for your business.")
-
-            await interaction.followup.send(embed=embed)
+            await respond(interaction, embed=embed)
+            
+            await self.update_inv_new(interaction.user, -qty, item_name, conn)
+            await self.update_bank_new(interaction.user, conn, +cost)
+            await conn.commit()
 
     @app_commands.command(name='item', description='Get more details on a specific item')
     @app_commands.describe(item_name='Select an item.')
@@ -4423,7 +4502,7 @@ class Economy(commands.Cog):
             net = await self.calculate_inventory_value(interaction.user, conn)
             if their_count:
                 amt = ((their_count*data[0])/net)*100
-                dynamic_text += f" ({amt:.1f}% of your net worth)"
+                dynamic_text += f" ({amt:.1f}% of your net worth)" if amt >= 0.1 else ""
 
             em = discord.Embed(
                 title=item_name,
@@ -5174,7 +5253,7 @@ class Economy(commands.Cog):
 
                     piee.set_image(url=pie.to_url())
                 except ZeroDivisionError:
-                    piee.description = f"{user.mention} has not got enough data yet to form a pie chart."
+                    piee.description = f"{user} has not got enough data yet to form a pie chart."
                 
                 await interaction.response.send_message(embeds=[stats, piee], ephemeral=ephemerality)
 
@@ -5647,9 +5726,9 @@ class Economy(commands.Cog):
                     await self.open_cooldowns(user, conn)
                     await conn.commit()
 
-                    return await interaction.response.send_message(embed=membed(f"Force registered {user.mention}."))
+                    return await interaction.response.send_message(embed=membed(f"Force registered {user}."))
                 
-                await interaction.response.send_message(embed=membed(f"{user.mention} isn't registered."))
+                await interaction.response.send_message(embed=membed(f"{user} isn't registered."))
 
             elif not_registered_check and (user.id == interaction.user.id):
 
@@ -5660,7 +5739,7 @@ class Economy(commands.Cog):
 
                 norer = membed(
                     f"# <:successful:1183089889269530764> You are now registered.\n"
-                    f"Your records have been added in our database, {user.mention}.\n"
+                    f"Your records have been added in our database, {user}.\n"
                     f"From now on, you may use any of the economy commands.\n"
                     f"Here are some of our top used commands:\n"
                     f"### 1. Start earning quick robux:\n"
@@ -5778,11 +5857,8 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             if await self.can_call_out(member, conn):
-                await interaction.response.send_message(
-                    embed=membed(f"Could not find {str(member)} in the database.")
-                )
+                await interaction.response.send_message(embed=membed(f"{member} isn't registered."))
             else:
-
                 active_sessions.update({interaction.user.id: 1})
 
                 view = ConfirmResetData(
@@ -6025,7 +6101,7 @@ class Economy(commands.Cog):
 
                 if not (await self.can_call_out_either(interaction.user, other, conn)):
                     return await interaction.response.send_message(
-                        embed=membed(f'Either you or {other.mention} are not registered.')
+                        embed=membed(f'Either you or {other} are not registered.')
                     )
 
                 prim_d = await conn.fetchone(
@@ -6055,12 +6131,12 @@ class Economy(commands.Cog):
                 
                 if host_d[-1]:
                     return await interaction.response.send_message(
-                        embed=membed(f"{other.mention} is in passive mode, you can't rob them!")
+                        embed=membed(f"{other} is in passive mode, you can't rob them!")
                     )
 
                 if host_d[0] < 1_000_000:
                     return await interaction.response.send_message(
-                        embed=membed(f"{other.mention} doesn't even have {CURRENCY} **1,000,000**, not worth it.")
+                        embed=membed(f"{other} doesn't even have {CURRENCY} **1,000,000**, not worth it.")
                     )
                 
                 if prim_d[0] < 10_000_000:
@@ -6085,7 +6161,7 @@ class Economy(commands.Cog):
                         fine = randint(1, prim_d[0])
                         embed.description = (
                             f'You were caught lol {emote}\n'
-                            f'You paid {other.mention} {CURRENCY} **{fine:,}**.'
+                            f'You paid {other} {CURRENCY} **{fine:,}**.'
                         )
 
                         b = prim_d[-1]
@@ -6093,12 +6169,19 @@ class Economy(commands.Cog):
                             fine += b
                             embed.description += (
                                 "\n\n**Bounty Status:**\n"
-                                f"{other.mention} was also given your bounty of **{CURRENCY} {b:,}**."
+                                f"{other} was also given your bounty of **{CURRENCY} {b:,}**."
                             )
 
                             await self.update_bank_new(other, conn, +fine)
-                            query = "UPDATE `bank` SET bounty = 0, wallet = wallet - $0 WHERE userID = $1"
-                            await conn.execute(query, fine, primary_id)
+                            await conn.execute(
+                                """
+                                UPDATE `bank` 
+                                SET 
+                                    bounty = 0, 
+                                    wallet = wallet - $0 
+                                WHERE userID = $1
+                                """, fine, primary_id
+                            )
                             return await interaction.response.send_message(embed=embed)
 
                         await self.update_wallet_many(
