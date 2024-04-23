@@ -4051,56 +4051,6 @@ class Economy(commands.Cog):
 
             return await ctx.send(embed=membed(f"Success! You just got **{rQty}x** {emoji} {item}!"))
 
-    @staticmethod
-    async def update_showcase_order(interaction: discord.Interaction, conn: asqlite_Connection, new_showcase_db: str, id_details: dict) -> None:
-        """
-        The showcase you send should be the latest version.
-        
-        Validate whether the previous stored showcase is the same as the new one.
-        
-        If not, call this function to return an updating dictionary.
-        
-        Update the order of the showcase.
-        
-        The key of the dictionary contains the item ID and the value containing the quantity, emoji, and item name.
-        """
-
-        showcase: list = new_showcase_db.split(" ")
-
-        showdata = await conn.fetchmany(
-            """
-            SELECT inventory.qty, shop.itemID, shop.itemName, shop.emoji
-            FROM shop
-            LEFT JOIN inventory ON shop.itemID = inventory.itemID
-            WHERE shop.itemID = $0 AND inventory.userID = $1
-            """, showcase, interaction.user.id, size=len(showcase)
-        )
-        
-        changes_were_made = False
-        
-        for item in showdata:
-            if item is None:
-                continue
-
-            if item[0] is None:
-                changes_were_made = True
-                id_details.pop(item[1], None)
-                showcase[showcase.index(f"{item[1]}")] = "0"
-            id_details.update({showdata[1]: (showcase[0], showcase[-1], showcase[-2])})
-
-        if changes_were_made:
-            showcase = " ".join(showcase)
-            await conn.execute(
-                """
-                UPDATE bank 
-                SET showcase = $0 
-                WHERE userID = $1
-                """, showcase, interaction.user.id
-            )
-            await conn.commit()
-
-        return id_details
-
     showcase = app_commands.Group(
         name="showcase", 
         description="Manage your showcased items.", 
