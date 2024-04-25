@@ -124,13 +124,10 @@ LEVEL_UP_PROMPTS = (
     "Outstanding",
     "You're doing great"
 )
-ARROW = "<:arrowe:1180428600625877054>"
 CURRENCY = '\U000023e3'
 PREMIUM_CURRENCY = '<:robuxpremium:1174417815327998012>'
-STICKY_MESSAGE = "> \U0001f4cc This command is undergoing changes!\n\n"
-DOWNM = membed("Hang tight, maintenance is in progress!")
+DOWNM = membed("This is a work in progress!")
 NOT_REGISTERED = membed('Could not find an account associated with the user provided.')
-active_sessions = dict()
 SLOTS = ('🔥', '😳', '🌟', '💔', '🖕', '🤡', '🍕', '🍆', '🍑')
 BONUS_MULTIPLIERS = {
     "🍕🍕": 55,
@@ -729,7 +726,6 @@ class ConfirmResetData(discord.ui.View):
         return await economy_check(interaction, self.interaction.user)
     
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
-        del active_sessions[self.interaction.user.id]
         for item in self.children:
             item.disabled = True
         try:
@@ -772,7 +768,6 @@ class ConfirmResetData(discord.ui.View):
                 print_exception(type(e), e, e.__traceback__)
 
                 await tr.rollback()
-                del active_sessions[interaction.user.id]
                 
                 return await interaction.followup.send(
                     embed=membed(
@@ -782,7 +777,6 @@ class ConfirmResetData(discord.ui.View):
                 )
             else:
                 await tr.commit()
-                del active_sessions[interaction.user.id]
 
                 whose = "your" if interaction.user.id == self.removing_user.id else f"{self.removing_user}'s"
                 end_note = " Thanks for using the bot." if whose == "your" else ""
@@ -793,7 +787,6 @@ class ConfirmResetData(discord.ui.View):
 
     @discord.ui.button(label='CANCEL', style=discord.ButtonStyle.primary)
     async def cancel_button_reset(self, interaction: discord.Interaction, _: discord.ui.Button):
-        del active_sessions[interaction.user.id]
 
         for item in self.children:
             item.disabled = True
@@ -816,7 +809,6 @@ class Confirm(discord.ui.View):
 
     @discord.ui.button(label='Cancel', style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        del active_sessions[interaction.user.id]
         self.children[1].style = discord.ButtonStyle.secondary
         button.style = discord.ButtonStyle.success
         
@@ -830,7 +822,6 @@ class Confirm(discord.ui.View):
 
     @discord.ui.button(label='Confirm', style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        del active_sessions[interaction.user.id]
         self.children[0].style = discord.ButtonStyle.secondary
         button.style = discord.ButtonStyle.success
 
@@ -843,7 +834,7 @@ class Confirm(discord.ui.View):
         self.stop()
 
 
-async def respond(interaction: discord.Interaction, **kwargs) -> discord.WebhookMessage | None:
+async def respond(interaction: discord.Interaction, **kwargs) -> Union[None, discord.WebhookMessage]:
     """Determine if we should respond to the interaction or send followups"""
     if interaction.response.is_done():
         return await interaction.followup.send(**kwargs)
@@ -856,14 +847,8 @@ async def process_confirmation(interaction: discord.Interaction, prompt: str) ->
     
     The actual action is done in the command itself.
 
-    You do not need to check if another confirmation is active, as this function does that for you.
-
     This returns a boolean indicating whether the user confirmed the action or not, or None if the user timed out.
     """
-
-    if active_sessions.get(interaction.user.id):
-        return await respond(interaction, embed=WARN_FOR_CONCURRENCY)
-    active_sessions.update({interaction.user.id: 1})
     
     view = Confirm(interaction)
     confirm = discord.Embed(
@@ -881,7 +866,6 @@ async def process_confirmation(interaction: discord.Interaction, prompt: str) ->
         for item in view.children:
             item.disabled = True
 
-        del active_sessions[interaction.user.id]
         embed.title = "Timed Out"
         embed.description = f"~~{embed.description}~~"
         embed.colour = discord.Colour.brand_red()
@@ -889,7 +873,6 @@ async def process_confirmation(interaction: discord.Interaction, prompt: str) ->
         return view.value
     
     if view.value:
-
         embed.title = "Action Confirmed"
         embed.colour = discord.Colour.brand_green()
         await msg.edit(embed=embed, view=view)
@@ -1994,7 +1977,6 @@ class Leaderboard(discord.ui.View):
         self.add_item(DropdownLB(bot, their_choice))
 
     async def on_timeout(self) -> None:
-        del active_sessions[self.channel_id]
         for item in self.children:
             item.disabled = True
         try:
@@ -2692,8 +2674,6 @@ class ShopItem(discord.ui.Button):
         super().__init__(style=discord.ButtonStyle.primary, emoji=self.ie, label=item_name, **kwargs)
 
     async def callback(self, interaction: discord.Interaction):
-        if active_sessions.get(interaction.user.id):
-            return await interaction.response.send_message(embed=WARN_FOR_CONCURRENCY)
         
         await interaction.response.send_modal(
             ItemQuantityModal(
@@ -2971,7 +2951,6 @@ class Economy(commands.Cog):
             )
 
             lb.set_footer(text="Ranked globally")
-            not_database = []
 
             if chosen_choice == 'Bank + Wallet':
 
@@ -3052,15 +3031,14 @@ class Economy(commands.Cog):
                     """
                 )
 
-            for i, member in enumerate(data):
-                member_name = self.bot.get_user(member[0])
-                their_badge = UNIQUE_BADGES.get(member_name.id, "")
-                msg1 = f"{i+1}. {member_name.name} {their_badge} \U00003022 `{member[1]:,}`"
-                not_database.append(msg1)
-            
+            top_rankings = [
+                f"{i}. {member_name.name} {UNIQUE_BADGES.get(member_name.id, '')} \U00003022 `{member[1]:,}`" 
+                for i, member in enumerate(data, start=1) if (member_name := self.bot.get_user(member[0]))
+            ]
+
             lb.description = (
-                f"Displaying the top [`{len(data)}`](https://www.quora.com/) users.\n\n"
-                f"{'\n'.join(not_database) or 'No data.'}")
+                f"Displaying the top [`{len(data)}`](https://www.dis.gd/support) users.\n\n"
+                f"{'\n'.join(top_rankings) or 'No data.'}")
             return lb
 
     async def servant_preset(self, owner_id: int, dtls) -> discord.Embed:
@@ -3822,7 +3800,7 @@ class Economy(commands.Cog):
         user: Optional[USER_ENTRY], 
         multiplier: Optional[MULTIPLIER_TYPES] = "robux"
     ) -> None:
-        await interaction.response.send_message(embed=membed("This is a work in progress!"))
+        await interaction.response.send_message(embed=DOWNM)
 
     share = app_commands.Group(
         name='share', 
@@ -3872,13 +3850,14 @@ class Economy(commands.Cog):
                 
                 if share_amount > wallet_amt_host:
                     return await interaction.response.send_message(
-                        embed=membed("You don't have that much money to share."))
+                        embed=membed("You don't have that much money to share.")
+                    )
                 
                 setting_enabled = await Economy.is_setting_enabled(conn, user_id=interaction.user.id, setting="share_robux_confirmations")
                 if setting_enabled:
                     value = await process_confirmation(
                         interaction=interaction, 
-                        prompt=f"Are you sure you want to share {CURRENCY} **{share_amount:,}** with {recipient}?"
+                        prompt=f"Are you sure you want to share {CURRENCY} **{share_amount:,}** with {recipient.mention}?"
                     )
                     if not value:
                         return
@@ -3892,7 +3871,7 @@ class Economy(commands.Cog):
 
                 return await respond(
                     interaction=interaction,
-                    embed=membed(f"Shared {CURRENCY} **{share_amount:,}** with {recipient}!")
+                    embed=membed(f"Shared {CURRENCY} **{share_amount:,}** with {recipient.mention}!")
                 )
 
     @share.command(name='items', description='Share items with another user', extras={"exp_gained": 5})
@@ -3942,7 +3921,7 @@ class Economy(commands.Cog):
                 if attrs[-1]:
                     value = await process_confirmation(
                         interaction=interaction, 
-                        prompt=f"Are you sure you want to share **{quantity}x {ie} {item_name}** with {recipient}?"
+                        prompt=f"Are you sure you want to share **{quantity}x {ie} {item_name}** with {recipient.mention}?"
                     )
                     if not value:
                         return
@@ -3964,7 +3943,7 @@ class Economy(commands.Cog):
                     interaction,
                     embed=discord.Embed(
                         colour=RARITY_COLOUR.get(attrs[-1], 0x2B2D31),
-                        description=f"Shared **{quantity}x {ie} {item_name}** with {recipient}!"
+                        description=f"Shared **{quantity}x {ie} {item_name}** with {recipient.mention}!"
                     )
                 )
 
@@ -4937,7 +4916,7 @@ class Economy(commands.Cog):
 
                     piee.set_image(url=pie.to_url())
                 except ZeroDivisionError:
-                    piee.description = f"{user} has not got enough data yet to form a pie chart."
+                    piee.description = f"{user.mention} has not got enough data yet to form a pie chart."
                 
                 await interaction.response.send_message(embeds=[stats, piee], ephemeral=ephemerality)
 
@@ -5156,7 +5135,7 @@ class Economy(commands.Cog):
                 if member.id == interaction.user.id:
                     em.description = "You don't have any items yet."
                 else:
-                    em.description = f"{member.name} has nothing for you to see."
+                    em.description = f"{member.mention} has nothing for you to see."
                 return await interaction.response.send_message(embed=em)
 
             em.set_author(
@@ -5430,8 +5409,8 @@ class Economy(commands.Cog):
                     await self.open_cooldowns(user, conn)
                     await conn.commit()
 
-                    return await interaction.response.send_message(embed=membed(f"Force registered {user}."))
-                await interaction.response.send_message(embed=membed(f"{user} isn't registered."))
+                    return await interaction.response.send_message(embed=membed(f"Force registered {user.mention}."))
+                await interaction.response.send_message(embed=membed(f"{user.mention} isn't registered."))
 
             elif not_registered_check and (user.id == interaction.user.id):
 
@@ -5441,24 +5420,24 @@ class Economy(commands.Cog):
                 await conn.commit()
 
                 norer = membed(
-                    f"# <:successful:1183089889269530764> You are now registered.\n"
-                    f"Your records have been added in our database, {user}.\n"
-                    f"From now on, you may use any of the economy commands.\n"
-                    f"Here are some of our top used commands:\n"
-                    f"### 1. Start earning quick robux:\n"
-                    f" - </bet:1172898644622585883>, "
-                    f"</coinflip:1172898644622585882> </slots:1172898644287029332>, "
-                    f"</step:1172898643884380166>, </highlow:1172898644287029331>\n"
-                    f"### 2. Seek out employment:\n "
-                    f" - </getjob:1172898643884380168>, </work:1172898644287029336>\n"
-                    f"### 3. Customize your look:\n"
-                    f" - </editprofile bio:1172898645532749948>, "
-                    f"</editprofile avatar:1172898645532749948>\n"
-                    f"### 4. Manage your Account:\n"
-                    f" - </balance:1172898644287029337>, "
-                    f"</withdraw:1172898644622585876>, </deposit:1172898644622585877>, "
-                    f"</inventory:1172898644287029333>, </shop view:1172898645532749946>, "
-                    f"</buy:1172898644287029334>"
+                    "# <:successful:1183089889269530764> You are now registered.\n"
+                    "Your records have been added in our database.\n"
+                    "From now on, you may use any of the economy commands.\n"
+                    "Here are some of our top used commands:\n"
+                    "### 1. Start earning quick robux:\n"
+                    " - </bet:1172898644622585883>, "
+                    "</coinflip:1172898644622585882> </slots:1172898644287029332>, "
+                    "</step:1172898643884380166>, </highlow:1172898644287029331>\n"
+                    "### 2. Seek out employment:\n "
+                    " - </getjob:1172898643884380168>, </work:1172898644287029336>\n"
+                    "### 3. Customize your look:\n"
+                    " - </editprofile bio:1172898645532749948>, "
+                    "</editprofile avatar:1172898645532749948>\n"
+                    "### 4. Manage your Account:\n"
+                    " - </balance:1172898644287029337>, "
+                    "</withdraw:1172898644622585876>, </deposit:1172898644622585877>, "
+                    "</inventory:1172898644287029333>, </shop view:1172898645532749946>, "
+                    "</buy:1172898644287029334>"
                 )
                 
                 return await interaction.response.send_message(embed=norer)
@@ -5545,10 +5524,7 @@ class Economy(commands.Cog):
     @app_commands.describe(member='The player to remove all of the data of. Defaults to the user calling the command.')
     async def discontinue_bot(self, interaction: discord.Interaction, member: Optional[USER_ENTRY]) -> None:
         """Opt out of the virtual economy and delete all of the user data associated."""
-
-        if active_sessions.get(interaction.user.id):
-            return await interaction.response.send_message(embed=membed(WARN_FOR_CONCURRENCY))
-
+        
         member = member or interaction.user
 
         if member.id != interaction.user.id:
@@ -5561,26 +5537,24 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             if await self.can_call_out(member, conn):
-                await interaction.response.send_message(embed=membed(f"{member} isn't registered."))
-            else:
-                active_sessions.update({interaction.user.id: 1})
+                return await interaction.response.send_message(embed=membed(f"{member.mention} isn't registered."))
 
-                view = ConfirmResetData(
-                    interaction=interaction, 
-                    bot=self.bot, 
-                    user_to_remove=member
-                )
+            view = ConfirmResetData(
+                interaction=interaction, 
+                bot=self.bot, 
+                user_to_remove=member
+            )
 
-                link = "https://www.youtube.com/shorts/vTrH4paRl90"            
-                await interaction.response.send_message(
-                    view=view,
-                    embed=membed(
-                        f"This command will reset **[EVERYTHING]({link})**.\n"
-                        "Are you **SURE** you want to do this?\n\n"
-                        "If you do, click `RESET MY DATA` **3** times."
-                    )
+            link = "https://www.youtube.com/shorts/vTrH4paRl90"            
+            await interaction.response.send_message(
+                view=view,
+                embed=membed(
+                    f"This command will reset **[EVERYTHING]({link})**.\n"
+                    "Are you **SURE** you want to do this?\n\n"
+                    "If you do, click `RESET MY DATA` **3** times."
                 )
-                view.message = await interaction.original_response()
+            )
+            view.message = await interaction.original_response()
 
     @app_commands.command(name="withdraw", description="Withdraw robux from your bank account")
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -5772,12 +5746,6 @@ class Economy(commands.Cog):
     ) -> None:
         """View the leaderboard and filter the results based on different stats inputted."""
 
-        if active_sessions.get(interaction.channel.id):
-            return await interaction.response.send_message(
-                embed=membed("The command is still active in this channel.")
-            )
-        active_sessions.update({interaction.channel.id: 1})
-
         lb_view = Leaderboard(
             bot=self.bot, 
             their_choice=stat, 
@@ -5811,7 +5779,7 @@ class Economy(commands.Cog):
                 conn: asqlite_Connection
 
                 if not (await self.can_call_out_either(interaction.user, other, conn)):
-                    embed.description = f'Either you or {other} are not registered.'
+                    embed.description = f'Either you or {other.mention} are not registered.'
                     return await interaction.response.send_message(embed=embed)
 
                 prim_d = await conn.fetchone(
@@ -5839,11 +5807,11 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(embed=embed)
                 
                 if host_d[-1]:
-                    embed.description = f"{other} is in passive mode, you can't rob them!"
+                    embed.description = f"{other.mention} is in passive mode, you can't rob them!"
                     return await interaction.response.send_message(embed=embed)
 
                 if host_d[0] < 1_000_000:
-                    embed.description = f"{other} doesn't even have {CURRENCY} **1,000,000**, not worth it."
+                    embed.description = f"{other.mention} doesn't even have {CURRENCY} **1,000,000**, not worth it."
                     return await interaction.response.send_message(embed=embed)
                 
                 if prim_d[0] < 10_000_000:
@@ -5865,7 +5833,7 @@ class Economy(commands.Cog):
                         fine = randint(1, prim_d[0])
                         embed.description = (
                             f'You were caught lol {emote}\n'
-                            f'You paid {other} {CURRENCY} **{fine:,}**.'
+                            f'You paid {other.mention} {CURRENCY} **{fine:,}**.'
                         )
 
                         b = prim_d[-1]
@@ -5873,7 +5841,7 @@ class Economy(commands.Cog):
                             fine += b
                             embed.description += (
                                 "\n\n**Bounty Status:**\n"
-                                f"{other} was also given your bounty of **{CURRENCY} {b:,}**."
+                                f"{other.mention} was also given your bounty of **{CURRENCY} {b:,}**."
                             )
 
                             await self.update_bank_new(other, conn, +fine)
