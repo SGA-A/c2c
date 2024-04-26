@@ -7,7 +7,7 @@ from waifuim import WaifuAioClient
 from psutil import Process, cpu_count
 from PyDictionary import PyDictionary
 from waifuim.exceptions import APIException
-from typing import Literal, Union, Optional
+from typing import Literal, Union, Optional, List
 from re import compile as compile_it, search
 from xml.etree.ElementTree import fromstring
 
@@ -43,8 +43,8 @@ def owners_nolimit(interaction: discord.Interaction) -> Optional[app_commands.Co
     return app_commands.Cooldown(1, 7)
 
 
-def extract_attributes(post_element, mode: Literal["image", "tag"]):
-    if mode == "image":
+def extract_attributes(post_element, mode: Literal["post", "tag"]):
+    if mode == "post":
         author = post_element.get("author")
         created_at = post_element.get("created_at")
         file_url = post_element.get("file_url")
@@ -85,13 +85,9 @@ def format_relative(dt: datetime.datetime) -> str:
     return format_dt(dt, 'R')
 
 
-def parse_xml(xml_content, mode: Literal["image", "tag"]):
-    if mode == "image":
-        root = fromstring(xml_content)
-        result = root.findall(".//post")
-    else:
-        root = fromstring(xml_content)
-        result = root.findall(".//tag")
+def parse_xml(xml_content, mode: Literal["post", "tag"]):
+    root = fromstring(xml_content)
+    result = root.findall(f".//{mode}")
 
     extracted_data = [extract_attributes(res, mode=mode) for res in result]
     return extracted_data
@@ -233,27 +229,18 @@ class Utility(commands.Cog):
 
     async def retrieve_via_kona(
             self, 
-            tag_pattern: Optional[str], 
-            tags: Optional[str], 
-            limit=5, 
-            page=1, 
-            mode=Literal["image", "tag"]
-        ):
+            **params
+        ) -> Union[int, str]:
         """Returns a list of dictionaries for you to iterate through and fetch their attributes"""
-        if mode == "image":
-            base_url = "https://konachan.net/post.xml"
-            params = {"limit": limit, "page": page, "tags": tags}
-        else:
-            base_url = "https://konachan.net/tag.xml"
-            params = {"name": tag_pattern, "page": page, "order": "count", "limit": 20}
+        mode = params.pop("mode")
+        base_url = f"https://konachan.net/{mode}.xml"
 
         async with self.bot.session.get(base_url, params=params) as response:
-            if response.status == 200:
-                posts_xml = await response.text()
-                data = parse_xml(posts_xml, mode=mode)
-            else:
-                data = response.status
-        return data
+            if response.status != 200:
+                return response.status
+            
+            posts_xml = await response.text()
+            return parse_xml(posts_xml, mode=mode)
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -538,25 +525,55 @@ class Utility(commands.Cog):
         guild_ids=APP_GUILDS_ID
     )
 
+    async def tag_search_autocomplete(
+        self,
+        _: discord.Interaction,
+        current: str,
+    ) -> List[app_commands.Choice[str]]:
+        
+        tags_xml = await self.retrieve_via_kona(
+            name=current.lower(), 
+            mode="tag",
+            page=1,
+            order="count",
+            limit=20
+        )
+
+        if isinstance(tags_xml, int):  # http exception
+            return
+
+        return [
+            app_commands.Choice(name=result['name'], value=result['name'])
+            for result in tags_xml if current.lower() in result['name'].lower()
+        ]
+
     @anime.command(name='kona', description='Retrieve NSFW posts from Konachan')
-    @app_commands.describe(tags='The tags to base searches upon.', page='The page number to look through.')
+    @app_commands.describe(
+        tag1='A tag to base your search on.', 
+        tag2='A tag to base your search on.',
+        tag3='A tag to base your search on.' ,
+        page='The page number to look through.'
+    )
+    @app_commands.autocomplete(tag1=tag_search_autocomplete, tag2=tag_search_autocomplete, tag3=tag_search_autocomplete)
     async def kona_fetch(
         self, 
         interaction: discord.Interaction, 
-        tags: Optional[str] = "original", 
+        tag1: Optional[str] = "original", 
+        tag2: Optional[str] = "summer",
+        tag3: Optional[str] = "minato_aqua",
         page: Optional[app_commands.Range[int, 1]] = 1
-        ) -> None:
+    ) -> None:
 
         await interaction.response.defer(thinking=True, ephemeral=True)
         
-        tagviewing = ', '.join(tags.split(' '))
+        tags = [val for param, val in interaction.namespace if param.startswith("tag")]
+        tagviewing = ' '.join(tags)
 
         posts_xml = await self.retrieve_via_kona(
-            tags=tags, 
+            tags=tagviewing, 
             limit=3, 
             page=page, 
-            mode="image", 
-            tag_pattern=None
+            mode="post"
         )
 
         if isinstance(posts_xml, int):
@@ -616,53 +633,6 @@ class Utility(commands.Cog):
         
         await interaction.followup.send(embed=embed)
         await interaction.followup.send(embeds=attachments, ephemeral=True)
-
-    @anime.command(name='tagsearch', description='Retrieve tags from Konachan')
-    @app_commands.describe(tag_pattern="A single word to use to find matching results.")
-    async def tag_fetch(self, interaction: discord.Interaction, tag_pattern: str) -> None:
-
-        embed = discord.Embed(title='Results', colour=discord.Colour.dark_embed())
-        embed.set_author(
-            icon_url=interaction.user.display_avatar.url, 
-            name=interaction.user.name, 
-            url=interaction.user.display_avatar.url
-        )
-
-        tags_xml = await self.retrieve_via_kona(tag_pattern=tag_pattern, mode="tag", tags=None)
-
-        if isinstance(tags_xml, int):
-            return await interaction.response.send_message(
-                ephemeral=True,
-                embed=membed(API_EXCEPTION)
-            )
-
-        if len(tags_xml) == 0:
-            return await interaction.response.send_message(
-                ephemeral=True,
-                embed=membed(
-                    "## No tags found.\n"
-                    "- There is only one known cause:\n"
-                    " - No matching tags exist yet under the given tag pattern."
-                )
-            )
-
-        type_of_tag = {
-            0: "`general`",
-            1: "`artist`",
-            2: "`N/A`",
-            3: "`copyright`",
-            4: "`character`"
-        }
-
-        descriptionerfyrd = set()
-        pos = 0
-        for result in tags_xml:
-            descriptionerfyrd.add(
-                f'{pos}. {result['name']} ({type_of_tag.get(int(result['tag_type']), "Unknown Tag Type")})'
-            )
-        embed.set_footer(text="Some tags here don't have any posts.")
-        embed.description = "\n".join(descriptionerfyrd)
-        await interaction.response.send_message(embed=embed)
 
     @anime.command(name='char', description="Retrieve SFW or NSFW anime images")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
