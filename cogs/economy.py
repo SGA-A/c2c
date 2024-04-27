@@ -5142,7 +5142,10 @@ class Economy(commands.Cog):
                 name=f"{member.display_name}'s Inventory", 
                 icon_url=member.display_avatar.url
             )
-            paginator = PaginationSimple(interaction)
+            paginator = PaginationSimple(
+                interaction, 
+                invoker_id=interaction.user.id
+            )
 
             async def get_page_part(page: int):
                 """Helper function to determine what page of the paginator we're on."""
