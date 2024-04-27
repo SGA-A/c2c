@@ -142,8 +142,9 @@ class Pagination(discord.ui.View):
 class PaginationSimple(discord.ui.View):
     """Pagination menu soon with support for refreshing the pagination."""
     
-    def __init__(self, interaction: discord.Interaction, get_page: Optional[Callable] = None) -> None:
-        self.interaction = interaction
+    def __init__(self, ctx, get_page: Optional[Callable] = None) -> None:
+        self.ctx = ctx
+        self.ctx_send = ctx.response.send_message if isinstance(ctx, discord.Interaction) else ctx.send
         self.get_page = get_page
         self.index = 1
         self.total_pages: Optional[int] = None
@@ -151,7 +152,7 @@ class PaginationSimple(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Make sure only original user that invoked interaction can interact"""
-        if interaction.user == self.interaction.user:
+        if interaction.user.id == self.ctx.author.id:
             return True
         emb = membed("You cannot interact with this menu")
         await interaction.response.send_message(embed=emb, ephemeral=True)
@@ -161,8 +162,7 @@ class PaginationSimple(discord.ui.View):
         try:
             for item in self.children:
                 item.disabled = True
-            message = await self.interaction.original_response()
-            await message.edit(view=self)
+            await self.message.edit(view=self)
         except discord.NotFound:
             pass
 
@@ -171,10 +171,13 @@ class PaginationSimple(discord.ui.View):
         emb, self.total_pages = await self.get_page(self.index)
         if self.total_pages == 1:
             self.stop()
-            await self.interaction.response.send_message(embed=emb)
-        elif self.total_pages > 1:
+            self.message = await self.ctx_send(embed=emb)
+        else:
             self.update_buttons()
-            await self.interaction.response.send_message(embed=emb, view=self)
+            self.message = await self.ctx_send(embed=emb, view=self)
+        
+        if self.message is None:
+            self.message = await self.ctx.interaction.original_response()
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
         """Update the page index in response to changes in the current page."""
@@ -183,7 +186,8 @@ class PaginationSimple(discord.ui.View):
         if interaction.response.is_done():
             message = await interaction.original_response()
             return await interaction.followup.edit_message(
-                message_id=message.id, embed=emb, view=self)
+                message_id=message.id, embed=emb, view=self
+            )
         await interaction.response.edit_message(embed=emb, view=self)
 
     def update_buttons(self) -> None:
