@@ -186,17 +186,10 @@ class Tags(commands.Cog):
         # ownerID: set(name)
         self._reserved_tags_being_made: set[str] = set()
 
-        self.view_tags = app_commands.ContextMenu(
-            name='View Tags From User',
-            callback=self.view_their_tags
-        )
-
-        self.bot.tree.add_command(self.view_tags)
-
     async def non_aliased_tag_autocomplete(self, _: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         
         async with self.bot.pool.acquire() as conn:
-            
+    
             query = (
                 """
                 SELECT name
@@ -289,29 +282,6 @@ class Tags(commands.Cog):
 
     def remove_in_progress_tag(self, name: str) -> None:
         self._reserved_tags_being_made.discard(name.lower())
-    
-    @app_commands.guilds(*APP_GUILDS_ID)
-    async def view_their_tags(self, interaction: discord.Interaction, user: discord.Member):
-
-        async with interaction.client.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            query = (
-                """
-                SELECT name, rowid
-                FROM tags
-                WHERE ownerID=$0
-                ORDER BY name
-                """
-            )
-
-            rows = await conn.fetchall(query, user.id)
-            if not rows:
-                return await interaction.response.send_message(embed=membed(f"{user.mention} has no tags."))
-        
-            em = discord.Embed(colour=discord.Colour.blurple())
-            em.set_author(name=user.display_name, icon_url=user.display_avatar.url)
-            await self.reusable_paginator_via(interaction, results=rows, em=em)
             
     @commands.hybrid_group(description="Tag text for later retrieval", fallback='get')
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -325,7 +295,10 @@ class Tags(commands.Cog):
             except RuntimeError as e:
                 return await ctx.send(embed=membed(str(e)))
 
-            await ctx.send(content, reference=ctx.message.reference)
+            await ctx.send(
+                content=content, 
+                reference=ctx.message.reference
+            )
 
             # update the usage
             await conn.execute("UPDATE tags SET uses = uses + 1 WHERE name = $0", name)
@@ -621,7 +594,7 @@ class Tags(commands.Cog):
 
                 await ctx.send(embed=membed(f"Removed all tags by {user.mention}."))
 
-    async def reusable_paginator_via(self, interaction: discord.Interaction, *, results: tuple, length: Optional[int] = 12, em: discord.Embed):
+    async def reusable_paginator_via(self, ctx: commands.Context, *, results: tuple, length: Optional[int] = 12, em: discord.Embed):
         """Only use this when you have a tuple containing the tag name and rowid in this order."""
 
         async def get_page_part(page: int):
@@ -636,18 +609,13 @@ class Tags(commands.Cog):
             em.set_footer(text=f"Page {page} of {n}")
             return em, n
         
-        paginator = PaginationSimple(interaction, get_page=get_page_part)
+        paginator = PaginationSimple(ctx, get_page=get_page_part)
         await paginator.navigate()
 
     @tag.command(description="Search for a tag")
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(query='The tag name to search for.')
     async def search(self, ctx: commands.Context, *, query: app_commands.Range[str, 3, 100]):
-
-        interaction = ctx.interaction
-        
-        if interaction is None:
-            return await ctx.send(embed=membed(NOT_SUPPORTED))
 
         async with self.bot.pool.acquire() as conn:
 
@@ -663,9 +631,13 @@ class Tags(commands.Cog):
             results = await conn.fetchall(sql, query)
 
         if not results:
-            return await interaction.response.send_message(embed=membed('No tags found.'))
+            return await ctx.send(embed=membed('No tags found.'))
         
-        await self.reusable_paginator_via(interaction, results=results, em=discord.Embed(colour=discord.Colour.blurple()))
+        await self.reusable_paginator_via(
+            ctx,
+            results=results, 
+            em=discord.Embed(colour=discord.Colour.blurple())
+        )
 
     @tag.command(description="Transfer a tag to another member")
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -694,10 +666,6 @@ class Tags(commands.Cog):
     @tag.command(name="all", description="List all tags ever made")
     @app_commands.guilds(*APP_GUILDS_ID)
     async def all_tags(self, ctx: commands.Context):
-        interaction = ctx.interaction
-
-        if interaction is None:
-            return await ctx.send(embed=membed(NOT_SUPPORTED))
 
         async with self.bot.pool.acquire() as conn:
             query = (
@@ -713,8 +681,47 @@ class Tags(commands.Cog):
                 return await ctx.send(embed=membed('No tags exist!'))
 
             em = discord.Embed(colour=discord.Colour.blurple())
-            await self.reusable_paginator_via(interaction, results=rows, em=em)
+            await self.reusable_paginator_via(
+                ctx,
+                results=rows, 
+                em=em
+            )
     
+    @tag.command(name="list", description="Display all tags you made")
+    @app_commands.describe(member='The member to list tags of. Defaults to show yours.')
+    async def _list(self, ctx: commands.Context, *, member: discord.User = commands.Author):
+        async with self.bot.pool.acquire() as conn:
+            conn: asqlite_Connection
+            query = (
+                """
+                SELECT name, rowid
+                FROM tags
+                WHERE ownerID=$0
+                ORDER BY name
+                """
+            )
+
+            rows = await conn.fetchall(query, member.id)
+            if not rows:
+                return await ctx.send(embed=membed(f"{member.mention} has no tags."))
+        
+            em = discord.Embed(colour=discord.Colour.blurple())
+            em.set_author(name=member.display_name, icon_url=member.display_avatar.url)
+            await self.reusable_paginator_via(
+                ctx, 
+                results=rows, 
+                em=em
+            )
+
+
+    @commands.hybrid_command()
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.describe(member='The member to list tags of. Defaults to show yours.')
+    async def tags(self, ctx: commands.Context, *, member: discord.User = commands.Author):
+        """An alias for tag list command."""
+        await ctx.invoke(self._list, member=member)
+
+
     @tag.command(description="Display a random tag")
     @app_commands.guilds(*APP_GUILDS_ID)
     async def random(self, ctx: commands.Context):
