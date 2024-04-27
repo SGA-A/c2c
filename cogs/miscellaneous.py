@@ -389,7 +389,10 @@ class Utility(commands.Cog):
 
             em = membed()
             em.title = f"{user.display_name}'s Command Usage"
-            paginator = PaginationSimple(interaction)
+            paginator = PaginationSimple(
+                interaction, 
+                invoker_id=interaction.user.id
+            )
 
             async def get_page_part(page: int, length: Optional[int] = 12):
 
@@ -1345,7 +1348,10 @@ class Utility(commands.Cog):
         em = membed(f"- Estimated Results: {results_count}\n- Search Time: {search_time}ms")
 
         em.set_author(name=user.name, icon_url=user.display_avatar.url)
-        paginator = PaginationSimple(interaction)
+        paginator = PaginationSimple(
+            interaction, 
+            invoker_id=interaction.user.id
+        )
         length = 1
 
         async def get_page_part(page: int):
