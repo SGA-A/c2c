@@ -1,4 +1,4 @@
-from re import compile
+from re import compile, search
 from pytz import timezone
 from time import perf_counter
 from datetime import timedelta, datetime
@@ -495,6 +495,39 @@ class Moderation(commands.Cog):
         await ctx.send(embed=membed("You are not allowed to use these commands."))
         return False
 
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author.bot:
+            return
+
+        try:
+            if message.content in {"geo", "teo"}:
+                return await message.add_reaction("<a:StoleThisEmote7:793153800612479017>")
+        except discord.NotFound:
+            pass
+        except discord.Forbidden:
+            pass
+        
+        if message.content.startswith(".."):
+            match = search(r'\d+$', message.content)
+
+            if not message.channel.permissions_for(message.author).manage_messages:
+                return await message.channel.send(
+                    content="You're not able to do this.", 
+                    delete_after=3.0, 
+                    silent=True
+                )
+
+            if not match:
+                return await message.channel.send(
+                    content="You didn't specify a number.", 
+                    delete_after=3.0, 
+                    silent=True
+                )
+
+            ctx = await self.bot.get_context(message)
+            await ctx.invoke(self.purge, purge_max_amount=int(match.group()))
+
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.guilds(*APP_GUILDS_ID)
     async def purge_from_here(self, interaction: discord.Interaction, message: discord.Message):
@@ -541,7 +574,7 @@ class Moderation(commands.Cog):
                 pass
             finally:
                 # delete the task we just completed
-                await conn.execute('DELETE FROM tasks WHERE mod_to = $1', mod_to)
+                await conn.execute('DELETE FROM tasks WHERE mod_to = $0', mod_to)
                 await conn.commit()
 
     @commands.command(name="close", description="Close the invocation thread")
@@ -602,11 +635,11 @@ class Moderation(commands.Cog):
         if resp:
             return await interaction.response.send_message(embed=membed(resp))
         
-        # ! SEND THE MESSAGE HERE
         minutes, seconds = divmod(duration, 60)
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
 
+        # Sending message
         success = discord.Embed()
         success.colour = 0x70DEAA
         success.title = "Temporary role added"
@@ -618,7 +651,7 @@ class Moderation(commands.Cog):
         await user.add_roles(discord.Object(id=role.id))
         await interaction.response.send_message(embed=success)
 
-        # ! SCHEDULE THE TASK HERE
+        # Scheduling task
         timestamp = (discord.utils.utcnow() + timedelta(seconds=duration)).timestamp()
 
         conn = await self.bot.pool.acquire()
