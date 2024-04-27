@@ -594,7 +594,7 @@ class Tags(commands.Cog):
 
                 await ctx.send(embed=membed(f"Removed all tags by {user.mention}."))
 
-    async def reusable_paginator_via(self, ctx: commands.Context, *, results: tuple, length: Optional[int] = 12, em: discord.Embed):
+    async def reusable_paginator_via(self, ctx, *, results: tuple, length: Optional[int] = 12, em: discord.Embed):
         """Only use this when you have a tuple containing the tag name and rowid in this order."""
 
         async def get_page_part(page: int):
@@ -609,13 +609,17 @@ class Tags(commands.Cog):
             em.set_footer(text=f"Page {page} of {n}")
             return em, n
         
-        paginator = PaginationSimple(ctx, get_page=get_page_part)
+        paginator = PaginationSimple(
+            ctx, 
+            invoker_id=ctx.author.id, 
+            get_page=get_page_part
+        )
         await paginator.navigate()
 
     @tag.command(description="Search for a tag")
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(query='The tag name to search for.')
-    async def search(self, ctx: commands.Context, *, query: app_commands.Range[str, 3, 100]):
+    async def search(self, ctx: commands.Context, *, query: Annotated[str, commands.clean_content]):
 
         async with self.bot.pool.acquire() as conn:
 
