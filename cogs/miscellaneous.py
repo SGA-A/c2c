@@ -8,7 +8,7 @@ from psutil import Process, cpu_count
 from PyDictionary import PyDictionary
 from waifuim.exceptions import APIException
 from typing import Literal, Union, Optional, List
-from re import compile as compile_it, search
+from re import compile as compile_it
 from xml.etree.ElementTree import fromstring
 
 from discord.ext import commands
@@ -227,10 +227,7 @@ class Utility(commands.Cog):
         self.bot.tree.remove_command(self.get_embed_cmd.name, type=self.get_embed_cmd.type)
         self.bot.tree.remove_command(self.image_src.name, type=self.image_src.type)
 
-    async def retrieve_via_kona(
-            self, 
-            **params
-        ) -> Union[int, str]:
+    async def retrieve_via_kona(self, **params) -> Union[int, str]:
         """Returns a list of dictionaries for you to iterate through and fetch their attributes"""
         mode = params.pop("mode")
         base_url = f"https://konachan.net/{mode}.xml"
@@ -241,38 +238,6 @@ class Utility(commands.Cog):
             
             posts_xml = await response.text()
             return parse_xml(posts_xml, mode=mode)
-
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        if message.author.bot:
-            return
-
-        try:
-            if message.content in {"geo", "teo"}:
-                return await message.add_reaction("<a:StoleThisEmote7:793153800612479017>")
-            if message.content in {"0x80", "cookies"}:
-                return await message.add_reaction("<:0x80:1125061332698406923>")
-            if "c2c" in message.content.lower():
-                await message.add_reaction("<:milady:973571282031484968>")
-        except discord.NotFound:
-            pass
-        except discord.Forbidden:
-            pass
-        
-        if message.content.startswith(".."):
-            match = search(r'\d+$', message.content)
-
-            if not message.channel.permissions_for(message.author).manage_messages:
-                return await message.channel.send(
-                    "You're not able to do this.", delete_after=3.0, silent=True)
-
-            if not match:
-                return await message.channel.send(
-                    "You didn't specify a number.", delete_after=3.0, silent=True)
-
-            ctx = await self.bot.get_context(message)
-            cmd = self.bot.get_command("purge")
-            await ctx.invoke(cmd, purge_max_amount=int(match.group()))
 
     @commands.command(name='invite', description='Links the invite for c2c')
     async def invite_bot(self, ctx):
@@ -557,13 +522,17 @@ class Utility(commands.Cog):
         tag3='A tag to base your search on.' ,
         page='The page number to look through.'
     )
-    @app_commands.autocomplete(tag1=tag_search_autocomplete, tag2=tag_search_autocomplete, tag3=tag_search_autocomplete)
+    @app_commands.autocomplete(
+        tag1=tag_search_autocomplete, 
+        tag2=tag_search_autocomplete, 
+        tag3=tag_search_autocomplete
+    )
     async def kona_fetch(
         self, 
         interaction: discord.Interaction, 
-        tag1: Optional[str] = "original", 
-        tag2: Optional[str] = "summer",
-        tag3: Optional[str] = "minato_aqua",
+        tag1: str, 
+        tag2: Optional[str],
+        tag3: Optional[str],
         page: Optional[app_commands.Range[int, 1]] = 1
     ) -> None:
 
@@ -760,11 +729,7 @@ class Utility(commands.Cog):
         uniform: Optional[bool]
     ) -> None:
 
-        tags = []
-        for param, arg in iter(interaction.namespace):
-            param: str
-            param = param.replace('_', '-')
-            tags.append(param)
+        tags = [param.replace('_', '-') for param, _ in iter(interaction.namespace)]
 
         if not tags:
             return await interaction.response.send_message(
