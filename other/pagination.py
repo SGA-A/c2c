@@ -142,9 +142,9 @@ class Pagination(discord.ui.View):
 class PaginationSimple(discord.ui.View):
     """Pagination menu soon with support for refreshing the pagination."""
     
-    def __init__(self, ctx, get_page: Optional[Callable] = None) -> None:
+    def __init__(self, ctx, invoker_id: int, get_page: Optional[Callable] = None) -> None:
         self.ctx = ctx
-        self.ctx_send = ctx.response.send_message if isinstance(ctx, discord.Interaction) else ctx.send
+        self.invoker_id = invoker_id
         self.get_page = get_page
         self.index = 1
         self.total_pages: Optional[int] = None
@@ -152,7 +152,7 @@ class PaginationSimple(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Make sure only original user that invoked interaction can interact"""
-        if interaction.user.id == self.ctx.author.id:
+        if interaction.user.id == self.invoker_id:
             return True
         emb = membed("You cannot interact with this menu")
         await interaction.response.send_message(embed=emb, ephemeral=True)
@@ -169,15 +169,21 @@ class PaginationSimple(discord.ui.View):
     async def navigate(self) -> None:
         """Get through the paginator properly."""
         emb, self.total_pages = await self.get_page(self.index)
+        try:
+            ctx_send = self.ctx.response.send_message
+        except AttributeError:
+            ctx_send = self.ctx.send
+
         if self.total_pages == 1:
             self.stop()
-            self.message = await self.ctx_send(embed=emb)
-        else:
-            self.update_buttons()
-            self.message = await self.ctx_send(embed=emb, view=self)
-        
+            self.message = await ctx_send(embed=emb)
+            return
+
+        self.update_buttons()
+        self.message = await ctx_send(embed=emb, view=self)
+
         if self.message is None:
-            self.message = await self.ctx.interaction.original_response()
+            self.message = await self.ctx.original_response()
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
         """Update the page index in response to changes in the current page."""
