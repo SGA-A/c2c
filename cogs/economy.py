@@ -5264,15 +5264,15 @@ class Economy(commands.Cog):
                         embed=membed("You don't have a job, get one first.")
                     )
 
-            # has_cd = self.is_no_cooldown(data[0][0])
-            # if isinstance(has_cd, tuple):
-            #     return await interaction.response.send_message(
-            #         embed=membed(f"You can work again at {has_cd[0]} ({has_cd[1]}).")
-            #     )
+            has_cd = self.is_no_cooldown(data[0][0])
+            if isinstance(has_cd, tuple):
+                return await interaction.response.send_message(
+                    embed=membed(f"You can work again at {has_cd[0]} ({has_cd[1]}).")
+                )
 
-            # async with conn.transaction():
-            #     ncd = (discord.utils.utcnow() + datetime.timedelta(minutes=40)).timestamp()
-            #     await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
+            async with conn.transaction():
+                ncd = (discord.utils.utcnow() + datetime.timedelta(minutes=40)).timestamp()
+                await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
             possible_minigames = choices((1, 2), k=1, weights=(85, 15))[0]
             num_to_func_link = {
