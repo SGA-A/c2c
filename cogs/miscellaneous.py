@@ -157,52 +157,11 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
             embed=membed("Your feedback could not be sent. Try again later"))
 
 
-class InviteButton(discord.ui.View):
-    def __init__(self, bot: commands.Bot):
-        super().__init__()
-        self.bot: commands.Bot = bot
-
-        perms = discord.Permissions.none()
-
-        perms.read_message_history = True
-        perms.read_messages = True
-        perms.send_messages_in_threads = True
-        perms.send_messages = True
-        
-        perms.manage_channels = True
-        perms.manage_messages = True
-        perms.manage_roles = True
-        perms.manage_threads = True
-
-        perms.create_instant_invite = True
-        perms.external_emojis = True
-        
-        perms.embed_links = True
-        perms.attach_files = True
-        perms.add_reactions = True
-
-        perms.connect = True
-        perms.speak = True
-        perms.move_members = True
-
-        self.add_item(
-            discord.ui.Button(
-                label="Invite",
-                url=discord.utils.oauth_url(self.bot.user.id, permissions=perms)
-            )
-        )
-
-
 class ImageSource(discord.ui.View):
     def __init__(self, url: str):
         super().__init__()
-
-        self.add_item(
-            discord.ui.Button(
-                label="Source",
-                url=url
-            )
-        )
+        
+        self.add_item(discord.ui.Button(url=url, label="Source"))
 
 
 class Utility(commands.Cog):
@@ -239,11 +198,6 @@ class Utility(commands.Cog):
             
             posts_xml = await response.text()
             return parse_xml(posts_xml, mode=mode)
-
-    @commands.command(name='invite', description='Links the invite for c2c')
-    async def invite_bot(self, ctx: commands.Context) -> None:
-        content = membed("Remember that only developers can invite the bot.")
-        await ctx.send(embed=content, view=InviteButton(self.bot))
 
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.command(name='serverinfo', description="Show information about the server and its members")
