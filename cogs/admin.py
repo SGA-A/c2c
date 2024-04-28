@@ -51,6 +51,42 @@ FORUM_TAG_IDS = {
 }
 
 
+class InviteButton(discord.ui.View):
+    def __init__(self, bot: commands.Bot):
+        super().__init__()
+        self.bot: commands.Bot = bot
+
+        perms = discord.Permissions.none()
+
+        perms.read_message_history = True
+        perms.read_messages = True
+        perms.send_messages_in_threads = True
+        perms.send_messages = True
+        
+        perms.manage_channels = True
+        perms.manage_messages = True
+        perms.manage_roles = True
+        perms.manage_threads = True
+
+        perms.create_instant_invite = True
+        perms.external_emojis = True
+        
+        perms.embed_links = True
+        perms.attach_files = True
+        perms.add_reactions = True
+
+        perms.connect = True
+        perms.speak = True
+        perms.move_members = True
+
+        self.add_item(
+            discord.ui.Button(
+                label="Invite",
+                url=discord.utils.oauth_url(self.bot.user.id, permissions=perms)
+            )
+        )
+
+
 class Owner(commands.Cog):
     """Cog containing commands only executable by the bot owners. Contains debugging tools."""
     def __init__(self, bot: commands.Bot):
@@ -647,12 +683,16 @@ class Owner(commands.Cog):
     async def quit_client(self, ctx):
         """Quits the bot gracefully."""
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
+        await self.bot.pool.close()
+        await self.bot.session.close()
         utility_cog = self.bot.get_cog("Utility")
         await utility_cog.wf.close()
-        await self.bot.session.close()
-        await self.bot.pool.close()
-        await self.bot.http.close()
         await self.bot.close()
+
+    @commands.command(name='invite', description='Links the invite for c2c')
+    async def invite_bot(self, ctx: commands.Context) -> None:
+        content = membed("Remember that only developers can invite the bot.")
+        await ctx.send(embed=content, view=InviteButton(self.bot))
 
     @commands.hybrid_command(name='repeat', description='Repeat what you typed', aliases=('say',))
     @app_commands.guilds(*APP_GUILDS_ID)
