@@ -152,8 +152,9 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
         success = membed("Your response has been submitted!")
         await interaction.response.send_message(embed=success, ephemeral=True)
 
-    async def on_error(self, interaction: discord.Interaction, error):
-        return await interaction.response.send_message(embed=membed("Something went wrong."))
+    async def on_error(self, interaction: discord.Interaction, _):
+        return await interaction.response.send_message(
+            embed=membed("Your feedback could not be sent. Try again later"))
 
 
 class InviteButton(discord.ui.View):
@@ -240,18 +241,13 @@ class Utility(commands.Cog):
             return parse_xml(posts_xml, mode=mode)
 
     @commands.command(name='invite', description='Links the invite for c2c')
-    async def invite_bot(self, ctx):
-        content = (
-            "The button component gives a direct link to invite me to your server.\n"
-            "Remember that only developers can invite the bot."
-        )
-        content = membed(content)
-        
+    async def invite_bot(self, ctx: commands.Context) -> None:
+        content = membed("Remember that only developers can invite the bot.")
         await ctx.send(embed=content, view=InviteButton(self.bot))
 
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.command(name='serverinfo', description="Show information about the server and its members")
-    async def display_server_info(self, interaction: discord.Interaction):
+    async def display_server_info(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(thinking=True)
 
         guild = interaction.guild
@@ -538,7 +534,7 @@ class Utility(commands.Cog):
 
         await interaction.response.defer(thinking=True, ephemeral=True)
         
-        tags = [val for param, val in interaction.namespace if param.startswith("tag")]
+        tags = [val for _, val in iter(interaction.namespace) if isinstance(val, str)]
         tagviewing = ' '.join(tags)
 
         posts_xml = await self.retrieve_via_kona(
@@ -549,13 +545,9 @@ class Utility(commands.Cog):
         )
 
         if isinstance(posts_xml, int):
+            cause = RESPONSES.get(posts_xml, "the cause of the error is not known")
             return await interaction.response.send_message(
-                embed=membed(
-                    f"The [Konachan Website](https://konachan.net/help) returned an "
-                    f"erroneous status code of `{posts_xml}`: "
-                    f"{RESPONSES.setdefault(posts_xml, "the cause of the error is not known")}.\n"
-                    f"You should try again later to see if the service improves."
-                )
+                embed=membed(f"Failed to make request, return status code `{posts_xml}`: {cause}")
             )
 
         if len(posts_xml) == 0:
@@ -991,43 +983,6 @@ class Utility(commands.Cog):
             headers=headers
         )
 
-    @app_commands.command(name='com', description='Finds most common letters in a sentences')
-    @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.describe(word='The sentence(s) to find the frequent letters of.')
-    async def common(self, interaction: Interaction, word: str) -> None:
-
-        letters = []
-        frequency = []
-
-        for letter in word:
-            if letter not in letters:
-                letters.append(letter)
-                frequency.append(1)
-            else:
-                i = letters.index(letter)
-                frequency[i] += 1
-
-        n = max(frequency)
-
-        # Look for most common letter(s) and add to commons list
-        commons = []
-        counter = 0
-        for m in frequency:
-            if n == m:
-                commons.append(letters[counter])
-            counter += 1
-
-        # Format most common letters
-        commons.sort()
-        answer = ''
-        for letter in commons:
-            answer = answer + letter + ' '
-
-        # Remove extra space at the end of the string
-        answer = answer[:-1]
-
-        await interaction.response.send_message(embed=membed(f'The most common letter is {answer}.'))
-
     @app_commands.command(name='charinfo', description='Show you info about character. Maximum 25 at once.')
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(characters='Any written letters or symbols.')
@@ -1202,32 +1157,6 @@ class Utility(commands.Cog):
                 embed: discord.Embed = membed()
                 embed.set_image(url=resp.url)
                 await ctx.send(embed=embed)
-
-    @app_commands.command(name='tn', description="Get the time now in your chosen format")
-    @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.rename(spec="mode")
-    @app_commands.describe(spec='The mode of displaying the current time now.')
-    async def tn(
-        self, 
-        interaction: discord.Interaction, 
-        spec: Optional[
-            Literal[
-                "t - returns short time (format HH:MM)", 
-                "T - return long time (format HH:MM:SS)",
-                "d - returns short date (format DD/MM/YYYY)",
-                "D - returns long date (format DD Month Year)",
-                "F - returns long date and time (format Day, DD Month Year HH:MM)",
-                "R - returns the relative time since now"
-            ]] = "t"
-        ) -> None:
-
-        format_dtime = discord.utils.format_dt(discord.utils.utcnow(), style=spec[0])
-        embed = membed(
-            f"## <:watchb:1195754643209334906> Timestamp Conversion\n{format_dtime}\n"
-            f"- The epoch time in this format is: `{format_dtime}`"
-        )
-        embed.set_thumbnail(url=interaction.user.display_avatar.url)
-        await interaction.response.send_message(embed=embed)
 
     @commands.command(name='avatar', description="Display a user's enlarged avatar")
     async def avatar(self, ctx, *, username: Union[discord.Member, discord.User] = None) -> None:
