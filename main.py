@@ -262,16 +262,14 @@ classnames = Literal[
 
 
 def return_txt_cmds_first(command_holder: dict, category: classnames) -> dict:
-    """Displays all the text-based commands that are defined within a cog as a dict. This should always be called
-    first for consistency."""
+    """Displays all text-based commands defined within a cog as a dict."""
     for cmd in bot.get_cog(category).get_commands():
         command_holder.update({cmd.name: deque((f'{category}', f'{cmd.description}', 'txt'))})
     return command_holder
 
 
 def return_interaction_cmds_last(command_holder: dict, category: classnames) -> dict:
-    """Displays all the app commands and grouped app commands that are defined within a cog as a dict. This should
-    always be called last for consistency."""
+    """Displays all slash commands defined within a cog as a dict."""
     for cmd in bot.get_cog(category).get_app_commands():
         command_holder.update({cmd.name: deque((f'{category}', f'{cmd.description}', 'sla'))})
     return command_holder
@@ -332,7 +330,7 @@ def generic_loop_with_subcommand(all_cmds: dict, cmd_formatter: set, guild_id) -
                         got_something = True
                         total_command_count += 1
                         cmd_formatter.add(f"\U00002022 {option.mention} - {option.description}")
-            
+
             if not got_something:
                 cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
         except AttributeError:
@@ -573,7 +571,7 @@ async def dispatch_the_webhook_when(ctx: commands.Context):
             "- Added a policy to never close threads that are inactive, only lock them\n"
             "- Kicked more bots off the server\n"
             "- Renamed some channels for consistency\n"
-            "- Disabled AutoMod rules completely, no moderation rules are in effect anymore"
+            "- Disabled some custom AutoMod rules\n"
         )
     )
     
