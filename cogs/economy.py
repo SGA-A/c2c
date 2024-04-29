@@ -84,9 +84,8 @@ MAX_BET_KEYCARD = 15_000_000
 MIN_BET_WITHOUT = 100_000
 MAX_BET_WITHOUT = 10_000_000
 WARN_FOR_CONCURRENCY = membed(
-    "- You cannot interact with this command because you are in an ongoing command.\n"
-    "- Finish any commands you are currently using before trying again.\n"
-    "- If you are repeatedly getting this message from the same interaction, you should contact the bot owner."
+    "You cannot interact with this command because you are in an ongoing command.\n"
+    "Finish any commands you are currently using before trying again.\n"
 )
 ROBUX_DESCRIPTION = 'Can be a constant number like "1234" or a shorthand (max, all, 1e6).'
 APP_GUILDS_ID = [829053898333225010, 780397076273954886]
@@ -537,7 +536,7 @@ async def economy_check(interaction: discord.Interaction, original: USER_ENTRY) 
     if original == interaction.user:
         return True
     await interaction.response.send_message(
-        embed=membed(f"This menu is controlled by {original}."),
+        embed=membed(f"This menu is controlled by {original.mention}."),
         ephemeral=True,
         delete_after=5.0
     )
@@ -1072,8 +1071,15 @@ class RememberOrder(discord.ui.View):
 class BalanceView(discord.ui.View):
     """View for the balance command to mange and deposit/withdraw money."""
 
-    def __init__(self, interaction: discord.Interaction, bot: commands.Bot,
-                 wallet: int, bank: int, bankspace: int, viewing: USER_ENTRY) -> None:
+    def __init__(
+            self, 
+            interaction: discord.Interaction, 
+            bot: commands.Bot, 
+            wallet: int, 
+            bank: int, 
+            bankspace: int, 
+            viewing: USER_ENTRY
+        ) -> None:
         self.interaction = interaction
         self.bot: commands.Bot = bot
         self.their_wallet = wallet
@@ -1103,12 +1109,38 @@ class BalanceView(discord.ui.View):
         except discord.NotFound:
             pass
 
+    async def has_assertion_failed(self, interaction: discord.Interaction, conn: asqlite_Connection):
+        """
+        Ensure the user is not in a transaction.
+        
+        Unlike normal interaction checks, return None on assertion failure.
+        """
+
+        data = await conn.fetchone("SELECT userID FROM transactions WHERE userID = $0", interaction.user.id)
+        try:
+            assert not data
+            return False
+        except AssertionError:
+            warning = discord.ui.View().add_item(
+                discord.ui.Button(
+                    label="Explain This!", 
+                    url="https://dankmemer.lol/tutorial/interaction-locks"
+                )
+            )
+            await interaction.response.send_message(embed=WARN_FOR_CONCURRENCY, view=warning, ephemeral=True)
+            return True
+
     @discord.ui.button(label="Withdraw", disabled=True)
     async def withdraw_money_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Withdraw money from the bank."""
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
+
+            check = await self.has_assertion_failed(interaction, conn)
+            if check:
+                return
+
             bank_amt = await Economy.get_spec_bank_data(
                 interaction.user, 
                 field_name="bank", 
@@ -1138,6 +1170,11 @@ class BalanceView(discord.ui.View):
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
+
+            check = await self.has_assertion_failed(interaction, conn)
+            if check:
+                return
+
             data = await conn.fetchone(
                 """
                 SELECT wallet, bank, bankspace 
@@ -1232,6 +1269,11 @@ class BlackjackUi(discord.ui.View):
     async def on_timeout(self) -> None:
         if not self.finished:
             del self.bot.games[self.interaction.user.id]
+            
+            async with self.bot.pool.acquire() as conn:
+                await Economy.end_transaction(conn, user_id=self.interaction.user.id)
+                await conn.commit()
+
             try:
                 await self.message.edit(
                     content=None, 
@@ -1247,6 +1289,7 @@ class BlackjackUi(discord.ui.View):
             conn: asqlite_Connection
         ) -> None:
 
+        await Economy.end_transaction(conn, user_id=self.interaction.user.id)
         bj_lose, new_bj_win, new_amount_balance = await conn.fetchone(
             f"""
             UPDATE `{BANK_TABLE_NAME}`
@@ -1269,6 +1312,7 @@ class BlackjackUi(discord.ui.View):
             conn: asqlite_Connection
         ) -> None:
 
+        await Economy.end_transaction(conn, user_id=self.interaction.user.id)
         bj_win, new_bj_lose, new_amount_balance = await conn.fetchone(
             f"""
             UPDATE `{BANK_TABLE_NAME}`
@@ -1592,8 +1636,12 @@ class BlackjackUi(discord.ui.View):
         else:
             async with self.bot.pool.acquire() as conn:
                 conn: asqlite_Connection
+
+                await Economy.end_transaction(conn, user_id=interaction.user.id)
+                await conn.commit()
+
                 wallet_amt = await Economy.get_wallet_data_only(interaction.user, conn)
-            
+
             tie = discord.Embed(
                 colour=discord.Colour.yellow(),
                 description=(
@@ -2569,6 +2617,8 @@ class ItemQuantityModal(discord.ui.Modal):
             self.activated_coupon = True
             return discounted_price
 
+        await Economy.declare_transaction(conn, user_id=interaction.user.id)
+
         value = await process_confirmation(
             interaction=interaction, 
             prompt=(
@@ -2579,6 +2629,9 @@ class ItemQuantityModal(discord.ui.Modal):
                 f"**{discounted_price:,}** if you decide to use the coupon."
             )
         )
+
+        await Economy.end_transaction(conn, user_id=interaction.user.id)
+        await conn.commit()
 
         if value is None:
             return value
@@ -2599,7 +2652,7 @@ class ItemQuantityModal(discord.ui.Modal):
             current_balance: int
         ) -> None:
 
-
+        await Economy.declare_transaction(conn, user_id=interaction.user.id)
         value = await process_confirmation(
             interaction=interaction, 
             prompt=(
@@ -2607,6 +2660,9 @@ class ItemQuantityModal(discord.ui.Modal):
                 f"{self.item_name}** for **{CURRENCY} {new_price:,}**?"
             )
         )
+        await Economy.end_transaction(conn, user_id=interaction.user.id)
+        await conn.commit()
+
         if value:
             await self.begin_purchase(interaction, true_qty, conn, current_balance, new_price)
     
@@ -2816,6 +2872,23 @@ class Economy(commands.Cog):
             "[`>reasons`](https://www.google.com/)."
         )
         self.batch_update.start()
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        async with self.bot.pool.acquire() as conn:
+            conn: asqlite_Connection
+            data = await conn.fetchone("SELECT userID FROM transactions WHERE userID = $0", interaction.user.id)
+            try:
+                assert not data
+                return True
+            except AssertionError:
+                a = discord.ui.View().add_item(
+                    discord.ui.Button(
+                        label="Explain This!", 
+                        url="https://dankmemer.lol/tutorial/interaction-locks"
+                    )
+                )
+                await interaction.response.send_message(view=a, embed=WARN_FOR_CONCURRENCY, ephemeral=True)
+                return False
 
     @tasks.loop(hours=1)
     async def batch_update(self):
@@ -3524,6 +3597,14 @@ class Economy(commands.Cog):
 
         return data
 
+    @staticmethod
+    async def declare_transaction(conn: asqlite_Connection, *, user_id: int) -> bool:
+        await conn.execute("INSERT INTO transactions (userID) VALUES ($0)", user_id)
+    
+    @staticmethod
+    async def end_transaction(conn: asqlite_Connection, *, user_id: int) -> bool:
+        await conn.execute("DELETE FROM transactions WHERE userID = $0", user_id)
+
     # -----------------------------------------
 
     @staticmethod
@@ -3800,7 +3881,12 @@ class Economy(commands.Cog):
         user: Optional[USER_ENTRY], 
         multiplier: Optional[MULTIPLIER_TYPES] = "robux"
     ) -> None:
-        await interaction.response.send_message(embed=DOWNM)
+        await interaction.response.send_message(
+            embed=membed(
+                "We are working on making this feature better!\n"
+                "Track our progress [here](https://github.com/SGA-A/c2c/issues/35)."
+            )
+        )
 
     share = app_commands.Group(
         name='share', 
@@ -3855,10 +3941,13 @@ class Economy(commands.Cog):
                 
                 setting_enabled = await Economy.is_setting_enabled(conn, user_id=interaction.user.id, setting="share_robux_confirmations")
                 if setting_enabled:
+                    await Economy.declare_transaction(conn, user_id=interaction.user.id)
                     value = await process_confirmation(
                         interaction=interaction, 
                         prompt=f"Are you sure you want to share {CURRENCY} **{share_amount:,}** with {recipient.mention}?"
                     )
+                    await Economy.end_transaction(conn, user_id=interaction.user.id)
+                    await conn.commit()
                     if not value:
                         return
 
@@ -3919,10 +4008,14 @@ class Economy(commands.Cog):
                     return await respond(interaction, embed=membed(f"You don't have **{quantity}x {ie} {item_name}**."))
                 
                 if attrs[-1]:
+                    await Economy.declare_transaction(conn, user_id=interaction.user.id)
                     value = await process_confirmation(
                         interaction=interaction, 
                         prompt=f"Are you sure you want to share **{quantity}x {ie} {item_name}** with {recipient.mention}?"
                     )
+                    await Economy.end_transaction(conn, user_id=interaction.user.id)
+                    await conn.commit()
+
                     if not value:
                         return
 
@@ -4092,6 +4185,8 @@ class Economy(commands.Cog):
 
             cost = floor((cost * sell_quantity) / 4)
             if await self.is_setting_enabled(conn, user_id=interaction.user.id, setting="selling_confirmations"):
+                await Economy.declare_transaction(conn, user_id=interaction.user.id)
+
                 value = await process_confirmation(
                     interaction=interaction, 
                     prompt=(
@@ -4099,6 +4194,8 @@ class Economy(commands.Cog):
                         f"{ie} {item_name}** for **{CURRENCY} {cost:,}**?"
                     )
                 )
+                await Economy.end_transaction(conn, user_id=interaction.user.id)
+                await conn.commit()
 
                 if not value:
                     return
@@ -4617,10 +4714,13 @@ class Economy(commands.Cog):
                     """
                 )
                 
+                await Economy.declare_transaction(conn, user_id=interaction.user.id)
                 value = await process_confirmation(
                     interaction=interaction, 
                     prompt=massive_prompt
                 )
+                await conn.commit()
+                await Economy.end_transaction(conn, user_id=interaction.user.id)
 
                 if value:
 
@@ -4683,7 +4783,10 @@ class Economy(commands.Cog):
         """View your profile within the economy."""
 
         return await interaction.response.send_message(
-            embed=membed("We're working on custom profiles so this command is disabled for now.")
+            embed=membed(
+                "We're working on custom profiles so this command is disabled for now.\n"
+                "Track our progress [here](https://github.com/SGA-A/c2c/issues/110)."
+            )
         )
 
         user = user or interaction.user
@@ -6087,14 +6190,14 @@ class Economy(commands.Cog):
             
             return await interaction.response.send_message(embed=winner)
 
+
+        await Economy.declare_transaction(conn, user_id=interaction.user.id)
         shallow_pv = [display_user_friendly_card_format(number) for number in player_hand]
         shallow_dv = [display_user_friendly_card_format(number) for number in dealer_hand]
 
         self.bot.games[interaction.user.id] = (deck, player_hand, dealer_hand, shallow_dv, shallow_pv, namount)
 
-        initial = discord.Embed()
-        initial.colour = 0x2B2D31
-        initial.description = (
+        initial = membed(
             f"The game has started. May the best win.\n"
             f"`{CURRENCY} ~{format_number_short(namount)}` is up for grabs on the table."
         )
