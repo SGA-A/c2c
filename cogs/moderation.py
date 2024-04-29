@@ -72,8 +72,14 @@ class RoleManagement(app_commands.Group):
 
         start_time = perf_counter()
         try:
+            
             for member in users_without_it:
-                await member.add_roles(discord.Object(id=role.id), atomic=True)
+                await member.add_roles(
+                    discord.Object(id=role.id), 
+                    reason=f"Bulk role-add requested by {interaction.user} (ID: {interaction.user.id})", 
+                    atomic=True
+                )
+
         except discord.HTTPException:
             return "We are being rate-limited. Try again later"
         finally:
@@ -99,7 +105,12 @@ class RoleManagement(app_commands.Group):
         start_time = perf_counter()
         try:
             for member in targets:
-                await member.remove_roles(discord.Object(id=new_role.id), atomic=True)
+                await member.remove_roles(
+                    discord.Object(id=new_role.id), 
+                    reason=f"Bulk role-remove requested by {interaction.user} (ID: {interaction.user.id})", 
+                    atomic=True
+                )
+
         except discord.HTTPException:
             return "We are being rate-limited. Try again later."
         finally:
@@ -127,7 +138,11 @@ class RoleManagement(app_commands.Group):
         if resp:
             return await interaction.response.send_message(embed=membed(resp))
         
-        await user.add_roles(discord.Object(id=role.id))
+        await user.add_roles(
+            discord.Object(id=role.id), 
+            reason=f"Requested by {interaction.user} (ID: {interaction.user.id})"
+        )
+
         await interaction.response.send_message(embed=membed(f"Added {role.mention} to {user.mention}."))
 
     @app_commands.command(name="remove", description="Removes a role from the specified member")
@@ -144,7 +159,11 @@ class RoleManagement(app_commands.Group):
         if resp:
             return await interaction.response.send_message(embed=membed(resp))
     
-        await user.remove_roles(discord.Object(id=role.id))
+        await user.remove_roles(
+            discord.Object(id=role.id), 
+            reason=f"Requested by {interaction.user} (ID: {interaction.user.id})"
+        )
+
         await interaction.response.send_message(embed=membed(f"Removed {role.mention} from {user.mention}."))
 
     @app_commands.command(name="custom", description="Add or remove multiple roles in a single command")
@@ -190,7 +209,11 @@ class RoleManagement(app_commands.Group):
         
         embed = discord.Embed(colour=0x2B2D31, title="Role Changes")
 
-        await user.add_roles(*added_roles)
+        await user.add_roles(
+            *added_roles, 
+            reason=f"Custom request by {interaction.user} (ID: {interaction.user.id})"
+        )
+
         embed.add_field(
             name="Added", 
             value="\n".join(role.mention for role in added_roles) or "\U0000200b"
@@ -200,7 +223,10 @@ class RoleManagement(app_commands.Group):
             name="Removed", 
             value="\n".join(role.mention for role in removed_roles) or "\U0000200b"
         )
-        await user.remove_roles(*removed_roles)
+        await user.remove_roles(
+            *removed_roles, 
+            reason=f"Custom request by {interaction.user} (ID: {interaction.user.id})"
+        )
         
         await interaction.followup.send(embed=embed)
 
@@ -569,7 +595,10 @@ class Moderation(commands.Cog):
             
             try:
                 mem: discord.Member = guild.get_member(mod_to)
-                guild = await mem.remove_roles(discord.Object(id=role_id))
+                guild = await mem.remove_roles(
+                    discord.Object(id=role_id),
+                    reason="Temporary role has expired"
+                )
             except discord.HTTPException:
                 pass
             finally:
@@ -623,7 +652,7 @@ class Moderation(commands.Cog):
     @temprole.command(name="add", description="Adds a temporary role")
     @app_commands.describe(user="The user to add the role to.", role="The role to add to this user.", duration="When this role should be removed e.g. 1d 7h 19m 4s.")
     async def add_temp_role(self, interaction: discord.Interaction, user: discord.Member, duration: app_commands.Transform[int, TimeConverter], role: discord.Role):
-        
+
         if not duration:
             return await interaction.response.send_message(embed=membed("Use a valid duration format e.g. 1d 7h 19m 4s."))
 
@@ -639,31 +668,45 @@ class Moderation(commands.Cog):
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
 
+        time_components = (
+            (int(days), "days"),
+            (int(hours), "hours"),
+            (int(minutes), "minutes"),
+            (int(seconds), "seconds")
+        )
+
         # Sending message
         success = discord.Embed()
-        success.colour = 0x70DEAA
+        success.colour = role.colour
         success.title = "Temporary role added"
+        success.description = f"Granted {user.mention} the {role.mention} role for "
+        success.description += ' and '.join(f"{quantity} {unit}" for quantity, unit in time_components if quantity)
 
-        success.description = (
-            f"Granted {user.mention} the {role.mention} role for:\n"
-            f"- {int(days)} days, {int(hours)} hours, {int(minutes)} minutes and {int(seconds)} seconds.")
-
-        await user.add_roles(discord.Object(id=role.id))
+        await user.add_roles(
+            discord.Object(id=role.id), 
+            reason=f"Temporary role requested by {interaction.user} (ID: {interaction.user.id})"
+        )
         await interaction.response.send_message(embed=success)
 
         # Scheduling task
         timestamp = (discord.utils.utcnow() + timedelta(seconds=duration)).timestamp()
 
         conn = await self.bot.pool.acquire()
+        
         await conn.execute(
-            'INSERT INTO tasks (mod_to, role_id, end_time, in_guild) VALUES ($0, $1, $2, $3)', user.id, role.id, timestamp, guild.id)
+            """
+            INSERT INTO tasks (mod_to, role_id, end_time, in_guild) 
+            VALUES ($0, $1, $2, $3)
+            """, user.id, role.id, timestamp, guild.id
+        )
+
         await conn.commit()
         await self.bot.pool.release(conn)
 
         if self.check_for_role.is_running():
             self.check_for_role.restart()
-        else:
-            self.check_for_role.start()
+            return
+        self.check_for_role.start()
 
 
 async def setup(bot: commands.Bot):
