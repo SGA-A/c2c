@@ -45,7 +45,7 @@ class Pagination(discord.ui.View):
         """Make sure only original user that invoked interaction can interact"""
         if interaction.user == self.interaction.user:
             return True
-        emb = membed("You cannot interact with this menu")
+        emb = membed(f"This menu is controlled by {self.interaction.user.mention}.")
         await interaction.response.send_message(embed=emb, ephemeral=True)
         return False
 
@@ -154,7 +154,7 @@ class PaginationSimple(discord.ui.View):
         """Make sure only original user that invoked interaction can interact"""
         if interaction.user.id == self.invoker_id:
             return True
-        emb = membed("You cannot interact with this menu")
+        emb = membed("This menu is not for you.")
         await interaction.response.send_message(embed=emb, ephemeral=True)
         return False
 
@@ -245,8 +245,7 @@ class PaginationItem(discord.ui.View):
         """Make sure only original user that invoked interaction can interact"""
         if interaction.user == self.interaction.user:
             return True
-        emb = membed(
-            f"This shop menu is controlled by {self.interaction.user.mention}, you will have to run the original command yourself.")
+        emb = membed(f"This menu is controlled by {self.interaction.user.mention}.")
         await interaction.response.send_message(embed=emb, ephemeral=True)
         return False
 
