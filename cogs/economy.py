@@ -385,7 +385,8 @@ async def determine_exponent(interaction: discord.Interaction, rinput: str) -> s
     except (ValueError, TypeError):
         return await respond(
             interaction=interaction,
-            embed=membed("You need to provide a real positive number.")
+            embed=membed("You need to provide a real positive number."), 
+            ephemeral=True
         )
 
 
@@ -1127,7 +1128,11 @@ class BalanceView(discord.ui.View):
                     url="https://dankmemer.lol/tutorial/interaction-locks"
                 )
             )
-            await interaction.response.send_message(embed=WARN_FOR_CONCURRENCY, view=warning, ephemeral=True)
+            await interaction.response.send_message(
+                embed=WARN_FOR_CONCURRENCY, 
+                view=warning, 
+                ephemeral=True
+            )
             return True
 
     @discord.ui.button(label="Withdraw", disabled=True)
@@ -1755,14 +1760,23 @@ class HighLow(discord.ui.View):
         return await economy_check(interaction, self.interaction.user)
 
     async def on_timeout(self) -> None:
+        async with self.interaction.client.pool.acquire() as conn:
+            await Economy.end_transaction(conn, user_id=self.interaction.user.id)
+            await conn.commit()
+
         for item in self.children:
             item.disabled = True
-        await self.message.edit(embed=membed("The game ended because you didn't answer in time."), view=None)
+
+        await self.message.edit(
+            view=None, 
+            embed=membed("The game ended because you didn't answer in time.")
+        )
 
     async def send_win(self, interaction: discord.Interaction, button: discord.ui.Button, conn: asqlite_Connection):
         new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
         total = self.their_bet * (new_multi // 100 + 1)
         new_balance = await Economy.update_bank_new(interaction.user, conn, total)
+        await Economy.end_transaction(conn, user_id=self.interaction.user.id)
         await self.make_clicked_blurple_only(button)
 
         win = discord.Embed(
@@ -1786,6 +1800,7 @@ class HighLow(discord.ui.View):
 
     async def send_loss(self, interaction: discord.Interaction, button: discord.ui.Button, conn: asqlite_Connection):
         new_amount = await Economy.update_bank_new(interaction.user, conn, -self.their_bet)
+        await Economy.end_transaction(conn, user_id=self.interaction.user.id)
         await self.make_clicked_blurple_only(button)
 
         lose = discord.Embed()
@@ -4061,23 +4076,32 @@ class Economy(commands.Cog):
     @showcase.command(name="view", description="View your item showcase")
     @app_commands.checks.cooldown(1, 5)
     async def view_showcase(self, interaction: discord.Interaction) -> None:
-        return await interaction.response.send_message(embed=membed("This is getting rewritten. Give it some time."))
+        await interaction.response.send_message(
+            ephemeral=True,
+            embed=membed("This is getting rewritten. Give it some time.")
+        )
 
     @showcase.command(name="add", description="Add an item to your showcase", extras={"exp_gained": 1})
     @app_commands.checks.cooldown(1, 10)
     @app_commands.describe(item_name="Select an item.")
     async def add_showcase_item(self, interaction: discord.Interaction, item_name: str) -> None:
-        return await interaction.response.send_message(embed=membed("This is getting rewriten. Give it some time."))
+        await interaction.response.send_message(
+            ephemeral=True,
+            embed=membed("This is getting rewriten. Give it some time.")
+        )
 
     @showcase.command(name="remove", description="Remove an item from your showcase", extras={"exp_gained": 1})
     @app_commands.checks.cooldown(1, 10)
     @app_commands.describe(item_name="Select an item.")
     async def remove_showcase_item(self, interaction: discord.Interaction, item_name: str) -> None:
-        return await interaction.response.send_message(embed=membed("This is getting rewritten. Give it some time."))
+        await interaction.response.send_message(
+            ephemeral=True,
+            embed=membed("This is getting rewritten. Give it some time.")
+        )
 
     shop = app_commands.Group(
         name='shop', 
-        description='view items available for purchase.', 
+        description='View items available for purchase.', 
         guild_only=True, 
         guild_ids=APP_GUILDS_ID
     )
@@ -4173,13 +4197,15 @@ class Economy(commands.Cog):
             if item_attrs is None:
                 return await respond(
                     interaction=interaction, 
+                    ephemeral=True,
                     embed=membed(f"You don't own a single {ie} **{item_name}**.")
                 )
 
             cost, qty = item_attrs
             if qty < sell_quantity:
                 return await respond(
-                    interaction=interaction, 
+                    interaction=interaction,
+                    ephemeral=True, 
                     embed=membed(f"You don't have {ie} **{sell_quantity:,}x** {item_name}, so uh no.")
                 )
 
@@ -4309,13 +4335,14 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
 
             servants = await conn.fetchall("SELECT slay_name FROM slay WHERE userID = $0", interaction.user.id)
             size = len(servants)
 
             if size >= 6:
                 return await interaction.response.send_message(
+                    ephemeral=True,
                     embed=membed("You cannot have more than 6 servants.")
                 )
 
@@ -4323,7 +4350,9 @@ class Economy(commands.Cog):
             
             if dupe_check_result is not None:
                 return await interaction.response.send_message(
-                    embed=membed("Somebody already owns a servant with that name."))
+                    ephemeral=True,
+                    embed=membed("Somebody already owns a servant with that name.")
+                )
         
             intro = choice(
                 (
@@ -4366,7 +4395,7 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             if await self.can_call_out(interaction.user, conn):
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
 
             servants = await conn.fetchall(
                 """
@@ -4391,8 +4420,10 @@ class Economy(commands.Cog):
                         )
                 
                 await conn.execute(
-                    "DELETE FROM slay WHERE userID = ? AND slay_name = ?", 
-                    (interaction.user.id, servant_name)
+                    """
+                    DELETE FROM slay 
+                    WHERE userID = $0 AND slay_name = $1
+                    """, interaction.user.id, servant_name
                 )
 
                 await conn.commit()
@@ -4401,7 +4432,8 @@ class Economy(commands.Cog):
                 )
 
             return await interaction.response.send_message(
-                embed=membed("You don't have own a servant with this name.")
+                ephemeral=True,
+                embed=membed("You don't have a servant with this name.")
             )
 
     @servant.command(name='lookup', description="Look for a servant by their name")
@@ -4415,6 +4447,7 @@ class Economy(commands.Cog):
             dtls = await conn.fetchone("SELECT * FROM `slay` WHERE LOWER(slay_name) = LOWER($0)", servant_name)
             if dtls is None:
                 return await interaction.response.send_message(
+                    ephemeral=True,
                     embed=membed("Nobody owns a servant with the name provided.")
                 )
 
@@ -4495,9 +4528,11 @@ class Economy(commands.Cog):
                     relative = discord.utils.format_dt(when, style="R")
                     when = discord.utils.format_dt(when)
                     return await interaction.response.send_message(
+                        ephemeral=True,
                         embed=membed(
                             f"{slay_name} is still working.\n"
-                            f"They'll be back at {when} ({relative}).")
+                            f"They'll be back at {when} ({relative})."
+                        )
                     )
 
                 data = await conn.fetchone(
@@ -4644,6 +4679,7 @@ class Economy(commands.Cog):
             if not data:
                 return await respond(
                     interaction=interaction,
+                    ephemeral=True,
                     embed=membed(f"You don't own a single {ie} **{item_name}**, therefore cannot use it.")
                 )
             
@@ -4651,6 +4687,7 @@ class Economy(commands.Cog):
             if qty < quantity:
                 return await respond(
                     interaction=interaction,
+                    ephemral=True,
                     embed=membed(f"You don't own **{quantity}x {ie} {item_name}**, therefore cannot use this many.")
                 )
             
@@ -4658,7 +4695,8 @@ class Economy(commands.Cog):
             if handler is None:
                 return await respond(
                     interaction=interaction,
-                    embed=membed(f"{ie} **{item_name}** does not have a use yet.")
+                    ephemeral=True,
+                    embed=membed(f"{ie} **{item_name}** does not have a use yet.\nWait until it does!")
                 )
             
             if item_name == "Bank Note":
@@ -4683,12 +4721,13 @@ class Economy(commands.Cog):
             )
 
             if data is None:
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
 
             prestige, actual_level, actual_robux = data
 
             if prestige == 10:
                 return await interaction.response.send_message(
+                    ephemeral=True,
                     embed=membed(
                         "You've reached the highest prestige!\n"
                         "No more perks can be obtained from this command."
@@ -5038,7 +5077,7 @@ class Economy(commands.Cog):
 
             wallet_amt = await conn.fetchone(f"SELECT wallet FROM `{BANK_TABLE_NAME}` WHERE userID = $0", interaction.user.id)
             if wallet_amt is None:
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
             wallet_amt, = wallet_amt
 
             has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
@@ -5048,15 +5087,14 @@ class Economy(commands.Cog):
                 exponent_amount=robux,
                 has_keycard=has_keycard
             )
-            
+
             if robux is None:
                 return
 
             number = randint(1, 100)
             hint = randint(1, 100)
 
-            query = discord.Embed()
-            query.colour = 0x2B2D31
+            query = membed()
             query.description = (
                 "I just chose a secret number between 0 and 100.\n"
                 f"Is the secret number *higher* or *lower* than **{hint}**?"
@@ -5075,6 +5113,7 @@ class Economy(commands.Cog):
                 bet=robux, 
                 value=number
             )
+            await Economy.declare_transaction(conn, user_id=interaction.user.id)
 
             await interaction.response.send_message(view=hl_view, embed=query)
             hl_view.message = await interaction.original_response()
@@ -5210,11 +5249,11 @@ class Economy(commands.Cog):
         member: Optional[USER_ENTRY]
     ) -> None:
         """View your inventory or another player's inventory."""
-
         member = member or interaction.user
 
         if (member.bot) and (member.id != self.bot.user.id):
             return await interaction.response.send_message(
+                ephemeral=True,
                 embed=membed("Bots do not have accounts.")
             )
 
@@ -5239,7 +5278,7 @@ class Economy(commands.Cog):
                     em.description = "You don't have any items yet."
                 else:
                     em.description = f"{member.mention} has nothing for you to see."
-                return await interaction.response.send_message(embed=em)
+                return await interaction.response.send_message(embed=em, ephemeral=True)
 
             em.set_author(
                 name=f"{member.display_name}'s Inventory", 
@@ -5359,13 +5398,14 @@ class Economy(commands.Cog):
             )
             
             if not data:
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
 
             job_name = data[1][0]
             if job_name == "None":
-                    return await interaction.response.send_message(
-                        embed=membed("You don't have a job, get one first.")
-                    )
+                return await interaction.response.send_message(
+                    ephemeral=True,
+                    embed=membed("You don't have a job, get one first.")
+                )
 
             has_cd = self.is_no_cooldown(data[0][0])
             if isinstance(has_cd, tuple):
@@ -5414,7 +5454,7 @@ class Economy(commands.Cog):
             )
 
             if not data:
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
 
             has_cd = self.is_no_cooldown(cooldown_value=data[0][0])
             
@@ -5422,21 +5462,28 @@ class Economy(commands.Cog):
                 embed = discord.Embed(
                     title="Cannot perform this action", 
                     description=f"You can change your job {has_cd[1]}.", 
-                    colour=0x2B2D31)
-                    
-                return await interaction.response.send_message(embed=embed)
+                    colour=0x2B2D31
+                )
+                return await interaction.response.send_message(embed=embed, ephemeral=True)
 
             async with conn.transaction():
                 
                 if data[1][0] != "None":
                     return await interaction.response.send_message(
-                    embed=membed(
-                        f"You are already working as a **{data[1][0]}**.\n"
-                        "You'll have to resign first using /work resign."))
+                        ephemeral=True,
+                        embed=membed(
+                            f"You are already working as a **{data[1][0]}**.\n"
+                            "You'll have to resign first using /work resign."
+                        )
+                    )
 
                 ncd = (discord.utils.utcnow() + datetime.timedelta(days=2)).timestamp()
                 await self.update_cooldown(
-                    conn, user=interaction.user, cooldown_type="job_change", new_cd=ncd)
+                    conn, 
+                    user=interaction.user, 
+                    cooldown_type="job_change", 
+                    new_cd=ncd
+                )
                 
                 await self.change_job_new(interaction.user, conn, job_name=chosen_job)
                 embed = discord.Embed()
@@ -5464,10 +5511,13 @@ class Economy(commands.Cog):
             )
 
             if not data:
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
 
             if data[1][0] == "None":
-                return await interaction.response.send_message(embed=membed("You're already unemployed."))
+                return await interaction.response.send_message(
+                    ephemeral=True,
+                    embed=membed("You're already unemployed.")
+                )
 
             has_cd = self.is_no_cooldown(cooldown_value=data[0][0])
             if isinstance(has_cd, tuple):
@@ -5477,7 +5527,7 @@ class Economy(commands.Cog):
                     colour=0x2B2D31
                 )
 
-                return await interaction.response.send_message(embed=embed)
+                return await interaction.response.send_message(embed=embed, ephemeral=True)
 
             value = await process_confirmation(
                 interaction=interaction, 
@@ -5516,7 +5566,7 @@ class Economy(commands.Cog):
                     await conn.commit()
 
                     return await interaction.response.send_message(embed=membed(f"Force registered {user.mention}."))
-                await interaction.response.send_message(embed=membed(f"{user.mention} isn't registered."))
+                await interaction.response.send_message(embed=membed(f"{user.mention} isn't registered."), ephemeral=True)
 
             elif not_registered_check and (user.id == interaction.user.id):
 
@@ -5598,7 +5648,7 @@ class Economy(commands.Cog):
             ncd = await conn.fetchone("SELECT weekly FROM cooldowns WHERE userID = $0", interaction.user.id)
             
             if ncd is None:
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
             
             has_cd = self.is_no_cooldown(ncd[0])
 
@@ -5636,6 +5686,7 @@ class Economy(commands.Cog):
         if member.id != interaction.user.id:
             if interaction.user.id not in self.bot.owner_ids:
                 return await interaction.response.send_message(
+                    ephemeral=True,
                     embed=membed("You are not allowed to do this.")
                 )
 
@@ -5643,7 +5694,10 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             if await self.can_call_out(member, conn):
-                return await interaction.response.send_message(embed=membed(f"{member.mention} isn't registered."))
+                return await interaction.response.send_message(
+                    ephemeral=True,
+                    embed=membed(f"{member.mention} isn't registered.")
+                )
 
             view = ConfirmResetData(
                 interaction=interaction, 
@@ -5689,7 +5743,7 @@ class Economy(commands.Cog):
             )
 
             if bank_amt is None:
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
             bank_amt, = bank_amt
 
             query = (
@@ -5726,7 +5780,7 @@ class Economy(commands.Cog):
 
             elif actual_amount > bank_amt:
                 embed.description = f"You only have {CURRENCY} **{bank_amt:,}** in your bank right now."
-                return await interaction.response.send_message(embed=embed)
+                return await interaction.response.send_message(embed=embed, ephemeral=True)
 
             else:
                 new_data = await conn.fetchone(query, actual_amount, user.id)
@@ -5767,7 +5821,7 @@ class Economy(commands.Cog):
                 """, interaction.user.id
             )
             if details is None:
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
             
             wallet_amt, bank, bankspace = details
 
@@ -5779,7 +5833,7 @@ class Economy(commands.Cog):
                     f"You can only hold **{CURRENCY} {details[2]:,}** in your bank right now.\n"
                     f"To hold more, use currency commands and level up more. Bank notes can aid with this."
                 )
-                return await interaction.response.send_message(embed=embed)
+                return await interaction.response.send_message(embed=embed, ephemeral=True)
             
             query = (
                 f"""
@@ -5798,7 +5852,7 @@ class Economy(commands.Cog):
                 
                 if not available_bankspace:
                     embed.description = "You have nothing to deposit."
-                    return await interaction.response.send_message(embed=embed)
+                    return await interaction.response.send_message(embed=embed, ephemeral=True)
 
                 wallet_new, bank_new = await conn.fetchone(query, available_bankspace, user.id)
                 await conn.commit()
@@ -5886,7 +5940,7 @@ class Economy(commands.Cog):
 
                 if not (await self.can_call_out_either(interaction.user, other, conn)):
                     embed.description = f'Either you or {other.mention} are not registered.'
-                    return await interaction.response.send_message(embed=embed)
+                    return await interaction.response.send_message(embed=embed, ephemeral=True)
 
                 prim_d = await conn.fetchone(
                     """
@@ -6043,7 +6097,7 @@ class Economy(commands.Cog):
             )
 
             if wallet_amt is None:
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
             wallet_amt, = wallet_amt
 
             has_keycard = await self.user_has_item_from_id(
@@ -6102,15 +6156,10 @@ class Economy(commands.Cog):
         )
 
         if wallet_amt is None:
-            return await interaction.response.send_message(embed=self.not_registered)
+            return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
         
         wallet_amt, = wallet_amt
         has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
-
-        if self.bot.games.get(interaction.user.id) is not None:
-            return await interaction.response.send_message(
-                embed=membed("You already have an ongoing game taking place.")
-            )
 
         # ----------- Check what the bet amount is, converting where necessary -----------
 
@@ -6256,13 +6305,14 @@ class Economy(commands.Cog):
 
         if amount > wallet_amount:
             return await interaction.response.send_message(
+                ephemeral=True,
                 embed=membed("You are too poor for this bet.")
             )
 
         if has_keycard:
-
             if (amount < MIN_BET_KEYCARD) or (amount > MAX_BET_KEYCARD):
                 return await interaction.response.send_message(
+                    ephemeral=True,
                     embed=membed(
                         f"You can't bet less than {CURRENCY} **{MIN_BET_KEYCARD:,}**.\n"
                         f"You also can't bet anything more than {CURRENCY} **{MAX_BET_KEYCARD:,}**."
@@ -6271,13 +6321,13 @@ class Economy(commands.Cog):
         else:
             if (amount < MIN_BET_WITHOUT) or (amount > MAX_BET_WITHOUT):
                 return await interaction.response.send_message(
+                    ephemeral=True,
                     embed=membed(
                         f"You can't bet less than {CURRENCY} **{MIN_BET_WITHOUT:,}**.\n"
                         f"You also can't bet anything more than {CURRENCY} **{MAX_BET_WITHOUT:,}**.\n"
                         f"These values can increase when you acquire a <:lanyard:1165935243140796487> Keycard."
                     )
                 )
-
         return amount
 
     @app_commands.command(name="bet", description="Bet your robux on a dice roll", extras={"exp_gained": 3})
@@ -6301,7 +6351,7 @@ class Economy(commands.Cog):
             )
 
             if data is None:
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
             wallet_amt, id_won_amount, id_lose_amount = data
 
             pmulti = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
