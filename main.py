@@ -341,6 +341,8 @@ async def total_command_count(interaction: Interaction) -> int:
     global slash_cmds
     if slash_cmds:
         return slash_cmds
+    
+    # added 1 extra because there is 1 global command not detected here 
     slash_cmds = (len(await bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(bot.commands)
     return slash_cmds
 
