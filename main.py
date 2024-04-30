@@ -12,8 +12,6 @@ from os import environ
 from sys import version, stderr
 
 from re import compile
-from random import choice
-from collections import deque
 from logging import INFO
 
 from typing import (
@@ -23,8 +21,7 @@ from typing import (
     Optional, 
     TYPE_CHECKING, 
     Union, 
-    List, 
-    Tuple
+    List
 )
 
 from discord import (
@@ -43,7 +40,7 @@ from discord import (
     NotFound
 )
 
-from discord.utils import setup_logging, format_dt
+from discord.utils import setup_logging
 from discord.ext import commands
 from cogs.economy import membed, APP_GUILDS_ID
 
@@ -51,6 +48,9 @@ if TYPE_CHECKING:
     from discord.abc import Snowflake
 
     AppCommandStore = Dict[str, app_commands.AppCommand]  # name: AppCommand
+
+
+slash_cmds = None
 
 
 # Search for a specific term in this project using Ctrl + Shift + F
@@ -264,236 +264,211 @@ classnames = Literal[
 def return_txt_cmds_first(command_holder: dict, category: classnames) -> dict:
     """Displays all text-based commands defined within a cog as a dict."""
     for cmd in bot.get_cog(category).get_commands():
-        command_holder.update({cmd.name: deque((f'{category}', f'{cmd.description}', 'txt'))})
+        command_holder.update(
+            {
+                cmd.name: (f'{cmd.description}', 'txt')
+            }
+        )
     return command_holder
 
 
 def return_interaction_cmds_last(command_holder: dict, category: classnames) -> dict:
     """Displays all slash commands defined within a cog as a dict."""
     for cmd in bot.get_cog(category).get_app_commands():
-        command_holder.update({cmd.name: deque((f'{category}', f'{cmd.description}', 'sla'))})
+        command_holder.update(
+            {
+                cmd.name: (f'{cmd.description}', 'sla')
+            }
+        )
     return command_holder
 
 
 def fill_up_commands(category: classnames) -> dict:
     """Assumes a category has both slash and text commands."""
-    the_dict = {}
-    new_dict = return_txt_cmds_first(the_dict, category)
+    new_dict = return_txt_cmds_first({}, category)
     all_cmds: dict = return_interaction_cmds_last(new_dict, category)
     return all_cmds
 
 
-def generic_loop_slash_only_subcommands(all_cmds: dict, cmd_formatter: set, guild_id) -> Tuple[set, int]:
+def generic_loop_slash_only_subcommands(all_cmds: dict, cmd_formatter: list, guild_id) -> set:
     """Returns tuple with first element as set of commands, second being the total command count."""
-    total_command_count = 0
-
-    for cmd, cmd_details in all_cmds.items():
-        total_command_count += 1
+    for i, cmd in enumerate(all_cmds, start=1):
 
         command_manage = bot.tree.get_app_command(cmd, guild=Object(id=guild_id))
-        try:
-            got_something = False
-            if not command_manage.options:
+
+        for option in command_manage.options:
+            if not isinstance(option, app_commands.AppCommandGroup):
                 continue
 
+            contains_subcommands = False
             for option in command_manage.options:
-                if not isinstance(option, app_commands.AppCommandGroup):
-                    continue
-                got_something = True
-                total_command_count += 1
-                cmd_formatter.add(f"\U00002022 {option.mention} - {option.description}")
-            
-            if not got_something:
-                cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
-        except AttributeError:
-            continue
-    return cmd_formatter, total_command_count
+                if isinstance(option, app_commands.AppCommandGroup):
+                    contains_subcommands = True
+                    cmd_formatter.append(f"{i}. {option.mention} - {option.description}")
+
+            if not contains_subcommands:
+                cmd_formatter.append(f"{i}. {command_manage.mention} - {command_manage.description}")
+    return cmd_formatter
 
 
-def generic_loop_with_subcommand(all_cmds: dict, cmd_formatter: set, guild_id) -> Tuple[set, int]:
-    total_command_count = 0
+def generic_loop_with_subcommand(all_cmds: dict, cmd_formatter: list, guild_id) -> set:
 
-    for cmd, cmd_details in all_cmds.items():
-        total_command_count += 1
+    for i, (cmd, cmd_details) in enumerate(all_cmds.items(), start=1):
 
         if cmd_details[-1] == 'txt':
-            cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
+            cmd_formatter.append(f"{i}. [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[0]}")
             continue
         
         command_manage = bot.tree.get_app_command(cmd, guild=Object(id=guild_id))
-        
-        try:
-            got_something = False
-            if command_manage.options:
-                for option in command_manage.options:
-                    if isinstance(option, app_commands.AppCommandGroup):
-                        got_something = True
-                        total_command_count += 1
-                        cmd_formatter.add(f"\U00002022 {option.mention} - {option.description}")
 
-            if not got_something:
-                cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
-        except AttributeError:
+        if not isinstance(command_manage, app_commands.AppCommand):
             continue
-    return cmd_formatter, total_command_count
+
+        contains_subcommands = False
+        for option in command_manage.options:
+            if isinstance(option, app_commands.AppCommandGroup):
+                contains_subcommands = True
+                cmd_formatter.append(f"{i}. {option.mention} - {option.description}")
+
+        if not contains_subcommands:
+            cmd_formatter.append(f"{i}. {command_manage.mention} - {command_manage.description}")
+
+    return cmd_formatter
 
 
 async def total_command_count(interaction: Interaction) -> int:
     """Return the total amount of commands detected within the bot, including text and slash commands."""
-    amount = (len(await bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(bot.commands)
-    return amount
+    global slash_cmds
+    if slash_cmds:
+        return slash_cmds
+    return (len(await bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(bot.commands)
 
 
-class SelectMenu(ui.Select):
+class HelpDropdown(ui.Select):
     def __init__(self):
         optionss = [
             SelectOption(
                 label='Owner', 
                 description='Debugging facilities for developers.', 
-                emoji='<:ownerSTAR:1221502316478464050>'),
+                emoji='<:ownerSTAR:1221502316478464050>'
+            ),
             SelectOption(
                 label='Moderation', 
                 description='Manage your own server, easily.', 
-                emoji='<:modSTAR:1221502315241013259>'),
+                emoji='<:modSTAR:1221502315241013259>'
+            ),
             SelectOption(
                 label='Utility', 
                 description='Entertainment beginning.', 
-                emoji='<:utilitySTAR:1221502313798172753>'),
+                emoji='<:utilitySTAR:1221502313798172753>'
+            ),
             SelectOption(
                 label='Economy', 
                 description='Earn a living in a simulated virtual economy.', 
-                emoji='\U00002b50'),
+                emoji='\U00002b50'
+            ),
             SelectOption(
                 label='Tags',
                 description='Create and manage your own tags.',
-                emoji='<:tagsSTAR:1227681495255355535>'),
+                emoji='<:tagsSTAR:1227681495255355535>'
+            ),
             SelectOption(
                 label="TempVoice", 
                 description="Configure your own temporary voice channel.",
-                emoji="<:tempSTAR:1221502312472903851>"),
+                emoji="<:tempSTAR:1221502312472903851>"
+            ),
             SelectOption(
                 label='Music', 
                 description='Stream your favourite tunes from any platform.', 
-                emoji='<:musicSTAR:1221502310967017652>')
+                emoji='<:musicSTAR:1221502310967017652>'
+            )
         ]
         super().__init__(placeholder="Select a command category", options=optionss)
 
     async def callback(self, interaction: Interaction):
 
-        their_choice: str = self.values[0]
-        cmd_formatter = set()
+        chosen_help_category: str = self.values[0]
+        cmd_formatter = []
 
         total_cmds_rough = await total_command_count(interaction)
-        total_cmds_cata = 0
 
         for option in self.options:
-            option.default = option.value == their_choice
+            option.default = option.value == chosen_help_category
 
-        embed = Embed()
-        embed.title = f"Help: {their_choice}"
-        if their_choice == 'Owner':
+        embed = Embed(title=f"Help: {chosen_help_category}")
+        if chosen_help_category == 'Owner':
             
-            all_cmds = fill_up_commands(their_choice)
+            all_cmds = fill_up_commands(chosen_help_category)
 
             embed.colour = 0x5BAAEF
-            embed.set_thumbnail(
-                url='https://cdn.discordapp.com/icons/592654230112698378/1a4fed4eca3d81da620a662a8b383c5b.png?size=512')
+            embed.set_thumbnail(url='https://cdn.discordapp.com/icons/592654230112698378/1a4fed4eca3d81da620a662a8b383c5b.png?size=512')
 
-            for cmd, cmd_details in all_cmds.items():
-                total_cmds_cata += 1
+            for i, (cmd, cmd_details) in enumerate(all_cmds.items(), start=1):
 
                 if cmd_details[-1] == 'txt':
-                    cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
+                    cmd_formatter.append(f"{i}. [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[0]}")
                     continue
 
                 command_manage = bot.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
-                cmd_formatter.add(f"\U00002022 **{command_manage.mention}** - {cmd_details[1]}")
+                cmd_formatter.append(f"{i}. **{command_manage.mention}** - {command_manage.description}")
 
-        elif their_choice == 'Moderation':
+        elif chosen_help_category == 'Moderation':
 
-            all_cmds = fill_up_commands(their_choice)
+            all_cmds = fill_up_commands(chosen_help_category)
+            all_cmds.update({"role": "sla"})
 
             embed.colour = 0xF70E73
             embed.set_thumbnail(url='https://emoji.discadia.com/emojis/74e65408-2adb-46dc-86a7-363f3096b6b2.PNG')
 
-            cmd_formatter, total_cmds_cata = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild_id)
+            cmd_formatter = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild_id)
 
-            roles = bot.tree.get_app_command("role", guild=Object(id=interaction.guild.id))
-            for option in roles.options:
-                total_cmds_cata += 1
-                cmd_formatter.add(f"\U00002022 {option.mention} - {option.description}")
+        elif chosen_help_category == 'Tags':
 
-        elif their_choice == 'Tags':
-
-            all_cmds = bot.get_cog(their_choice).get_commands()[0]
-            for cmd in all_cmds.commands:
-                total_cmds_cata += 1
-                cmd_formatter.add(f"\U00002022 [`>{cmd.qualified_name}`](https://youtu.be/dQw4w9WgXcQ) - {cmd.description}")
+            all_cmds = bot.get_cog(chosen_help_category).get_commands()[0]
+            for i, cmd in enumerate(all_cmds.commands, start=1):
+                cmd_formatter.append(f"{i}. [`>{cmd.qualified_name}`](https://youtu.be/dQw4w9WgXcQ) - {cmd.description}")
         
             embed.colour = 0x9EE1FF
             embed.set_thumbnail(url='https://i.imgur.com/uHb7xhc.png')
             embed.set_footer(text="These are also available as slash commands!")
 
-        elif their_choice in {"Utility", "TempVoice"}:
+        elif chosen_help_category in {"Utility", "TempVoice"}:
 
-            all_cmds = fill_up_commands(their_choice)
-            match their_choice:
+            all_cmds = fill_up_commands(chosen_help_category)
+            match chosen_help_category:
                 case "Utility":
                     embed.colour = 0x0FFF87
                     embed.set_thumbnail(url='https://i.imgur.com/YHBLgVx.png')
                 case _:
                     embed.colour = 0x8A1941
                     embed.set_thumbnail(url='https://i.imgur.com/b8u1MQj.png')
-            cmd_formatter, total_cmds_cata = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild_id)
-        
-        elif their_choice == 'Economy':
+            
+            cmd_formatter = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild_id)
+        elif chosen_help_category == 'Economy':
             
             embed.colour = 0xFFD700
             embed.set_thumbnail(url='https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Robux_2019_Logo_gold.svg/200px-Robux_2019_Logo_gold.svg.png')
 
-            all_cmds = fill_up_commands(their_choice)
+            all_cmds = fill_up_commands(chosen_help_category)
             
-            for cmd, cmd_details in all_cmds.items():
-                total_cmds_cata += 1
-                if cmd_details[-1] == 'txt':
-                    cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
-                    continue
-
-                command_manage = bot.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
-
-                try:
-                    got_something = False
-                    if not command_manage.options:
-                        continue
-
-                    for option in command_manage.options:
-                        if not isinstance(option, app_commands.AppCommandGroup):
-                            continue
-                        got_something = True
-                        total_cmds_cata += 1
-                        cmd_formatter.add(f"\U00002022 {option.mention} - {option.description}")
-
-                    if not got_something:
-                        cmd_formatter.add(f"\U00002022 {command_manage.mention} - {cmd_details[1]}")
-                except AttributeError:
-                    cmd_formatter.add(f"\U00002022 </balance:1192188834134376500> - {cmd_details[1]}")
+            cmd_formatter = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild_id)
         else:
             embed.colour = 0x6953E0
             embed.set_thumbnail(url="https://i.imgur.com/nFZTMFl.png")
 
-            all_cmds = return_txt_cmds_first(dict(), their_choice)
+            all_cmds = return_txt_cmds_first({}, chosen_help_category)
 
-            for cmd, cmd_details in all_cmds.items():
-                cmd_formatter.add(f"\U00002022 [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[1]}")
-                total_cmds_cata += 1
+            for i, (cmd, cmd_details) in enumerate(all_cmds.items(), start=1):
+                cmd_formatter.append(f"{i}. [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[0]}")
 
-        proportion = (total_cmds_cata / total_cmds_rough) * 100
+        prcntage = (len(cmd_formatter) / total_cmds_rough) * 100
+
         embed.description = "\n".join(cmd_formatter)
         embed.add_field(
-            name='Info', 
+            name="Info", 
             value=(
-                f'- {total_cmds_cata} commands listed\n'
-                f'- {proportion:.2f}% of all commands are here'
+                f"- {total_cmds_rough} commands total\n"
+                f"- {prcntage:.0f}% of all commands are here"
             )
         )
 
@@ -501,9 +476,9 @@ class SelectMenu(ui.Select):
 
 
 class Select(ui.View):
-    def __init__(self, timeout = 60.0):
-        super().__init__(timeout=timeout)
-        self.add_item(SelectMenu())
+    def __init__(self):
+        super().__init__(timeout=30.0)
+        self.add_item(HelpDropdown())
 
     async def on_timeout(self) -> None:
         for item in self.children:
@@ -518,7 +493,7 @@ class TimeConverter(commands.Converter):
     time_regex = compile(r"(\d{1,5}(?:[.,]?\d{1,5})?)([smhd])")
     time_dict = {"h": 3600, "s": 1, "m": 60, "d": 86400}
 
-    async def convert(self, ctx, argument):
+    async def convert(self, _, argument):
         matches = self.time_regex.findall(argument.lower())
         time = 0
         for v, k in matches:
@@ -656,72 +631,46 @@ async def load_cog(ctx: commands.Context, cog_name: cogs):
     await ctx.message.add_reaction("\U00002705")
 
 
-@bot.tree.command(name='help', description='The help command for c2c. Shows help for different categories.')
-async def help_command_category(interaction: Interaction):
-    
-    epicker = choice(
-        (
-            "<:githubB:1195500626382164119>", 
-            "<:githubBF:1195498685296021535>", 
-            "<:githubW:1195499565508460634>", 
-            "<:githubBlue:1195664427836506212>"
-        )
-    )
-
-    # remains True if not called in a guild
+async def do_guild_checks(interaction: Interaction):
     app_commands_not_supported = True
-    extra = ""
-    
     if interaction.guild:
-        app_commands_not_supported = interaction.guild.id not in APP_GUILDS_ID
-    
-        joined_at = interaction.guild.me.joined_at
-        extra = (
-            f"- Joined this server on {format_dt(joined_at, style="F")} ({format_dt(joined_at, style="R")})\n"
-        )
-
-    embed = Embed(
-        title='Help Menu for c2c', 
-        colour=0xB8B9C9,
-        description=(
-            '```fix\n[Patch #34]\n'
-            '- Blazing speeds\n'
-            '- Tags are here, at last\n'
-            '- Paginators are looking better```\n'
-            '**Note:**\n'
-            '- This does not display uncategorized commands.\n'
-            '- The prefix for this bot is `>` (for text commands)\n'
-            '- Not all categories are accessible to everyone, check the details prior'
-        )
-    )
-
-    embed.add_field(
-        name="Who are you?", 
-        value=(
-            "Here's the gist:\n"
-            f"- Made by Splint#6019 and Geo#2181 on <t:1669831154:F> (<t:1669831154:R>)\n{extra}"
-            "- I have some features that might make your day a little brighter, like music!\n"
-            f"- I'm a private bot, only in `{len(interaction.client.guilds)}` servers!\n"
-            "- Use the dropdown below to see what I have to offer.\n\n"
-            f"I'm also open source. You can find my code on {epicker} "
-            "[GitHub](https://github.com/SGA-A/c2c)."
-        )
-    )
+        gid = interaction.guild.id
+        app_commands_not_supported = gid not in APP_GUILDS_ID
 
     if app_commands_not_supported:
-        supported_guilds = "\n".join(f" - {interaction.client.get_guild(guild_id).name}" for guild_id in APP_GUILDS_ID)
+        supported_guilds = "\n".join(f" - {bot.get_guild(sgid).name}" for sgid in APP_GUILDS_ID)
 
         second = membed(
-            "Some commands are not available here:\n"
-            "- Slash commands are **only** supported in these servers:\n"
+            "Commands are **not** available here:\n"
+            "- Slash commands are only supported in these servers:\n"
             f"{supported_guilds}\n"
-            "- Text commands are supported everywhere **except** DMs.\n\n"
+            "- Text commands are supported everywhere except DMs.\n\n"
             "This was done to prevent hidden abuse.\n"
             "You may contact the developers to request another guild to be added."
         )
-        return await interaction.response.send_message(embeds=[embed, second], ephemeral=True)
+        return await interaction.response.send_message(embed=second, ephemeral=True)
+    return app_commands_not_supported
 
-    help_view = Select(timeout=30.0)
+
+@bot.tree.command(name='help', description='The help command for c2c. Shows help for different categories.')
+async def help_command_category(interaction: Interaction):
+    
+    value = await do_guild_checks(interaction)
+    if value is None:
+        return
+
+    embed = Embed(
+        title="Help for c2c", 
+        colour=0xB8B9C9,
+        description=(
+            "**For your reference:**\n"
+            "- This does not display uncategorized commands.\n"
+            "- The prefix for this bot is `>` (for text commands)\n"
+            "- Not all categories are accessible to everyone, check the details prior\n\n"
+        )
+    )
+
+    help_view = Select()
     await interaction.response.send_message(embed=embed, view=help_view, ephemeral=True)
     help_view.message = await interaction.original_response()
 
