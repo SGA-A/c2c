@@ -341,7 +341,8 @@ async def total_command_count(interaction: Interaction) -> int:
     global slash_cmds
     if slash_cmds:
         return slash_cmds
-    return (len(await bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(bot.commands)
+    slash_cmds = (len(await bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(bot.commands)
+    return slash_cmds
 
 
 class HelpDropdown(ui.Select):
