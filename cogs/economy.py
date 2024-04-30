@@ -1921,14 +1921,13 @@ class HexModal(discord.ui.Modal):
 
     async def on_error(self, interaction: discord.Interaction, error):
         warning = membed(
-            ("The hex colour provided was not valid.\n"
-             "It needs to be in this format: `#FFFFFF`.\n" 
-             "Note that you do not need to include the hashtag."
-            )
+            "The hex colour provided was not valid.\n"
+            "It needs to be in this format: `#FFFFFF`.\n" 
+            "Note that you do not need to include the hashtag."
         )
         if not interaction.response.is_done():
-            return await interaction.response.send_message(embed=warning)
-        return await interaction.followup.send(embed=warning)
+            return await interaction.response.send_message(ephemeral=True, embed=warning)
+        return await interaction.followup.send(ephemeral=True, embed=warning)
 
 
 class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
@@ -1999,7 +1998,9 @@ class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
     async def on_error(self, interaction: discord.Interaction, error):
         print_exception(type(error), error, error.__traceback__)
         return await interaction.response.send_message(
-            embed=membed("We couldn't update your investment properly."))
+            ephemeral=True,
+            embed=membed("We couldn't update your investment properly.")
+        )
 
 
 class DropdownLB(discord.ui.Select):
@@ -2174,8 +2175,11 @@ class SelectTaskMenu(discord.ui.Select):
     async def callback(self, interaction: discord.Interaction):
         
         energy = await self.conn.fetchone(
-            "SELECT energy, hunger FROM `slay` WHERE userID = ? AND slay_name = ?", 
-            (interaction.user.id, self.worker)
+            """
+            SELECT energy, hunger 
+            FROM `slay` 
+            WHERE userID = $0 AND slay_name = $1
+            """, interaction.user.id, self.worker
         )
 
         energy, hunger = energy
@@ -2373,7 +2377,12 @@ class ServantsManager(discord.ui.View):
             return
 
         current_hygiene = await self.child.conn.fetchone(
-            "SELECT hygiene from `slay` WHERE userID = ? AND slay_name = ?", (self.child.owner_id, self.child.choice))
+            """
+            SELECT hygiene 
+            FROM `slay` 
+            WHERE userID = ? AND slay_name = ?
+            """, (self.child.owner_id, self.child.choice)
+        )
 
         if current_hygiene[0] >= 90:
             return await interaction.response.send_message(
@@ -2400,8 +2409,7 @@ class ServantsManager(discord.ui.View):
         if interaction.response.is_done():
             return
 
-        await interaction.response.send_modal(
-            InvestmentModal(self.child.conn, self.child.bot, self.child.choice, self))
+        await interaction.response.send_modal(InvestmentModal(self.child.conn, self.child.bot, self.child.choice, self))
 
     @discord.ui.button(label="\u200b", emoji="\U0001fac2", style=discord.ButtonStyle.secondary, row=2)
     async def hug(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -2411,23 +2419,30 @@ class ServantsManager(discord.ui.View):
             return
 
         data = await self.child.conn.fetchone(
-            "SELECT gender from `slay` WHERE userID = ? AND slay_name = ?", (self.child.owner_id, self.child.choice))
+            """
+            SELECT gender 
+            FROM `slay` 
+            WHERE userID = ? AND slay_name = ?
+            """, (self.child.owner_id, self.child.choice)
+        )
+
         her_his, she_he = self.pronouns.get(data[0])[0], self.pronouns.get(data[0])[1]
 
         selection = choice(
-            ("Your servant is greatful for your affection and embraces you tightly.",
-             f"You are enveloped in a warm, tight hug, savoring the moment with {her_his} body.",
-             f"Wrapped in each other's arms, you shared a tender hug with {her_his}, finding solace in the silent "
-             "connection.",
-             f"{she_he.title()} held your body close, feeling a sense of security in the embrace of "
-             f"someone truly special to {her_his} heart.",
-             "As you hugged them, you whispered words of comfort, "
-             f"letting {her_his} mind know {she_he} was cherished and valued.",
-             f"The embrace was more than physical; it was celebrating the mutual connection {she_he} shared with you.",
-             f"With a smile, you embraced {her_his} lascivious body, feeling a sense of completeness as if both of "
-             "your hearts were synchronized in that moment.",
-             "The hug was a blend of familiarity and excitement, as if rediscovering the "
-             "joy of being close to someone dear.")
+            (   "Your servant is greatful for your affection and embraces you tightly.",
+                f"You are enveloped in a warm, tight hug, savoring the moment with {her_his} body.",
+                f"Wrapped in each other's arms, you shared a tender hug with {her_his}, finding solace in the silent "
+                "connection.",
+                f"{she_he.title()} held your body close, feeling a sense of security in the embrace of "
+                f"someone truly special to {her_his} heart.",
+                "As you hugged them, you whispered words of comfort, "
+                f"letting {her_his} mind know {she_he} was cherished and valued.",
+                f"The embrace was more than physical; it was celebrating the mutual connection {she_he} shared with you.",
+                f"With a smile, you embraced {her_his} lascivious body, feeling a sense of completeness as if both of "
+                "your hearts were synchronized in that moment.",
+                "The hug was a blend of familiarity and excitement, as if rediscovering the "
+                "joy of being close to someone dear."
+            )
         )
 
         dtls = await self.child.conn.fetchone(
@@ -2459,14 +2474,15 @@ class ServantsManager(discord.ui.View):
         her_his, she_he = pronouns.get(data[0])[0], pronouns.get(data[0])[1]
 
         selection = choice(
-            (f"Your came into contact with {her_his} lips, planting a lingering kiss that conveyed both passion and "
-             f"tenderness. {she_he.title()} was forever grateful.",
-             f"With a playful grin, you sealed {her_his} lips with a light, affectionate kiss.",
-             f"You closed {her_his} eyes slowly and gently kissed {her_his} on the cheek.",
-             f"In a tender moment, you leaned in and placed a soft kiss on {her_his} lips, expressing your affection.",
-             "You placed a passionate kiss speaking of desire and an unspoken connection that went beyond just words. "
-             f"{she_he.title()} embraced it albeit awkwardly and held her captive in the state she was enthralled in.",
-             "A gentle peck on the nose became a cherished routine, a simple act that spoke volumes.")
+            (   f"Your came into contact with {her_his} lips, planting a lingering kiss that conveyed both passion and "
+                f"tenderness. {she_he.title()} was forever grateful.",
+                f"With a playful grin, you sealed {her_his} lips with a light, affectionate kiss.",
+                f"You closed {her_his} eyes slowly and gently kissed {her_his} on the cheek.",
+                f"In a tender moment, you leaned in and placed a soft kiss on {her_his} lips, expressing your affection.",
+                "You placed a passionate kiss speaking of desire and an unspoken connection that went beyond just words. "
+                f"{she_he.title()} embraced it albeit awkwardly and held her captive in the state she was enthralled in.",
+                "A gentle peck on the nose became a cherished routine, a simple act that spoke volumes."
+            )
         )
 
         dtls = await self.child.conn.fetchone(
@@ -2490,8 +2506,7 @@ class ServantsManager(discord.ui.View):
         if interaction.response.is_done():
             return
 
-        await interaction.response.send_modal(
-            ImageModal(self.child.conn, self.child.choice, self))
+        await interaction.response.send_modal(ImageModal(self.child.conn, self.child.choice, self))
 
     @discord.ui.button(emoji="\U00002728", label="Add Colour", style=discord.ButtonStyle.success, row=3)
     async def hex_modal(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -2500,8 +2515,7 @@ class ServantsManager(discord.ui.View):
         if interaction.response.is_done():
             return
 
-        await interaction.response.send_modal(
-            HexModal(self.child.conn, self.child.choice, self))
+        await interaction.response.send_modal(HexModal(self.child.conn, self.child.choice, self))
 
     @discord.ui.button(label="Go back", style=discord.ButtonStyle.primary, row=4)
     async def go_back(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -2535,6 +2549,7 @@ class ShowcaseView(discord.ui.View):
             item.disabled = True
         await interaction.response.edit_message(
             view=self,
+            ephemeral=True,
             embed=membed("Your showcase could not update properly.")
         )
 
@@ -5566,7 +5581,10 @@ class Economy(commands.Cog):
                     await conn.commit()
 
                     return await interaction.response.send_message(embed=membed(f"Force registered {user.mention}."))
-                await interaction.response.send_message(embed=membed(f"{user.mention} isn't registered."), ephemeral=True)
+                await interaction.response.send_message(
+                    ephemeral=True, 
+                    embed=membed(f"{user.mention} isn't registered.")
+                )
 
             elif not_registered_check and (user.id == interaction.user.id):
 
@@ -5762,7 +5780,7 @@ class Economy(commands.Cog):
 
                 if not bank_amt:
                     embed.description = "You have nothing to withdraw."
-                    return await interaction.response.send_message(embed=embed)
+                    return await interaction.response.send_message(embed=embed, ephemeral=True)
 
                 new_data = await conn.fetchone(query, bank_amt, user.id)
                 await conn.commit()
@@ -5778,25 +5796,24 @@ class Economy(commands.Cog):
 
                 return await interaction.response.send_message(embed=embed)
 
-            elif actual_amount > bank_amt:
+            if actual_amount > bank_amt:
                 embed.description = f"You only have {CURRENCY} **{bank_amt:,}** in your bank right now."
                 return await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            else:
-                new_data = await conn.fetchone(query, actual_amount, user.id)
-                await conn.commit()
-                wallet_new, bank_new = new_data
+            new_data = await conn.fetchone(query, actual_amount, user.id)
+            await conn.commit()
+            wallet_new, bank_new = new_data
 
-                embed.add_field(
-                    name="<:withdraw:1195657655134470155> Withdrawn", 
-                    value=f"{CURRENCY} {actual_amount:,}", 
-                    inline=False
-                )
-                
-                embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}")
-                embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
+            embed.add_field(
+                name="<:withdraw:1195657655134470155> Withdrawn", 
+                value=f"{CURRENCY} {actual_amount:,}", 
+                inline=False
+            )
+            
+            embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}")
+            embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
 
-                await interaction.response.send_message(embed=embed)
+            await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='deposit', description="Deposit robux into your bank account")
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -5872,19 +5889,19 @@ class Economy(commands.Cog):
 
             if actual_amount > wallet_amt:
                 embed.description = f"You only have {CURRENCY} **{wallet_amt:,}** in your wallet right now."
-            else:
-                wallet_new, bank_new = await conn.fetchone(query, actual_amount, user.id)
-                await conn.commit()
+                return await interaction.response.send_message(embed=embed, ephemeral=True)
 
-                embed.add_field(
-                    name="<:deposit:1195657772231036948> Deposited", 
-                    value=f"{CURRENCY} {actual_amount:,}", 
-                    inline=False
-                )
+            wallet_new, bank_new = await conn.fetchone(query, actual_amount, user.id)
+            await conn.commit()
 
-                embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}")
-                embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
-            
+            embed.add_field(
+                name="<:deposit:1195657772231036948> Deposited", 
+                value=f"{CURRENCY} {actual_amount:,}", 
+                inline=False
+            )
+
+            embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}")
+            embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
             await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='leaderboard', description='Rank users based on various stats')
