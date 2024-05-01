@@ -799,13 +799,13 @@ class ConfirmResetData(discord.ui.View):
 
 
 class Confirm(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction):
-        self.interaction = interaction
+    def __init__(self, controlling_user: discord.abc.User):
+        self.controlling_user = controlling_user
         super().__init__(timeout=40.0)
         self.value = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, self.interaction.user)
+        return await economy_check(interaction, self.controlling_user)
 
     @discord.ui.button(label='Cancel', style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -841,7 +841,12 @@ async def respond(interaction: discord.Interaction, **kwargs) -> Union[None, dis
     await interaction.response.send_message(**kwargs)
 
 
-async def process_confirmation(interaction: discord.Interaction, prompt: str) -> bool:
+async def process_confirmation(
+        interaction: discord.Interaction, 
+        prompt: str, 
+        view_owner: Optional[discord.Member], 
+        **kwargs
+    ) -> bool:
     """
     Process a confirmation. This only updates the view.
     
@@ -849,15 +854,16 @@ async def process_confirmation(interaction: discord.Interaction, prompt: str) ->
 
     This returns a boolean indicating whether the user confirmed the action or not, or None if the user timed out.
     """
-    
-    view = Confirm(interaction)
+    view_owner = view_owner or interaction.user
+
+    view = Confirm(controlling_user=view_owner)
     confirm = discord.Embed(
         title="Pending Confirmation",
         colour=0x2B2D31,
         description=prompt
     )
 
-    resp = await respond(interaction, embed=confirm, view=view)
+    resp = await respond(interaction, embed=confirm, view=view, **kwargs)
     msg = resp or await interaction.original_response()
     await view.wait()
     
@@ -3419,37 +3425,32 @@ class Economy(commands.Cog):
 
     @staticmethod
     async def user_has_item_from_id(user_id: int, item_id: int, conn: asqlite_Connection) -> bool:
-        """Check if a user has a specific item based on its id."""
+        """Check if a user has a specific item based on its id. Return a numerical value."""
         query = (
             """
-            SELECT EXISTS (
-                SELECT 1
-                FROM inventory
-                WHERE inventory.userID = ? AND inventory.itemID = ?
-            )
+            SELECT qty
+            FROM inventory
+            WHERE inventory.userID = ? AND inventory.itemID = ?
             """
         )
 
-        result = await conn.fetchone(query, (user_id, item_id))
-        return bool(result[0]) if result else False
+        return await conn.fetchone(query, (user_id, item_id))
 
     @staticmethod
     async def user_has_item_from_name(user_id: int, item_name: str, conn: asqlite_Connection) -> bool:
-        """Check if a user has a specific item based on its name."""
+        """Check if a user has a specific item based on its name. Return a numerical value."""
         query = (
             """
-            SELECT EXISTS (
-                SELECT 1
-                FROM inventory
-                INNER JOIN shop 
-                    ON inventory.itemID = shop.itemID
-                WHERE inventory.userID = ? AND shop.itemName = ?
-            )
+            SELECT qty
+            FROM inventory
+            INNER JOIN shop 
+                ON inventory.itemID = shop.itemID
+            WHERE inventory.userID = ? AND shop.itemName = ?
             """
         )
 
         result = await conn.fetchone(query, (user_id, item_name))
-        return bool(result[0]) if result else False
+        return result[0] if result else 0
 
     @staticmethod
     async def update_inv_new(
@@ -4069,6 +4070,171 @@ class Economy(commands.Cog):
                         description=f"Shared **{quantity}x {ie} {item_name}** with {recipient.mention}!"
                     )
                 )
+
+    trade = app_commands.Group(
+        name='trade', 
+        description='Exchange different assets with others.', 
+        guild_only=True, 
+        guild_ids=APP_GUILDS_ID
+    )
+    
+    async def coin_checks(
+        self,
+        interaction: discord.Interaction,
+        conn: asqlite_Connection,
+        user_to_check: int
+    ):
+        pass
+        
+
+    async def prompt_for_coins(
+        self,
+        interaction: discord.Interaction,
+        item_sender: discord.Member,
+        item_sender_qty: int,
+        item_sender_data: tuple,
+        coin_sender: discord.Member,
+        coin_sender_qty: int,
+        can_continue: Optional[bool] = True
+    ) -> Union[None, bool]:
+        
+        """
+        Send a confirmation prompt to `item_sender`, asking to confirm whether 
+        they want to exchange their items (`item_sender_data`) with `coin_sender`, 
+        in return for money (`coin_sender_qty`).
+
+        The person that is confirming has to send items, in exchange they get coins.
+        """
+
+        # TODO Build checks for ensuring they actually have the specified quantity of items.
+
+        if not can_continue:
+            return
+        
+        can_continue = await process_confirmation(
+            interaction,
+            view_owner=item_sender,
+            content=item_sender.mention,
+            prompt=dedent(
+                f"""
+                > Are you sure you want to trade with {coin_sender.mention}?
+
+                **Their:**
+                - {CURRENCY} {coin_sender_qty:,}
+
+                **For Your:**
+                - {item_sender_qty} {item_sender_data[-1]} {item_sender_data[1]}
+                """
+            )
+        )
+        return can_continue
+
+    async def prompt_coins_for_items(
+        self,
+        interaction: discord.Interaction,
+        coin_sender: discord.Member,
+        item_sender: discord.Member,
+        coin_sender_qty: int,
+        item_sender_qty: int,
+        item_sender_data: tuple,
+        can_continue: Optional[bool] = True
+    ) -> Union[None, bool]:
+        
+        """
+        Send a confirmation prompt to `coin_sender`, asking to confirm whether 
+        they want to exchange their coins for items.
+
+        The person that is confirming has to send coins, and they get items in return.
+        """
+        # TODO Build checks for ensuring they actually have the specified amount of coins.
+
+        if not can_continue:
+            return
+        
+        can_continue = await process_confirmation(
+            interaction,
+            view_owner=coin_sender,
+            content=coin_sender.mention,
+            prompt=dedent(
+                f"""
+                > Are you sure you want to trade with {item_sender.mention}?
+
+                **Their:**
+                - {item_sender_qty} {item_sender_data[-1]} {item_sender_data[1]}
+
+                **For Your:**
+                - {CURRENCY} {coin_sender_qty:,}
+                """
+            )
+        )
+        return can_continue
+    
+    async def prompt_items_for_items(
+        self,
+        interaction: discord.Interaction,
+        item_sender: discord.Member,
+        item_sender_qty: int,
+        item_sender_data: tuple,
+        item_sender2: discord.Member,
+        item_sender2_qty: int,
+        item_sender2_data: tuple,
+        can_continue: Optional[bool] = True
+    ) -> Union[None, bool]:
+        
+        """
+        The person that is confirming has to send items, and they also get items in return.
+        """
+
+        # TODO Build checks for ensuring they actually have the specified quantity of items
+        
+        if not can_continue:
+            return
+        
+        can_continue = await process_confirmation(
+            interaction,
+            view_owner=item_sender,
+            content=item_sender.mention,
+            prompt=dedent(
+                f"""
+                > Are you sure you want to trade with {item_sender2.mention}?
+
+                **Their:**
+                - {item_sender2_qty} {item_sender2_data[-1]} {item_sender2_data[1]}
+
+                **For Your:**
+                - {item_sender_qty} {item_sender_data[-1]} {item_sender_data[1]}
+                """
+            )
+        )
+        return can_continue
+
+    @trade.command(name="for_coins", description="Exchange your items for coins in return")
+    @app_commands.rename(with_who="with")
+    @app_commands.describe(
+        item="What item will you give?",
+        quantity="How much of this item will you give?",
+        with_who="Who are you giving this to?",
+        for_coins="How much coins do you expect in return?"
+    )
+    async def trade_for_coins(
+        self, 
+        interaction: discord.Interaction, 
+        item: str,
+        quantity: int, 
+        with_who: discord.Member,
+        for_coins: str
+    ) -> None:
+        return await interaction.response.send_message(embed=membed("This command is in development."))
+    
+        async with self.bot.pool.acquire() as conn:
+            conn: asqlite_Connection
+            item_details = await self.partial_match_for(interaction, item, conn)
+
+            if item_details is None:
+                return
+            item_id, item_name, item_emoji = item_details
+
+            await self.declare_transaction(conn, user_id=interaction.user.id)
 
     @commands.command(name="freemium", description="Get a free random item.")
     async def free_item(self, ctx: commands.Context) -> None:
