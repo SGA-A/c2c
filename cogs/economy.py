@@ -3434,7 +3434,8 @@ class Economy(commands.Cog):
             """
         )
 
-        return await conn.fetchone(query, (user_id, item_id))
+        val = await conn.fetchone(query, (user_id, item_id))
+        return val[0] if val else 0
 
     @staticmethod
     async def user_has_item_from_name(user_id: int, item_name: str, conn: asqlite_Connection) -> bool:
@@ -4078,14 +4079,47 @@ class Economy(commands.Cog):
         guild_ids=APP_GUILDS_ID
     )
     
-    async def coin_checks(
+    async def coin_checks_passing(
+        self,
+        interaction: discord.Interaction,
+        user_id_to_check: int,
+        coin_qty_offered: int,
+        actual_wallet_amt
+    ) -> Union[bool, None]:
+        if actual_wallet_amt is None:
+            await respond(interaction, embed=membed(f"<@{user_id_to_check}> is not registered."))
+        elif actual_wallet_amt[0] < coin_qty_offered:
+            await respond(
+                interaction, 
+                embed=membed(f"<@{user_id_to_check} only has {CURRENCY} **{actual_wallet_amt[0]:,}** (not the requested {CURRENCY} **{coin_qty_offered:,}**).")
+            )
+        else:
+            return True
+    
+    async def item_checks_passing(
         self,
         interaction: discord.Interaction,
         conn: asqlite_Connection,
-        user_to_check: int
-    ):
-        pass
+        user_to_check: discord.Member,
+        item_id_offered: int,
+        item_qty_offered: int
+    ) -> Union[bool, None]:
         
+        item_amt = await self.user_has_item_from_id(
+            user_id=user_to_check.id,
+            item_id=item_id_offered,
+            conn=conn
+        )
+        if not item_amt:
+            await respond(interaction, embed=membed(f"{user_to_check.mention} does not have this item."))
+        elif item_amt < item_qty_offered:
+            await respond(
+                interaction, 
+                embed=membed(f"{user_to_check.mention} only has **{item_amt}** of this item (not the requested **{item_qty_offered}**).")
+            )
+        else:
+            return True
+            
 
     async def prompt_for_coins(
         self,
@@ -4123,7 +4157,7 @@ class Economy(commands.Cog):
                 - {CURRENCY} {coin_sender_qty:,}
 
                 **For Your:**
-                - {item_sender_qty} {item_sender_data[-1]} {item_sender_data[1]}
+                - {item_sender_qty}x {item_sender_data[-1]} {item_sender_data[1]}
                 """
             )
         )
@@ -4160,7 +4194,7 @@ class Economy(commands.Cog):
                 > Are you sure you want to trade with {item_sender.mention}?
 
                 **Their:**
-                - {item_sender_qty} {item_sender_data[-1]} {item_sender_data[1]}
+                - {item_sender_qty}x {item_sender_data[-1]} {item_sender_data[1]}
 
                 **For Your:**
                 - {CURRENCY} {coin_sender_qty:,}
@@ -4208,7 +4242,7 @@ class Economy(commands.Cog):
         )
         return can_continue
 
-    @trade.command(name="for_coins", description="Exchange your items for coins in return")
+    @trade.command(name="items_for_coins", description="Exchange your items for coins in return")
     @app_commands.rename(with_who="with")
     @app_commands.describe(
         item="What item will you give?",
@@ -4224,17 +4258,93 @@ class Economy(commands.Cog):
         with_who: discord.Member,
         for_coins: str
     ) -> None:
-        return await interaction.response.send_message(embed=membed("This command is in development."))
-    
+        
+        for_coins = await determine_exponent(
+            interaction=interaction, 
+            rinput=for_coins
+        )
+
+        if for_coins is None:
+            return
+
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
             item_details = await self.partial_match_for(interaction, item, conn)
 
             if item_details is None:
                 return
-            item_id, item_name, item_emoji = item_details
 
-            await self.declare_transaction(conn, user_id=interaction.user.id)
+            wallet_amt = await conn.fetchone("SELECT wallet FROM bank WHERE userID = $0", with_who.id)
+            if isinstance(for_coins, str):
+                for_coins = wallet_amt[0] if wallet_amt else 0
+
+            async with conn.transaction():
+                await self.declare_transaction(conn, user_id=interaction.user.id)
+                
+                # ! For the person sending items
+                item_check_passing = await self.item_checks_passing(
+                    interaction, 
+                    conn,
+                    user_to_check=interaction.user,
+                    item_id_offered=item_details[0],
+                    item_qty_offered=quantity
+                )
+
+                if not item_check_passing:
+                    await self.end_transaction(conn, user_id=interaction.user.id)
+                    return
+
+                can_continue = await self.prompt_for_coins(
+                    interaction,
+                    item_sender=interaction.user,
+                    item_sender_qty=quantity,
+                    item_sender_data=item_details,
+                    coin_sender=with_who,
+                    coin_sender_qty=for_coins
+                )
+                if not can_continue:
+                    await self.end_transaction(conn, user_id=interaction.user.id)
+                    return
+
+                # ! For the other person sending coins
+
+                await self.declare_transaction(conn, user_id=with_who.id)
+                coin_check_passing = await self.coin_checks_passing(
+                    interaction,
+                    user_id_to_check=with_who.id,
+                    coin_qty_offered=for_coins,
+                    actual_wallet_amt=wallet_amt
+                )
+                if not coin_check_passing:
+                    await self.end_transaction(conn, user_id=with_who.id)
+                    return
+
+                can_continue = await self.prompt_coins_for_items(
+                    interaction,
+                    coin_sender=with_who,
+                    coin_sender_qty=for_coins,
+                    item_sender=interaction.user,
+                    item_sender_qty=quantity,
+                    item_sender_data=item_details,
+                    can_continue=can_continue
+                )
+                
+                if not can_continue:
+                    await self.end_transaction(conn, user_id=with_who.id)
+                    return
+                
+                await conn.execute(
+                    """
+                    DELETE FROM transactions 
+                    WHERE userID IN ($0, $1)
+                    """, interaction.user.id, with_who.id
+                )
+                await self.update_inv_by_id(interaction.user, -quantity, item_details[0], conn)
+                await conn.execute("UPDATE inventory SET qty = qty + $0 WHERE userID = $1 AND itemID = $2", quantity, with_who.id, item_details[0])
+                await self.update_wallet_many(conn, (for_coins, with_who.id), (-for_coins, interaction.user.id))
+
+                await interaction.followup.send(embed=membed("Trade success!"))
+
 
     @commands.command(name="freemium", description="Get a free random item.")
     async def free_item(self, ctx: commands.Context) -> None:
@@ -6676,6 +6786,7 @@ class Economy(commands.Cog):
             ]
 
     @item.autocomplete('item_name')
+    @trade_for_coins.autocomplete('item')
     async def item_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
         async with interaction.client.pool.acquire() as conn:
             res = await conn.fetchall("SELECT itemName FROM shop")
