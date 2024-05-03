@@ -236,33 +236,44 @@ class Owner(commands.Cog):
         embed = membed()
         
         if isinstance(real_amount, str):
-            embed.description = "Invalid inputted amount."
+            embed.description = "This shortcut is not supported here."
             return await interaction.response.send_message(embed=embed)
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
             if configuration.startswith("a"):
-                condition = f"{deposit_mode} = {deposit_mode} + $0"
+                query = (
+                    f"""
+                    UPDATE `bank` 
+                    SET `{deposit_mode}` = `{deposit_mode}` + ?
+                    WHERE userID = ?
+                    """
+                )
+
                 embed.description = f"Added {CURRENCY} **{real_amount:,}** to {member.mention}!"
             elif configuration.startswith("r"):
-                condition = f"{deposit_mode} = {deposit_mode} - $0"
+                query = (
+                    f"""
+                    UPDATE `bank` 
+                    SET `{deposit_mode}` = `{deposit_mode}` - ?
+                    WHERE userID = ?
+                    """
+                )
                 embed.description = f"Deducted {CURRENCY} **{real_amount:,}** from {member.mention}!"
             else:
-                condition = f"{deposit_mode} = $0"
+                query = (
+                    f"""
+                    UPDATE `bank` 
+                    SET `{deposit_mode}` = ?
+                    WHERE userID = ?
+                    """
+                )
                 embed.description = f"Set {CURRENCY} **{real_amount:,}** to {member.mention}!"
 
-            data = await conn.execute(
-                f"""
-                UPDATE bank 
-                SET {condition} 
-                WHERE userID = $1
-                """, amount, member.id
-            )
+            await conn.execute(query, (real_amount, member.id))
             await conn.commit()
 
-            if data is None:
-                embed.description = f"{member.mention} is not in the database."
             await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
     @commands.command(name='cthr', aliases=('ct', 'create_thread'), description='Use a preset to create forum channels')
@@ -609,10 +620,9 @@ class Owner(commands.Cog):
                 "Refer to this message for details: https://discord.com/channels/829053898333225010/1121094935802822768/1166397053329477642"
             )
         )
+        
         second_embed.set_thumbnail(url="https://i.imgur.com/aoECtze.png")
-        second_embed.set_footer(
-            text="Reminder: the perks from all roles are one-time use only and cannot be reused or recycled."
-        )
+        second_embed.set_footer(text="Reminder: the perks from all roles are one-time use only and cannot be reused or recycled.")
         
         try:
             await original.edit(
@@ -624,11 +634,13 @@ class Owner(commands.Cog):
             await ctx.send(str(err))
 
     @commands.command(name='update4', description='Update the progress tracker')
-    async def override_economy(self, ctx):
+    async def override_economy(self, ctx: commands.Context):
         """Update the progress tracker on the Economy system."""
+        
         await ctx.message.delete()
         channel = self.bot.get_partial_messageable(1124782048041762867)
         original = channel.get_partial_message(1166793975466831894)
+        
         temporary = discord.Embed(
             title="Temporary Removal of the Economy System",
             description=(
@@ -650,6 +662,7 @@ class Owner(commands.Cog):
                 " <@992152414566232139> "
                 "<a:ehe:928612599132749834>)!"),
             colour=discord.Colour.from_rgb(102, 127, 163))
+        
         temporary.add_field(
             name="Roadmap",
             value=(
@@ -665,6 +678,7 @@ class Owner(commands.Cog):
                 '(early)**: new commands/essential functions to the Economy system added.\n<:red'
                 'A:1166790106422722560> **August 2024 (late)**: economy system '
                 'fully operational and ready for use.'))
+        
         temporary.add_field(
             name="Acknowledgement",
             value=(
@@ -677,6 +691,7 @@ class Owner(commands.Cog):
                 "commands)\n\nwe would not be able to recover the Economy System without "
                 "<@992152414566232139>, she is the literal backbone of its revival! thank her for"
                 " making it possible!"))
+        
         await original.edit(embed=temporary)
 
     @commands.command(name='quit', description='Quits the bot gracefully', aliases=('q',))
@@ -774,7 +789,7 @@ class Owner(commands.Cog):
             embed=membed(f"Your thread was created here: {thread.jump_url}.")
         )
 
-    @commands.command(name="upload2")
+    @commands.command(name="upload2", description="Update the forum announcement")
     async def upload2(self, ctx: commands.Context):
         channel: discord.PartialMessageable = self.bot.get_partial_messageable(1147203137195745431)
         msg = channel.get_partial_message(1147203137195745431)
