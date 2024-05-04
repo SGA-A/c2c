@@ -5,7 +5,6 @@ from unicodedata import name
 from time import perf_counter
 from waifuim import WaifuAioClient
 from psutil import Process, cpu_count
-from PyDictionary import PyDictionary
 from waifuim.exceptions import APIException
 from typing import Literal, Union, Optional, List
 from re import compile as compile_it
@@ -160,7 +159,6 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
 class ImageSource(discord.ui.View):
     def __init__(self, url: str):
         super().__init__()
-        
         self.add_item(discord.ui.Button(url=url, label="Source"))
 
 
@@ -786,43 +784,6 @@ class Utility(commands.Cog):
 
         await interaction.response.send_message(embed=success)
 
-    @app_commands.command(name='define', description='Define any word of choice')
-    @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.checks.cooldown(1, 3, key=lambda i: i.user.id)
-    @app_commands.describe(word='An english term.')
-    async def define_word(self, interaction: discord.Interaction, word: str) -> None:
-        try:
-            the_dictionary = PyDictionary()
-            choicer = word
-            meaning = the_dictionary.meaning(f'{choicer.lower()}')
-            for item in meaning.items():
-                for thing in item:
-                    if isinstance(thing, list):
-                        unique_colour = return_random_color()
-                        the_result = discord.Embed(colour=unique_colour)
-                        the_result.title = f'Define: {choicer.lower()}'
-                        the_result.description=(
-                            '<:dictionarye:1195748221994160220> This shows '
-                            f'all the available definitions for the word {choicer}.'
-                        )
-                        
-                        for x in range(0, len(thing)):
-                            if "(" in thing[x]:
-                                thing[x] += ")"
-                            the_result.add_field(name=f'Definition {x + 1}', value=f'{thing[x]}')
-                        if len(the_result.fields) == 0:
-                            the_result.add_field(
-                                name="No results were found.", 
-                                value=f"We couldn't find a definition for {choicer.lower()}."
-                            )
-                        return await interaction.response.send_message(embed=the_result)
-                    else:
-                        continue
-        except AttributeError:
-            await interaction.response.send_message(
-                embed=membed('Try again, but this time input an actual word.')
-            )
-
     @app_commands.command(name='randomfact', description='Queries a random fact')
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 5)
@@ -963,7 +924,7 @@ class Utility(commands.Cog):
         feedback_modal = FeedbackModal()
         await interaction.response.send_modal(feedback_modal)
 
-    @app_commands.command(name='about', description='Tells you information about the bot itself')
+    @app_commands.command(name='about', description='Learn more about the bot')
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.checks.cooldown(1, 10, key=lambda i: i.guild.id)
     async def about_the_bot(self, interaction: discord.Interaction) -> None:
@@ -1074,7 +1035,6 @@ class Utility(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     @commands.command(name="pickupline", description="Get pick up lines to use", aliases=('pul',))
-    @commands.guild_only()
     async def pick_up_lines(self, ctx: commands.Context) -> discord.Message | None:
         async with ctx.typing():
             async with self.bot.session.get("https://api.popcat.xyz/pickuplines") as resp:
@@ -1084,7 +1044,6 @@ class Utility(commands.Cog):
                 await ctx.reply(embed=membed(data["pickupline"]))
 
     @commands.command(name="wyr", description="Get 'would you rather' questions to use")
-    @commands.guild_only()
     async def would_yr(self, ctx: commands.Context) -> discord.Message | None:
         async with ctx.typing():
             async with self.bot.session.get("https://api.popcat.xyz/wyr") as resp:
@@ -1100,7 +1059,6 @@ class Utility(commands.Cog):
                 )
 
     @commands.command(name="alert", description="Create real incoming iphone alerts")
-    @commands.guild_only()
     async def alert_iph(self, ctx: commands.Context, *, custom_text: str) -> discord.Message | None:
         async with ctx.typing():
             custom_text = '+'.join(custom_text.split(' '))
