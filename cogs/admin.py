@@ -299,7 +299,6 @@ class Owner(commands.Cog):
     @commands.command(name='sync', description='Sync the bot tree for changes', aliases=("sy",))
     async def sync_tree(self, ctx: commands.Context) -> None:
         """Sync the bot's tree to either the guild or globally, varies from time to time."""
-        print("syncing")
 
         for guild_id in APP_GUILDS_ID:
             await self.bot.tree.sync(guild=discord.Object(id=guild_id))
@@ -541,8 +540,8 @@ class Owner(commands.Cog):
                 "a space that fosters a chill and mature community that can talk "
                 "about anything and everything.\n\n"
                 "**What does cc actually stand for?**\n"
-                "We don't know either, our guess is something along the lines"
-                "of a collective community, this being the aim by the server to date.\n\n"
+                "We don't know either, our guess is something along the lines "
+                "of a collective community, this being the aim of the server to date.\n\n"
                 "We hope you enjoy your stay, and we wish you a wonderful journey.\n"
                 "And don't forget; you're here forever."
             )
@@ -563,7 +562,7 @@ class Owner(commands.Cog):
                 "  - People with full music control over music bots.\n\n"
                 "- Other custom roles\n"
                 "  - <@&1124762696110309579> and <@&1047576437177200770>.\n"
-                "  - Reaching **Level 40** to make your own!"
+                "  - Reach **Level 40** to make your own!"
             )
         )
         
@@ -589,7 +588,7 @@ class Owner(commands.Cog):
                 "  - \U000023e3 **17,555,000,000**, 5 \U0001f3c6\n\n"
                 "- <@&923931683311456267>\n"
                 "  - \U000023e3 **56,241,532,113**\n"
-                "  - 3,500 free EXP\n"
+                "  - 3,500 free EXP\n\n"
                 "- <@&923931729016795266>\n"
                 "  - Request a feature for <@1047572530422108311>\n"
                 "  - Your own custom role\n\n"
