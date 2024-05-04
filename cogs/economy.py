@@ -1240,6 +1240,7 @@ class BalanceView(discord.ui.View):
 
             bank = nd[0] + nd[1]
             inv = await Economy.calculate_inventory_value(self.viewing, conn)
+            rank = await Economy.calculate_alternate_net_ranking(self.viewing, conn)
 
             space = (nd[1] / nd[2]) * 100
             
@@ -1253,6 +1254,8 @@ class BalanceView(discord.ui.View):
             balance.add_field(name="Money Net", value=f"{CURRENCY} {bank:,}")
             balance.add_field(name="Inventory Net", value=f"{CURRENCY} {inv:,}")
             balance.add_field(name="Total Net", value=f"{CURRENCY} {inv + bank:,}")
+            
+            balance.set_footer(text=f"Global Rank: #{rank}")
             
         self.checks(nd[1], nd[0], nd[2]-nd[1])
         await interaction.response.edit_message(content=None, embed=balance, view=self)
@@ -2020,7 +2023,8 @@ class DropdownLB(discord.ui.Select):
             SelectOption(label='Inventory Net', description='Sort by the net value of your inventory.'),
             SelectOption(label='Bounty', description="Sort by the sum paid for capturing a player."),
             SelectOption(label='Commands', description="Sort by total commands ran."),
-            SelectOption(label='Level', description="Sort by player level.")
+            SelectOption(label='Level', description="Sort by player level."),
+            SelectOption(label='Net Worth', description="Sort by the total net worth.")
         ]
 
         super().__init__(options=options)
@@ -2041,9 +2045,8 @@ class DropdownLB(discord.ui.Select):
 
 
 class Leaderboard(discord.ui.View):
-    def __init__(self, bot: commands.Bot, their_choice, channel_id):
+    def __init__(self, bot: commands.Bot, their_choice: str):
         super().__init__(timeout=40.0)
-        self.channel_id = channel_id
         self.add_item(DropdownLB(bot, their_choice))
 
     async def on_timeout(self) -> None:
@@ -3127,7 +3130,8 @@ class Economy(commands.Cog):
                     """
                 )
 
-            else:
+            elif chosen_choice == 'Level':
+
                 data = await conn.fetchall(
                     f"""
                     SELECT `userID`, `level` AS lvl 
@@ -3135,6 +3139,34 @@ class Economy(commands.Cog):
                     GROUP BY `userID` 
                     HAVING lvl > 0
                     ORDER BY lvl DESC
+                    """
+                )
+
+            else:
+
+                data = await conn.fetchall(
+                    """
+                    SELECT 
+                        COALESCE(inventory.userID, money.userID) AS userID, 
+                        (COALESCE(SUM(shop.cost * inventory.qty), 0) + COALESCE(money.total_balance, 0)) AS TotalNetWorth
+                    FROM 
+                        inventory
+                    LEFT JOIN 
+                        shop ON shop.itemID = inventory.itemID
+                    RIGHT JOIN 
+                        (
+                            SELECT 
+                                `userID`, 
+                                SUM(`wallet` + `bank`) AS total_balance 
+                            FROM 
+                                `bank` 
+                            GROUP BY 
+                                `userID`
+                        ) AS money ON inventory.userID = money.userID
+                    GROUP BY 
+                        COALESCE(inventory.userID, money.userID)
+                    ORDER BY 
+                        TotalNetWorth DESC
                     """
                 )
 
@@ -3199,6 +3231,67 @@ class Economy(commands.Cog):
         return sdetails
 
     # ------------------ BANK FUNCS ------------------ #
+
+    @staticmethod
+    async def calculate_alternate_net_ranking(user: USER_ENTRY, conn: asqlite_Connection) -> int:
+        """Calculate the alternative net ranking of a user based on their net worth."""
+        val = await conn.fetchone(
+            """
+            SELECT 
+            (
+                SELECT 
+                    COUNT(*) + 1 
+                FROM 
+                    (
+                        SELECT 
+                            inventory.userID, 
+                            (SUM(shop.cost * inventory.qty) + COALESCE(money.total_balance, 0)) AS TotalNetWorth
+                        FROM 
+                            inventory
+                        LEFT JOIN 
+                            shop ON shop.itemID = inventory.itemID
+                        LEFT JOIN 
+                            (
+                                SELECT 
+                                    `userID`, 
+                                    SUM(`wallet` + `bank`) AS total_balance 
+                                FROM 
+                                    `bank` 
+                                GROUP BY 
+                                    `userID`
+                            ) AS money ON inventory.userID = money.userID
+                        GROUP BY 
+                            inventory.userID
+                    ) AS rankings
+                WHERE 
+                    TotalNetWorth > COALESCE(
+                        (
+                            SELECT 
+                                (SUM(shop.cost * inventory.qty) + money.total_balance) AS TotalNetWorth 
+                            FROM 
+                                inventory 
+                            INNER JOIN 
+                                shop ON shop.itemID = inventory.itemID 
+                            INNER JOIN 
+                                (
+                                    SELECT 
+                                        `userID`, 
+                                        SUM(`wallet` + `bank`) AS total_balance 
+                                    FROM 
+                                        `bank` 
+                                    GROUP BY 
+                                        `userID`
+                                ) AS money ON inventory.userID = money.userID 
+                            WHERE 
+                                inventory.userID = $0
+                        ), 
+                        0
+                    )
+            ) AS Rank
+        """, user.id
+        )
+        val = val or ("Not listed",)
+        return val[0]
 
     @staticmethod
     async def open_bank_new(user: USER_ENTRY, conn_input: asqlite_Connection) -> None:
@@ -4891,7 +4984,7 @@ class Economy(commands.Cog):
                 their_count, = their_count
 
             dynamic_text = (
-                f"> {data[1]}\n\n"
+                f"> *{data[1]}*\n\n"
                 f"This item {"can" if data[5] else "cannot"} be purchased.\n"
                 f"**{total_count}** {make_plural("person", total_count)} {plural_for_own(total_count)} this item.\n"
                 f"You own **{their_count}**."
@@ -6212,6 +6305,7 @@ class Economy(commands.Cog):
 
                 bank = nd[0] + nd[1]
                 inv = await self.calculate_inventory_value(user, conn)
+                rank = await self.calculate_alternate_net_ranking(user, conn)
 
                 space = (nd[1] / nd[2]) * 100
 
@@ -6229,6 +6323,8 @@ class Economy(commands.Cog):
                 balance.add_field(name="Inventory Net", value=f"{CURRENCY} {inv:,}")
                 balance.add_field(name="Total Net", value=f"{CURRENCY} {inv + bank:,}")
                 
+                balance.set_footer(text=f"Global Rank: #{rank}")
+
                 view = BalanceView(
                     interaction, 
                     bot=self.bot, 
@@ -6504,17 +6600,13 @@ class Economy(commands.Cog):
             "Inventory Net", 
             "Bounty", 
             "Commands", 
-            "Level"
+            "Level",
+            "Net Worth"
         ]
     ) -> None:
         """View the leaderboard and filter the results based on different stats inputted."""
 
-        lb_view = Leaderboard(
-            bot=self.bot, 
-            their_choice=stat, 
-            channel_id=interaction.channel.id
-        )
-
+        lb_view = Leaderboard(bot=self.bot, their_choice=stat)
         lb = await self.create_leaderboard_preset(chosen_choice=stat)
 
         await interaction.response.send_message(embed=lb, view=lb_view)
