@@ -12,7 +12,6 @@ from asqlite import Connection as asqlite_Connection
 from cogs.economy import membed, APP_GUILDS_ID
 from other.pagination import PaginationSimple
 
-
 TAG_NOT_FOUND_RESPONSE = (
     "Could not find any tag with these properties.\n"
     "- You can't modify the tag if it doesn't belong to you.\n"
@@ -297,7 +296,8 @@ class Tags(commands.Cog):
 
             await ctx.send(
                 content=content, 
-                reference=ctx.message.reference
+                reference=ctx.message.reference, 
+                suppress_embeds=not(content.strip().count("/attachments/", 20, 40))
             )
 
             # update the usage
