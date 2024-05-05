@@ -331,10 +331,10 @@ class RoleManagement(app_commands.Group):
         about.colour = role.colour
         about.title = "Role Info"
         about.description = (
-            f"**Name**: {role.name}\n"
-            f"**Members**: {len(role.members)} ({proportion:.1f}% of members)\n"
-            f"**Colour**: {role.colour}\n"
-            f"**Created** {fmt_d} ({fmt_r})"
+            f"- **Name**: {role.name}\n"
+            f"- **Members**: {len(role.members)} ({proportion:.1f}% of members)\n"
+            f"- **Colour**: {role.colour}\n"
+            f"- **Created**: {fmt_d} ({fmt_r})"
         )
         about.set_footer(text=f"ID: {role.id}")
         await interaction.followup.send(embed=about)
@@ -523,36 +523,20 @@ class Moderation(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
-        if message.author.bot:
+
+        if not message.content.startswith(".."):
             return
-
-        try:
-            if message.content in {"geo", "teo"}:
-                return await message.add_reaction("<a:StoleThisEmote7:793153800612479017>")
-        except discord.NotFound:
-            pass
-        except discord.Forbidden:
-            pass
         
-        if message.content.startswith(".."):
-            match = search(r'\d+$', message.content)
+        match = search(r'\d+$', message.content)
 
-            if not message.channel.permissions_for(message.author).manage_messages:
-                return await message.channel.send(
-                    content="You're not able to do this.", 
-                    delete_after=3.0, 
-                    silent=True
-                )
+        if not message.channel.permissions_for(message.author).manage_messages:
+            return await message.channel.send(embed=membed("You're not able to do this."), silent=True)
 
-            if not match:
-                return await message.channel.send(
-                    content="You didn't specify a number.", 
-                    delete_after=3.0, 
-                    silent=True
-                )
+        if not match:
+            return await message.channel.send(content=membed("You didn't specify a number."), silent=True)
 
-            ctx = await self.bot.get_context(message)
-            await ctx.invoke(self.purge, purge_max_amount=int(match.group()))
+        ctx = await self.bot.get_context(message)
+        await ctx.invoke(self.purge, purge_max_amount=int(match.group()))
 
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -607,7 +591,6 @@ class Moderation(commands.Cog):
                 await conn.commit()
 
     @commands.command(name="close", description="Close the invocation thread")
-    @commands.guild_only()
     async def close_thread(self, ctx: commands.Context):
         await ctx.message.delete()
         if isinstance(ctx.channel, discord.Thread):
