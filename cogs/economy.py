@@ -50,7 +50,6 @@ def membed(custom_description: Optional[str] = None) -> discord.Embed:
     membedder = discord.Embed(colour=0x2B2D31, description=custom_description)
     return membedder
 
-
 def swap_elements(x, index1, index2) -> None:
     """Swap two elements in place given their indices, return None.
     
@@ -2921,6 +2920,13 @@ class Economy(commands.Cog):
             await interaction.response.send_message(view=a, embed=WARN_FOR_CONCURRENCY, ephemeral=True)
             return False
 
+    @staticmethod
+    async def owners_nolimit(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
+        """Any of the owners of the bot bypass all cooldown restrictions."""
+        if interaction.user.id in {546086191414509599, 992152414566232139}:
+            return None
+        return app_commands.Cooldown(1, 5)
+
     @tasks.loop(hours=1)
     async def batch_update(self):
         async with self.bot.pool.acquire() as conn:
@@ -3054,6 +3060,8 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection = conn
             
+            player_badges = {2: "\U0001f948", 3: "\U0001f949"}
+
             lb = discord.Embed(
                 title=f"Leaderboard: {chosen_choice}",
                 color=0x2B2D31,
@@ -3169,15 +3177,22 @@ class Economy(commands.Cog):
                         TotalNetWorth DESC
                     """
                 )
+            top_rankings = []
 
-            top_rankings = [
-                f"{i}. {member_name.name} {UNIQUE_BADGES.get(member_name.id, '')} \U00003022 `{member[1]:,}`" 
-                for i, member in enumerate(data, start=1) if (member_name := self.bot.get_user(member[0]))
+            if data:
+                first_member = data[0]
+                member_name = self.bot.get_user(first_member[0])
+
+                top_rankings.append(
+                    f"### \U0001f947 ` {first_member[1]:,} ` \U00002014 {member_name.name} {UNIQUE_BADGES.get(member_name.id, '')}\n"
+                )
+
+            top_rankings += [
+                f"{player_badges.get(i, "\U0001f539")} ` {member[1]:,} ` \U00002014 {member_name.name} {UNIQUE_BADGES.get(member_name.id, '')}" 
+                for i, member in enumerate(data[1:], start=2) if (member_name := self.bot.get_user(member[0]))
             ]
 
-            lb.description = (
-                f"Displaying the top [`{len(data)}`](https://www.dis.gd/support) users.\n\n"
-                f"{'\n'.join(top_rankings) or 'No data.'}")
+            lb.description = '\n'.join(top_rankings) or 'No data.'
             return lb
 
     async def servant_preset(self, owner_id: int, dtls) -> discord.Embed:
@@ -4024,7 +4039,7 @@ class Economy(commands.Cog):
         recipient='The user receiving the robux shared.', 
         share_amount=ROBUX_DESCRIPTION
     )
-    @app_commands.checks.cooldown(1, 6)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def share_robux(
         self, 
         interaction: discord.Interaction, 
@@ -4090,7 +4105,7 @@ class Economy(commands.Cog):
         quantity='The amount of this item to share.', 
         recipient='The user receiving the item.'
     )
-    @app_commands.checks.cooldown(1, 5)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def share_items(
         self, 
         interaction: discord.Interaction, 
@@ -4768,7 +4783,7 @@ class Economy(commands.Cog):
     )
 
     @showcase.command(name="view", description="View your item showcase")
-    @app_commands.checks.cooldown(1, 5)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def view_showcase(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_message(
             ephemeral=True,
@@ -4776,7 +4791,7 @@ class Economy(commands.Cog):
         )
 
     @showcase.command(name="add", description="Add an item to your showcase", extras={"exp_gained": 1})
-    @app_commands.checks.cooldown(1, 10)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     @app_commands.describe(item_name="Select an item.")
     async def add_showcase_item(self, interaction: discord.Interaction, item_name: str) -> None:
         await interaction.response.send_message(
@@ -4785,7 +4800,7 @@ class Economy(commands.Cog):
         )
 
     @showcase.command(name="remove", description="Remove an item from your showcase", extras={"exp_gained": 1})
-    @app_commands.checks.cooldown(1, 10)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     @app_commands.describe(item_name="Select an item.")
     async def remove_showcase_item(self, interaction: discord.Interaction, item_name: str) -> None:
         await interaction.response.send_message(
@@ -4801,7 +4816,7 @@ class Economy(commands.Cog):
     )
 
     @shop.command(name='view', description='View all the shop items')
-    @app_commands.checks.cooldown(1, 12)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def view_the_shop(self, interaction: discord.Interaction) -> None:
         """This is a subcommand. View the currently available items within the shop."""
 
@@ -5341,7 +5356,7 @@ class Economy(commands.Cog):
     @app_commands.command(name="use", description="Use an item you own from your inventory", extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(item='Select an item.', quantity='Amount of items to use, when possible.')
-    @app_commands.checks.cooldown(1, 6)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def use_item(
         self, 
         interaction: discord.Interaction, 
@@ -5397,7 +5412,7 @@ class Economy(commands.Cog):
 
     @app_commands.command(name="prestige", description="Sacrifice currency stats in exchange for incremental perks")
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.checks.cooldown(1, 6)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def prestige(self, interaction: discord.Interaction) -> None:
         """Sacrifice a portion of your currency stats in exchange for incremental perks."""
 
@@ -5504,7 +5519,7 @@ class Economy(commands.Cog):
         user='The user whose profile you want to see.', 
         category='What type of data you want to view.'
     )
-    @app_commands.checks.cooldown(1, 6)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def find_profile(
         self, 
         interaction: discord.Interaction, 
@@ -5756,7 +5771,7 @@ class Economy(commands.Cog):
 
     @app_commands.command(name='highlow', description='Guess the number. Jackpot wins big!', extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.checks.cooldown(1, 6)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     @app_commands.describe(robux=ROBUX_DESCRIPTION)
     async def highlow(self, interaction: discord.Interaction, robux: str) -> None:
         """
@@ -5812,7 +5827,7 @@ class Economy(commands.Cog):
 
     @app_commands.command(name='slots', description='Try your luck on a slot machine', extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.checks.cooldown(1, 4)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     @app_commands.rename(amount='robux')
     @app_commands.describe(amount=ROBUX_DESCRIPTION)
     async def slots(self, interaction: discord.Interaction, amount: str) -> None:
@@ -6124,7 +6139,7 @@ class Economy(commands.Cog):
     @work.command(name="apply", description="Apply for a job", extras={"exp_gained": 1})
     @app_commands.rename(chosen_job="job")
     @app_commands.describe(chosen_job='The job you want to apply for.')
-    @app_commands.checks.cooldown(1, 6)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def get_job(
         self, 
         interaction: discord.Interaction, 
@@ -6185,7 +6200,7 @@ class Economy(commands.Cog):
                 await interaction.response.send_message(embed=embed)
     
     @work.command(name="resign", description="Resign from your current job")
-    @app_commands.checks.cooldown(1, 6)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def job_resign(self, interaction: discord.Interaction) -> None:
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
@@ -6586,7 +6601,6 @@ class Economy(commands.Cog):
 
     @app_commands.command(name='leaderboard', description='Rank users based on various stats')
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.checks.cooldown(1, 6)
     @app_commands.describe(stat="The stat you want to see.")
     async def get_leaderboard(
         self, 
@@ -6614,7 +6628,7 @@ class Economy(commands.Cog):
     @app_commands.rename(other="user")
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(other='The user you want to rob money from.')
-    @app_commands.checks.cooldown(1, 6)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def rob_the_user(self, interaction: discord.Interaction, other: discord.Member) -> None:
         """Rob someone else."""
         primary_id = str(interaction.user.id)
@@ -6770,7 +6784,7 @@ class Economy(commands.Cog):
         bet_on='The side of the coin you bet it will flip on.', 
         amount=ROBUX_DESCRIPTION
     )
-    @app_commands.checks.cooldown(1, 6)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     @app_commands.rename(bet_on='side', amount='robux')
     async def coinflip(self, interaction: discord.Interaction, bet_on: str, amount: str) -> None:
         """Flip a coin and make a bet on what side of the coin it flips to."""
@@ -6829,7 +6843,7 @@ class Economy(commands.Cog):
 
     @app_commands.command(name="blackjack", description="Test your skills at blackjack", extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.checks.cooldown(1, 4)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     @app_commands.rename(bet_amount='robux')
     @app_commands.describe(bet_amount=ROBUX_DESCRIPTION)
     async def play_blackjack(self, interaction: discord.Interaction, bet_amount: str) -> None:
@@ -7025,7 +7039,7 @@ class Economy(commands.Cog):
 
     @app_commands.command(name="bet", description="Bet your robux on a dice roll", extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.checks.cooldown(1, 6)
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     @app_commands.rename(exponent_amount='robux')
     @app_commands.describe(exponent_amount=ROBUX_DESCRIPTION)
     async def bet(self, interaction: discord.Interaction, exponent_amount: str) -> None:
