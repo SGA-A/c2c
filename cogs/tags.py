@@ -263,15 +263,14 @@ class Tags(commands.Cog):
             await conn.execute(query, name, content, ctx.author.id, timestamp)
         except sqlite3.IntegrityError:
             await tr.rollback()
-            await ctx.send(embed=membed("A tag with this name already exists."))
+            await ctx.send(embed=membed(f"A tag named {name!r} already exists."))
         except Exception as e:
             print(e)
-
             await tr.rollback()
             await ctx.send(embed=membed("Could not create tag."))
         else:
             await tr.commit()
-            await ctx.send(embed=membed(f'Tag {name} successfully created.'))
+            await ctx.send(embed=membed(f'Tag {name!r} successfully created.'))
 
     def is_tag_being_made(self, name: str) -> bool:
         return name.lower() in self._reserved_tags_being_made
