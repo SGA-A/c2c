@@ -5260,8 +5260,6 @@ class Economy(commands.Cog):
                     embed.description += f"\n- {qty}x {ie} {item_name} (bonus)\n"
                 
                 await interaction.response.send_message(embed=embed)
-                msg = await interaction.original_response()
-                await msg.add_reaction("<a:owoKonataDance:1205288135861473330>")
 
     @commands.command(name='reasons', description='Identify causes of registration errors')
     async def not_registered_why(self, ctx: commands.Context) -> None:
