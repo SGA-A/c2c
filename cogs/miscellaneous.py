@@ -11,12 +11,16 @@ from re import compile as compile_it
 from xml.etree.ElementTree import fromstring
 
 from discord.ext import commands
-from discord import app_commands, Interaction, Object
+from discord import app_commands
 
 import discord
 import datetime
 
-from cogs.economy import APP_GUILDS_ID, USER_ENTRY, total_commands_used_by_user
+from cogs.economy import (
+    APP_GUILDS_ID, 
+    USER_ENTRY, 
+    total_commands_used_by_user
+)
 from other.pagination import Pagination, PaginationSimple
 
 
@@ -33,13 +37,6 @@ RESPONSES = {
     500: "Internal Server Error - Some unknown error occured on the konachan website's server",
     503: "Service Unavailable - The konachan website currently cannot handle the request"
 }
-
-
-def owners_nolimit(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
-    """Any of the owners of the bot bypass all cooldown restrictions."""
-    if interaction.user.id in {546086191414509599, 992152414566232139}:
-        return None
-    return app_commands.Cooldown(1, 7)
 
 
 def extract_attributes(post_element, mode: Literal["post", "tag"]):
@@ -167,6 +164,7 @@ class Utility(commands.Cog):
         self.bot = bot
         self.process = Process()
         self.wf = WaifuAioClient(session=bot.session, token=bot.WAIFU_API_KEY, app_name="c2c")
+        self.g = Github('SGA-A', bot.GITHUB_TOKEN)
 
         self.image_src = app_commands.ContextMenu(
             name='Extract Image Source',
@@ -180,6 +178,13 @@ class Utility(commands.Cog):
 
         self.bot.tree.add_command(self.image_src)
         self.bot.tree.add_command(self.get_embed_cmd)
+
+    @staticmethod
+    async def owners_nolimit(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
+        """Any of the owners of the bot bypass all cooldown restrictions."""
+        if interaction.user.id in {546086191414509599, 992152414566232139}:
+            return None
+        return app_commands.Cooldown(1, 7)
 
     async def cog_unload(self) -> None:
         self.bot.tree.remove_command(self.get_embed_cmd.name, type=self.get_embed_cmd.type)
@@ -786,14 +791,16 @@ class Utility(commands.Cog):
 
     @app_commands.command(name='randomfact', description='Queries a random fact')
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.checks.cooldown(1, 5)
-    async def random_fact(self, interaction: Interaction):
-        api_url = 'https://api.api-ninjas.com/v1/facts?limit=1'
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
+    async def random_fact(self, interaction: discord.Interaction):
+        api_url = 'https://api.api-ninjas.com/v1/facts'
         parameters = {'X-Api-Key': self.bot.NINJAS_API_KEY}
         
         async with self.bot.session.get(api_url, params=parameters) as resp:
             text = await resp.json()
-            await interaction.response.send_message(embed=membed(f"{text[0].get('fact')}."))
+            if resp.status != 200:
+                return await interaction.response.send_message(embed=membed(API_EXCEPTION))
+            await interaction.response.send_message(embed=membed(f"{text[0]['fact']}."))
 
     async def format_api_response(self, interaction: discord.Interaction, start: float, api_url: str, **attrs):
         async with self.bot.session.get(api_url, **attrs) as response:  # params=params, headers=headers
@@ -901,7 +908,7 @@ class Utility(commands.Cog):
     @app_commands.command(name='charinfo', description='Show you info about character. Maximum 25 at once.')
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(characters='Any written letters or symbols.')
-    async def charinfo(self, interaction: Interaction, *, characters: str) -> None:
+    async def charinfo(self, interaction: discord.Interaction, *, characters: str) -> None:
         """Shows you information about a number of characters.
         Only up to 25 characters at a time.
         """
@@ -930,17 +937,11 @@ class Utility(commands.Cog):
     async def about_the_bot(self, interaction: discord.Interaction) -> None:
 
         await interaction.response.defer(thinking=True)
-        lenslash = len(await self.bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1
         lentxt = len(self.bot.commands)
-        amount = (lenslash + lentxt)
+        self.bot.command_count = self.bot.command_count or (len(await self.bot.tree.fetch_commands(guild=discord.Object(id=interaction.guild.id))) + 1 + lentxt)
+        lenslash = self.bot.command_count - lentxt
 
-        username = 'SGA-A'
-        token = self.bot.GITHUB_TOKEN
-        repository_name = 'c2c'
-
-        g = Github(username, token)
-
-        repo = g.get_repo(f'{username}/{repository_name}')
+        repo = self.g.get_repo('SGA-A/c2c')
 
         commits = repo.get_commits()[:3]
         revision = list()
@@ -1020,7 +1021,7 @@ class Utility(commands.Cog):
         embed.add_field(
             name='<:cmdsb:1195752574821879872> Commands', 
             value=(
-                f'{amount} total\n'
+                f'{self.bot.command_count} total\n'
                 f'{ARROW}{lentxt} (prefix)\n'
                 f'{ARROW}{lenslash} (slash)'
             )
@@ -1038,9 +1039,9 @@ class Utility(commands.Cog):
     async def pick_up_lines(self, ctx: commands.Context) -> discord.Message | None:
         async with ctx.typing():
             async with self.bot.session.get("https://api.popcat.xyz/pickuplines") as resp:
+                data = await resp.json()
                 if resp.status != 200:
                     return await ctx.send(embed=membed(API_EXCEPTION))
-                data = await resp.json()
                 await ctx.reply(embed=membed(data["pickupline"]))
 
     @commands.command(name="wyr", description="Get 'would you rather' questions to use")
@@ -1103,7 +1104,7 @@ class Utility(commands.Cog):
         limit="The maximum number of images to retrieve. Defaults to 5.",
         image_colour="The colour of the image to search for. Defaults to colour.",
         from_only="[Limited to Bot Owner] Search from this website only.",
-        image_size="The size of the image. Defaults to medium"
+        image_size="The size of the image. Defaults to medium."
     )
     async def image_search(
         self, 
