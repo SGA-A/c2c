@@ -530,10 +530,10 @@ class Moderation(commands.Cog):
         match = search(r'\d+$', message.content)
 
         if not message.channel.permissions_for(message.author).manage_messages:
-            return await message.channel.send(embed=membed("You're not able to do this."), silent=True)
+            return await message.channel.send(silent=True, embed=membed("You're not able to do this."))
 
         if not match:
-            return await message.channel.send(content=membed("You didn't specify a number."), silent=True)
+            return await message.channel.send(silent=True, content=membed("You didn't specify a number."))
 
         ctx = await self.bot.get_context(message)
         await ctx.invoke(self.purge, purge_max_amount=int(match.group()))
