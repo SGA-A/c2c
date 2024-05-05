@@ -49,10 +49,6 @@ if TYPE_CHECKING:
 
     AppCommandStore = Dict[str, app_commands.AppCommand]  # name: AppCommand
 
-
-slash_cmds = None
-
-
 # Search for a specific term in this project using Ctrl + Shift + F
 
 
@@ -194,6 +190,7 @@ class C2C(commands.Bot):
 
         # Misc
         self.games = dict()
+        self.command_count = None
         self.time_launch = None
 
     async def setup_hook(self):
@@ -338,13 +335,12 @@ def generic_loop_with_subcommand(all_cmds: dict, cmd_formatter: list, guild_id) 
 
 async def total_command_count(interaction: Interaction) -> int:
     """Return the total amount of commands detected within the bot, including text and slash commands."""
-    global slash_cmds
-    if slash_cmds:
-        return slash_cmds
+    if bot.command_count:
+        return bot.command_count
     
     # added 1 extra because there is 1 global command not detected here 
-    slash_cmds = (len(await bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(bot.commands)
-    return slash_cmds
+    bot.command_count = (len(await bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(bot.commands)
+    return bot.command_count
 
 
 class HelpDropdown(ui.Select):
