@@ -55,34 +55,48 @@ class SlashExceptionHandler(commands.Cog):
     @commands.Cog.listener("on_app_command_error")
     async def get_app_command_error(
         self, interaction: Interaction, error: app_commands.AppCommandError) -> None:
-        
+
+        if not interaction.response.is_done():
+            return await interaction.response.defer(thinking=True)
+
+        embed = membed()
+
         if isinstance(error, app_commands.CheckFailure):
 
-            if isinstance(error, app_commands.MissingRole):
-                exception = membed(f"You're missing a required role: <@&{error.missing_role}>")
-
-            elif isinstance(error, app_commands.MissingPermissions):
-                exception = membed("You're missing some permissions required to use this command.")
-
-            elif isinstance(error, app_commands.CommandOnCooldown):
-                exception = Embed()
-                exception.title = choice(COOLDOWN_PROMPTS)
-                
-                exception.colour = 0x2B2D31
+            if isinstance(error, app_commands.CommandOnCooldown):
+                embed.title = choice(COOLDOWN_PROMPTS)
                 after_cd = format_dt(utcnow() + timedelta(seconds=error.retry_after), style="R")
-                exception.description = f"You can run this command again {after_cd}."
+                embed.description = f"You can run this command again {after_cd}."
+                return await interaction.followup.send(embed=embed)
+
+            elif isinstance(error, app_commands.BotMissingPermissions):
+                embed.description = "I'm missing permissions required to use this command."
+                embed.add_field(
+                    name=f"Missing Permissions ({len(error.missing_permissions)})", 
+                    value="\n".join(err.title() for err in error.missing_permissions)
+                )
+                return await interaction.followup.send(embed=embed)
+
+            elif isinstance(error, app_commands.MissingRole):
+                embed.description = "You're missing a role required to use this command."
+                embed.add_field(name="Missing Role", value=f"<@&{error.missing_role}>")
+                return await interaction.followup.send(embed=embed)
+            
             else:
                 return  # we already respond
+            
         elif isinstance(error, app_commands.TransformerError):
             if error.type.value == AppCommandOptionType.user.value:
-                exception = membed(f"{error.value} is not a member of this server.")
+                embed.description = f"{error.value} is not a member of this server."
             else:
-                exception = membed("An error occurred while processing your input.")
+                embed.description = "An error occurred while processing your input."
+        
         elif isinstance(error, app_commands.CommandNotFound):
             exception = membed("This command no longer exists!")
 
         elif isinstance(error, app_commands.CommandAlreadyRegistered):
             exception = membed("Another command with this name already exists.")
+        
         else:
             print_exception(type(error), error, error.__traceback__)
             exception = Embed(colour=0x2B2D31)
@@ -93,8 +107,6 @@ class SlashExceptionHandler(commands.Cog):
                 "please let us know about it. We're always here to help!"
             )
 
-        if not interaction.response.is_done():
-            return await interaction.response.send_message(embed=exception, view=MessageDevelopers())
         await interaction.followup.send(embed=exception, view=MessageDevelopers())
 
 
