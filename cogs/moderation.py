@@ -49,9 +49,15 @@ class TimeConverter(app_commands.Transformer):
         return time
 
 
-@app_commands.guild_only()
-@app_commands.checks.bot_has_permissions(manage_roles=True)
 class RoleManagement(app_commands.Group):
+
+    async def interaction_check(self, interaction: discord.Interaction[discord.Client]) -> bool:
+        if interaction.channel.permissions_for(interaction.user).manage_roles:
+            return True
+        
+        embed = membed("I'm missing permissions required to use this command.")
+        embed.add_field(name="Missing Permissions (1)", value="Manage Roles")
+        await interaction.response.send_message(embed=embed)
 
     async def bulk_add_roles(
         self, 
