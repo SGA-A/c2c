@@ -53,22 +53,13 @@ class TimeConverter(app_commands.Transformer):
 @app_commands.checks.bot_has_permissions(manage_roles=True)
 class RoleManagement(app_commands.Group):
 
-    async def on_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
-        if isinstance(error, app_commands.BotMissingPermissions):
-            await respond(
-                interaction=interaction,
-                ephemeral=True,
-                embed=membed("Missing a required permission: `Manage Roles`.")
-            )
-        await respond(interaction=interaction, embed=membed("An error occurred."), ephemeral=True)
-
     async def bulk_add_roles(
         self, 
         interaction: discord.Interaction, 
         users_without_it: set, 
         role: discord.Role, 
         how_many: int
-        ) -> str | None:
+    ) -> str | None:
 
         start_time = perf_counter()
         try:
@@ -502,7 +493,8 @@ class Moderation(commands.Cog):
 
         self.purge_from_here_cmd = app_commands.ContextMenu(
             name='Purge Up To Here',
-            callback=self.purge_from_here)
+            callback=self.purge_from_here
+        )
         
         roles = RoleManagement(
             name="role", 
@@ -514,12 +506,6 @@ class Moderation(commands.Cog):
         
         self.bot.tree.add_command(self.purge_from_here_cmd)
         self.bot.tree.add_command(roles)
-    
-    async def cog_check(self, ctx: commands.Context) -> bool:
-        if ctx.author.guild_permissions.manage_guild:
-            return True
-        await ctx.send(embed=membed("You are not allowed to use these commands."))
-        return False
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -527,16 +513,25 @@ class Moderation(commands.Cog):
         if not message.content.startswith(".."):
             return
         
-        match = search(r'\d+$', message.content)
-
         if not message.channel.permissions_for(message.author).manage_messages:
-            return await message.channel.send(silent=True, embed=membed("You're not able to do this."))
+            return await message.channel.send(
+                delete_after=5.0,
+                silent=True,
+                embed=membed("You're not able to do this.")
+            )
 
+        match = search(r'\d+$', message.content)
         if not match:
-            return await message.channel.send(silent=True, content=membed("You didn't specify a number."))
-
-        ctx = await self.bot.get_context(message)
-        await ctx.invoke(self.purge, purge_max_amount=int(match.group()))
+            return await message.channel.send(
+                delete_after=5.0, 
+                silent=True,
+                embed=membed("You didn't specify a number.")
+            )
+        
+        await message.channel.purge(
+            limit=int(match.group())+1, 
+            check=lambda msg: not msg.pinned
+        )
 
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -590,25 +585,27 @@ class Moderation(commands.Cog):
                 await conn.execute('DELETE FROM tasks WHERE mod_to = $0', mod_to)
                 await conn.commit()
 
+    @commands.has_permissions(manage_threads=True)
     @commands.command(name="close", description="Close the invocation thread")
     async def close_thread(self, ctx: commands.Context):
+        if not isinstance(ctx.channel, discord.Thread):
+            return await ctx.reply(embed=membed("This is not a thread."))
+        
         await ctx.message.delete()
-        if isinstance(ctx.channel, discord.Thread):
-            await ctx.send(
-                embed=membed(
-                    "This thread is now locked due to lack of use.\n"
-                    "It may be re-opened if needed by contacting an admin."
-                )
+        await ctx.send(
+            embed=membed(
+                "This thread is now locked due to lack of use.\n"
+                "It may be re-opened if needed by contacting an admin."
             )
+        )
 
-            return await ctx.channel.edit(
-                locked=True,
-                archived=True,
-                reason=f'Marked as closed by {ctx.author} (ID: {ctx.author.id})'
-            )
-        else:
-            await ctx.reply(embed=membed("This is not a thread."), mention_author=False)
+        return await ctx.channel.edit(
+            locked=True,
+            archived=True,
+            reason=f'Marked as closed by {ctx.author} (ID: {ctx.author.id})'
+        )
 
+    @commands.has_permissions(manage_channels=True)
     @commands.command(name='delay', description='Sets a slowmode for the invoker channel', aliases=('d',))
     async def set_delay(self, ctx: commands.Context, slowmode_in_seconds: int):
         """Sets a delay to which users can send messages."""
@@ -618,6 +615,7 @@ class Moderation(commands.Cog):
             return await ctx.send(embed=membed(f'Slowmode set to **{slowmode_in_seconds}** seconds.'))
         await ctx.send(embed=membed("Disabled slowmode."))
 
+    @commands.has_permissions(manage_messages=True)
     @commands.command(name="purge", description="Bulk-remove messages, excluding pins")
     async def purge(self, ctx: commands.Context, purge_max_amount: int):
         """Purge an amount of messages. Pinned messages aren't removed."""
@@ -630,7 +628,8 @@ class Moderation(commands.Cog):
         description="Role management commands associated with an expiry.", 
         guild_only=True, 
         guild_ids=APP_GUILDS_ID, 
-        default_permissions=discord.Permissions(manage_roles=True))
+        default_permissions=discord.Permissions(manage_roles=True)
+    )
 
     @temprole.command(name="add", description="Adds a temporary role")
     @app_commands.describe(user="The user to add the role to.", role="The role to add to this user.", duration="When this role should be removed e.g. 1d 7h 19m 4s.")
