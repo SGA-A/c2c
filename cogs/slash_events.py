@@ -73,7 +73,7 @@ class SlashExceptionHandler(commands.Cog):
                 embed.description = "I'm missing permissions required to use this command."
                 embed.add_field(
                     name=f"Missing Permissions ({len(error.missing_permissions)})", 
-                    value="\n".join(err.title() for err in error.missing_permissions)
+                    value="\n".join(err.replace('_', ' ').title() for err in error.missing_permissions)
                 )
                 return await interaction.followup.send(embed=embed)
 
