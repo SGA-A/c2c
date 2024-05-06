@@ -50,6 +50,7 @@ def membed(custom_description: Optional[str] = None) -> discord.Embed:
     membedder = discord.Embed(colour=0x2B2D31, description=custom_description)
     return membedder
 
+
 def swap_elements(x, index1, index2) -> None:
     """Swap two elements in place given their indices, return None.
     
@@ -1375,8 +1376,8 @@ class BlackjackUi(discord.ui.View):
                     colour=discord.Colour.brand_red(),
                     description=(
                         f"**You lost. You went over 21 and busted.**\n"
-                        f"You lost {CURRENCY} **{namount:,}**. You now "
-                        f"have {CURRENCY} **{new_amount_balance:,}**\n"
+                        f"You lost {CURRENCY} **{namount:,}**. "
+                        f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
                         f"You lost {prnctl:.1f}% of the games."
                     )
                 )
@@ -1572,10 +1573,8 @@ class BlackjackUi(discord.ui.View):
             loser = discord.Embed(
                 colour=discord.Colour.brand_red(),
                 description=(
-                    f"**You lost. You stood with a lower score (`{player_sum}`) than "
-                    f"the dealer (`{dealer_total}`).**\n"
-                    f"You lost {CURRENCY} **{namount:,}**. You now "
-                    f"have {CURRENCY} **{new_amount_balance:,}**.\n"
+                    f"**You lost. You stood with a lower score (`{player_sum}`) than the dealer (`{dealer_total}`).**\n"
+                    f"You lost {CURRENCY} **{namount:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
                     f"You lost {prnctl:.1f}% of the games."
                 )
             )
@@ -1614,10 +1613,8 @@ class BlackjackUi(discord.ui.View):
             win = discord.Embed(
                 colour=discord.Colour.brand_green(),
                 description=(
-                    f"**You win! You stood with a higher score (`{player_sum}`) than the "
-                    f"dealer (`{dealer_total}`).**\n"
-                    f"You won {CURRENCY} **{amount_after_multi:,}**. "
-                    f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
+                    f"**You win! You stood with a higher score (`{player_sum}`) than the dealer (`{dealer_total}`).**\n"
+                    f"You won {CURRENCY} **{amount_after_multi:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
                     f"You won {prctnw:.1f}% of the games."
                 )
             )
@@ -1712,8 +1709,7 @@ class BlackjackUi(discord.ui.View):
             colour=discord.Colour.brand_red(),
             description=(
                 f"**You forfeit. The dealer took half of your bet for surrendering.**\n"
-                f"You lost {CURRENCY} **{namount:,}**. You now "
-                f"have {CURRENCY} **{new_amount_balance:,}**.\n"
+                f"You lost {CURRENCY} **{namount:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
                 f"You lost {prcntl:.1f}% of the games."
             )
         )
@@ -7080,28 +7076,29 @@ class Economy(commands.Cog):
             if has_keycard:
                 badges.add("<:lanyard:1165935243140796487>")
                 
-                your_choice = choices(
-                    [1, 2, 3, 4, 5, 6], 
+                their_roll, = choices(
+                    population=(1, 2, 3, 4, 5, 6), 
                     weights=[37 / 3, 37 / 3, 37 / 3, 63 / 3, 63 / 3, 63 / 3]
                 )
 
-                bot_choice = choices(
-                    [1, 2, 3, 4, 5, 6], 
-                    weights=[65 / 4, 65 / 4, 65 / 4, 65 / 4, 35 / 2, 35 / 2]
+                bot_roll, = choices(
+                    population=(1, 2, 3, 4, 5, 6), 
+                    weights=(65 / 4, 65 / 4, 65 / 4, 65 / 4, 35 / 2, 35 / 2)
                 )
 
             else:
-                bot_choice = choices(
-                    [1, 2, 3, 4, 5, 6], 
-                    weights=[10, 10, 15, 27, 15, 23])
+                their_roll, = choices(
+                    population=(1, 2, 3, 4, 5, 6), 
+                    weights=(10, 10, 15, 27, 15, 23)
+                )
                 
-                your_choice = choices(
-                    [1, 2, 3, 4, 5, 6], 
-                    weights=[55 / 3, 55 / 3, 55 / 3, 45 / 3, 45 / 3, 45 / 3]
+                bot_roll, = choices(
+                    population=(1, 2, 3, 4, 5, 6), 
+                    weights=(55 / 3, 55 / 3, 55 / 3, 45 / 3, 45 / 3, 45 / 3)
                 )
             
             async with conn.transaction():
-                if your_choice[0] > bot_choice[0]:
+                if their_roll > bot_roll:
                     amount_after_multi = int(((pmulti / 100) * amount) + amount)
                     updated = await self.update_bank_three_new(
                         interaction.user, 
@@ -7113,24 +7110,23 @@ class Economy(commands.Cog):
 
                     prcntw = (updated[1] / (id_lose_amount + updated[1])) * 100
 
-                    embed = discord.Embed(
-                        colour=discord.Color.brand_green(),
-                        description=(
-                            f"**You've rolled higher!** You won {CURRENCY} **{amount_after_multi:,}**.\n"
-                            f"Your new `wallet` balance is {CURRENCY} **{updated[2]:,}**.\n"
-                            f"You've won {prcntw:.1f}% of all games."
-                        )
+                    embed = discord.Embed(colour=discord.Color.brand_green())
+                    embed.description=(
+                        f"**You've rolled higher!**\n"
+                        f"You won {CURRENCY} **{amount_after_multi:,}**.\n"
+                        f"You now have {CURRENCY} **{updated[2]:,}**.\n"
+                        f"You've won {prcntw:.1f}% of all games."
                     )
+
                     embed.set_author(
                         name=f"{interaction.user.name}'s winning gambling game", 
                         icon_url=interaction.user.display_avatar.url
                     )
 
-                elif your_choice[0] == bot_choice[0]:
-                    embed = discord.Embed(
-                        description="**Tie.** You lost nothing nor gained anything!", 
-                        colour=discord.Color.yellow()
-                    )
+                elif their_roll == bot_roll:
+                    embed = discord.Embed(colour=discord.Color.yellow())
+                    embed.description = "**Tie.** You lost nothing nor gained anything!"
+
                     embed.set_author(
                         name=f"{interaction.user.name}'s gambling game", 
                         icon_url=interaction.user.display_avatar.url
@@ -7148,13 +7144,12 @@ class Economy(commands.Cog):
                     new_total = id_won_amount + updated[1]
                     prcntl = (updated[1] / new_total) * 100
 
-                    embed = discord.Embed(
-                        colour=discord.Color.brand_red(),
-                        description=(
-                            f"**You've rolled lower!** You lost {CURRENCY} **{amount:,}**.\n"
-                            f"Your new balance is {CURRENCY} **{updated[2]:,}**.\n"
-                            f"You've lost {prcntl:.1f}% of all games."
-                        )
+                    embed = discord.Embed(colour=discord.Color.brand_red())
+                    embed.description=(
+                        f"**You've rolled lower!**\n"
+                        f"You lost {CURRENCY} **{amount:,}**.\n"
+                        f"You now have {CURRENCY} **{updated[2]:,}**.\n"
+                        f"You've lost {prcntl:.1f}% of all games."
                     )
 
                     embed.set_author(
@@ -7162,10 +7157,10 @@ class Economy(commands.Cog):
                         icon_url=interaction.user.display_avatar.url
                     )
                 
+                embed.add_field(name=interaction.user.name, value=f"Rolled `{their_roll}` {''.join(badges)}")
+                embed.add_field(name=self.bot.user.name, value=f"Rolled `{bot_roll}`")
                 embed.set_footer(text=f"Multiplier: {pmulti:,}%")
 
-                embed.add_field(name=interaction.user.name, value=f"Rolled `{your_choice[0]}` {''.join(badges)}")
-                embed.add_field(name=self.bot.user.name, value=f"Rolled `{bot_choice[0]}`")
                 await interaction.response.send_message(embed=embed)
 
     @add_showcase_item.autocomplete('item_name')
