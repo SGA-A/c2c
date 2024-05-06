@@ -37,10 +37,10 @@ class ContextCommandHandler(commands.Cog):
                 await ctx.reply(embed=embed, view=contact_view)
 
             elif isinstance(err, self.err.MissingPermissions):
-                embed.description = f"You're missing {len(err.missing_permissions)} permission(s) required to use this command."
+                embed.description = "You're missing permissions required to use this command."
                 embed.add_field(
-                    name="Missing Permissions", 
-                    value="\n".join(err.title() for err in err.missing_permissions)
+                    name=f"Missing Permissions ({len(err.missing_permissions)})", 
+                    value="\n".join(err.replace('_', ' ').title() for err in err.missing_permissions)
                 )
                 await ctx.reply(embed=embed, view=contact_view)
 
