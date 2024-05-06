@@ -5,7 +5,6 @@ from discord.utils import format_dt, utcnow
 from discord.ext import commands
 from discord import Embed
 
-from .economy import membed
 from .slash_events import MessageDevelopers
 
 
@@ -18,8 +17,9 @@ class ContextCommandHandler(commands.Cog):
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, err: Exception):
         """The function that handles all the errors passed into the bot via text-based commands."""
+        
         contact_view = MessageDevelopers()
-        embed = membed()
+        embed = Embed(colour=0x2B2D31)
 
         if isinstance(err, commands.errors.UserInputError):
 
@@ -45,29 +45,30 @@ class ContextCommandHandler(commands.Cog):
                 await ctx.reply(embed=embed, view=contact_view)
 
             elif isinstance(err, self.err.MissingRole):
-                embed = membed("You're missing a role required to use this command.")
+                embed.description = "You're missing a role required to use this command.")
                 embed.add_field(name="Missing Role", value=f"<@&{err.missing_role}>")
                 await ctx.reply(embed=embed, view=contact_view)
 
         elif isinstance(err, self.err.CommandOnCooldown):
             after_cd = format_dt(utcnow() + timedelta(seconds=err.retry_after), style="R")
-            await ctx.reply(embed=membed(f"You're on a cooldown. Try again {after_cd}."), view=contact_view)
+            embed.description = f"You're on a cooldown. Try again {after_cd}."
+            await ctx.reply(embed=embed, view=contact_view)
 
         elif isinstance(err, self.err.CommandNotFound):
-            await ctx.reply(embed=membed("Could not find what you were looking for."), view=contact_view)
+            embed.description = "Could not find what you were looking for."
+            await ctx.reply(embed=embed, view=contact_view)
 
         else:
             print_exception(type(err), err, err.__traceback__)
             
-            error = Embed(colour=0x2B2D31)
-            error.title = "Something went wrong"
-            error.description = (
+            embed.title = "Something went wrong"
+            embed.description = (
                 "Seems like the bot has stumbled upon an unexpected error. "
                 "Not to worry, these things happen from time to time. If this issue persists, "
                 "please let us know about it. We're always here to help!"
             )
             
-            await ctx.reply(embed=error, view=contact_view)
+            await ctx.reply(embed=embed, view=contact_view)
 
 
 async def setup(bot: commands.Bot):
