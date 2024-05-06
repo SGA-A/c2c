@@ -51,8 +51,8 @@ class TimeConverter(app_commands.Transformer):
 
 class RoleManagement(app_commands.Group):
 
-    async def interaction_check(self, interaction: discord.Interaction[discord.Client]) -> bool:
-        if interaction.channel.permissions_for(interaction.user).manage_roles:
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.guild.me.guild_permissions.manage_roles:
             return True
         
         embed = membed("I'm missing permissions required to use this command.")
