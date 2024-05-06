@@ -138,7 +138,6 @@ class Owner(commands.Cog):
             
             except discord.HTTPException:
                 msg = await ctx.send(
-                    mention_author=True,
                     content=(
                         "**[WARNING]:** Previous weekly reward announcement was detected, but"
                         " could not be found in the invoker channel. Make sure you are calling "
@@ -301,7 +300,9 @@ class Owner(commands.Cog):
         """Sync the bot's tree to either the guild or globally, varies from time to time."""
 
         for guild_id in APP_GUILDS_ID:
-            await self.bot.tree.sync(guild=discord.Object(id=guild_id))
+            synced = await self.bot.tree.sync(guild=discord.Object(id=guild_id))
+        
+        self.bot.command_count = len(synced) + len(self.bot.commands) + 1
 
         await self.bot.tree.sync(guild=None)
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
