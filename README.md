@@ -34,12 +34,6 @@
 [![python badge](http://ForTheBadge.com/images/badges/made-with-python.svg)](https://www.python.org/ "Python")
 </div>
 
-
-## Developer Team
-We are 2 teenagers in the UK studying A-Levels, and chose to make this Discord bot as a side hussle.
-- [Splint](https://discordapp.com/users/992152414566232139/): The primary developer for most commands in the bot.
-- [inter_geo](https://discordapp.com/users/546086191414509599): The secondary developer, making some commands in the bot.
-
 ## Installation
 > [!CAUTION]
 > We do not support running an instance of the bot. Setup details will not be given, if you can figure it out, go nuts.
@@ -70,8 +64,6 @@ We are 2 teenagers in the UK studying A-Levels, and chose to make this Discord b
 The help command. 
 It is an interactive menu sorting all the commands within cogs by category and assumes each cog fits into one category. 
 A dropdown is displayed to list the available categories and clicking any given one provides an embed edited from the original response containing every single command that corresponds to the category. My thought process at the time of making it was robust. It can also list subcommands of a grouped slash command.  All of the embed images are now hosted on Imgur. 
-
-In the course of making this bot, I learnt a lot of things. I was just a beginner at first and had no idea how to read or even understand the discord.py documentation. I think it was my initiative one day to just completley absolve the documentation and of all of its contents one day that led me to where this project has come now. And also the programming tips I've gotten over the years. It is a passion project and We are not considering disbanding the project any time soon.
 
 > [!NOTE]
 > The future of this project is uncertain. Given my limited free time, I may not be able to update the code after breaking changes to the library/API take place. This will only dwindle in the future. See https://github.com/SGA-A/c2c/discussions/9 [and the Version Guarantees for discord.py.](https://discordpy.readthedocs.io/en/stable/version_guarantees.html)
