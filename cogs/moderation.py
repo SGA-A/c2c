@@ -537,17 +537,14 @@ class Moderation(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_ID)
     async def purge_from_here(self, interaction: discord.Interaction, message: discord.Message):
 
-        if not interaction.user.guild_permissions.manage_messages:
-            return await interaction.response.send_message(
-                embed=membed("You are not allowed to use this command."))
-        
+        await interaction.response.defer(ephemeral=True)
+
         diff = discord.utils.utcnow() - message.created_at
-        
         if diff.total_seconds() > 1_209_600:
-            return await interaction.response.send_message(
-                embed=membed("This message was created more than 14 days ago."))
+            return await interaction.followup.send(
+                embed=membed("This message was created more than 14 days ago.")
+            )
         
-        await interaction.response.defer(thinking=True, ephemeral=True)
         count = await interaction.channel.purge(after=discord.Object(id=message.id))
         await interaction.followup.send(embed=membed(f"Deleted **{len(count)}** messages."))
 
