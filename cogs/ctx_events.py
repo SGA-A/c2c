@@ -45,7 +45,7 @@ class ContextCommandHandler(commands.Cog):
                 await ctx.reply(embed=embed, view=contact_view)
 
             elif isinstance(err, self.err.MissingRole):
-                embed.description = "You're missing a role required to use this command.")
+                embed.description = "You're missing a role required to use this command."
                 embed.add_field(name="Missing Role", value=f"<@&{err.missing_role}>")
                 await ctx.reply(embed=embed, view=contact_view)
 
