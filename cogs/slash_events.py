@@ -53,11 +53,10 @@ class SlashExceptionHandler(commands.Cog):
         self.bot.dispatch("app_command_error", interaction, error)
 
     @commands.Cog.listener("on_app_command_error")
-    async def get_app_command_error(
-        self, interaction: Interaction, error: app_commands.AppCommandError) -> None:
+    async def get_app_command_error(self, interaction: Interaction, error: app_commands.AppCommandError) -> None:
 
         if not interaction.response.is_done():
-            return await interaction.response.defer(thinking=True)
+            await interaction.response.defer(thinking=True)
 
         embed = membed()
 
@@ -67,14 +66,6 @@ class SlashExceptionHandler(commands.Cog):
                 embed.title = choice(COOLDOWN_PROMPTS)
                 after_cd = format_dt(utcnow() + timedelta(seconds=error.retry_after), style="R")
                 embed.description = f"You can run this command again {after_cd}."
-                return await interaction.followup.send(embed=embed)
-
-            elif isinstance(error, app_commands.BotMissingPermissions):
-                embed.description = "I'm missing permissions required to use this command."
-                embed.add_field(
-                    name=f"Missing Permissions ({len(error.missing_permissions)})", 
-                    value="\n".join(err.replace('_', ' ').title() for err in error.missing_permissions)
-                )
                 return await interaction.followup.send(embed=embed)
 
             elif isinstance(error, app_commands.MissingRole):
