@@ -15,30 +15,32 @@ from re import compile
 from logging import INFO
 
 from typing import (
-    Literal, 
-    Any, 
-    Dict, 
-    Optional, 
-    TYPE_CHECKING, 
-    Union, 
-    List
+    Any,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    TYPE_CHECKING,
+    Union,
 )
 
 from discord import (
-    app_commands, 
-    Object, 
-    ui, 
-    Intents,
-    Status, 
-    Embed, 
-    Interaction, 
-    CustomActivity,
-    AppCommandType, 
-    SelectOption, 
+    AllowedMentions,
+    app_commands,
+    AppCommandType,
     Colour,
-    Webhook, 
-    NotFound
+    CustomActivity,
+    Embed,
+    Interaction,
+    Intents,
+    NotFound,
+    Object,
+    SelectOption,
+    Status,
+    Webhook,
+    ui,
 )
+
 
 from discord.utils import setup_logging
 from discord.ext import commands
@@ -220,17 +222,22 @@ intents.guilds = True
 intents.voice_states = True
 
 
+mentionable = AllowedMentions.none()
+mentionable.users = True
+
+
 bot = C2C(
-    command_prefix='>', 
-    intents=intents, 
-    case_insensitive=True, 
-    help_command=None, 
+    activity=CustomActivity(name='Serving cc • /help'),
+    allowed_mentions=mentionable,
+    case_insensitive=True,
+    command_prefix='>',
+    help_command=None,
+    intents=intents,
+    max_messages=100,
+    max_ratelimit_timeout=30.0,
     owner_ids={992152414566232139, 546086191414509599},
-    activity=CustomActivity(name='Serving cc • /help'), 
-    status=Status.idle, 
-    tree_cls=MyCommandTree, 
-    max_messages=100, 
-    max_ratelimit_timeout=30.0
+    status=Status.idle,
+    tree_cls=MyCommandTree,
 )
 print(version)
 
@@ -467,7 +474,7 @@ class HelpDropdown(ui.Select):
             name="Info", 
             value=(
                 f"- {total_cmds_rough} commands total\n"
-                f"- {prcntage:.0f}% of all commands are here"
+                f"- {prcntage:.0f}% of them are here"
             )
         )
 
@@ -663,7 +670,7 @@ async def help_command_category(interaction: Interaction):
         colour=0xB8B9C9,
         description=(
             "**For your reference:**\n"
-            "- This does not display uncategorized commands.\n"
+            "- This does not display uncategorized commands\n"
             "- The prefix for this bot is `>` (for text commands)\n"
             "- Not all categories are accessible to everyone, check the details prior\n\n"
         )
