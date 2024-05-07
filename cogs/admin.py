@@ -1,6 +1,5 @@
 """The administrative cog. Only for use by the bot owners."""
-from random import randint
-from datetime import timedelta, datetime
+from datetime import datetime
 from re import findall
 from textwrap import indent
 from contextlib import redirect_stdout
@@ -25,8 +24,6 @@ from cogs.economy import (
     CURRENCY, 
     determine_exponent, 
     APP_GUILDS_ID, 
-    get_profile_key_value, 
-    modify_profile,
     membed
 )
 
@@ -124,86 +121,6 @@ class Owner(commands.Cog):
             )
         )
 
-    @commands.command(name="p_n", description="Send payouts to eligible members")
-    async def rewards_user_roles(self, ctx: commands.Context):
-        """Send a weekly payout to users that are eligible."""
-        await ctx.message.delete()
-
-        pinned_if_any = get_profile_key_value("weeklyr msg id")
-        if pinned_if_any is not None:
-            
-            try:
-                already_pinned = await ctx.fetch_message(pinned_if_any)
-                await already_pinned.unpin(reason="Outdated weekly reward announcement")  # unpin if stored
-            
-            except discord.HTTPException:
-                msg = await ctx.send(
-                    content=(
-                        "**[WARNING]:** Previous weekly reward announcement was detected, but"
-                        " could not be found in the invoker channel. Make sure you are calling "
-                        "this command in the same channel it was sent in."
-                    )
-                )
-
-                return await msg.edit(content=f"{msg.content}\n\nCancelled the payout operation.")
-
-        if ctx.guild.id != 829053898333225010:
-            return await ctx.send("This command is to be called only within **cc**.")
-        
-        active_members = ctx.guild.get_role(1190772029830471781).members
-        activated_members = ctx.guild.get_role(1190772182591209492).members
-
-        eligible = len(active_members) + len(activated_members)
-        actual = 0
-
-        async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
-            payouts = {}
-            economy = self.bot.get_cog("Economy")
-
-            async with conn.transaction():
-                for member in activated_members:
-                    if await economy.can_call_out(member, conn):
-                        continue
-                    amt_activated = randint(1_100_000_000, 2_100_000_000)
-                    await economy.update_bank_new(member, conn, amt_activated)
-                    payouts.update(
-                        {f"{member.mention}": (amt_activated, ctx.guild.get_role(1190772182591209492).mention)})
-                    actual += 1
-
-                for member in active_members:
-                    if await economy.can_call_out(member, conn):
-                        continue
-                    amt_active = randint(200000000, 1100000000)
-                    await economy.update_bank_new(member, conn, amt_active)
-                    payouts.update({f"{member.mention}": (amt_active, ctx.guild.get_role(1190772029830471781).mention)})
-                    actual += 1
-
-            dt_now = datetime.now()
-            payday = discord.Embed(
-                colour=discord.Colour.dark_embed(),
-                description=(
-                    "## Weekly Rewards (for week "
-                    f"{dt_now.isocalendar().week} of {dt_now.year})\n"
-                    "These are the users who were eligible to claim this week's activity "
-                    "rewards. Entries that contained users not registered as of "
-                    f"{discord.utils.format_dt(dt_now, style="t")} today were "
-                    f"ignored. Considering this, `{eligible}` user(s) were eligible,"
-                    f" but `{actual}` user(s) were given these rewards.\n"
-                )
-            )
-
-            payday_notes = []
-            for member, payout in payouts.items():  # all members that got paid
-                payday_notes.append(
-                    f"- {member} walked away with \U000023e3 **{payout[0]:,}** from being {payout[1]}."
-                )
-
-            payday.description += '\n'.join(payday_notes)
-            unpinned = await ctx.send(embed=payday)
-            await unpinned.pin(reason="Latest weekly rewards announcement")
-            modify_profile("update", "weeklyr msg id", unpinned.id)  # store to unpin later
-
     @app_commands.command(name="config", description="Adjust a user's robux directly")
     @app_commands.default_permissions(administrator=True)
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -275,24 +192,16 @@ class Owner(commands.Cog):
 
             await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
 
-    @commands.command(name='cthr', aliases=('ct', 'create_thread'), description='Use a preset to create forum channels')
+    @commands.command(name='threader', aliases=('ct', 'cthr'), description='Create a thread in a text channel')
     async def create_thread(self, ctx: commands.Context, thread_name: str):
         """Create a forum channel quickly with only name of thread required as argument."""
         if not isinstance(ctx.channel, discord.TextChannel):
-            await ctx.send(
-                "You need to be in a text channel.", 
-                delete_after=5.0
-            )
+            await ctx.send(content="You need to be in a text channel.", delete_after=5.0)
 
-        thread = await ctx.channel.create_thread(
+        await ctx.channel.create(
             name=thread_name, 
             auto_archive_duration=10080, 
             message=discord.Object(ctx.message.id)
-        )
-
-        await thread.send(
-            content=f"Created {thread.mention}.",
-            delete_after=5.0
         )
 
     @commands.command(name='sync', description='Sync the bot tree for changes', aliases=("sy",))
@@ -339,7 +248,7 @@ class Owner(commands.Cog):
         func = env['func']
         try:
             with redirect_stdout(stdout):
-                ret = await func()
+                ret = await func()  # return value
         except Exception:
             value = stdout.getvalue()
             await ctx.send(f'```py\n{value}{format_exc()}\n```')
@@ -350,7 +259,7 @@ class Owner(commands.Cog):
             except discord.HTTPException:
                 pass
 
-            if ret is None:
+            if ret is None:  # if nothing is returned
                 if value:
                     await ctx.send(f'```py\n{value}\n```')
             else:
@@ -409,43 +318,7 @@ class Owner(commands.Cog):
             """
         )
 
-    @commands.command(name='regex', description='Load automod match_regex rules')
-    async def automod_regex(self, ctx):
-        """Automod regex rules and their patterns."""
-        await ctx.guild.create_automod_rule(
-            name='new rule by c2c',
-            event_type=discord.AutoModRuleEventType.message_send,
-            actions=[discord.AutoModRuleAction(duration=timedelta(minutes=5.0))],
-            trigger=discord.AutoModTrigger(
-                regex_patterns=["a", "b", "c", "d", "e"]
-            )
-        )
-        await ctx.message.add_reaction('<:successful:1183089889269530764>')
-
-    @commands.command(name='mentions', description='Load automod mass_mentions rules')
-    async def automod_mentions(self, ctx):
-        """Automod mentioning rules"""
-        await ctx.guild.create_automod_rule(
-            name='new rule by c2c',
-            event_type=discord.AutoModRuleEventType.message_send,
-            actions=[discord.AutoModRuleAction(duration=timedelta(minutes=5.0))],
-            trigger=discord.AutoModTrigger(mention_limit=5)
-        )
-        await ctx.message.add_reaction('<:successful:1183089889269530764>')
-
-    @commands.command(name='keyword', description='Load automod by_keyword rules')
-    async def automod_keyword(self, ctx, the_word):
-        """Automod keyword rules"""
-        await ctx.guild.create_automod_rule(
-            name='new rule by c2c',
-            event_type=discord.AutoModRuleEventType.message_send,
-            actions=[discord.AutoModRuleAction(duration=timedelta(minutes=5.0))],
-            trigger=discord.AutoModTrigger(keyword_filter=[f'{the_word}']),
-        )
-
-        await ctx.message.add_reaction('<:successful:1183089889269530764>')
-
-    @commands.command(name='update', description='Update channel information')
+    @commands.command(name='uschedule', description='Update the planned changes tracker in cc', aliases=('us', 'usched'))
     async def push_update(self, ctx):
         """Push an update directly to the info channel."""
 
@@ -479,7 +352,7 @@ class Owner(commands.Cog):
 
         await original.edit(embed=embed)
 
-    @commands.command(name='update3', description='Modify rules and guidelines')
+    @commands.command(name='urules', description='Update the rules channel for cc', aliases=('ur',))
     async def push_update3(self, ctx: commands.Context):
         """Push an update to the rules channel."""
         await ctx.message.delete()
@@ -519,7 +392,7 @@ class Owner(commands.Cog):
 
         await original.edit(embed=r)
 
-    @commands.command(name='update2', description='Edit the welcome message for the server')
+    @commands.command(name='uinfo', description='Update the information channel for cc')
     async def push_update2(self, ctx):
         """Push to update the welcome and info embed within its respective channel."""
         await ctx.message.delete()
@@ -633,7 +506,7 @@ class Owner(commands.Cog):
         except discord.HTTPException as err:
             await ctx.send(str(err))
 
-    @commands.command(name='update4', description='Update the progress tracker')
+    @commands.command(name='utracker', description='Update the economy system tracker', aliases=('ut',))
     async def override_economy(self, ctx: commands.Context):
         """Update the progress tracker on the Economy system."""
         
@@ -690,7 +563,9 @@ class Owner(commands.Cog):
                 " - contributing to **12.5**% of the full programme (will make ideas for new "
                 "commands)\n\nwe would not be able to recover the Economy System without "
                 "<@992152414566232139>, she is the literal backbone of its revival! thank her for"
-                " making it possible!"))
+                " making it possible!"
+            )
+        )
         
         await original.edit(embed=temporary)
 
@@ -718,11 +593,10 @@ class Owner(commands.Cog):
     async def repeat(
         self, 
         ctx: commands.Context, 
-        channel: Optional[
-            Union[
-                discord.TextChannel, discord.VoiceChannel,
-                discord.ForumChannel, discord.Thread]], 
-        *, message: str) -> None:
+        channel: Optional[Union[discord.TextChannel, discord.VoiceChannel, discord.ForumChannel, discord.Thread]], 
+        *, 
+        message: str
+    ) -> None:
         """Repeat what you typed, also converting emojis based on whats inside two equalities."""
 
         if not ctx.interaction:
@@ -742,7 +616,7 @@ class Owner(commands.Cog):
         channel = channel or ctx.channel
         await channel.send(message)
         if ctx.interaction:
-            await ctx.send(f"Done. Sent this message to {channel.mention}.", ephemeral=True)
+            await ctx.send(content=f"Sent this message to {channel.mention}.", ephemeral=True)
 
     @app_commands.command(name='upload', description='Upload a new forum thread')
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -786,10 +660,11 @@ class Owner(commands.Cog):
         )
 
         await interaction.followup.send(
+            ephemeral=True, 
             embed=membed(f"Your thread was created here: {thread.jump_url}.")
         )
 
-    @commands.command(name="upload2", description="Update the forum announcement")
+    @commands.command(name="uforuma", description="Update the forum announcement", aliases=("ufa",))
     async def upload2(self, ctx: commands.Context):
         channel: discord.PartialMessageable = self.bot.get_partial_messageable(1147203137195745431)
         msg = channel.get_partial_message(1147203137195745431)
@@ -808,7 +683,6 @@ class Owner(commands.Cog):
         a.set_thumbnail(url="https://i.imgur.com/Udo4MDP.png")
 
         await msg.edit(embed=a)
-        await ctx.send("done")
 
 
 async def setup(bot: commands.Bot):
