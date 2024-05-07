@@ -170,7 +170,7 @@ class PaginationSimple(discord.ui.View):
     async def on_timeout(self) -> None:
         try:
             for item in self.children:
-                item.disabled = True
+                item.disabled = not(hasattr(item, "url") and item.url)
             await self.message.edit(view=self)
         except discord.NotFound:
             pass
