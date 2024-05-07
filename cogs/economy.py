@@ -1264,7 +1264,9 @@ class BalanceView(discord.ui.View):
     async def close_view(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Close the balance view."""
         self.stop()
-        await interaction.response.edit_message(view=None)
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(view=self)
 
 
 class BlackjackUi(discord.ui.View):
