@@ -39,33 +39,15 @@ RESPONSES = {
 }
 
 
-def extract_attributes(post_element, mode: Literal["post", "tag"]):
+def extract_attributes(post_element, mode: Literal["post", "tag"]) -> Union[dict, str]:
     if mode == "post":
-        author = post_element.get("author")
-        created_at = post_element.get("created_at")
-        file_url = post_element.get("file_url")
-        jpeg_url = post_element.get("jpeg_url")
-        preview_url = post_element.get("preview_url")
-        source = post_element.get("source")
-        tags = post_element.get("tags")
+        keys_to_extract = {"created_at", "jpeg_url", "author"}
+        data = {key: post_element.get(key) for key in keys_to_extract}
+    else:
+        data = post_element.get("name")
 
-        return {
-            "author": author,
-            "created_at": created_at,
-            "file_url": file_url,
-            "jpeg_url": jpeg_url,
-            "preview_url": preview_url,
-            "source": source,
-            "tags": tags,
-        }
-
-    tag_name = post_element.get("name")
-    tag_type = post_element.get("type")
-
-    return {
-        "name": tag_name,
-        "tag_type": tag_type
-    }
+    del post_element
+    return data
 
 
 def format_dt(dt: datetime.datetime, style: Optional[str] = None) -> str:
@@ -82,8 +64,7 @@ def format_relative(dt: datetime.datetime) -> str:
 
 
 def parse_xml(xml_content, mode: Literal["post", "tag"]):
-    root = fromstring(xml_content)
-    result = root.findall(f".//{mode}")
+    result = fromstring(xml_content).findall(f".//{mode}")
 
     extracted_data = [extract_attributes(res, mode=mode) for res in result]
     return extracted_data
@@ -153,10 +134,9 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
             embed=membed("Your feedback could not be sent. Try again later"))
 
 
-class ImageSource(discord.ui.View):
+class ImageSourceButton(discord.ui.Button):
     def __init__(self, url: str):
-        super().__init__()
-        self.add_item(discord.ui.Button(url=url, label="Source"))
+        super().__init__(url=url, label="Source", row=1)
 
 
 class Utility(commands.Cog):
@@ -425,23 +405,23 @@ class Utility(commands.Cog):
             Literal[
                 "education", "recreational", "social", "diy", 
                 "charity", "cooking", "relaxation", "music", "busywork"
-            ]] = ""
-        ) -> None:
+            ]
+        ] = ""
+    ) -> None:
         
         if activity_type:
             activity_type = f"?type={activity_type}"
         
-        async with self.bot.session.get(
-                f"http://www.boredapi.com/api/activity{activity_type}") as response:
-            if response.status == 200:
-                resp = await response.json()
-                await interaction.response.send_message(embed=membed(f"{resp['activity']}."))
-            else:
-                await interaction.response.send_message(embed=membed("An unsuccessful request was made."))
+        async with self.bot.session.get(f"http://www.boredapi.com/api/activity{activity_type}") as response:
+            if response.status != 200:
+                return await interaction.response.send_message(embed=membed(API_EXCEPTION))
+            
+            resp = await response.json()
+            await interaction.response.send_message(embed=membed(f"{resp['activity']}."))
 
     anime = app_commands.Group(
         name='anime', 
-        description="commands related to anime!", 
+        description="Surf through anime images and posts.", 
         guild_only=True, 
         guild_ids=APP_GUILDS_ID
     )
@@ -457,15 +437,15 @@ class Utility(commands.Cog):
             mode="tag",
             page=1,
             order="count",
-            limit=20
+            limit=25
         )
 
         if isinstance(tags_xml, int):  # http exception
             return
 
         return [
-            app_commands.Choice(name=result['name'], value=result['name'])
-            for result in tags_xml if current.lower() in result['name'].lower()
+            app_commands.Choice(name=tag_name, value=tag_name)
+            for tag_name in tags_xml if current.lower() in tag_name.lower()
         ]
 
     @anime.command(name='kona', description='Retrieve NSFW posts from Konachan')
@@ -488,28 +468,26 @@ class Utility(commands.Cog):
         tag3: Optional[str],
         page: Optional[app_commands.Range[int, 1]] = 1
     ) -> None:
-
-        await interaction.response.defer(thinking=True, ephemeral=True)
         
         tags = [val for _, val in iter(interaction.namespace) if isinstance(val, str)]
         tagviewing = ' '.join(tags)
 
         posts_xml = await self.retrieve_via_kona(
             tags=tagviewing, 
-            limit=3, 
+            limit=9999, 
             page=page, 
             mode="post"
         )
 
         if isinstance(posts_xml, int):
-            cause = RESPONSES.get(posts_xml, "the cause of the error is not known")
+            embed = membed("Failed to make this request.")
+            embed.add_field(name="Cause", value=RESPONSES.get(posts_xml, "Not Known."))
+
+            return await interaction.response.send_message(embed=embed)
+
+        if not len(posts_xml):
+
             return await interaction.response.send_message(
-                embed=membed(f"Failed to make request, return status code `{posts_xml}`: {cause}")
-            )
-
-        if len(posts_xml) == 0:
-
-            return await interaction.followup.send(
                 embed=membed(
                     "## No posts found.\n"
                     "- There are a few known causes:\n"
@@ -522,38 +500,43 @@ class Utility(commands.Cog):
                 )
             )
 
-        attachments = []
-        descriptionerfyrd = set()
-        for result in posts_xml:
-            tindex = posts_xml.index(result) + 1
-            descriptionerfyrd.add(
-                f'**[{tindex}]** *Post by {result['author']}*\n'
-                f'- Created <t:{result['created_at']}:R>\n'
-                f'- [File URL (source)]({result['file_url']})\n'
-                f'- [File URL (jpeg)]({result['jpeg_url']})\n'
-                f'- Made by {result['source'] or '*Unknown User*'}\n'
-                f'- Tags: {result['tags']}'
+        paginator = PaginationSimple(interaction, invoker_id=interaction.user.id)
+
+        additional_notes = [
+            (
+                f"{result['jpeg_url']}",
+                f"{result['author']}",
+                f"{result['created_at']}", 
+                ImageSourceButton(url=result['jpeg_url'])
             )
+            for result in posts_xml
+        ]
 
-            embed = discord.Embed(title=f"Post {tindex}")
-            embed.set_image(url=result['jpeg_url'])
-            attachments.append(embed)
+        async def get_page_part(page: int):
 
-        embed = discord.Embed(
-            title='Results', 
-            colour=discord.Colour.from_rgb(255, 233, 220),
-            description=(
-                f'- Retrieval is based on the following filters:\n'
-                f' - **Tags**: {tagviewing}\n'
-                f' - **Page**: {page}\n\n'
-            )
-        )
+            embed = membed()
 
-        embed.set_author(icon_url=interaction.user.display_avatar.url, name=interaction.user.name)
-        embed.description += "\n\n".join(descriptionerfyrd)
+            length = 1
+            offset = (page - 1) * length
+
+            for item in paginator.children:
+                if item.url:
+                    paginator.remove_item(item)
+
+            for item_attrs in additional_notes[offset:offset + length]:
+                embed.timestamp = datetime.datetime.fromtimestamp(int(item_attrs[2]))
+                embed.set_image(url=item_attrs[0])
+                embed.set_author(name=item_attrs[1])
+                
+                paginator.add_item(item_attrs[-1])
+
+            n = paginator.compute_total_pages(len(additional_notes), length)
+            embed.set_footer(text=f"Page {page} of {n}")
+            return embed, n
         
-        await interaction.followup.send(embed=embed)
-        await interaction.followup.send(embeds=attachments, ephemeral=True)
+        paginator.get_page = get_page_part
+
+        await paginator.navigate()
 
     @anime.command(name='char', description="Retrieve SFW or NSFW anime images")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
@@ -621,7 +604,10 @@ class Utility(commands.Cog):
                 embed.set_image(url=data["url"])
                 embed.set_footer(text=f"ID: {data.get('id', 'Unknown ID')}")
 
-            await interaction.followup.send(embed=embed, view=ImageSource(url=data["url"]))
+            img_view = discord.ui.View()
+            img_view.add_item(ImageSourceButton(url=data["url"]))
+
+            await interaction.followup.send(embed=embed, view=img_view)
 
     @anime.command(name='random', description="Get a completely random waifu image")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
@@ -650,9 +636,11 @@ class Utility(commands.Cog):
 
         embed.description += ", ".join(tags)
         embed.set_image(url=image.url)
-        
 
-        await interaction.response.send_message(embed=embed, view=ImageSource(url=image.url))
+        img_view = discord.ui.View()
+        img_view.add_item(ImageSourceButton(url=image.url))        
+
+        await interaction.response.send_message(embed=embed, view=img_view)
 
     @anime.command(name='filter', description="Filter from SFW waifu images to send")
     @app_commands.describe(
@@ -704,7 +692,10 @@ class Utility(commands.Cog):
         embed.description += ", ".join(tags)
         embed.set_image(url=image.url)
 
-        await interaction.response.send_message(embed=embed, view=ImageSource(url=image.url))
+        img_view = discord.ui.View()
+        img_view.add_item(ImageSourceButton(url=image.url))
+
+        await interaction.response.send_message(embed=embed, view=img_view)
 
     @app_commands.command(name='emojis', description='Fetch all the emojis c2c can access')
     @app_commands.guilds(*APP_GUILDS_ID)
@@ -718,6 +709,8 @@ class Utility(commands.Cog):
                 fmt = "<:"
             needed = f"{i} (**{i.name}**) - `{fmt}{i.name}:{i.id}>`"
             emotes_all.append(needed)
+
+        paginator = Pagination(interaction)
 
         async def get_page_part(page: int):
             emb = discord.Embed(
@@ -736,10 +729,12 @@ class Utility(commands.Cog):
                 name=interaction.guild.me.name, 
                 icon_url=interaction.guild.me.display_avatar.url
             )
-            n = Pagination.compute_total_pages(len(emotes_all), length)
+            n = paginator.compute_total_pages(len(emotes_all), length)
             return emb, n
 
-        await Pagination(interaction, get_page_part).navigate()
+        paginator.get_page = get_page_part
+
+        await paginator.navigate()
 
     @app_commands.command(name='inviter', description='Creates a server invite link')
     @app_commands.guilds(*APP_GUILDS_ID)
