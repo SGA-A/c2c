@@ -1,4 +1,4 @@
-from re import compile, search
+from re import compile
 from pytz import timezone
 from time import perf_counter
 from datetime import timedelta, datetime
@@ -513,43 +513,11 @@ class Moderation(commands.Cog):
         self.bot.tree.add_command(self.purge_from_here_cmd)
         self.bot.tree.add_command(roles)
 
-    @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-
-        if not message.content.startswith(".."):
-            return
-        
-        if not message.channel.permissions_for(message.author).manage_messages:
-            return await message.channel.send(
-                delete_after=5.0,
-                silent=True,
-                embed=membed("You're not able to do this.")
-            )
-
-        match = search(r'\d+$', message.content)
-        if not match:
-            return await message.channel.send(
-                delete_after=5.0, 
-                silent=True,
-                embed=membed("You didn't specify a number.")
-            )
-        
-        await message.channel.purge(
-            limit=int(match.group())+1, 
-            check=lambda msg: not msg.pinned
-        )
-
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.guilds(*APP_GUILDS_ID)
     async def purge_from_here(self, interaction: discord.Interaction, message: discord.Message):
 
         await interaction.response.defer(ephemeral=True)
-
-        diff = discord.utils.utcnow() - message.created_at
-        if diff.total_seconds() > 1_209_600:
-            return await interaction.followup.send(
-                embed=membed("This message was created more than 14 days ago.")
-            )
         
         count = await interaction.channel.purge(after=discord.Object(id=message.id))
         await interaction.followup.send(embed=membed(f"Deleted **{len(count)}** messages."))
