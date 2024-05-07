@@ -618,17 +618,9 @@ class Moderation(commands.Cog):
             return await ctx.send(embed=membed(f'Slowmode set to **{slowmode_in_seconds}** seconds.'))
         await ctx.send(embed=membed("Disabled slowmode."))
 
-    @commands.has_permissions(manage_messages=True)
-    @commands.command(name="purge", description="Bulk-remove messages, excluding pins")
-    async def purge(self, ctx: commands.Context, purge_max_amount: int):
-        """Purge an amount of messages. Pinned messages aren't removed."""
-        await ctx.message.delete()
-        stop_at = discord.utils.utcnow() - timedelta(weeks=2)
-        await ctx.channel.purge(limit=purge_max_amount, check=lambda msg: not msg.pinned, bulk=True, after=stop_at, oldest_first=False)
-
     temprole = app_commands.Group(
         name="temprole", 
-        description="Role management commands associated with an expiry.", 
+        description="Set roles that expire after a certain time.", 
         guild_only=True, 
         guild_ids=APP_GUILDS_ID, 
         default_permissions=discord.Permissions(manage_roles=True)
