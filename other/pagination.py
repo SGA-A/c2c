@@ -9,6 +9,9 @@ def membed(custom_description: str) -> discord.Embed:
     return membedder
 
 
+NOT_YOUR_MENU = membed("This menu is not for you.")
+
+
 class PaginatorInput(discord.ui.Modal):
     def __init__(self, their_view: discord.ui.View):
         self.their_view = their_view
@@ -45,16 +48,14 @@ class Pagination(discord.ui.View):
         """Make sure only original user that invoked interaction can interact"""
         if interaction.user == self.interaction.user:
             return True
-        emb = membed(f"This menu is controlled by {self.interaction.user.mention}.")
-        await interaction.response.send_message(embed=emb, ephemeral=True)
+        await interaction.response.send_message(embed=NOT_YOUR_MENU, ephemeral=True)
         return False
 
     async def on_timeout(self) -> None:
         try:
             for item in self.children:
                 item.disabled = True
-            message = await self.interaction.original_response()
-            await message.edit(view=self)
+            await self.message.edit(view=self)
         except discord.NotFound:
             pass
 
@@ -67,16 +68,22 @@ class Pagination(discord.ui.View):
         elif self.total_pages > 1:
             self.update_buttons()
             await self.interaction.response.send_message(embed=emb, view=self)
+        
+        self.message = await self.interaction.original_response()
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
         """Update the page index in response to changes in the current page."""
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
         emb, self.total_pages = await self.get_page(self.index)
         self.update_buttons()
-        if interaction.response.is_done():
-            message = await interaction.original_response()
-            return await interaction.followup.edit_message(
-                message_id=message.id, embed=emb, view=self)
-        await interaction.response.edit_message(embed=emb, view=self)
+        
+        return await interaction.followup.edit_message(
+            message_id=self.message.id, 
+            embed=emb, 
+            view=self
+        )
 
     def update_buttons(self) -> None:
         """Disable or re-enable buttons based on position in paginator."""
@@ -103,8 +110,8 @@ class Pagination(discord.ui.View):
         modal = PaginatorInput(their_view=self)
         await interaction.response.send_modal(modal)
         await modal.wait()
+        
         val = modal.page_num.value
-
         if val is None:
             return
         
@@ -112,14 +119,17 @@ class Pagination(discord.ui.View):
             val = abs(int(val))
         except ValueError:
             return await interaction.followup.send(
-                embed=membed("You need to provide a real value."), ephemeral=True)
+                embed=membed("You need to provide a real value."), 
+                ephemeral=True
+            )
 
         if not val:
             return await interaction.followup.send(
-                embed=membed("You need to type a positive value."),
-                ephemeral=True)
+                ephemeral=True,
+                embed=membed("You need to type a positive value.")
+            )
 
-        self.index = min(self.total_pages, val) 
+        self.index = min(self.total_pages, val)
         await self.edit_page(interaction)
 
     @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:right:1212498140620394548>"), row=1)
@@ -154,8 +164,7 @@ class PaginationSimple(discord.ui.View):
         """Make sure only original user that invoked interaction can interact"""
         if interaction.user.id == self.invoker_id:
             return True
-        emb = membed("This menu is not for you.")
-        await interaction.response.send_message(embed=emb, ephemeral=True)
+        await interaction.response.send_message(embed=NOT_YOUR_MENU, ephemeral=True)
         return False
 
     async def on_timeout(self) -> None:
@@ -189,12 +198,15 @@ class PaginationSimple(discord.ui.View):
         """Update the page index in response to changes in the current page."""
         emb, self.total_pages = await self.get_page(self.index)
         self.update_buttons()
-        if interaction.response.is_done():
-            message = await interaction.original_response()
-            return await interaction.followup.edit_message(
-                message_id=message.id, embed=emb, view=self
-            )
-        await interaction.response.edit_message(embed=emb, view=self)
+
+        if not interaction.response.is_done():
+            await interaction.response.defer()
+
+        return await interaction.followup.edit_message(
+            message_id=self.message.id, 
+            embed=emb, 
+            view=self
+        )
 
     def update_buttons(self) -> None:
         """Disable or re-enable buttons based on position in paginator."""
@@ -245,8 +257,7 @@ class PaginationItem(discord.ui.View):
         """Make sure only original user that invoked interaction can interact"""
         if interaction.user == self.interaction.user:
             return True
-        emb = membed(f"This menu is controlled by {self.interaction.user.mention}.")
-        await interaction.response.send_message(embed=emb, ephemeral=True)
+        await interaction.response.send_message(embed=NOT_YOUR_MENU, ephemeral=True)
         return False
 
     async def on_timeout(self) -> None:
