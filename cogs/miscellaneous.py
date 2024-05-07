@@ -512,23 +512,25 @@ class Utility(commands.Cog):
             for result in posts_xml
         ]
 
+        link_btn = None
         async def get_page_part(page: int):
+            nonlocal link_btn
 
             embed = membed()
 
             length = 1
             offset = (page - 1) * length
 
-            for item in paginator.children:
-                if item.url:
-                    paginator.remove_item(item)
+            if link_btn:
+                paginator.remove_item(link_btn)
 
             for item_attrs in additional_notes[offset:offset + length]:
                 embed.timestamp = datetime.datetime.fromtimestamp(int(item_attrs[2]))
                 embed.set_image(url=item_attrs[0])
                 embed.set_author(name=item_attrs[1])
-                
-                paginator.add_item(item_attrs[-1])
+
+                link_btn = item_attrs[-1]
+                paginator.add_item(link_btn)
 
             n = paginator.compute_total_pages(len(additional_notes), length)
             embed.set_footer(text=f"Page {page} of {n}")
