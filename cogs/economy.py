@@ -42,7 +42,7 @@ import discord
 import datetime
 import aiofiles
 
-from other.pagination import Pagination, PaginationItem, PaginationSimple
+from other.pagination import PaginationItem, PaginationSimple
 
 
 def membed(custom_description: Optional[str] = None) -> discord.Embed:
@@ -4859,7 +4859,7 @@ class Economy(commands.Cog):
                     item_attrs[1].disabled = wallet < item_attrs[1].cost
                     paginator.add_item(item_attrs[1])
 
-                n = Pagination.compute_total_pages(len(additional_notes), length)
+                n = paginator.compute_total_pages(len(additional_notes), length)
                 emb.set_footer(text=f"Page {page} of {n}")
                 return emb, n
 
@@ -5021,7 +5021,7 @@ class Economy(commands.Cog):
 
     servant = app_commands.Group(
         name='servant', 
-        description='Manage your servant.', 
+        description='Manage your servants.', 
         guild_only=True, 
         guild_ids=APP_GUILDS_ID
     )
@@ -6078,7 +6078,7 @@ class Economy(commands.Cog):
 
     work = app_commands.Group(
         name="work", 
-        description="Work management commands", 
+        description="Work management commands.", 
         guild_only=True, 
         guild_ids=APP_GUILDS_ID
     )
