@@ -3,6 +3,7 @@ from asqlite import Connection as asqlite_Connection
 
 import discord
 from discord import app_commands
+from datetime import timedelta
 from discord.ext import commands
 
 from cogs.economy import APP_GUILDS_ID, membed
@@ -292,7 +293,22 @@ class TempVoice(commands.Cog):
                 await channel.edit(status=current_status)
 
         except discord.RateLimited as rl:
-            print(f"We are being ratelimited, try again in {rl.retry_after:.2f}s.")
+            time_until = discord.utils.format_dt(
+                discord.utils.utcnow() + timedelta(seconds=rl.retry_after),
+                style="R"
+            )
+
+            await owner.send(
+                delete_after=25.0,
+                embed=discord.Embed(
+                    colour=0x2B2D31,
+                    title="Slow down!",
+                    description=(
+                        "You've hit the discord ratelimit for creating voice channels.\n"
+                        f"You'll have to try again {time_until}."
+                    )
+                )
+            )
             del self.active_voice_channels[owner.id]
     
     async def handle_mutual_removals(self, interaction: discord.Interaction, member: discord.Member, verb: Literal["trusted", "blocked"]):
@@ -371,7 +387,7 @@ class TempVoice(commands.Cog):
 
     voice = app_commands.Group(
         name="voice", 
-        description="Temporary voice channel management commands", 
+        description="Manage your own temporary voice channel.", 
         guild_ids=APP_GUILDS_ID, 
         guild_only=True
     )
