@@ -3991,7 +3991,7 @@ class Economy(commands.Cog):
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.command(name="settings", description="Adjust user-specfic settings")
+    @app_commands.command(name="settings", description="Adjust user-specific settings")
     @app_commands.describe(setting="The specific setting you want to adjust. Defaults to view.")
     async def view_user_settings(self, interaction: discord.Interaction, setting: Optional[str]) -> None:
         """View or adjust user-specific settings."""
