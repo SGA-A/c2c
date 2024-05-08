@@ -1,16 +1,13 @@
-import yt_dlp as youtube_dl
-
-from re import findall
 from os.path import basename
+from typing import Literal
+from asyncio import get_event_loop
+
+import yt_dlp as youtube_dl
+import discord
+
 from discord.ext import commands
-from asyncio import TimeoutError as asyncTE, get_event_loop
-
-from discord import (
-    FFmpegPCMAudio, 
-    PCMVolumeTransformer
-)
-
-from cogs.economy import membed
+from discord import app_commands
+from cogs.economy import membed, APP_GUILDS_ID
 
 
 # Suppress noise about console usage from errors
@@ -36,7 +33,7 @@ ffmpeg_options = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconne
 ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
 
 
-class YTDLSource(PCMVolumeTransformer):
+class YTDLSource(discord.PCMVolumeTransformer):
     def __init__(self, source, *, data, volume=0.5):
         super().__init__(source, volume)
 
@@ -49,136 +46,172 @@ class YTDLSource(PCMVolumeTransformer):
     async def from_url(cls, url, *, loop=None, stream=False):
         loop = loop or get_event_loop()
         data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+        print(data)
 
         if 'entries' in data:
             # take first item from a playlist
             data = data['entries'][0]
 
         filename = data['url'] if stream else ytdl.prepare_filename(data)
-        return cls(FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
 
 
 class Music(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot: commands.Bot = bot
 
-    async def cog_check(self, ctx: commands.Context) -> bool:
-        role = ctx.guild.get_role(990900517301522432)
-        return (role is None) or (role in ctx.author.roles)
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        role = interaction.guild.get_role(990900517301522432)
+        if (role is None) or (role in interaction.user.roles):
+            return True
+        await interaction.response.send_message(embed=membed(f"You need {role.mention} to use music commands."))
+        return False
 
     async def play_source(self, voice_client):
-        source = FFmpegPCMAudio("C:\\Users\\georg\\PycharmProjects\\c2c\\other\\battlet.mp3")
+        source = discord.FFmpegPCMAudio("C:\\Users\\georg\\PycharmProjects\\c2c\\other\\battlet.mp3")
         voice_client.play(source, after=lambda e: print('Player error: %s' % e) if e else self.bot.loop.create_task(self.play_source(voice_client)))
-
-    @commands.command(description="Join a voice channel")
-    async def join(self, ctx: commands.Context):
-        await ctx.message.add_reaction('<:successful:1183089889269530764>')
-        await ctx.author.voice.channel.connect(self_deaf=True)
-
-    @commands.command(description='Quickly join and play some music')
-    async def preset(self, ctx: commands.Context):
-        async with ctx.typing():
-            channel = ctx.message.author.voice.channel
-            voice = await channel.connect(self_deaf=True)
-            await self.bot.loop.create_task(self.play_source(voice))
+    
+    async def do_join_checks(self, interaction: discord.Interaction):
+        if (interaction.user.voice is None):
+            return await interaction.followup.send(embed=membed("You must be connected to a voice channel first."))
         
-        await ctx.send(embed=membed("Now playing: ` Scaramouche Battle Theme.mp3 `"))
+        if interaction.guild.voice_client is not None:
+            if (interaction.user not in interaction.guild.me.voice.channel.members):
+                return await interaction.followup.send(
+                    embed=membed(f"You must be connected to {interaction.guild.me.voice.channel.mention} first.")
+                )
+            return interaction.guild.voice_client
+        return await interaction.user.voice.channel.connect(self_deaf=True)
 
-    @commands.command(description='Plays a file from the local filesystem')
-    async def play(self, ctx: commands.Context):
-        channel = ctx.channel
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.command(description='Quickly join and play some music')
+    async def preset(self, interaction: discord.Interaction):
+        await interaction.response.defer()
 
-        choice = membed(
-            "Send the number that corresponds to the song you wish to play.\n"
-            "` 1 ` - Best Music of Genshin Impact\n"
-            "` 2 ` - Discord Stage Music 1 Hour\n"
-            "` 3 ` - Fortnite Loading Screen EXTENDED\n"
-            "` 4 ` - Mellow Vibe lo-fi beats\n"
-            "` 5 ` - Sumeru lo-fi beats\n"
-            "` 6 ` - Tokyo lo-fi HipHop Mix\n"
-            "` 7 ` - Study lo-fi HipHop Mix (You Inspire Me)"
-        )
+        voice = await self.do_join_checks(interaction)
+        if not voice:
+            return
 
-        my_msg = await ctx.send(
-            content=ctx.author.mention,
-            embed=choice
-        )
+        await self.bot.loop.create_task(self.play_source(voice))
+        await interaction.followup.send(embed=membed("Now playing: ` Scaramouche Battle Theme.mp3 `"))
 
-        def check(message):
-            return (
-                message.channel == channel and 
-                message.content in {"1", "2", "3", "4", "5", "6", "7"} and 
-                message.author == ctx.author
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.command(description='Plays a file from the local filesystem')
+    @app_commands.describe(song="The name of the song to play.")
+    async def play(
+        self, 
+        interaction: discord.Interaction, 
+        song: Literal["Say You Won't Let Go"]
+    ) -> None:
+        await interaction.response.defer()
+
+        voice = await self.do_join_checks(interaction)
+        if not voice:
+            return
+
+        if voice.is_playing():
+            return await interaction.followup.send(embed=membed("The player is still playing."))
+
+        pathn = f"C:\\Users\\georg\\Music\\{song}.mp3"
+        source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(pathn))
+        file_name = basename(pathn)
+        
+        voice.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
+        await interaction.followup.send(embed=membed(f'Now playing: `{file_name}`'))
+
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.describe(query="Could be a search term or a YouTube track link.")
+    @app_commands.command(description="Streams music via url from YouTube")
+    async def stream(self, interaction: discord.Interaction, query: str):
+        await interaction.response.defer()
+
+        voice = await self.do_join_checks(interaction)
+        if not voice:
+            return
+
+        if voice.is_playing():
+            return await interaction.followup.send(embed=membed("The player is still playing."))
+
+        player = await YTDLSource.from_url(query, loop=self.bot.loop, stream=True)
+        voice.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
+        await interaction.followup.send(embed=membed(f'Now playing: [{player.title}]({player.url})'))
+
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.command(description='Pause the player')
+    async def pause(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+
+        voice = await self.do_join_checks(interaction)
+        if not voice:
+            return
+        
+        if not voice.is_playing():
+            return await interaction.followup.send(embed=membed("The player is already paused."))
+        
+        voice.pause()
+        return await interaction.followup.send(embed=membed("Paused the player."))
+
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.command(description='Resume the player')
+    async def resume(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+
+        voice = await self.do_join_checks(interaction)
+        if not voice:
+            return
+        
+        if not voice.is_paused():
+            return await interaction.followup.send(embed=membed("The player is not paused."))
+        
+        voice.resume()
+        await interaction.followup.send(embed=membed("Resumed the player."))
+
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.describe(volume="The volume to set the player to")
+    @app_commands.command(description="Changes the player's volume")
+    async def volume(self, interaction: discord.Interaction, volume: app_commands.Range[int, 1, 250]):
+        await interaction.response.defer()
+
+        voice = await self.do_join_checks(interaction)
+        if not voice:
+            return
+
+        voice.source.volume = volume / 100
+        await interaction.followup.send(embed=membed(f"Changed volume to {volume}%"))
+
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.command(description='Stop the player')
+    async def stop(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+
+        voice = await self.do_join_checks(interaction)
+        if not voice:
+            return
+        
+        if not voice.is_playing():
+            return await interaction.followup.send(embed=membed("The player is not playing."))
+        
+        voice.stop()
+        await interaction.followup.send(embed=membed("Stopped the player."))
+
+    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.command(description='Disconnect the bot from voice')
+    async def disconnect(self, interaction: discord.Interaction):
+        await interaction.response.defer()
+
+        if interaction.guild.voice_client is None:
+            return await interaction.followup.send(embed=membed("The bot is not connected to a voice channel."))
+        
+        if interaction.user not in interaction.guild.me.voice.channel.members:
+            return await interaction.followup.send(
+                embed=membed(f"You must be connected to {interaction.guild.me.voice.channel.mention} first.")
             )
-
-        try:
-            msg = await self.bot.wait_for('message', check=check, timeout=15.0)
-        except asyncTE:
-            await my_msg.edit(embed=membed("Timed out waiting for a response."))
-        else:
-            quantity = int(findall(r'\d+', msg.content)[0])
-
-            pathn = {
-                1: "C:\\Users\\georg\\Music\\Best Music of Genshin Impact.mp3",
-                2: "C:\\Users\\georg\\Music\\Discord Stage Music 1 Hour.mp3",
-                3: "C:\\Users\\georg\\Music\\Fortnite Loading Screen Music.mp3",
-                4: "C:\\Users\\georg\\Music\\Mellow Vibe.mp3",
-                5: "C:\\Users\\georg\\Music\\sumeru lo-fi beats.mp3",
-                6: "C:\\Users\\georg\\Music\\Tokyo Lofi HipHop Mix.mp3",
-                7: "C:\\Users\\georg\\Music\\You inspire me.mp3"
-            }.get(quantity)
-
-            source = PCMVolumeTransformer(FFmpegPCMAudio(pathn))
-            file_name = basename(pathn)
-            ctx.voice_client.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
-
-            await my_msg.edit(embed=membed(f'Now playing: `{file_name}`'))
-
-    @commands.command(description="Streams music via url from YouTube")
-    async def stream(self, ctx: commands.Context, *, url):
-
-        async with ctx.typing():
-            player = await YTDLSource.from_url(url, loop=self.bot.loop, stream=True)
-            ctx.voice_client.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
-
-        await ctx.send(embed=membed(f'Now playing: [{player.title}]({player.url})'))
-
-    @commands.command(name='pause', description='Pause the player, if playing music')
-    async def pause(self, ctx: commands.Context):
-
-        if not ctx.voice_client.is_playing():
-            return await ctx.send(embed=membed("The player is already paused."))
         
-        ctx.voice_client.pause()
-        return await ctx.message.add_reaction('<:successful:1183089889269530764>')
+        if interaction.guild.voice_client.is_playing():
+            interaction.guild.voice_client.stop()
 
-    @commands.command(description='Resume the player')
-    async def resume(self, ctx: commands.Context):
-        if not ctx.voice_client.is_paused():
-            return await ctx.send(embed=membed("The player is not paused."))
-        
-        ctx.voice_client.resume()
-        await ctx.message.add_reaction('<:successful:1183089889269530764>')
-
-    @commands.command(description="Changes the player's volume", aliases=('vol',))
-    async def volume(self, ctx: commands.Context, volume: int):
-        ctx.voice_client.source.volume = volume / 100
-        await ctx.send(embed=membed(f"Changed volume to {volume}%"))
-
-    @commands.command(description='Disconnect the bot from voice', aliases=('leave', 'disconnect'))
-    async def stop(self, ctx: commands.Context):
-        await ctx.voice_client.disconnect()
-        await ctx.message.add_reaction('<:successful:1183089889269530764>')
-
-    @play.before_invoke
-    @stream.before_invoke
-    @pause.before_invoke
-    @resume.before_invoke
-    @volume.before_invoke
-    @stop.before_invoke
-    async def ensure_voice(self, ctx: commands.Context):
-        if (ctx.voice_client is None) and (ctx.voice_client.channel != ctx.author.voice.channel):
-            await ctx.send(embed=membed("I'm not in your voice channel."))
+        await interaction.guild.voice_client.disconnect()
+        await interaction.followup.send(embed=membed("Disconnected the player."))
 
 
 async def setup(bot: commands.Bot):
