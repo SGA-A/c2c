@@ -33,8 +33,8 @@ class TagName(commands.clean_content):
         if not lower:
             raise commands.BadArgument('Missing tag name.')
 
-        if len(lower) > 100:
-            raise commands.BadArgument('Tag name is a maximum of 100 characters.')
+        if len(lower) > 80:
+            raise commands.BadArgument('Tag name is a maximum of 80 characters.')
 
         first_word, _, _ = lower.partition(' ')
 
