@@ -12,12 +12,13 @@ from asqlite import Connection as asqlite_Connection
 from cogs.economy import membed, APP_GUILDS_ID
 from other.pagination import PaginationSimple
 
+
+TAG_NOT_FOUND_SIMPLE_RESPONSE = "Tag not found, it may have been deleted when you called the command."
 TAG_NOT_FOUND_RESPONSE = (
     "Could not find any tag with these properties.\n"
     "- You can't modify the tag if it doesn't belong to you.\n"
     "- You also can't modify a tag that doesn't exist, obviously."
 )
-NOT_SUPPORTED = "This command is not supported on text commands."
 
 
 class TagName(commands.clean_content):
@@ -109,7 +110,7 @@ class TagMakeModal(discord.ui.Modal, title='Create New Tag'):
 
 
 class Confirm(discord.ui.View):
-    """Chopped down version of the original interactive menu."""
+    """Chopped down version of the original confirmation interactive menu."""
 
     def __init__(self):
         super().__init__(timeout=45.0)
@@ -154,8 +155,8 @@ class Confirm(discord.ui.View):
 async def send_boilerplate_confirm(ctx: commands.Context, custom_description: str) -> bool:
     confirm = Confirm()
 
-    confirmation = discord.Embed(title="Pending Confirmation", colour=0x2B2D31)
-    confirmation.description = custom_description
+    confirmation = membed(custom_description)
+    confirmation.title = "Pending Confirmation"
     msg = await ctx.send(embed=confirmation, view=confirm)
     
     await confirm.wait()
@@ -177,6 +178,23 @@ async def send_boilerplate_confirm(ctx: commands.Context, custom_description: st
     return confirm.value
 
 
+class MatchWord(discord.ui.Button):
+    """
+    Represents a button in the user interface for a single word.
+
+    It is a generic button that, upon clicked, returns the word pressed for later use.
+    """
+    
+    def __init__(self, word: str):
+        super().__init__(label=word)
+
+    async def callback(self, interaction: discord.Interaction):
+        self.view.chosen_word = self.label
+        self.view.stop()
+
+        await interaction.response.edit_message(view=self.view)
+
+
 class Tags(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
@@ -184,6 +202,84 @@ class Tags(commands.Cog):
 
         # ownerID: set(name)
         self._reserved_tags_being_made: set[str] = set()
+
+    @staticmethod
+    async def partial_match_for(ctx: commands.Context, word_input: str, tag_results) -> None | tuple:
+        """
+        If the user types part of an name, get the tag name and its content indicated.
+
+        This implementation is similar to the implementation for economy item matching, but the 
+        slight differences meant a polymorphised version had to be made.
+
+        This will only return the tag name, not its content.
+
+        This does not consider whether or not the invoker actually owns this tag.
+
+        This is known as partial matching for words.
+        """
+
+        length = len(tag_results)
+        if not length:
+            await ctx.send(
+                ephemeral=(ctx.interaction is not None),
+                embed=membed("No tag found with this pattern. Check the spelling.")
+            )
+            return
+        
+        if length == 1:
+            return tag_results[0][0]
+
+        match_view = discord.ui.View(timeout=15.0)
+        match_view.chosen_word = 0  # default is a falsey value
+
+        for resulting_word in tag_results:
+            match_view.add_item(MatchWord(word=resulting_word[0]))
+
+        msg = await ctx.send(
+            view=match_view,
+            embed=membed(
+                "There is more than one tag with that name pattern.\n"
+                "Select one of the following tags:"
+            ).set_author(name=f"Search: {word_input}", icon_url=ctx.author.display_avatar.url)
+        )
+
+        await match_view.wait()
+        await msg.delete()
+
+        if match_view.chosen_word:
+            return match_view.chosen_word
+
+        await ctx.send(embed=membed("No result selected, cancelled this request."))
+        return None
+
+    async def non_owned_partial_matching(self, ctx: commands.Context, word_input: str, conn: asqlite_Connection):
+        """Partial matching for every existing tag"""
+
+        tag_names = await conn.fetchall(
+            """
+            SELECT name
+            FROM tags
+            WHERE LOWER(name) LIKE LOWER($0) 
+            LIMIT 10
+            """, f"%{word_input}%"
+        )
+
+        name = await self.partial_match_for(ctx, word_input, tag_results=tag_names)
+        return name
+
+    async def owned_partial_matching(self, ctx: commands.Context, word_input: str, conn: asqlite_Connection):
+        """Partial matching for tags that are owned by the invoker"""
+
+        tag_names = await conn.fetchall(
+            """
+            SELECT name
+            FROM tags
+            WHERE ownerID = $0 AND LOWER(name) LIKE LOWER($1)
+            LIMIT 10
+            """, ctx.author.id, f"%{word_input}%", 
+        )
+
+        return await self.partial_match_for(ctx, word_input, tag_results=tag_names)
 
     async def non_aliased_tag_autocomplete(self, _: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         
@@ -221,21 +317,18 @@ class Tags(commands.Cog):
 
 
     async def get_tag_content(self, name: str, conn: asqlite_Connection):
-
-        query = (
+        
+        res = await conn.fetchone(
             """
-            SELECT name, content
+            SELECT content
             FROM tags
-            WHERE LOWER(name) = $0
-            """
+            WHERE name = $0
+            """, name.lower()
         )
-        
-        row = await conn.fetchone(query, name.lower())
+        if res is None:
+            raise RuntimeError(TAG_NOT_FOUND_SIMPLE_RESPONSE)
 
-        if row is None:
-            raise RuntimeError("Tag not found.")
-        
-        return row
+        return res[0]
 
     async def create_tag(
             self, 
@@ -288,10 +381,14 @@ class Tags(commands.Cog):
     async def tag(self, ctx: commands.Context, *, name: str):
         async with self.bot.pool.acquire() as conn:
             
+            name = await self.non_owned_partial_matching(ctx, name, conn)
+            if name is None:
+                return
+
             try:
-                name, content = await self.get_tag_content(name, conn)
-            except RuntimeError as e:
-                return await ctx.send(embed=membed(str(e)))
+                content = await self.get_tag_content(name, conn)
+            except RuntimeError as r:
+                await ctx.send(embed=membed(r))
 
             await ctx.send(
                 content=content, 
@@ -341,7 +438,7 @@ class Tags(commands.Cog):
                 return msg.author == ctx.author and ctx.channel == msg.channel
 
             try:
-                name = await self.bot.wait_for('message', timeout=15.0, check=check)
+                name = await self.bot.wait_for('message', timeout=25.0, check=check)
             except asyncio.TimeoutError:
                 return await ctx.send(embed=membed('You took too long.'))
 
@@ -349,10 +446,7 @@ class Tags(commands.Cog):
                 ctx.message = name
                 name = await converter.convert(ctx, name.content)
             except commands.BadArgument as e:
-                return await ctx.send(
-                    embed=membed(f'{e}')
-                )
-            
+                return await ctx.send(embed=membed(f'{e}'))            
             finally:
                 ctx.message = original
 
@@ -364,8 +458,7 @@ class Tags(commands.Cog):
             # while also checking if it exists due to the constraints,
             # however for UX reasons I might as well do it.
 
-            query = """SELECT 1 FROM tags WHERE LOWER(name)=$0"""
-            row = await conn.fetchone(query, name.lower())
+            row = await conn.fetchone("SELECT 1 FROM tags WHERE LOWER(name)=$0", name.lower())
 
             if row is not None:
                 return await ctx.send(
@@ -384,18 +477,16 @@ class Tags(commands.Cog):
             )
 
             try:
-                msg = await self.bot.wait_for('message', check=check, timeout=60.0)
+                msg = await self.bot.wait_for('message', check=check, timeout=120.0)
             except asyncio.TimeoutError:
                 self.remove_in_progress_tag(name)
-                return await ctx.send(embed=membed('You took too long.'))
+                return await ctx.reply(embed=membed('You took too long.'))
 
             if msg.content == 'abort':
                 self.remove_in_progress_tag(name)
-                return await ctx.send(embed=membed('Aborted.'))
-            
+                return await msg.reply(embed=membed('Aborted.'))
             elif msg.content:
                 clean_content = await commands.clean_content().convert(ctx, msg.content)
-            
             else:
                 # fast path I guess?
                 clean_content = msg.content
@@ -405,7 +496,7 @@ class Tags(commands.Cog):
 
             if len(clean_content) > 2000:
                 self.remove_in_progress_tag(name)
-                return await ctx.send('Tag content is a maximum of 2000 characters.')
+                return await msg.reply(embed=membed('Tag content is a maximum of 2000 characters.'))
 
             try:
                 await self.create_tag(ctx, name, clean_content, conn=conn)
@@ -429,31 +520,41 @@ class Tags(commands.Cog):
 
         if content is None:
             if ctx.interaction is None:
-                return await ctx.send(embed=membed("Missing content to edit with"))
+                return await ctx.send(embed=membed("Missing content to edit with."))
             
             async with self.bot.pool.acquire() as conn:
-                query = "SELECT content FROM tags WHERE LOWER(name)=$0 AND ownerID=$1"
-                row: Optional[tuple[str]] = await conn.fetchone(query, name, ctx.author.id)
+                content_row: Optional[tuple[str]] = await conn.fetchone(
+                    """
+                    SELECT content 
+                    FROM tags 
+                    WHERE LOWER(name)=$0 AND ownerID=$1
+                    """, name, ctx.author.id
+                )
                 
-                if row is None:
+                if content_row is None:
                     await ctx.send(embed=membed(TAG_NOT_FOUND_RESPONSE), ephemeral=True)
                     return
 
-                modal = TagEditModal(row[0])
+                modal = TagEditModal(content_row[0])
                 await ctx.interaction.response.send_modal(modal)
                 await modal.wait()
                 ctx.interaction = modal.interaction
                 content = modal.text
 
         if len(content) > 2000:
-            return await ctx.send(embed=membed('Tag content can only be up to 2000 characters'))
+            return await ctx.send(embed=membed('Tag content can only be up to 2000 characters.'))
 
         async with self.bot.pool.acquire() as conn:
+            
+            val = await conn.fetchone(
+                """
+                UPDATE tags 
+                SET content = $0 
+                WHERE LOWER(name) = $1 AND ownerID = $2 
+                RETURNING name
+                """, content, name, ctx.author.id
+            )
 
-            query = "UPDATE tags SET content = $0 WHERE LOWER(name) = $1 AND ownerID = $2 RETURNING name"
-            
-            val = await conn.fetchone(query, content, name, ctx.author.id)
-            
             if val is None:
                 return await ctx.send(embed=membed(TAG_NOT_FOUND_RESPONSE))
         
@@ -464,24 +565,31 @@ class Tags(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(name='The tag to remove')
     @app_commands.autocomplete(name=owned_non_aliased_tag_autocomplete)
-    async def remove(self, ctx: commands.Context, *, name: Annotated[str, TagName(lower=True)]):
-
-        bypass_owner_check = ctx.author.id in self.bot.owner_ids
-        clause = "LOWER(name)=$0"
-
-        if bypass_owner_check:
-            args = (name,)
-        else:
-            args = (name, ctx.author.id)
-            clause = f"{clause} AND ownerID=$1"
+    async def remove(self, ctx: commands.Context, *, name: Annotated[str, TagName]):
 
         async with self.bot.pool.acquire() as conn:
+
+            bypass_owner_check = ctx.author.id in self.bot.owner_ids
+            clause = "name=$0"
+
+            if bypass_owner_check:
+                name = await self.owned_partial_matching(ctx, name, conn)
+                if name is None:
+                    return
+                args = (name,)
+            else:
+                name = await self.non_owned_partial_matching(ctx, name, conn)
+                if name is None:
+                    return
+                
+                args = (name, ctx.author.id)
+                clause = f"{clause} AND ownerID=$1"
 
             query = f"DELETE FROM tags WHERE {clause} RETURNING rowid"
             deleted_id = await conn.fetchone(query, *args)
 
             if deleted_id is None:
-                return await ctx.send(embed=membed(TAG_NOT_FOUND_RESPONSE))
+                return await ctx.send(embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
             await ctx.send(embed=membed(f'Tag with ID {deleted_id[0]} successfully deleted.'))
 
     @tag.command(description="Remove a tag that you own by its ID", aliases=('delete_id',))
@@ -505,16 +613,16 @@ class Tags(commands.Cog):
 
             if deleted is None:
                 return await ctx.send(embed=membed(TAG_NOT_FOUND_RESPONSE))
-            await ctx.send(embed=membed(f'Tag with ID {tag_id} successfully deleted.'))
+            await ctx.send(embed=membed('Tag with corresponding ID successfully deleted.'))
 
-    async def _send_tag_info(self, ctx: commands.Context, conn: asqlite_Connection, row: sqlite3.Row):
-        """Expects row in this format: rowid, name, uses, ownerID, created_at"""
+    async def _send_tag_info(self, ctx: commands.Context, conn: asqlite_Connection, tag_name: str, row: sqlite3.Row):
+        """Expects row in this format: rowid, uses, ownerID, created_at"""
 
         embed = discord.Embed(colour=discord.Colour.blurple())
 
-        rowid, name, uses, owner_id, created_at = row
+        rowid, uses, owner_id, created_at = row
 
-        embed.title = name
+        embed.title = tag_name
         embed.timestamp = datetime.datetime.fromtimestamp(created_at, tz=datetime.timezone.utc)
         embed.set_footer(text='Tag created')
 
@@ -546,26 +654,30 @@ class Tags(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(name='The tag to retrieve information for.')
     @app_commands.autocomplete(name=non_aliased_tag_autocomplete)
-    async def info(self, ctx: commands.Context, *, name: Annotated[str, TagName(lower=True)]):
+    async def info(self, ctx: commands.Context, *, name: Annotated[str, TagName]):
         
         async with self.bot.pool.acquire() as conn:
-            query = (
-                """
-                SELECT rowid, name, uses, ownerID, created_at
-                FROM tags
-                WHERE LOWER(name) = $0
-                """
-            )
+            name = await self.non_owned_partial_matching(ctx, name, conn)
+            if not name:
+                return
 
-            record = await conn.fetchone(query, name)
+            
+            record = await conn.fetchone(
+                """
+                SELECT rowid, uses, ownerID, created_at
+                FROM tags
+                WHERE name = $0
+                """, name
+            )
+            
             if record is None:
-                return await ctx.send(embed=membed('Tag not found.'))
+                return await ctx.send(embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
 
             await self._send_tag_info(ctx, conn, row=record)
 
     @tag.command(description="Remove all tags made by a user")
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.describe(user='The user to remove all tags .')
+    @app_commands.describe(user='The user to remove all tags of. Defaults to your own.')
     async def purge(self, ctx: commands.Context, user: Optional[discord.Member] = commands.Author):
 
         if (ctx.author.id != user.id) and (ctx.author.id not in self.bot.owner_ids):
@@ -574,8 +686,7 @@ class Tags(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            query = "SELECT COUNT(*) FROM tags WHERE ownerID=$0"
-            row: tuple[int] = await conn.fetchone(query, user.id)
+            row: tuple[int] = await conn.fetchone("SELECT COUNT(*) FROM tags WHERE ownerID=$0", user.id)
             count = row[0]
 
             if count == 0:
@@ -654,12 +765,14 @@ class Tags(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            query = "SELECT rowid FROM tags WHERE LOWER(name)=$0 AND ownerID=$1"
-
-            row = await conn.fetchone(query, tag.lower(), ctx.author.id)
+            tag = await self.owned_partial_matching(ctx, tag, conn)
+            if not tag:
+                return
+            
+            row = await conn.fetchone("SELECT rowid FROM tags WHERE name=$0 AND ownerID=$1", tag, ctx.author.id)
 
             if row is None:
-                return await ctx.send(embed=membed(TAG_NOT_FOUND_RESPONSE))
+                return await ctx.send(embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
 
             await conn.execute("UPDATE tags SET ownerID = $0 WHERE rowid = $1", member.id, row[0])
             await conn.commit()
@@ -716,20 +829,19 @@ class Tags(commands.Cog):
                 em=em
             )
 
-
     @commands.hybrid_command()
     @app_commands.guilds(*APP_GUILDS_ID)
-    @app_commands.describe(member='The member to list tags of. Defaults to show yours.')
+    @app_commands.describe(member='The member to list the tags of. Defaults to your own.')
     async def tags(self, ctx: commands.Context, *, member: discord.User = commands.Author):
         """An alias for tag list command."""
         await ctx.invoke(self._list, member=member)
-
 
     @tag.command(description="Display a random tag")
     @app_commands.guilds(*APP_GUILDS_ID)
     async def random(self, ctx: commands.Context):
         async with self.bot.pool.acquire() as conn:
-            query = (
+
+            row = await conn.fetchone(
                 """
                 SELECT name, content
                 FROM tags
@@ -738,9 +850,8 @@ class Tags(commands.Cog):
                 """
             )
 
-            row = await conn.fetchone(query)
             if row is None:
-                return await ctx.send(embed=membed('No tags exist!'))
+                return await ctx.send(embed=membed('No tags exist yet!'))
             
             name, content = row
 
