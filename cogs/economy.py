@@ -2544,41 +2544,6 @@ class ShowcaseDropdown(discord.ui.Select):
         pass
 
 
-class ShowcaseView(discord.ui.View):
-    def __init__(self, _: discord.Interaction):
-        pass
-
-    async def on_error(self, interaction: discord.Interaction, error: Exception, _) -> None:
-        print_exception(type(error), error, error.__traceback__)
-        self.stop()
-        for item in self.children:
-            item.disabled = True
-        await interaction.response.edit_message(
-            view=self,
-            ephemeral=True,
-            embed=membed("Your showcase could not update properly.")
-        )
-
-    async def on_timeout(self) -> None:
-        for item in self.children:
-            item.disabled = True
-        try:
-            await self.message.edit(view=self)
-        except discord.NotFound:
-            pass
-    
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, self.interaction.user)
-
-    @discord.ui.button(emoji="<:move_up:1213223442241818705>", row=1)
-    async def move_up(self, interaction: discord.Interaction, _: discord.ui.Button):
-        pass
-
-    @discord.ui.button(emoji="<:move_down:1213223440669085756>", row=1)
-    async def move_down(self, interaction: discord.Interaction, _: discord.ui.Button):
-        pass
-
-
 class ItemQuantityModal(discord.ui.Modal):
     def __init__(
             self, 
@@ -2887,6 +2852,42 @@ class UserSettings(discord.ui.View):
         return await economy_check(interaction, self.interaction.user)
 
 
+class ShowcaseView(discord.ui.View):
+    def __init__(self, interaction: discord.Interaction):
+        self.interaction = interaction
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, _) -> None:
+        print_exception(type(error), error, error.__traceback__)
+        self.stop()
+
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.edit_message(
+            view=self,
+            ephemeral=True,
+            embed=membed("Your showcase could not update properly.")
+        )
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+        try:
+            await self.message.edit(view=self)
+        except discord.NotFound:
+            pass
+    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await economy_check(interaction, self.interaction.user)
+
+    @discord.ui.button(emoji="<:move_up:1213223442241818705>", row=1)
+    async def move_up(self, interaction: discord.Interaction, _: discord.ui.Button):
+        pass
+
+    @discord.ui.button(emoji="<:move_down:1213223440669085756>", row=1)
+    async def move_down(self, interaction: discord.Interaction, _: discord.ui.Button):
+        pass
+
+
 class Economy(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
@@ -2900,6 +2901,44 @@ class Economy(commands.Cog):
             "[`>reasons`](https://www.google.com/)."
         )
         self.batch_update.start()
+
+    @staticmethod
+    async def fetch_showdata(user: USER_ENTRY, conn: asqlite_Connection) -> discord.Embed:
+
+        showdata = await conn.fetchall(
+            """
+            SELECT shop.itemName, shop.emoji, COALESCE(inventory.qty, 0)
+            FROM showcase
+            INNER JOIN shop
+                ON showcase.itemID = shop.itemID
+            LEFT JOIN inventory
+                ON showcase.itemID = inventory.itemID AND inventory.userID = $0
+            WHERE showcase.userID = $0
+            ORDER BY showcase.itemPos DESC
+            """, user.id
+        )
+
+        ui_data = []
+
+        garbage = set()
+        for i, (item_name, ie, inv_qty) in enumerate(showdata, start=1):
+            if not inv_qty:
+                garbage.add(item_name)
+                continue
+            ui_data.append(f"{i}. {ie} {item_name}")
+        
+        if len(ui_data) < 6:
+            for i in range(len(ui_data), 6):
+                ui_data.append(f"{i}. Empty slot")
+        
+        if garbage:
+            placeholders = ', '.join(f'${i}' for i in range(1, len(garbage)+1))
+            await conn.execute(f"DELETE FROM showcase WHERE userID = $0 AND itemID IN ({placeholders})", user.id, *garbage)
+            await conn.commit()
+        
+        embed = discord.Embed(title=f"{user.display_name}'s Showcase")
+        embed.set_thumbnail(url=user.display_avatar.url)
+        embed.description = "\n".join(ui_data)
 
     async def interaction_check(self, interaction: discord.Interaction):
         async with self.bot.pool.acquire() as conn:
@@ -2978,14 +3017,20 @@ class Economy(commands.Cog):
         else:
             check.start()
 
-    @staticmethod
-    async def partial_match_for(interaction: discord.Interaction, item_input: str, conn: asqlite_Connection) -> None | tuple:
+    async def partial_match_for(self, interaction: discord.Interaction, item_input: str, conn: asqlite_Connection) -> None | tuple:
         """
         If the user types part of an item name, get that item name indicated.
 
         This is known as partial matching for item names.
         """
-        res = await conn.fetchall("SELECT itemID, itemName, emoji FROM shop WHERE LOWER(itemName) LIKE LOWER($0) LIMIT 5", f"%{item_input}%")
+        res = await conn.fetchall(
+            """
+            SELECT itemID, itemName, emoji 
+            FROM shop 
+            WHERE LOWER(itemName) LIKE LOWER($0)
+            LIMIT 5
+            """, f"%{item_input}%"
+        )
 
         if not res:
             return await interaction.response.send_message(
