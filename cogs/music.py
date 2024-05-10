@@ -73,13 +73,15 @@ class Music(commands.Cog):
     
     async def do_join_checks(self, interaction: discord.Interaction):
         if (interaction.user.voice is None):
-            return await interaction.followup.send(embed=membed("You must be connected to a voice channel first."))
+            await interaction.followup.send(embed=membed("Connect to a voice channel first."))
+            return
         
         if interaction.guild.voice_client is not None:
             if (interaction.user not in interaction.guild.me.voice.channel.members):
-                return await interaction.followup.send(
-                    embed=membed(f"You must be connected to {interaction.guild.me.voice.channel.mention} first.")
+                await interaction.followup.send(
+                    embed=membed(f"Connect to {interaction.guild.me.voice.channel.mention} first.")
                 )
+                return
             return interaction.guild.voice_client
         return await interaction.user.voice.channel.connect(self_deaf=True)
 
@@ -91,6 +93,9 @@ class Music(commands.Cog):
         voice = await self.do_join_checks(interaction)
         if not voice:
             return
+        
+        if voice.is_playing():
+            voice.stop()
 
         await self.bot.loop.create_task(self.play_source(voice))
         await interaction.followup.send(embed=membed("Now playing: ` Scaramouche Battle Theme.mp3 `"))
@@ -110,14 +115,14 @@ class Music(commands.Cog):
             return
 
         if voice.is_playing():
-            return await interaction.followup.send(embed=membed("The player is still playing."))
+            voice.stop()
 
         pathn = f"C:\\Users\\georg\\Music\\{song}.mp3"
         source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(pathn))
         file_name = basename(pathn)
         
         voice.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
-        await interaction.followup.send(embed=membed(f'Now playing: `{file_name}`'))
+        await interaction.followup.send(embed=membed(f'Now playing: ` {file_name} `'))
 
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(query="Could be a search term or a YouTube track link.")
@@ -130,7 +135,7 @@ class Music(commands.Cog):
             return
 
         if voice.is_playing():
-            return await interaction.followup.send(embed=membed("The player is still playing."))
+            voice.stop()
 
         player = await YTDLSource.from_url(query, loop=self.bot.loop, stream=True)
         voice.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
@@ -177,7 +182,7 @@ class Music(commands.Cog):
             return
 
         voice.source.volume = volume / 100
-        await interaction.followup.send(embed=membed(f"Changed volume to {volume}%"))
+        await interaction.followup.send(embed=membed(f"Changed volume of the player to {volume}%"))
 
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.command(description='Stop the player')
@@ -196,15 +201,15 @@ class Music(commands.Cog):
 
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.command(description='Disconnect the bot from voice')
-    async def disconnect(self, interaction: discord.Interaction):
+    async def leave(self, interaction: discord.Interaction):
         await interaction.response.defer()
 
         if interaction.guild.voice_client is None:
-            return await interaction.followup.send(embed=membed("The bot is not connected to a voice channel."))
+            return await interaction.followup.send(embed=membed("Not connected to a voice channel."))
         
         if interaction.user not in interaction.guild.me.voice.channel.members:
             return await interaction.followup.send(
-                embed=membed(f"You must be connected to {interaction.guild.me.voice.channel.mention} first.")
+                embed=membed(f"Connect to {interaction.guild.me.voice.channel.mention} first.")
             )
         
         if interaction.guild.voice_client.is_playing():
