@@ -794,9 +794,9 @@ class Utility(commands.Cog):
         parameters = {'X-Api-Key': self.bot.NINJAS_API_KEY}
         
         async with self.bot.session.get(api_url, params=parameters) as resp:
-            text = await resp.json()
             if resp.status != 200:
                 return await interaction.response.send_message(embed=membed(API_EXCEPTION))
+            text = await resp.json()
             await interaction.response.send_message(embed=membed(f"{text[0]['fact']}."))
 
     async def format_api_response(self, interaction: discord.Interaction, start: float, api_url: str, **attrs):
@@ -902,7 +902,7 @@ class Utility(commands.Cog):
             headers=headers
         )
 
-    @app_commands.command(name='charinfo', description='Show you info about character. Maximum 25 at once.')
+    @app_commands.command(name='charinfo', description='Show information about characters')
     @app_commands.guilds(*APP_GUILDS_ID)
     @app_commands.describe(characters='Any written letters or symbols.')
     async def charinfo(self, interaction: discord.Interaction, *, characters: str) -> None:
@@ -1036,9 +1036,9 @@ class Utility(commands.Cog):
     async def pick_up_lines(self, ctx: commands.Context) -> discord.Message | None:
         async with ctx.typing():
             async with self.bot.session.get("https://api.popcat.xyz/pickuplines") as resp:
-                data = await resp.json()
                 if resp.status != 200:
                     return await ctx.send(embed=membed(API_EXCEPTION))
+                data = await resp.json()
                 await ctx.reply(embed=membed(data["pickupline"]))
 
     @commands.command(name="wyr", description="Get 'would you rather' questions to use")
@@ -1060,8 +1060,7 @@ class Utility(commands.Cog):
     async def alert_iph(self, ctx: commands.Context, *, custom_text: str) -> discord.Message | None:
         async with ctx.typing():
             custom_text = '+'.join(custom_text.split(' '))
-            async with self.bot.session.get(
-                    f"https://api.popcat.xyz/alert?text={custom_text}") as resp:
+            async with self.bot.session.get(f"https://api.popcat.xyz/alert?text={custom_text}") as resp:
                 if resp.status != 200:
                     return await ctx.send(embed=membed(API_EXCEPTION))
                 embed: discord.Embed = membed()
