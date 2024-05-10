@@ -1263,10 +1263,11 @@ class BalanceView(discord.ui.View):
     @discord.ui.button(emoji=discord.PartialEmoji.from_str("<:terminate:1205810058357907487>"))
     async def close_view(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Close the balance view."""
-        self.stop()
         for item in self.children:
             item.disabled = True
+
         await interaction.response.edit_message(view=self)
+        self.stop()
 
 
 class BlackjackUi(discord.ui.View):
