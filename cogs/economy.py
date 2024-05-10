@@ -2043,9 +2043,13 @@ class DropdownLB(discord.ui.Select):
 
 
 class Leaderboard(discord.ui.View):
-    def __init__(self, bot: commands.Bot, their_choice: str):
+    def __init__(self, interaction: discord.Interaction, bot: commands.Bot, their_choice: str):
+        self.interaction = interaction
         super().__init__(timeout=40.0)
         self.add_item(DropdownLB(bot, their_choice))
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await economy_check(interaction, self.interaction.user)
 
     async def on_timeout(self) -> None:
         for item in self.children:
@@ -6662,7 +6666,7 @@ class Economy(commands.Cog):
     ) -> None:
         """View the leaderboard and filter the results based on different stats inputted."""
 
-        lb_view = Leaderboard(bot=self.bot, their_choice=stat)
+        lb_view = Leaderboard(interaction, bot=self.bot, their_choice=stat)
         lb = await self.create_leaderboard_preset(chosen_choice=stat)
 
         await interaction.response.send_message(embed=lb, view=lb_view)
