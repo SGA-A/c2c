@@ -135,8 +135,8 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
 
 
 class ImageSourceButton(discord.ui.Button):
-    def __init__(self, url: str):
-        super().__init__(url=url, label="Source", row=1)
+    def __init__(self, url: Optional[str] = None):
+        super().__init__(url=url or "https://www.google.com", label="Source", row=1)
 
 
 class Utility(commands.Cog):
@@ -500,45 +500,41 @@ class Utility(commands.Cog):
                 )
             )
 
-        paginator = PaginationSimple(interaction, invoker_id=interaction.user.id)
+        paginator = Pagination(interaction)
 
         additional_notes = [
             (
                 f"{result['jpeg_url']}",
                 f"{result['author']}",
-                f"{result['created_at']}", 
-                ImageSourceButton(url=result['jpeg_url'])
+                f"{result['created_at']}"
             )
             for result in posts_xml
         ]
 
-        link_btn = None
         async def get_page_part(page: int):
-            nonlocal link_btn
+            embeds = []
 
-            embed = membed()
-
-            length = 1
+            length = 3
             offset = (page - 1) * length
 
-            if link_btn:
-                paginator.remove_item(link_btn)
-
             for item_attrs in additional_notes[offset:offset + length]:
-                embed.timestamp = datetime.datetime.fromtimestamp(int(item_attrs[2]))
-                embed.set_image(url=item_attrs[0])
-                embed.set_author(name=item_attrs[1])
+                embed = discord.Embed(
+                    timestamp=datetime.datetime.fromtimestamp(int(item_attrs[2])),
+                    title=item_attrs[1],
+                    url=item_attrs[0],
+                    colour=0x2B2D31
+                )
 
-                link_btn = item_attrs[-1]
-                paginator.add_item(link_btn)
+                embed.set_image(url=item_attrs[0])
+                embeds.append(embed)
 
             n = paginator.compute_total_pages(len(additional_notes), length)
-            embed.set_footer(text=f"Page {page} of {n}")
-            return embed, n
+            embeds[-1].set_footer(text=f"Page {page} of {n}")
+            return embeds, n
         
         paginator.get_page = get_page_part
 
-        await paginator.navigate()
+        await paginator.navigate(ephemeral=True)
 
     @anime.command(name='char', description="Retrieve SFW or NSFW anime images")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
