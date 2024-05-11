@@ -17,11 +17,12 @@ import discord
 import datetime
 
 from cogs.economy import (
-    APP_GUILDS_ID, 
+    APP_GUILDS_IDS, 
     USER_ENTRY, 
     total_commands_used_by_user
 )
-from other.pagination import Pagination, PaginationSimple
+from .core.paginator import Pagination, PaginationSimple
+from .core.helpers import membed
 
 
 ARROW = "<:arrowe:1180428600625877054>"
@@ -76,12 +77,6 @@ def extract_domain(website):
     return match.group(1)
 
 
-def membed(descriptioner: Optional[str] = None) -> discord.Embed:
-    """Quickly create an embed with a custom description using the preset."""
-    membedder = discord.Embed(colour=0x2B2D31, description=descriptioner)
-    return membedder
-
-
 def return_random_color():
     colors_crayon = (
         discord.Color.from_rgb(255, 204, 204),
@@ -119,19 +114,17 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
 
     async def on_submit(self, interaction: discord.Interaction):
         channel = interaction.guild.get_channel(1122902104802070572)
-        embed = discord.Embed()
+        embed = membed(self.message.value)
         embed.title = f'New Feedback: {self.fb_title.value or "Untitled"}'
-        embed.description = self.message.value
-        embed.colour = 0x2B2D31
         embed.set_author(name=interaction.user.name, icon_url=interaction.user.display_avatar.url)
 
         await channel.send(embed=embed)
-        success = membed("Your response has been submitted!")
-        await interaction.response.send_message(embed=success, ephemeral=True)
+        await interaction.response.send_message(ephemeral=True, embed=membed("Your response has been submitted!"))
 
     async def on_error(self, interaction: discord.Interaction, _):
         return await interaction.response.send_message(
-            embed=membed("Your feedback could not be sent. Try again later"))
+            embed=membed("Your feedback could not be sent. Try again later.")
+        )
 
 
 class ImageSourceButton(discord.ui.Button):
@@ -182,7 +175,7 @@ class Utility(commands.Cog):
             posts_xml = await response.text()
             return parse_xml(posts_xml, mode=mode)
 
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name='serverinfo', description="Show information about the server and its members")
     async def display_server_info(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(thinking=True)
@@ -258,7 +251,7 @@ class Utility(commands.Cog):
 
         await interaction.followup.send(embed=embed)
 
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(user="Whose command usage to display. Defaults to you.")
     @app_commands.command(name="usage", description="See your total command usage")
     async def view_user_usage(self, interaction: discord.Interaction, user: Optional[USER_ENTRY]):
@@ -307,7 +300,7 @@ class Utility(commands.Cog):
 
         await paginator.navigate()
 
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name='calc', description='Calculate an expression')
     @app_commands.describe(expression='The expression to evaluate.')
     async def calculator(self, interaction: discord.Interaction, expression: str):
@@ -333,7 +326,7 @@ class Utility(commands.Cog):
 
         await interaction.response.send_message(embed=output)
 
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name='ping', description='Checks latency of the bot')
     async def ping(self, interaction: discord.Interaction):
         start = perf_counter()
@@ -346,7 +339,7 @@ class Utility(commands.Cog):
         content.description += f"\nRound-trip: {(end - start) * 1000:.0f}ms"
         await interaction.edit_original_response(embed=content)
 
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     async def extract_source(self, interaction: discord.Interaction, message: discord.Message):
 
         images = set()
@@ -374,7 +367,7 @@ class Utility(commands.Cog):
         
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     async def embed_colour(self, interaction: discord.Interaction, message: discord.Message):
 
         await interaction.response.send_message("Looking into it..")
@@ -396,7 +389,7 @@ class Utility(commands.Cog):
         await msg.edit(content="No embeds were found within this message.")
 
     @app_commands.command(name='bored', description="Find something to do if you're bored")
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(activity_type='The type of activities to filter by.')
     async def prompt_act(
         self, 
@@ -423,7 +416,7 @@ class Utility(commands.Cog):
         name='anime', 
         description="Surf through anime images and posts.", 
         guild_only=True, 
-        guild_ids=APP_GUILDS_ID
+        guild_ids=APP_GUILDS_IDS
     )
 
     async def tag_search_autocomplete(
@@ -699,7 +692,7 @@ class Utility(commands.Cog):
         await interaction.response.send_message(embed=embed, view=img_view)
 
     @app_commands.command(name='emojis', description='Fetch all the emojis c2c can access')
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     async def emojis_paginator(self, interaction: discord.Interaction) -> None:
         length = 10
         emotes_all = []
@@ -738,7 +731,7 @@ class Utility(commands.Cog):
         await paginator.navigate()
 
     @app_commands.command(name='inviter', description='Creates a server invite link')
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.default_permissions(create_instant_invite=True)
     @app_commands.describe(
         invite_lifespan='A non-zero duration in days for which the invite should last for.', 
@@ -786,7 +779,7 @@ class Utility(commands.Cog):
         await interaction.response.send_message(embed=success)
 
     @app_commands.command(name='randomfact', description='Queries a random fact')
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def random_fact(self, interaction: discord.Interaction):
         api_url = 'https://api.api-ninjas.com/v1/facts'
@@ -814,7 +807,7 @@ class Utility(commands.Cog):
     @app_commands.describe(
         user="The user to apply the manipulation to.", 
         endpoint="What kind of manipulation sorcery to use.")
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     async def image_manip(
         self, 
         interaction: discord.Interaction, 
@@ -848,7 +841,7 @@ class Utility(commands.Cog):
         user="The user to apply the manipulation to.",
         endpoint="What kind of manipulation sorcery to use."
     )
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     async def image2_manip(
         self, 
         interaction: discord.Interaction,
@@ -877,7 +870,7 @@ class Utility(commands.Cog):
 
     @app_commands.command(name="locket", description="Insert people into a heart-shaped locket")
     @app_commands.describe(user="The user to add to the locket.", user2="The second user to add to the locket.")
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     async def locket_manip(
         self, 
         interaction: discord.Interaction, 
@@ -902,7 +895,7 @@ class Utility(commands.Cog):
         )
 
     @app_commands.command(name='charinfo', description='Show information about characters')
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(characters='Any written letters or symbols.')
     async def charinfo(self, interaction: discord.Interaction, *, characters: str) -> None:
         """Shows you information about a number of characters.
@@ -922,13 +915,13 @@ class Utility(commands.Cog):
         await interaction.response.send_message(msg, suppress_embeds=True)
 
     @app_commands.command(name='feedback', description='Send feedback to the c2c developers')
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     async def feedback(self, interaction: discord.Interaction) -> None:
         feedback_modal = FeedbackModal()
         await interaction.response.send_modal(feedback_modal)
 
     @app_commands.command(name='about', description='Learn more about the bot')
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.checks.cooldown(1, 10, key=lambda i: i.guild.id)
     async def about_the_bot(self, interaction: discord.Interaction) -> None:
 
@@ -1091,7 +1084,7 @@ class Utility(commands.Cog):
         await ctx.send(embed=embed)
 
     @app_commands.checks.cooldown(1, 15, key=lambda i: i.guild.id)
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name="imagesearch", description="Browse images from the web")
     @app_commands.describe(
         query="The search query to use for the image search.",
