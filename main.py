@@ -44,7 +44,9 @@ from discord import (
 
 from discord.utils import setup_logging
 from discord.ext import commands
-from cogs.economy import membed, APP_GUILDS_ID
+
+from cogs.core.helpers import membed
+from cogs.core.constants import APP_GUILDS_IDS
 
 if TYPE_CHECKING:
     from discord.abc import Snowflake
@@ -199,6 +201,9 @@ class C2C(commands.Bot):
         print("we're in.")
 
         for file in Path('cogs').glob('**/*.py'):
+            if "core" in file.parts:
+                continue
+            
             *tree, _ = file.parts
             try:
                 await self.load_extension(f"{'.'.join(tree)}.{file.stem}")
@@ -206,7 +211,7 @@ class C2C(commands.Bot):
                 print_exception(type(e), e, e.__traceback__, file=stderr)
 
         self.pool = await create_pool(
-            'C:\\Users\\georg\\Documents\\c2c\\db-shit\\economy.db'
+            'C:\\Users\\georg\\Documents\\c2c\\database\\economy.db'
         )
 
         self.time_launch = datetime.now()
@@ -426,7 +431,7 @@ class HelpDropdown(ui.Select):
             embed.colour = 0xF70E73
             embed.set_thumbnail(url='https://emoji.discadia.com/emojis/74e65408-2adb-46dc-86a7-363f3096b6b2.PNG')
 
-            cmd_formatter = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild_id)
+            cmd_formatter = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild.id)
 
         elif chosen_help_category == 'Tags':
 
@@ -449,7 +454,7 @@ class HelpDropdown(ui.Select):
                     embed.colour = 0x8A1941
                     embed.set_thumbnail(url='https://i.imgur.com/b8u1MQj.png')
             
-            cmd_formatter = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild_id)
+            cmd_formatter = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild.id)
         elif chosen_help_category == 'Economy':
             
             embed.colour = 0xFFD700
@@ -457,15 +462,16 @@ class HelpDropdown(ui.Select):
 
             all_cmds = fill_up_commands(chosen_help_category)
             
-            cmd_formatter = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild_id)
+            cmd_formatter = generic_loop_with_subcommand(all_cmds, cmd_formatter, interaction.guild.id)
         else:
             embed.colour = 0x6953E0
             embed.set_thumbnail(url="https://i.imgur.com/nFZTMFl.png")
 
-            all_cmds = return_txt_cmds_first({}, chosen_help_category)
+            all_cmds = return_interaction_cmds_last({}, chosen_help_category)
 
-            for i, (cmd, cmd_details) in enumerate(all_cmds.items(), start=1):
-                cmd_formatter.append(f"{i}. [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) - {cmd_details[0]}")
+            for i, cmd in enumerate(all_cmds, start=1):
+                command_manage = bot.tree.get_app_command(cmd, guild=Object(id=interaction.guild.id))
+                cmd_formatter.append(f"{i}. {command_manage.mention} - {command_manage.description}")
 
         prcntage = (len(cmd_formatter) / total_cmds_rough) * 100
 
@@ -641,10 +647,10 @@ async def do_guild_checks(interaction: Interaction):
     app_commands_not_supported = True
     if interaction.guild:
         gid = interaction.guild.id
-        app_commands_not_supported = gid not in APP_GUILDS_ID
+        app_commands_not_supported = gid not in APP_GUILDS_IDS
 
     if app_commands_not_supported:
-        supported_guilds = "\n".join(f" - {bot.get_guild(sgid).name}" for sgid in APP_GUILDS_ID)
+        supported_guilds = "\n".join(f" - {bot.get_guild(sgid).name}" for sgid in APP_GUILDS_IDS)
 
         second = membed(
             "Commands are **not** available here:\n"
