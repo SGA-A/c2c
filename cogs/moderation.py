@@ -6,8 +6,10 @@ from datetime import timedelta, datetime
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from other.pagination import Pagination
-from cogs.economy import membed, process_confirmation, APP_GUILDS_ID, respond
+from .core.paginator import Pagination
+from .core.views import process_confirmation
+from .core.helpers import membed, respond
+from .core.constants import APP_GUILDS_IDS
 
 import discord
 
@@ -505,7 +507,7 @@ class Moderation(commands.Cog):
         roles = RoleManagement(
             name="role", 
             description="Role management commands",
-            guild_ids=APP_GUILDS_ID,  
+            guild_ids=APP_GUILDS_IDS,  
             guild_only=True, 
             default_permissions=discord.Permissions(manage_roles=True)
         )
@@ -514,7 +516,7 @@ class Moderation(commands.Cog):
         self.bot.tree.add_command(roles)
 
     @app_commands.default_permissions(manage_messages=True)
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     async def purge_from_here(self, interaction: discord.Interaction, message: discord.Message):
 
         await interaction.response.defer(ephemeral=True)
@@ -590,7 +592,7 @@ class Moderation(commands.Cog):
         name="temprole", 
         description="Set roles that expire after a certain time.", 
         guild_only=True, 
-        guild_ids=APP_GUILDS_ID, 
+        guild_ids=APP_GUILDS_IDS, 
         default_permissions=discord.Permissions(manage_roles=True)
     )
 

@@ -6,7 +6,8 @@ from discord import app_commands
 from datetime import timedelta
 from discord.ext import commands
 
-from cogs.economy import APP_GUILDS_ID, membed
+from .core.helpers import membed
+from .core.constants import APP_GUILDS_IDS
 
 
 def return_default_user_voice_settings(name: str) -> tuple:
@@ -388,7 +389,7 @@ class TempVoice(commands.Cog):
     voice = app_commands.Group(
         name="voice", 
         description="Manage your own temporary voice channel.", 
-        guild_ids=APP_GUILDS_ID, 
+        guild_ids=APP_GUILDS_IDS, 
         guild_only=True
     )
     
@@ -398,7 +399,7 @@ class TempVoice(commands.Cog):
         await interaction.response.send_message(embed=membed("You haven't created your own channel yet."))
         return False
     
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name="setup", description="Setup a creator channel for temporary voice channels")
     @app_commands.describe(creator_channel="The channel to use for making temporary voice channels.")
     async def setup_voice(self, interaction: discord.Interaction, creator_channel: discord.VoiceChannel):

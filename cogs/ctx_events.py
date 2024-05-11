@@ -1,11 +1,13 @@
 from traceback import print_exception
 from datetime import timedelta
+from random import choice
 
 from discord.utils import format_dt, utcnow
 from discord.ext import commands
 from discord import Embed
 
-from .slash_events import MessageDevelopers
+from .core.views import MessageDevelopers
+from .core.constants import COOLDOWN_PROMPTS
 
 
 class ContextCommandHandler(commands.Cog):
@@ -26,7 +28,7 @@ class ContextCommandHandler(commands.Cog):
             if isinstance(err, self.err.MissingRequiredArgument):
                 embed.description = "Some required arguments are missing."
                 return await ctx.reply(embed=embed, view=contact_view)
-            
+
             embed.description = "That didn't work. Check your inputs are valid."
             await ctx.reply(embed=embed, view=contact_view)
 
@@ -50,9 +52,10 @@ class ContextCommandHandler(commands.Cog):
                 await ctx.reply(embed=embed, view=contact_view)
 
         elif isinstance(err, self.err.CommandOnCooldown):
+            embed.title = choice(COOLDOWN_PROMPTS)
             after_cd = format_dt(utcnow() + timedelta(seconds=err.retry_after), style="R")
-            embed.description = f"You're on a cooldown. Try again {after_cd}."
-            await ctx.reply(embed=embed, view=contact_view)
+            embed.description = f"You can run this command again {after_cd}."
+            await ctx.send(embed=embed, view=contact_view)
 
         elif isinstance(err, self.err.CommandNotFound):
             embed.description = "Could not find what you were looking for."

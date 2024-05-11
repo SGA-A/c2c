@@ -4,7 +4,7 @@ import discord
 from traceback import print_exception
 from typing import Optional, Callable
 
-from cogs.economy import membed, determine_exponent
+from .helpers import membed, determine_exponent
 
 
 NOT_YOUR_MENU = membed("This menu is not for you.")
@@ -34,7 +34,7 @@ class PaginatorInput(discord.ui.Modal):
 
     async def on_error(self, interaction: discord.Interaction, error):
         self.stop()
-        await interaction.response.send_message("Something went wrong.")
+        await interaction.response.send_message(embed=membed("Something went wrong."))
         print_exception(type(error), error, error.__traceback__)
 
 
@@ -259,8 +259,6 @@ class PaginationSimple(discord.ui.View):
 
     @staticmethod
     def compute_total_pages(total_results: int, results_per_page: int) -> int:
-        """Based off the total elements available in the iterable, determine how many pages there
-        should be within the paginator."""
         return ((total_results - 1) // results_per_page) + 1
 
 

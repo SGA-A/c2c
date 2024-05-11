@@ -7,7 +7,9 @@ import discord
 
 from discord.ext import commands
 from discord import app_commands
-from cogs.economy import membed, APP_GUILDS_ID
+
+from .core.constants import APP_GUILDS_IDS
+from .core.helpers import membed
 
 
 # Suppress noise about console usage from errors
@@ -68,7 +70,7 @@ class Music(commands.Cog):
         return False
 
     async def play_source(self, voice_client):
-        source = discord.FFmpegPCMAudio("C:\\Users\\georg\\PycharmProjects\\c2c\\other\\battlet.mp3")
+        source = discord.FFmpegPCMAudio("C:\\Users\\georg\\Documents\\c2c\\battlet.mp3")
         voice_client.play(source, after=lambda e: print('Player error: %s' % e) if e else self.bot.loop.create_task(self.play_source(voice_client)))
     
     async def do_join_checks(self, interaction: discord.Interaction):
@@ -85,7 +87,7 @@ class Music(commands.Cog):
             return interaction.guild.voice_client
         return await interaction.user.voice.channel.connect(self_deaf=True)
 
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(description='Quickly join and play some music')
     async def preset(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -100,7 +102,7 @@ class Music(commands.Cog):
         await self.bot.loop.create_task(self.play_source(voice))
         await interaction.followup.send(embed=membed("Now playing: ` Scaramouche Battle Theme.mp3 `"))
 
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(description='Plays a file from the local filesystem')
     @app_commands.describe(song="The name of the song to play.")
     async def play(
@@ -124,7 +126,7 @@ class Music(commands.Cog):
         voice.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
         await interaction.followup.send(embed=membed(f'Now playing: ` {file_name} `'))
 
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(query="Could be a search term or a YouTube track link.")
     @app_commands.command(description="Streams music via url from YouTube")
     async def stream(self, interaction: discord.Interaction, query: str):
@@ -141,7 +143,7 @@ class Music(commands.Cog):
         voice.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
         await interaction.followup.send(embed=membed(f'Now playing: [{player.title}]({player.url})'))
 
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(description='Pause the player')
     async def pause(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -156,7 +158,7 @@ class Music(commands.Cog):
         voice.pause()
         return await interaction.followup.send(embed=membed("Paused the player."))
 
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(description='Resume the player')
     async def resume(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -171,7 +173,7 @@ class Music(commands.Cog):
         voice.resume()
         await interaction.followup.send(embed=membed("Resumed the player."))
 
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(volume="The volume to set the player to")
     @app_commands.command(description="Changes the player's volume")
     async def volume(self, interaction: discord.Interaction, volume: app_commands.Range[int, 1, 250]):
@@ -184,7 +186,7 @@ class Music(commands.Cog):
         voice.source.volume = volume / 100
         await interaction.followup.send(embed=membed(f"Changed volume of the player to {volume}%"))
 
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(description='Stop the player')
     async def stop(self, interaction: discord.Interaction):
         await interaction.response.defer()
@@ -199,7 +201,7 @@ class Music(commands.Cog):
         voice.stop()
         await interaction.followup.send(embed=membed("Stopped the player."))
 
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(description='Disconnect the bot from voice')
     async def leave(self, interaction: discord.Interaction):
         await interaction.response.defer()

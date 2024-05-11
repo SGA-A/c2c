@@ -3,42 +3,13 @@ from datetime import timedelta
 from traceback import print_exception
 
 from discord.ext import commands
-from discord.ui import View, Button
 from discord.utils import format_dt, utcnow
-from discord import Embed, Interaction, app_commands, AppCommandOptionType
+from discord import Interaction, app_commands, AppCommandOptionType
 
-from cogs.economy import membed
+from .core.helpers import membed
+from .core.views import MessageDevelopers
+from .core.constants import COOLDOWN_PROMPTS
 
-
-COOLDOWN_PROMPTS = (
-    "Too spicy, take a breather..", 
-    "Take a chill pill", 
-    "Woah now, slow it down",
-    "Let's slow it down here", 
-    "Slow it down bud", 
-    "Spam isn't cool fam", 
-    "Hold your horses...",
-    "Pump the brakes, speed racer", 
-    "CHILL OUT, DAMN", 
-    "Easy tiger, let's not rush", 
-    "Slow down there cowboy", 
-    "Whoa there, slow down", 
-    "Cool your jets, space cadet",
-    "Easy does it, turbo"
-)
-
-
-class MessageDevelopers(View):
-    def __init__(self):
-        super().__init__(timeout=60.0)
-
-        self.add_item(
-            Button(
-                label="Contact a developer", 
-                url="https://www.discordapp.com/users/546086191414509599"
-            )
-        )
-        
 
 class SlashExceptionHandler(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
@@ -90,13 +61,12 @@ class SlashExceptionHandler(commands.Cog):
         
         else:
             print_exception(type(error), error, error.__traceback__)
-            exception = Embed(colour=0x2B2D31)
-            exception.title = "Something went wrong"
-            exception.description = (
+            exception = membed(
                 "Seems like the bot has stumbled upon an unexpected error. "
                 "Not to worry, these things happen from time to time. If this issue persists, "
                 "please let us know about it. We're always here to help!"
             )
+            exception.title = "Something went wrong"
 
         await interaction.followup.send(embed=exception, view=MessageDevelopers())
 

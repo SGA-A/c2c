@@ -9,8 +9,9 @@ from discord.ext import commands
 from typing import Annotated, Optional
 from asqlite import Connection as asqlite_Connection
 
-from cogs.economy import membed, APP_GUILDS_ID
-from other.pagination import PaginationSimple
+from .core.helpers import membed
+from .core.constants import APP_GUILDS_IDS
+from .core.paginator import PaginationSimple
 
 
 TAG_NOT_FOUND_SIMPLE_RESPONSE = "Tag not found, it may have been deleted when you called the command."
@@ -375,7 +376,7 @@ class Tags(commands.Cog):
         self._reserved_tags_being_made.discard(name.lower())
             
     @commands.hybrid_group(description="Tag text for later retrieval", fallback='get')
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(name='The tag to retrieve.')
     @app_commands.autocomplete(name=non_aliased_tag_autocomplete)
     async def tag(self, ctx: commands.Context, *, name: str):
@@ -400,7 +401,7 @@ class Tags(commands.Cog):
             await conn.execute("UPDATE tags SET uses = uses + 1 WHERE name = $0", name)
     
     @tag.command(description="Create a new tag owned by you", aliases=('add',))
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(name='The tag name.', content='The tag content.')
     async def create(
         self, 
@@ -420,7 +421,7 @@ class Tags(commands.Cog):
             await self.create_tag(ctx, name, content, conn=conn)
     
     @tag.command(description="Interactively make your own tag", ignore_extra=True)
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     async def make(self, ctx: commands.Context):
 
         async with self.bot.pool.acquire() as conn:
@@ -504,7 +505,7 @@ class Tags(commands.Cog):
                 self.remove_in_progress_tag(name)
 
     @tag.command(description="Modifiy an existing tag that you own")
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(
         name='The tag to edit.',
         content='The new content of the tag, if not given then a modal is opened.',
@@ -562,7 +563,7 @@ class Tags(commands.Cog):
             await ctx.send(embed=membed('Successfully edited tag.'))
 
     @tag.command(description="Remove a tag that you own", aliases=('delete',))
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(name='The tag to remove')
     @app_commands.autocomplete(name=owned_non_aliased_tag_autocomplete)
     async def remove(self, ctx: commands.Context, *, name: Annotated[str, TagName]):
@@ -593,7 +594,7 @@ class Tags(commands.Cog):
             await ctx.send(embed=membed(f'Tag with ID {deleted_id[0]} successfully deleted.'))
 
     @tag.command(description="Remove a tag that you own by its ID", aliases=('delete_id',))
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(tag_id='The internal tag ID to delete.')
     @app_commands.rename(tag_id='id')
     async def remove_id(self, ctx: commands.Context, tag_id: int):
@@ -651,7 +652,7 @@ class Tags(commands.Cog):
         await ctx.send(embed=embed)
 
     @tag.command(description="Retrieve info about a tag", aliases=('owner',))
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(name='The tag to retrieve information for.')
     @app_commands.autocomplete(name=non_aliased_tag_autocomplete)
     async def info(self, ctx: commands.Context, *, name: Annotated[str, TagName]):
@@ -676,7 +677,7 @@ class Tags(commands.Cog):
             await self._send_tag_info(ctx, conn, row=record)
 
     @tag.command(description="Remove all tags made by a user")
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(user='The user to remove all tags of. Defaults to your own.')
     async def purge(self, ctx: commands.Context, user: Optional[discord.Member] = commands.Author):
 
@@ -727,7 +728,7 @@ class Tags(commands.Cog):
         await paginator.navigate()
 
     @tag.command(description="Search for a tag")
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(query='The tag name to search for.')
     async def search(self, ctx: commands.Context, *, query: Annotated[str, commands.clean_content]):
 
@@ -754,7 +755,7 @@ class Tags(commands.Cog):
         )
 
     @tag.command(description="Transfer a tag to another member")
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(member='The member to transfer the tag to.', tag="The tag to transfer.")
     @app_commands.autocomplete(tag=owned_non_aliased_tag_autocomplete)
     async def transfer(self, ctx: commands.Context, member: discord.Member, *, tag: Annotated[str, TagName]):
@@ -780,7 +781,7 @@ class Tags(commands.Cog):
             await ctx.send(embed=membed(f'Successfully transferred tag ownership to {member.mention}.'))
 
     @tag.command(name="all", description="List all tags ever made")
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     async def all_tags(self, ctx: commands.Context):
 
         async with self.bot.pool.acquire() as conn:
@@ -830,14 +831,14 @@ class Tags(commands.Cog):
             )
 
     @commands.hybrid_command()
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(member='The member to list the tags of. Defaults to your own.')
     async def tags(self, ctx: commands.Context, *, member: discord.User = commands.Author):
         """An alias for tag list command."""
         await ctx.invoke(self._list, member=member)
 
     @tag.command(description="Display a random tag")
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     async def random(self, ctx: commands.Context):
         async with self.bot.pool.acquire() as conn:
 
