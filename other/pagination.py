@@ -14,9 +14,8 @@ NOT_YOUR_MENU = membed("This menu is not for you.")
 
 
 async def button_response(interaction: discord.Interaction, **kwargs) -> None | discord.Message:
-    message = kwargs.pop("message")
     if interaction.response.is_done():
-        return await message.edit(**kwargs)
+        return await interaction.edit_original_response(**kwargs)
     return await interaction.response.edit_message(**kwargs)
 
 
@@ -115,7 +114,7 @@ class Pagination(discord.ui.View):
         kwargs = {"view": self}
         kwargs.update({"embeds" if isinstance(emb, list) else "embed": emb})
 
-        await button_response(interaction, message=self.message, **kwargs)
+        await button_response(interaction, **kwargs)
 
     def update_buttons(self) -> None:
         """Disable or re-enable buttons based on position in paginator."""
