@@ -1,3 +1,4 @@
+from discord.ext import commands
 import discord
 from traceback import print_exception
 from typing import Optional, Callable
@@ -12,6 +13,13 @@ def membed(custom_description: str) -> discord.Embed:
 NOT_YOUR_MENU = membed("This menu is not for you.")
 
 
+async def button_response(interaction: discord.Interaction, **kwargs) -> None | discord.Message:
+    message = kwargs.pop("message")
+    if interaction.response.is_done():
+        return await message.edit(**kwargs)
+    return await interaction.response.edit_message(**kwargs)
+
+
 class PaginatorInput(discord.ui.Modal):
     def __init__(self, their_view: discord.ui.View):
         self.their_view = their_view
@@ -22,7 +30,7 @@ class PaginatorInput(discord.ui.Modal):
         label='Page',
         required=True,
         min_length=1,
-        max_length=2
+        max_length=4
     )
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -34,6 +42,11 @@ class PaginatorInput(discord.ui.Modal):
         print_exception(type(error), error, error.__traceback__)
 
 
+class ButtonOnCooldown(commands.CommandError):
+  def __init__(self, retry_after: float):
+    self.retry_after = retry_after
+
+
 class Pagination(discord.ui.View):
     """Pagination menu with support for direct queries to a specific page."""
     
@@ -42,48 +55,67 @@ class Pagination(discord.ui.View):
         self.get_page = get_page
         self.index = 1
         self.total_pages: Optional[int] = None
+        self.cd = commands.CooldownMapping.from_cooldown(1, 3.0, lambda i: i.user)
         super().__init__(timeout=45.0)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Make sure only original user that invoked interaction can interact"""
         if interaction.user == self.interaction.user:
+            retry_after = self.cd.update_rate_limit(interaction)
+            if retry_after:
+                raise ButtonOnCooldown(retry_after)
             return True
         await interaction.response.send_message(embed=NOT_YOUR_MENU, ephemeral=True)
         return False
 
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item):
+        if isinstance(error, ButtonOnCooldown):
+            seconds = int(error.retry_after)
+            return await interaction.response.send_message(
+                ephemeral=True,
+                delete_after=error.retry_after,
+                embed=membed(f"You're on cooldown for {seconds}s.\nThis message will be deleted when it ends.")
+            )
+
+        # call the original on_error, which prints the traceback to stderr
+        await super().on_error(interaction, error, item)
+
     async def on_timeout(self) -> None:
         try:
             for item in self.children:
-                item.disabled = True
+                item.disabled = not(hasattr(item, "url") and item.url)
             await self.message.edit(view=self)
         except discord.NotFound:
             pass
 
-    async def navigate(self) -> None:
+    async def navigate(self, **kwargs) -> None:
         """Get through the paginator properly."""
         emb, self.total_pages = await self.get_page(self.index)
+        
+        kwargs.update({"embed": emb})
+
+        if isinstance(emb, list):
+            del kwargs["embed"]
+            kwargs.update({"embeds": emb})
+        
         if self.total_pages == 1:
             self.stop()
-            await self.interaction.response.send_message(embed=emb)
         elif self.total_pages > 1:
+            kwargs.update({"view": self})
             self.update_buttons()
-            await self.interaction.response.send_message(embed=emb, view=self)
         
+        await self.interaction.response.send_message(**kwargs)
         self.message = await self.interaction.original_response()
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
         """Update the page index in response to changes in the current page."""
-        if not interaction.response.is_done():
-            await interaction.response.defer()
 
         emb, self.total_pages = await self.get_page(self.index)
         self.update_buttons()
-        
-        return await interaction.followup.edit_message(
-            message_id=self.message.id, 
-            embed=emb, 
-            view=self
-        )
+        kwargs = {"view": self}
+        kwargs.update({"embeds" if isinstance(emb, list) else "embed": emb})
+
+        await button_response(interaction, message=self.message, **kwargs)
 
     def update_buttons(self) -> None:
         """Disable or re-enable buttons based on position in paginator."""
@@ -170,7 +202,7 @@ class PaginationSimple(discord.ui.View):
     async def on_timeout(self) -> None:
         try:
             for item in self.children:
-                item.disabled = not(hasattr(item, "url") and item.url)
+                item.disabled = True
             await self.message.edit(view=self)
         except discord.NotFound:
             pass
