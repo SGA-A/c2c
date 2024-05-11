@@ -449,10 +449,13 @@ class Utility(commands.Cog):
         ]
 
     @anime.command(name='kona', description='Retrieve NSFW posts from Konachan')
+    @app_commands.rename(length="max_images")
     @app_commands.describe(
         tag1='A tag to base your search on.', 
         tag2='A tag to base your search on.',
         tag3='A tag to base your search on.' ,
+        private='Hide the results from others. Defaults to True.',
+        length='The maximum number of images to display at once. Defaults to 3.',
         page='The page number to look through.'
     )
     @app_commands.autocomplete(
@@ -466,6 +469,8 @@ class Utility(commands.Cog):
         tag1: str, 
         tag2: Optional[str],
         tag3: Optional[str],
+        private: Optional[bool] = True,
+        length: Optional[app_commands.Range[int, 1, 10]] = 3,
         page: Optional[app_commands.Range[int, 1]] = 1
     ) -> None:
         
@@ -514,7 +519,6 @@ class Utility(commands.Cog):
         async def get_page_part(page: int):
             embeds = []
 
-            length = 3
             offset = (page - 1) * length
 
             for item_attrs in additional_notes[offset:offset + length]:
@@ -529,12 +533,11 @@ class Utility(commands.Cog):
                 embeds.append(embed)
 
             n = paginator.compute_total_pages(len(additional_notes), length)
-            embeds[-1].set_footer(text=f"Page {page} of {n}")
             return embeds, n
         
         paginator.get_page = get_page_part
 
-        await paginator.navigate(ephemeral=True)
+        await paginator.navigate(ephemeral=private)
 
     @anime.command(name='char', description="Retrieve SFW or NSFW anime images")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
