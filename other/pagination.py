@@ -1,13 +1,10 @@
 from discord.ext import commands
 import discord
+
 from traceback import print_exception
 from typing import Optional, Callable
 
-
-def membed(custom_description: str) -> discord.Embed:
-    """Quickly create an embed with a custom description using the preset."""
-    membedder = discord.Embed(colour=0x2F3136, description=custom_description)
-    return membedder
+from cogs.economy import membed, determine_exponent
 
 
 NOT_YOUR_MENU = membed("This menu is not for you.")
@@ -104,7 +101,6 @@ class Pagination(discord.ui.View):
             self.update_buttons()
         
         await self.interaction.response.send_message(**kwargs)
-        self.message = await self.interaction.original_response()
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
         """Update the page index in response to changes in the current page."""
@@ -146,19 +142,13 @@ class Pagination(discord.ui.View):
         if val is None:
             return
         
-        try:
-            val = abs(int(val))
-        except ValueError:
-            return await interaction.followup.send(
-                embed=membed("You need to provide a real value."), 
-                ephemeral=True
-            )
+        val = determine_exponent(interaction, val)
 
-        if not val:
-            return await interaction.followup.send(
-                ephemeral=True,
-                embed=membed("You need to type a positive value.")
-            )
+        if val is None:
+            return
+
+        if isinstance(val, str):  # max, all
+            return await interaction.followup.send(embed=membed("Invalid page number."))
 
         self.index = min(self.total_pages, val)
         await self.edit_page(interaction)
