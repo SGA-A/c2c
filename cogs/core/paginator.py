@@ -80,7 +80,7 @@ class Pagination(discord.ui.View):
         try:
             for item in self.children:
                 item.disabled = not(hasattr(item, "url") and item.url)
-            await self.message.edit(view=self)
+            await self.interaction.edit_original_response(view=self)
         except discord.NotFound:
             pass
 
@@ -142,13 +142,16 @@ class Pagination(discord.ui.View):
         if val is None:
             return
         
-        val = determine_exponent(interaction, val)
+        val = await determine_exponent(interaction, val)
 
         if val is None:
             return
 
-        if isinstance(val, str):  # max, all
-            return await interaction.followup.send(embed=membed("Invalid page number."))
+        if isinstance(val, str):
+            return await interaction.followup.send(
+                ephemeral=True, 
+                embed=membed("Invalid page number.")
+            )
 
         self.index = min(self.total_pages, val)
         await self.edit_page(interaction)
