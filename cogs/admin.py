@@ -20,12 +20,8 @@ from discord import app_commands
 from discord.ext import commands
 from asqlite import Connection as asqlite_Connection
 
-from cogs.economy import (
-    CURRENCY, 
-    determine_exponent, 
-    APP_GUILDS_ID, 
-    membed
-)
+from .core.helpers import membed, determine_exponent
+from .core.constants import CURRENCY, APP_GUILDS_IDS
 
 
 FORUM_ID = 1147176894903627888
@@ -123,7 +119,7 @@ class Owner(commands.Cog):
 
     @app_commands.command(name="config", description="Adjust a user's robux directly")
     @app_commands.default_permissions(administrator=True)
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(
         configuration='Whether to add, remove, or specify robux.',
         amount='The amount of robux to modify. Supports Shortcuts (exponents only).',
@@ -208,7 +204,7 @@ class Owner(commands.Cog):
     async def sync_tree(self, ctx: commands.Context) -> None:
         """Sync the bot's tree to either the guild or globally, varies from time to time."""
 
-        for guild_id in APP_GUILDS_ID:
+        for guild_id in APP_GUILDS_IDS:
             synced = await self.bot.tree.sync(guild=discord.Object(id=guild_id))
         
         self.bot.command_count = len(synced) + len(self.bot.commands) + 1
@@ -585,7 +581,7 @@ class Owner(commands.Cog):
         await ctx.send(embed=content, view=InviteButton(self.bot))
 
     @commands.hybrid_command(name='repeat', description='Repeat what you typed', aliases=('say',))
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(
         message='what you want me to say', 
         channel='what channel i should send in'
@@ -619,7 +615,7 @@ class Owner(commands.Cog):
             await ctx.send(content=f"Sent this message to {channel.mention}.", ephemeral=True)
 
     @app_commands.command(name='upload', description='Upload a new forum thread')
-    @app_commands.guilds(*APP_GUILDS_ID)
+    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(
         name="The name of the thread.",
         description="The content of the message to send with the thread.",
