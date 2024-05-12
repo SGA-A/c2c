@@ -522,7 +522,8 @@ class Moderation(commands.Cog):
         await interaction.response.defer(ephemeral=True)
         
         count = await interaction.channel.purge(after=discord.Object(id=message.id))
-        await interaction.followup.send(embed=membed(f"Deleted **{len(count)}** messages."))
+        msg: discord.WebhookMessage = await interaction.followup.send(embed=membed(f"Deleted **{len(count)}** messages."))
+        await msg.delete(delay=3.0)
 
     @tasks.loop()
     async def check_for_role(self):
