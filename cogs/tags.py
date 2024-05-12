@@ -222,7 +222,7 @@ class Tags(commands.Cog):
         length = len(tag_results)
         if not length:
             await ctx.send(
-                ephemeral=(ctx.interaction is not None),
+                ephemeral=True,
                 embed=membed("No tag found with this pattern. Check the spelling.")
             )
             return
@@ -323,9 +323,10 @@ class Tags(commands.Cog):
             """
             SELECT content
             FROM tags
-            WHERE name = $0
+            WHERE LOWER(name) = $0
             """, name.lower()
         )
+
         if res is None:
             raise RuntimeError(TAG_NOT_FOUND_SIMPLE_RESPONSE)
 
@@ -389,12 +390,11 @@ class Tags(commands.Cog):
             try:
                 content = await self.get_tag_content(name, conn)
             except RuntimeError as r:
-                await ctx.send(embed=membed(r))
+                return await ctx.send(embed=membed(r))
 
             await ctx.send(
                 content=content, 
-                reference=ctx.message.reference, 
-                suppress_embeds=not(content.strip().count("/attachments/", 20, 40))
+                reference=ctx.message.reference
             )
 
             # update the usage
@@ -560,7 +560,7 @@ class Tags(commands.Cog):
                 return await ctx.send(embed=membed(TAG_NOT_FOUND_RESPONSE))
         
             await conn.commit()
-            await ctx.send(embed=membed('Successfully edited tag.'))
+            await ctx.send(embed=membed(f'Successfully edited tag named {name!r}.'))
 
     @tag.command(description="Remove a tag that you own", aliases=('delete',))
     @app_commands.guilds(*APP_GUILDS_IDS)
@@ -586,12 +586,12 @@ class Tags(commands.Cog):
                 args = (name, ctx.author.id)
                 clause = f"{clause} AND ownerID=$1"
 
-            query = f"DELETE FROM tags WHERE {clause} RETURNING rowid"
-            deleted_id = await conn.fetchone(query, *args)
+            query = f"DELETE FROM tags WHERE {clause} RETURNING rowid, name"
+            deleted_info = await conn.fetchone(query, *args)
 
-            if deleted_id is None:
-                return await ctx.send(embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
-            await ctx.send(embed=membed(f'Tag with ID {deleted_id[0]} successfully deleted.'))
+            if deleted_info is None:
+                return await ctx.send(embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE), ephemeral=True)
+            await ctx.send(embed=membed(f'Tag named {deleted_info[1]!r} (ID {deleted_info[0]}) successfully deleted.'))
 
     @tag.command(description="Remove a tag that you own by its ID", aliases=('delete_id',))
     @app_commands.guilds(*APP_GUILDS_IDS)
@@ -609,12 +609,12 @@ class Tags(commands.Cog):
             clause = f'{clause} AND ownerID=$1'
 
         async with self.bot.pool.acquire() as conn:
-            query = f'DELETE FROM tags WHERE {clause} RETURNING rowid'
-            deleted = await conn.fetchone(query, *args)
+            query = f'DELETE FROM tags WHERE {clause} RETURNING rowid, name'
+            deleted_info = await conn.fetchone(query, *args)
 
-            if deleted is None:
-                return await ctx.send(embed=membed(TAG_NOT_FOUND_RESPONSE))
-            await ctx.send(embed=membed('Tag with corresponding ID successfully deleted.'))
+            if deleted_info is None:
+                return await ctx.send(embed=membed(TAG_NOT_FOUND_RESPONSE), ephemeral=True)
+            await ctx.send(embed=membed(f'Tag named {deleted_info[1]!r} (ID {deleted_info[0]}) successfully deleted.'))
 
     async def _send_tag_info(self, ctx: commands.Context, conn: asqlite_Connection, tag_name: str, row: sqlite3.Row):
         """Expects row in this format: rowid, uses, ownerID, created_at"""
@@ -631,7 +631,7 @@ class Tags(commands.Cog):
         embed.set_author(name=str(user), icon_url=user.display_avatar.url)
 
         embed.add_field(name='Owner', value=f'<@{owner_id}>')
-        embed.add_field(name='Uses', value=f"{uses:,}")
+        embed.add_field(name='Uses', value=f"` {uses:,} `")
 
         query = (
             """
@@ -639,7 +639,11 @@ class Tags(commands.Cog):
                 SELECT COUNT(*)
                 FROM tags second
                 WHERE (second.uses, second.rowid) >= (first.uses, first.rowid)
-            ) AS rank
+            ) AS rank,
+            (
+                SELECT COUNT(*)
+                FROM tags
+            ) AS total_tags
             FROM tags first
             WHERE first.rowid=$1
             """
@@ -647,7 +651,7 @@ class Tags(commands.Cog):
 
         rank = await conn.fetchone(query, rowid)
         if rank is not None:
-            embed.add_field(name='Rank', value=rank[0])
+            embed.add_field(name='Rank', value=f"` {rank[0]:,} / {rank[1]:,} `")
 
         await ctx.send(embed=embed)
 
@@ -674,7 +678,7 @@ class Tags(commands.Cog):
             if record is None:
                 return await ctx.send(embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
 
-            await self._send_tag_info(ctx, conn, row=record)
+            await self._send_tag_info(ctx, conn, tag_name=name, row=record)
 
     @tag.command(description="Remove all tags made by a user")
     @app_commands.guilds(*APP_GUILDS_IDS)
