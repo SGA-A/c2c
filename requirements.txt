@@ -13,7 +13,7 @@ click==8.1.7
 colorama==0.4.6
 cryptography==42.0.5
 Deprecated==1.2.14
-discord.py @ file:///C:/Users/georg/Documents/c2c/discord.py
+discord.py @ git+https://github.com/Rapptz/discord.py@041abf8b487038c2935da668405ba8b0686ff2f8
 frozenlist==1.4.1
 futures==3.0.5
 goslate==1.5.4
