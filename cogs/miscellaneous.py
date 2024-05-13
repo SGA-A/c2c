@@ -303,7 +303,7 @@ class Utility(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name='calc', description='Calculate an expression')
     @app_commands.describe(expression='The expression to evaluate.')
-    async def calculator(self, interaction: discord.Interaction, expression: str):
+    async def calculator(self, interaction: discord.Interaction, expression: str) -> None:
         try:
             interpretable = expression.replace('^', '**').replace(',', '_')
             
@@ -328,7 +328,7 @@ class Utility(commands.Cog):
 
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name='ping', description='Checks latency of the bot')
-    async def ping(self, interaction: discord.Interaction):
+    async def ping(self, interaction: discord.Interaction) -> None:
         start = perf_counter()
         content = membed(
             "Pong!\n"
@@ -340,7 +340,11 @@ class Utility(commands.Cog):
         await interaction.edit_original_response(embed=content)
 
     @app_commands.guilds(*APP_GUILDS_IDS)
-    async def extract_source(self, interaction: discord.Interaction, message: discord.Message):
+    async def extract_source(
+        self, 
+        interaction: discord.Interaction, 
+        message: discord.Message
+    ) -> None:
 
         images = set()
         counter = 0
@@ -359,7 +363,7 @@ class Utility(commands.Cog):
         embed = membed()
         if not counter:
             embed.description = "Could not find any attachments."
-            return await interaction.response.send_message(embed=embed)
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
         
         embed.title = f"Found {counter} images from {message.author.name}"
         embed.description="\n".join(images)
@@ -368,10 +372,12 @@ class Utility(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.guilds(*APP_GUILDS_IDS)
-    async def embed_colour(self, interaction: discord.Interaction, message: discord.Message):
+    async def embed_colour(
+        self, 
+        interaction: discord.Interaction, 
+        message: discord.Message
+    ) -> None:
 
-        await interaction.response.send_message("Looking into it..")
-        msg = await interaction.original_response()
         all_embeds = list()
         counter = 0
 
@@ -384,9 +390,9 @@ class Utility(commands.Cog):
                 all_embeds.append(nembed)
 
         if counter:
-            return await msg.edit(content=None, embeds=all_embeds)
+            return await interaction.response.send_message(embeds=all_embeds)
 
-        await msg.edit(content="No embeds were found within this message.")
+        await interaction.response.send_message(content="No embeds were found within this message.", ephemeral=True)
 
     @app_commands.command(name='bored', description="Find something to do if you're bored")
     @app_commands.guilds(*APP_GUILDS_IDS)
@@ -486,6 +492,7 @@ class Utility(commands.Cog):
         if not len(posts_xml):
 
             return await interaction.response.send_message(
+                ephemeral=True,
                 embed=membed(
                     "## No posts found.\n"
                     "- There are a few known causes:\n"
@@ -539,14 +546,12 @@ class Utility(commands.Cog):
         self, 
         interaction: discord.Interaction, 
         filter_by: Optional[
-                Literal[
-                    "neko", "kitsune", "waifu", "husbando", "ai", "ass", "boobs", 
-                    "creampie", "paizuri", "pussy", "random", "ecchi", "fucking"
-                ]
+            Literal[
+                "neko", "kitsune", "waifu", "husbando", "ai", "ass", "boobs", 
+                "creampie", "paizuri", "pussy", "random", "ecchi", "fucking"
             ]
-        ) -> None:
-
-        await interaction.response.defer()
+        ]
+    ) -> None:
 
         api_urls = {
             "neko": ("https://nekos.best/api/v2/neko", 'https://nekos.pro/api/neko'),
@@ -569,17 +574,17 @@ class Utility(commands.Cog):
         api_urls = api_urls.get(filter_by)
 
         if (isinstance(api_urls, str)) and (not interaction.channel.is_nsfw()):
-            return await interaction.followup.send(
+            return await interaction.response.send_message(
+                ephemeral=True,
                 embed=membed("This API endpoint **must** be used within an NSFW channel.")
             )
+        
         if isinstance(api_urls, tuple):
             api_urls = choice(api_urls)
         
         async with self.bot.session.get(api_urls) as resp:
             if resp.status != 200:
-                return await interaction.followup.send(
-                    embed=membed("The request failed, you should try again later.")
-                )
+                return await interaction.response.send_message(embed=membed(API_EXCEPTION))
 
             embed = discord.Embed(colour=discord.Colour.from_rgb(243, 157, 30))
             data = await resp.json()
@@ -601,7 +606,7 @@ class Utility(commands.Cog):
             img_view = discord.ui.View()
             img_view.add_item(ImageSourceButton(url=data["url"]))
 
-            await interaction.followup.send(embed=embed, view=img_view)
+            await interaction.response.send_message(embed=embed, view=img_view)
 
     @anime.command(name='random', description="Get a completely random waifu image")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
@@ -664,8 +669,10 @@ class Utility(commands.Cog):
 
         if not tags:
             return await interaction.response.send_message(
+                ephemeral=True,
                 embed=membed("You need to include at least 1 tag.")
             )
+
         try:
             image = await self.wf.search(included_tags=tags, is_nsfw=False)
         except APIException as ae:
@@ -742,7 +749,7 @@ class Utility(commands.Cog):
         interaction: discord.Interaction, 
         invite_lifespan: app_commands.Range[int, 1], 
         maximum_uses: int
-        ) -> None:
+    ) -> None:
 
         maximum_uses = abs(maximum_uses)
         invite_lifespan *= 86400
@@ -781,7 +788,7 @@ class Utility(commands.Cog):
     @app_commands.command(name='randomfact', description='Queries a random fact')
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    async def random_fact(self, interaction: discord.Interaction):
+    async def random_fact(self, interaction: discord.Interaction) -> None:
         api_url = 'https://api.api-ninjas.com/v1/facts'
         parameters = {'X-Api-Key': self.bot.NINJAS_API_KEY}
         
@@ -791,13 +798,19 @@ class Utility(commands.Cog):
             text = await resp.json()
             await interaction.response.send_message(embed=membed(f"{text[0]['fact']}."))
 
-    async def format_api_response(self, interaction: discord.Interaction, start: float, api_url: str, **attrs):
+    async def format_api_response(
+        self, 
+        interaction: discord.Interaction, 
+        start: float, 
+        api_url: str, 
+        **attrs
+    ) -> Union[None, discord.WebhookMessage]:
         async with self.bot.session.get(api_url, **attrs) as response:  # params=params, headers=headers
             if response.status == 200:
                 buffer = BytesIO(await response.read())
                 end = perf_counter()
                 return await interaction.followup.send(
-                    content=f"Done. Took `{end-start:.2f}s`.", 
+                    content=f"Done. Took ` {end-start:.2f}s `.", 
                     file=discord.File(buffer, 'clip.gif')
                 )
 
@@ -806,7 +819,8 @@ class Utility(commands.Cog):
     @app_commands.command(name="image", description="Manipulate a user's avatar")
     @app_commands.describe(
         user="The user to apply the manipulation to.", 
-        endpoint="What kind of manipulation sorcery to use.")
+        endpoint="What kind of manipulation sorcery to use."
+    )
     @app_commands.guilds(*APP_GUILDS_IDS)
     async def image_manip(
         self, 
@@ -817,13 +831,14 @@ class Utility(commands.Cog):
                 "abstract", "balls", "billboard", "bonks", "bubble", "canny", "clock",
                 "cloth", "contour", "cow", "cube", "dilate", "fall", "fan", "flush", "gallery",
                 "globe", "half-invert", "hearts", "infinity", "laundry", "lsd", "optics", "parapazzi"
-            ]] = "abstract"
-        ) -> None:
+            ]
+        ] = "abstract"
+    ) -> None:
+
         start = perf_counter()
         await interaction.response.defer(thinking=True)
         
         user = user or interaction.user
-
         params = {'image_url': user.display_avatar.url}
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
@@ -849,13 +864,15 @@ class Utility(commands.Cog):
         endpoint: Optional[
             Literal[
                 "minecraft", "patpat", "plates", "pyramid", "radiate", "rain", "ripped", "ripple",
-                "shred", "wiggle", "warp", "wave"]] = "wave"
-        ) -> discord.InteractionMessage | None:
+                "shred", "wiggle", "warp", "wave"
+            ]
+        ] = "wave"
+    ) -> Union[discord.InteractionMessage, None]:
 
         start = perf_counter()
         await interaction.response.defer(thinking=True)
-        user = user or interaction.user
 
+        user = user or interaction.user
         params = {'image_url': user.display_avatar.url}
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
@@ -876,12 +893,12 @@ class Utility(commands.Cog):
         interaction: discord.Interaction, 
         user: Optional[discord.User], 
         user2: discord.User
-    ) -> discord.InteractionMessage | None:
+    ) -> None:
         
         start = perf_counter()
         await interaction.response.defer(thinking=True)
-        user = user or interaction.user
 
+        user = user or interaction.user
         params = {'image_url': user.display_avatar.url, 'image_url_2': user2.display_avatar.url}
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = "https://api.jeyy.xyz/v2/image/heart_locket"
@@ -898,7 +915,8 @@ class Utility(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(characters='Any written letters or symbols.')
     async def charinfo(self, interaction: discord.Interaction, *, characters: str) -> None:
-        """Shows you information about a number of characters.
+        """
+        Shows you information about a number of characters.
         Only up to 25 characters at a time.
         """
 
@@ -906,12 +924,17 @@ class Utility(commands.Cog):
             digit = f'{ord(c):x}'
             the_name = name(c, 'Name not found.')
             c = '\\`' if c == '`' else c
-            return (f'[`\\U{digit:>08}`](http://www.fileformat.info/info/unicode/char/{digit}): {the_name} '
-                    f'**\N{EM DASH}** {c}')
+            return (
+                f'[`\\U{digit:>08}`](http://www.fileformat.info/info/unicode/char/{digit}): {the_name} '
+                f'**\N{EM DASH}** {c}'
+            )
 
         msg = '\n'.join(map(to_string, characters))
         if len(msg) > 2000:
-            return await interaction.response.send_message('Output too long to display.')
+            return await interaction.response.send_message(
+                ephemeral=True, 
+                embed=membed('Output too long to display.')
+            )
         await interaction.response.send_message(msg, suppress_embeds=True)
 
     @app_commands.command(name='feedback', description='Send feedback to the c2c developers')
@@ -1025,7 +1048,7 @@ class Utility(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     @commands.command(name="pickupline", description="Get pick up lines to use", aliases=('pul',))
-    async def pick_up_lines(self, ctx: commands.Context) -> discord.Message | None:
+    async def pick_up_lines(self, ctx: commands.Context) -> Union[None, discord.Message]:
         async with ctx.typing():
             async with self.bot.session.get("https://api.popcat.xyz/pickuplines") as resp:
                 if resp.status != 200:
@@ -1034,7 +1057,7 @@ class Utility(commands.Cog):
                 await ctx.reply(embed=membed(data["pickupline"]))
 
     @commands.command(name="wyr", description="Get 'would you rather' questions to use")
-    async def would_yr(self, ctx: commands.Context) -> discord.Message | None:
+    async def would_yr(self, ctx: commands.Context) -> Union[None, discord.Message]:
         async with ctx.typing():
             async with self.bot.session.get("https://api.popcat.xyz/wyr") as resp:
                 if resp.status != 200:
@@ -1049,7 +1072,7 @@ class Utility(commands.Cog):
                 )
 
     @commands.command(name="alert", description="Create real incoming iphone alerts")
-    async def alert_iph(self, ctx: commands.Context, *, custom_text: str) -> discord.Message | None:
+    async def alert_iph(self, ctx: commands.Context, *, custom_text: str) -> Union[None, discord.Message]:
         async with ctx.typing():
             custom_text = '+'.join(custom_text.split(' '))
             async with self.bot.session.get(f"https://api.popcat.xyz/alert?text={custom_text}") as resp:
@@ -1070,9 +1093,13 @@ class Utility(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command(name='banner', description="Display a user's enlarged banner")
-    async def banner(self, ctx, *, username: Union[discord.Member, discord.User] = None) -> discord.Message | None:
+    async def banner(
+        self, 
+        ctx: commands.Context, 
+        *, 
+        username: Union[discord.Member, discord.User] = commands.Author
+    ) -> Union[None, discord.Message]:
         """Shows a user's enlarged avatar (if possible)."""
-        username = username or ctx.author
         embed = membed()
         
         if not username.banner:
@@ -1120,7 +1147,10 @@ class Utility(commands.Cog):
 
         if from_only:
             if user.id not in self.bot.owner_ids:
-                return await interaction.response.send_message(embed=membed("You are not allowed to use this feature."))
+                return await interaction.response.send_message(
+                    ephemeral=True,
+                    embed=membed("You are not allowed to use this feature.")
+                )
             params.update({'siteSearch': from_only, 'siteSearchFilter': "i"})
 
         async with self.bot.session.get('https://www.googleapis.com/customsearch/v1', params=params) as response:
