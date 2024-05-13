@@ -1,8 +1,8 @@
 import discord
-
 from typing import Optional
 
 from .helpers import economy_check, respond
+
 
 class Confirm(discord.ui.View):
     def __init__(self, controlling_user: discord.abc.User):
@@ -99,3 +99,24 @@ class MessageDevelopers(discord.ui.View):
                 url="https://www.discordapp.com/users/546086191414509599"
             )
         )
+
+
+class GenericModal(discord.ui.Modal):
+    def __init__(
+        self, 
+        title: str, 
+        interaction: Optional[discord.Interaction] = None, 
+        **kwargs
+    ) -> None:
+
+        self.interaction = interaction
+        super().__init__(title=title, timeout=180.0)
+        
+        for keyword, arguments in kwargs.items():
+            setattr(self.data, keyword, arguments)
+
+    data = discord.ui.TextInput(label="\u2800")
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        self.interaction = interaction
+        self.stop()
