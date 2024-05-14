@@ -956,13 +956,12 @@ class Utility(commands.Cog):
         repo = self.g.get_repo('SGA-A/c2c')
 
         commits = repo.get_commits()[:3]
-        revision = list()
 
-        for commit in commits:
-            revision.append(
-                f"[`{commit.sha[:6]}`]({commit.html_url}) {commit.commit.message.splitlines()[0]} "
-                f"({format_relative(commit.commit.author.date)})"
-            )
+        revision = [
+            f"[`{commit.sha[:6]}`]({commit.html_url}) {commit.commit.message.splitlines()[0]} "
+            f"({format_relative(commit.commit.author.date)})"
+            for commit in commits
+        ]
 
         embed = discord.Embed(
             description=(
