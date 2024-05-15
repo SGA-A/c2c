@@ -286,8 +286,7 @@ class PaginationItem(discord.ui.View):
         try:
             for item in self.children:
                 item.disabled = True
-            message = await self.interaction.original_response()
-            await message.edit(view=self)
+            await self.interaction.edit_original_response(view=self)
         except discord.NotFound:
             pass
 
