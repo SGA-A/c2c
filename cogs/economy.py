@@ -1022,7 +1022,7 @@ class BalanceView(discord.ui.View):
                 title=button.label, 
                 default_val=bank_amt, 
                 conn=conn, 
-                message=self.message, 
+                message=interaction.message, 
                 view=self
             )
         )
@@ -1071,7 +1071,7 @@ class BalanceView(discord.ui.View):
                 title=button.label, 
                 default_val=available_bankspace, 
                 conn=conn, 
-                message=self.message, 
+                message=interaction.message, 
                 view=self
             )
         )
@@ -2814,7 +2814,7 @@ class Economy(commands.Cog):
                 offset += 1
                 continue
         
-            ui_data.append(f"` {inv_qty}x ` {ie} {item_name}")
+            ui_data.append(f"` {inv_qty:,}x ` {ie} {item_name}")
         
         # wipe out the garbage items from the showcase, since they don't exist in the inventory
         if garbage:
@@ -5036,7 +5036,7 @@ class Economy(commands.Cog):
                 f"> *{data[1]}*\n\n"
                 f"This item {"can" if data[5] else "cannot"} be purchased.\n"
                 f"**{total_count}** {make_plural("person", total_count)} {plural_for_own(total_count)} this item.\n"
-                f"You own **{their_count}**."
+                f"You own **{their_count:,}**."
             )
 
             net = await self.calculate_inventory_value(interaction.user, conn)
@@ -6034,7 +6034,7 @@ class Economy(commands.Cog):
                 em.description = ""
                 
                 for item in owned_items[offset:offset + length]:
-                    em.description += f"{item[1]} **{item[0]}** \U00002500 {item[2]}\n"
+                    em.description += f"{item[1]} **{item[0]}** \U00002500 {item[2]:,}\n"
 
                 n = paginator.compute_total_pages(len(owned_items), length)
                 em.set_footer(text=f"Page {page} of {n}")
@@ -6149,16 +6149,13 @@ class Economy(commands.Cog):
                 await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
 
             possible_minigames = choices((1, 2), k=1, weights=(85, 15))[0]
-            num_to_func_link = {
+            method_name = {
                 2: "do_order",
                 1: "do_tiles"
-            }
+            }.get(possible_minigames)
 
-            method_name = num_to_func_link[possible_minigames]
-            method = getattr(self, method_name)
-            if method_name == "do_order": 
-                return await method(interaction, job_name)
-            await method(interaction, job_name, conn)
+            method_name = getattr(self, method_name)
+            await method_name(interaction, job_name)
 
     @work.command(name="apply", description="Apply for a job", extras={"exp_gained": 1})
     @app_commands.rename(chosen_job="job")
