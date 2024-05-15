@@ -2610,7 +2610,7 @@ class MatchView(discord.ui.View):
         super().__init__(timeout=15.0)
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, interaction.user)
+        return await economy_check(interaction, self.interaction.user)
     
     async def on_timeout(self) -> None:
         await self.interaction.delete_original_response()
