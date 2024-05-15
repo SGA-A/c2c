@@ -82,10 +82,15 @@ MIN_BET_KEYCARD = 500_000
 MAX_BET_KEYCARD = 15_000_000
 MIN_BET_WITHOUT = 100_000
 MAX_BET_WITHOUT = 10_000_000
-WARN_FOR_CONCURRENCY = membed(
+SHOWCASE_ITEMS_REMOVED = (
+    "Other items were removed from your showcase.\n"
+    "You need to own at least one of every item you showcase."
+)
+WARN_FOR_CONCURRENCY = (
     "You cannot interact with this command because you are in an ongoing command.\n"
     "Finish any commands you are currently using before trying again.\n"
 )
+ITEM_DESCRPTION = 'Select an item.'
 ROBUX_DESCRIPTION = 'Can be a constant number like "1234" or a shorthand (max, all, 1e6).'
 GENDER_COLOURS = {"Female": 0xF3AAE0, "Male": 0x737ECF}
 GENDOR_EMOJIS = {"Male": "<:male:1201993062885380097>", "Female": "<:female:1201992742574755891>"}
@@ -995,9 +1000,9 @@ class BalanceView(discord.ui.View):
                 )
             )
             await interaction.response.send_message(
-                embed=WARN_FOR_CONCURRENCY, 
                 view=warning, 
-                ephemeral=True
+                ephemeral=True,
+                embed=membed(WARN_FOR_CONCURRENCY) 
             )
             return True
 
@@ -2598,6 +2603,19 @@ class ShopItem(discord.ui.Button):
         )
 
 
+class MatchView(discord.ui.View):
+    def __init__(self, interaction: discord.Interaction):
+        self.interaction = interaction
+        self.chosen_item = 0
+        super().__init__(timeout=15.0)
+    
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await economy_check(interaction, interaction.user)
+    
+    async def on_timeout(self) -> None:
+        await self.interaction.delete_original_response()
+
+
 class MatchItem(discord.ui.Button):
     """
     A menu to select an item from a list of items provided. 
@@ -2609,13 +2627,14 @@ class MatchItem(discord.ui.Button):
     def __init__(self, item_id: int, item_name: str, ie: str, **kwargs):
         self.item_id = item_id
 
-        super().__init__(label=item_name, emoji=ie, custom_id=str(item_id), **kwargs)
+        super().__init__(label=item_name, emoji=ie, custom_id=f"{item_id}", **kwargs)
 
     async def callback(self, interaction: discord.Interaction):
         self.view.chosen_item = (int(self.custom_id), self.label, self.emoji)
-
         self.view.stop()
+
         await interaction.response.edit_message(view=self.view)
+        await interaction.message.delete()
 
 
 class ProfileCustomizeButton(discord.ui.Button):
@@ -2708,55 +2727,6 @@ class UserSettings(discord.ui.View):
         return await economy_check(interaction, self.interaction.user)
 
 
-class ShowcaseDropdown(discord.ui.Select):
-    """A dropdown menu to select an item from the showcase. Used to determine which item should be updated."""
-    def __init__(self, showdata: list, options: list[discord.SelectOption]):
-        self.current_item = showdata[0][0]  # Default to the first item in the showcase
-        self.showdata = showdata  # [(item_name, emoji, qty), ...]
-
-        super().__init__(options=options, row=1)
-    
-    async def callback(self, _: discord.Interaction):
-        self.current_item = self.values[0]
-
-class ShowcaseView(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction, showdata: list):
-        self.interaction = interaction
-        self.showdata = showdata
-        super().__init__(timeout=60.0)
-
-    async def on_error(self, interaction: discord.Interaction, error: Exception, _) -> None:
-        print_exception(type(error), error, error.__traceback__)
-        self.stop()
-
-        for item in self.children:
-            item.disabled = True
-        await interaction.response.edit_message(
-            view=self,
-            ephemeral=True,
-            embed=membed("Your showcase could not update properly.")
-        )
-
-    async def on_timeout(self) -> None:
-        for item in self.children:
-            item.disabled = True
-        try:
-            await self.message.edit(view=self)
-        except discord.NotFound:
-            pass
-    
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, self.interaction.user)
-
-    @discord.ui.button(emoji="<:move_up:1213223442241818705>", row=1)
-    async def move_up(self, interaction: discord.Interaction, _: discord.ui.Button):
-        pass
-
-    @discord.ui.button(emoji="<:move_down:1213223440669085756>", row=1)
-    async def move_down(self, interaction: discord.Interaction, _: discord.ui.Button):
-        pass
-
-
 class Economy(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
@@ -2772,7 +2742,7 @@ class Economy(commands.Cog):
         self.batch_update.start()
 
     @staticmethod
-    async def fetch_showdata(user: USER_ENTRY, conn: asqlite_Connection, select: ShowcaseDropdown) -> tuple:
+    async def fetch_showdata(user: USER_ENTRY, conn: asqlite_Connection) -> tuple:
 
         showdata = await conn.fetchall(
             """
@@ -2787,36 +2757,36 @@ class Economy(commands.Cog):
             LEFT JOIN inventory
                 ON showcase.itemID = inventory.itemID AND inventory.userID = $0
             WHERE showcase.userID = $0
-            ORDER BY showcase.itemPos DESC
+            ORDER BY showcase.itemPos
             """, user.id
         )
 
         ui_data = []
         garbage = set()
-        select.options.clear()
 
-        for i, (item_name, ie, inv_qty, _) in enumerate(showdata, start=1):
+        offset = 0
+        for (item_name, ie, inv_qty, itemID) in showdata:
+            
+            # ensures items in the showcase not in their inventory are removed
             if not inv_qty:
-                garbage.add(item_name)
+                garbage.add(itemID)
+                offset += 1
                 continue
-
-            ui_data.append(f"{i}. {ie} {item_name}")
-            select.add_option(discord.SelectOption(label=item_name, value=item_name, emoji=ie, default=i == 1))
         
-        if len(ui_data) < 6:
-            for i in range(len(ui_data), 6):
-                ui_data.append(f"{i}. Empty slot")
-                select.add_option(discord.SelectOption(label="Empty slot", value="0", default=i==0))
+            ui_data.append(f"` {inv_qty}x ` {ie} {item_name}")
         
+        # wipe out the garbage items from the showcase, since they don't exist in the inventory
         if garbage:
             placeholders = ', '.join(f'${i}' for i in range(1, len(garbage)+1))
             await conn.execute(f"DELETE FROM showcase WHERE userID = $0 AND itemID IN ({placeholders})", user.id, *garbage)
             await conn.commit()
-        
-        embed = discord.Embed(title=f"{user.display_name}'s Showcase")
+
+        embed = discord.Embed(
+            title=f"{user.display_name}'s Showcase", 
+            description="\n".join(ui_data) or "Nothing to see here!"
+        )
         embed.set_thumbnail(url=user.display_avatar.url)
-        embed.description = "\n".join(ui_data)
-        return embed, [item[3] for item in showdata]
+        return embed
 
     async def interaction_check(self, interaction: discord.Interaction):
         async with self.bot.pool.acquire() as conn:
@@ -2832,7 +2802,11 @@ class Economy(commands.Cog):
                     url="https://dankmemer.lol/tutorial/interaction-locks"
                 )
             )
-            await interaction.response.send_message(view=a, embed=WARN_FOR_CONCURRENCY, ephemeral=True)
+            await interaction.response.send_message(
+                view=a, 
+                ephemeral=True,
+                embed=membed(WARN_FOR_CONCURRENCY)
+            )
             return False
 
     @staticmethod
@@ -2895,7 +2869,8 @@ class Economy(commands.Cog):
         else:
             check.start()
 
-    async def partial_match_for(self, interaction: discord.Interaction, item_input: str, conn: asqlite_Connection) -> None | tuple:
+    @staticmethod
+    async def partial_match_for(interaction: discord.Interaction, item_input: str, conn: asqlite_Connection) -> None | tuple:
         """
         If the user types part of an item name, get that item name indicated.
 
@@ -2923,13 +2898,12 @@ class Economy(commands.Cog):
         if len(res) == 1:
             return res[0]
 
-        match_view = discord.ui.View(timeout=15.0)
-        match_view.chosen_item = 0  # default is a falsey value
+        match_view = MatchView(interaction)
         
         for item in res:
             match_view.add_item(MatchItem(ie=item[-1], item_id=item[0], item_name=item[1]))
         
-        msg = await respond(
+        await respond(
             interaction=interaction,
             view=match_view,
             embed=membed(
@@ -2938,18 +2912,11 @@ class Economy(commands.Cog):
             ).set_author(name=f"Search: {item_input}", icon_url=interaction.user.display_avatar.url)
         )
 
-        await match_view.wait()
-        
-        if msg:
-            await msg.delete()
-        else:
-            await interaction.delete_original_response()
-
-        if match_view.chosen_item:
-            return match_view.chosen_item
-
-        await interaction.followup.send(embed=membed("No item selected, cancelled this request."))
-        return None
+        not_pressed = await match_view.wait()
+        if not_pressed:
+            await interaction.followup.send(embed=membed("No item selected, cancelled this request."))
+            return
+        return match_view.chosen_item
 
     @staticmethod
     def calculate_exp_for(*, level: int) -> int:
@@ -4022,7 +3989,7 @@ class Economy(commands.Cog):
     @share.command(name='items', description='Share items with another user', extras={"exp_gained": 5})
     @app_commands.rename(recipient='user', item_name='item')
     @app_commands.describe(
-        item_name='Select an item.', 
+        item_name=ITEM_DESCRPTION, 
         quantity='The amount of this item to share.', 
         recipient='The user receiving the item.'
     )
@@ -4043,7 +4010,7 @@ class Economy(commands.Cog):
             if not (await self.can_call_out_either(primm, recipient, conn)):
                 return await interaction.response.send_message(ephemeral=True, embed=NOT_REGISTERED)
 
-            item_details = await self.partial_match_for(interaction, item_name, conn)
+            item_details = await Economy.partial_match_for(interaction, item_name, conn)
             if item_details is None:
                 return
             item_id, item_name, ie = item_details
@@ -4329,7 +4296,7 @@ class Economy(commands.Cog):
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-            item_details = await self.partial_match_for(interaction, item, conn)
+            item_details = await Economy.partial_match_for(interaction, item, conn)
 
             if item_details is None:
                 return
@@ -4458,7 +4425,7 @@ class Economy(commands.Cog):
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-            item_details = await self.partial_match_for(interaction, for_item, conn)
+            item_details = await Economy.partial_match_for(interaction, for_item, conn)
 
             if item_details is None:
                 return
@@ -4585,8 +4552,8 @@ class Economy(commands.Cog):
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-            item_details = await self.partial_match_for(interaction, item, conn)
-            item2_details = await self.partial_match_for(interaction, for_item, conn)
+            item_details = await Economy.partial_match_for(interaction, item, conn)
+            item2_details = await Economy.partial_match_for(interaction, for_item, conn)
 
             if item_details is None or item2_details is None:
                 await interaction.followup.send(embed=membed("You did not specify valid items to trade on."))
@@ -4698,36 +4665,142 @@ class Economy(commands.Cog):
 
     showcase = app_commands.Group(
         name="showcase", 
-        description="Manage your showcased items.", 
-        guild_only=True, 
-        guild_ids=APP_GUILDS_IDS
+        description="Manage your own item showcase.", 
+        guild_ids=APP_GUILDS_IDS,
+        guild_only=True
     )
 
-    @showcase.command(name="view", description="View your item showcase")
-    @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    async def view_showcase(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_message(
-            ephemeral=True,
-            embed=membed("This is getting rewritten. Give it some time.")
+    async def delete_missing_showcase_items(
+        self, 
+        conn: asqlite_Connection, 
+        user_id: int, 
+        items_to_delete: Optional[set] = None 
+    ) -> Union[None, int]:
+        """
+        Delete showcase items that a user no longer has. 
+        
+        You can pass in pre-defined items as well.
+
+        This does not commit any deletions.
+        """
+
+        items_non_existant = await conn.fetchall(
+            """
+            SELECT
+                showcase.itemID
+            FROM showcase
+            LEFT JOIN inventory
+                ON showcase.itemID = inventory.itemID AND inventory.userID = $0
+            WHERE showcase.userID = $0 AND inventory.qty IS NULL
+            """, user_id
         )
 
-    @showcase.command(name="add", description="Add an item to your showcase", extras={"exp_gained": 1})
-    @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    @app_commands.describe(item_name="Select an item.")
-    async def add_showcase_item(self, interaction: discord.Interaction, item_name: str) -> None:
-        await interaction.response.send_message(
-            ephemeral=True,
-            embed=membed("This is getting rewriten. Give it some time.")
-        )
+        # meaning no pending deletion tasks
+        if (not items_non_existant) and (items_to_delete is None):
+            return
+        
+        items_to_delete = items_to_delete or set()
+        for item in items_non_existant:
+            items_to_delete.add(item[0])
 
-    @showcase.command(name="remove", description="Remove an item from your showcase", extras={"exp_gained": 1})
-    @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    @app_commands.describe(item_name="Select an item.")
-    async def remove_showcase_item(self, interaction: discord.Interaction, item_name: str) -> None:
-        await interaction.response.send_message(
-            ephemeral=True,
-            embed=membed("This is getting rewritten. Give it some time.")
+        placeholders = ', '.join(f'${i}' for i in range(1, len(items_to_delete)+1))
+        await conn.fetchall(
+            f"""
+            DELETE FROM showcase 
+            WHERE userID = $0 AND itemID IN ({placeholders})
+            """, user_id, *items_to_delete
         )
+        return len(items_to_delete)
+
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
+    @app_commands.describe(item=ITEM_DESCRPTION)
+    @showcase.command(name="add", description="Add an item to your showcase")
+    async def add_showcase_item(self, interaction: discord.Interaction, item: str) -> None:
+
+        async with self.bot.pool.acquire() as conn:
+            item_details = await Economy.partial_match_for(interaction, item, conn)
+
+            if item_details is None:
+                return
+            item_id, item, ie = item_details
+            all_embeds = []
+
+            async with conn.transaction():
+
+                val = await self.delete_missing_showcase_items(
+                    conn,
+                    user_id=interaction.user.id
+                )
+
+                if val:
+                    all_embeds.append(membed(SHOWCASE_ITEMS_REMOVED))
+
+                val = await Economy.user_has_item_from_id(interaction.user.id, item_id, conn)
+
+                if not val:
+                    all_embeds.append(f"You don't have a single {ie} **{item}**.")
+                    return await respond(
+                        interaction=interaction, 
+                        ephemeral=True,
+                        embeds=all_embeds
+                    )
+
+                # ! Insert branch
+                val = await conn.fetchone(
+                    """
+                    INSERT INTO showcase (userID, itemID, itemPos)
+                    SELECT $1, $2, COALESCE((SELECT MAX(itemPos) FROM showcase WHERE userID = $1), 0) + 1
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM showcase WHERE userID = $1 AND itemID = $2
+                    )
+                    RETURNING itemID
+                    """, interaction.user.id, item_id
+                )
+
+            if val is None:
+                all_embeds.append(membed(f"You already have **{ie} {item}** in your showcase."))
+                return await respond(
+                    interaction=interaction,
+                    ephemeral=True,
+                    embeds=all_embeds
+                )
+            
+            all_embeds.append(membed(f"Added {ie} {item} to your showcase!"))
+            await respond(interaction=interaction, embeds=all_embeds)
+
+    @app_commands.checks.dynamic_cooldown(owners_nolimit)
+    @app_commands.describe(item=ITEM_DESCRPTION)
+    @showcase.command(name="remove", description="Remove an item from your showcase")
+    async def remove_showcase_item(self, interaction: discord.Interaction, item: str) -> None:
+        
+        async with self.bot.pool.acquire() as conn:
+            conn: asqlite_Connection
+
+            item_details = await Economy.partial_match_for(interaction, item, conn)
+
+            if item_details is None:
+                return
+            item_id, item, ie = item_details
+
+            val = await self.delete_missing_showcase_items(
+                conn,
+                user_id=interaction.user.id,
+                items_to_delete={item_id,}
+            )
+            all_embeds = []
+
+            if val and (val > 1):
+                all_embeds.append(membed(SHOWCASE_ITEMS_REMOVED))
+            await conn.commit()
+            
+            all_embeds.append(membed(f"If **{ie} {item}** was in your showcase, it's now been removed."))
+            await respond(interaction=interaction, embeds=all_embeds)
+
+    @commands.command(name="st", description="Test out your showcase before publishing")
+    async def show_showcase_data(self, ctx: commands.Context):
+        async with self.bot.pool.acquire() as conn:
+            emb = await Economy.fetch_showdata(ctx.author, conn)
+            await ctx.send(embed=emb)
 
     shop = app_commands.Group(
         name='shop', 
@@ -4736,8 +4809,8 @@ class Economy(commands.Cog):
         guild_ids=APP_GUILDS_IDS
     )
 
-    @shop.command(name='view', description='View all the shop items')
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
+    @shop.command(name='view', description='View all the shop items')
     async def view_the_shop(self, interaction: discord.Interaction) -> None:
         """This is a subcommand. View the currently available items within the shop."""
 
@@ -4809,7 +4882,7 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            item_details = await self.partial_match_for(interaction, item_name, conn)
+            item_details = await Economy.partial_match_for(interaction, item_name, conn)
 
             if item_details is None:
                 return
@@ -4870,7 +4943,7 @@ class Economy(commands.Cog):
             await conn.commit()
 
     @app_commands.command(name='item', description='Get more details on a specific item')
-    @app_commands.describe(item_name='Select an item.')
+    @app_commands.describe(item_name=ITEM_DESCRPTION)
     @app_commands.rename(item_name="name")
     @app_commands.guilds(*APP_GUILDS_IDS)
     async def item(self, interaction: discord.Interaction, item_name: str) -> None:
@@ -4878,7 +4951,7 @@ class Economy(commands.Cog):
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-            item_details = await self.partial_match_for(interaction, item_name, conn)
+            item_details = await Economy.partial_match_for(interaction, item_name, conn)
 
             if item_details is None:
                 return
@@ -5276,7 +5349,7 @@ class Economy(commands.Cog):
 
     @app_commands.command(name="use", description="Use an item you own from your inventory", extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_IDS)
-    @app_commands.describe(item='Select an item.', quantity='Amount of items to use, when possible.')
+    @app_commands.describe(item=ITEM_DESCRPTION, quantity='Amount of items to use, when possible.')
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def use_item(
         self, 
@@ -5290,7 +5363,7 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
             
-            item_details = await self.partial_match_for(interaction, item, conn)
+            item_details = await Economy.partial_match_for(interaction, item, conn)
 
             if item_details is None:
                 return
@@ -7088,8 +7161,6 @@ class Economy(commands.Cog):
 
                 await interaction.response.send_message(embed=embed)
 
-    @add_showcase_item.autocomplete('item_name')
-    @remove_showcase_item.autocomplete('item_name')
     @sell.autocomplete('item_name')
     @use_item.autocomplete('item')
     @share_items.autocomplete('item_name')
@@ -7100,10 +7171,43 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             options = await conn.fetchall(
                 """
-                SELECT shop.itemName, shop.emoji, inventory.qty
+                SELECT shop.itemName, inventory.qty
                 FROM shop
                 INNER JOIN inventory ON shop.itemID = inventory.itemID
                 WHERE inventory.userID = $0
+                """, interaction.user.id
+            )
+
+            return [app_commands.Choice(name=option[0], value=option[0]) for option in options if current.lower() in option[0].lower()]
+
+    @add_showcase_item.autocomplete('item')
+    async def owned_not_in_showcase_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        
+        async with self.bot.pool.acquire() as conn:
+            options = await conn.fetchall(
+                """
+                SELECT shop.itemName
+                FROM shop
+                INNER JOIN inventory ON shop.itemID = inventory.itemID
+                LEFT JOIN showcase ON shop.itemID = showcase.itemID AND showcase.userID = $0
+                WHERE inventory.userID = $0 AND showcase.itemID IS NULL
+                """, interaction.user.id
+            )
+
+            return [app_commands.Choice(name=option[0], value=option[0]) for option in options if current.lower() in option[0].lower()]
+
+    @remove_showcase_item.autocomplete('item')
+    async def showcase_items_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        async with self.bot.pool.acquire() as conn:
+            conn: asqlite_Connection
+
+            options = await conn.fetchall(
+                """
+                SELECT itemName
+                FROM shop
+                INNER JOIN showcase ON shop.itemID = showcase.itemID
+                WHERE showcase.userID = $0
+                ORDER BY showcase.itemPos DESC
                 """, interaction.user.id
             )
 
