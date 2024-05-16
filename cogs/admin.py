@@ -680,6 +680,77 @@ class Owner(commands.Cog):
 
         await msg.edit(embed=a)
 
+    async def do_via_webhook(self, all_ems: list[discord.Embed], rtype: str, edit_message_id: Optional[int] = None):
+        webhook = discord.Webhook.from_url(url=self.bot.WEBHOOK_URL, session=self.bot.session)
+        if edit_message_id:
+            msg = await webhook.fetch_message(
+                1225532637217554503, 
+                thread=discord.Object(id=edit_message_id)
+            )
+
+            return await msg.edit(
+                content=f'This is mostly a `{rtype}` release.', 
+                embeds=all_ems
+            )
+
+        await webhook.send(
+            content=f'This is mostly a `{rtype}` release.',
+            embeds=all_ems, 
+            thread=discord.Object(id=1190736866308276394),
+            silent=True
+        )
+
+    @commands.command(name='dispatch-webhook', aliases=('dw',))
+    async def dispatch_the_webhook_when(self, ctx: commands.Context):
+        await ctx.message.delete()
+
+        all_ems = [
+            discord.Embed(
+                colour=discord.Colour.from_rgb(3, 102, 214),
+                title='Changelog',
+                description=(
+                    "Changes taken place between <t:1711929600:d> - <t:1719705600:d> are noted here.\n\n"
+                    "- Added new colour roles\n"
+                    "- Changed the colour of some colour roles\n"
+                    "- Added new self roles obtainable via <id:customize>\n"
+                    "- Changed the default colour for <@&914565377961369632>\n"
+                    "- Emojified the topic of all non-archived channels\n"
+                    "- Added new tasks to complete in Server Onboarding\n"
+                    "- Removed more redundant permissions from bots\n"
+                    "- Cleaned the pinned messages of most channels\n"
+                    "- Added a requirement to include tags upon creating a post\n"
+                    "- Simplified the guidelines thread for the forum (https://discord.com/channels/829053898333225010/1147203137195745431)\n"
+                    "- Added a policy to never close threads that are inactive, only lock them\n"
+                    "- Kicked more bots off the server\n"
+                    "- Renamed some channels for consistency\n"
+                    "- Disabled some custom AutoMod rules\n"
+                    "- Improve the onboarding question selection\n"
+                    "- Change how channel opt in works[**\U000000b9**](https://discord.com/channels/829053898333225010/1124782048041762867)"
+                )
+            )
+        ]
+
+        second_em = membed(
+            "## Breaking change to channel opt-in[**\U000000b9**](https://discord.com/channels/829053898333225010/1124782048041762867)\n"
+            "- You'll now no longer see these opt in channels if you do not select them.\n"
+            "- When selected, you will get **roles** that allow you to see the channel instead of joining it.\n"
+            "- This means less clutter, more of the stuff you're interested in.\n"
+            "- There's also a new option allowing you to see the server archives.\n"
+        )
+
+        second_em.set_footer(
+            icon_url=ctx.guild.icon.url, 
+            text="That's all for Q2 2024. Next review due: 30 September 2024."
+        )
+        all_ems.append(second_em)
+
+        rtype = "feature"  # or "bugfix"
+        await ctx.send(
+            content=f'This is mostly a `{rtype}` release.',
+            embeds=all_ems, 
+            silent=True
+        )
+
 
 async def setup(bot: commands.Bot):
     """Setup for cog."""
