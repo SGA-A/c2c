@@ -28,7 +28,6 @@ from discord import (
     AllowedMentions,
     app_commands,
     AppCommandType,
-    Colour,
     CustomActivity,
     Embed,
     Interaction,
@@ -37,7 +36,6 @@ from discord import (
     Object,
     SelectOption,
     Status,
-    Webhook,
     ui,
 )
 
@@ -535,61 +533,6 @@ async def testit(ctx):
     embed.add_field(name="\U0000200b", value="\U0000200b")
     embed.set_footer(text="This embed is used within DMO!")
     await ctx.send(embed=embed)
-
-
-@bot.command(name='dispatch-webhook', aliases=("dw",))
-async def dispatch_the_webhook_when(ctx: commands.Context):
-    await ctx.message.delete()
-    embed = Embed(
-        colour=Colour.from_rgb(3, 102, 214),
-        title='Changelog',
-        description=(
-            "Changes taken place between <t:1711929600:d> - <t:1719705600:d> are noted here.\n\n"
-            "- Added new colour roles\n"
-            "- Changed the colour of some colour roles\n"
-            "- Added new self roles obtainable via <id:customize>\n"
-            "- Changed the default colour for <@&914565377961369632>\n"
-            "- Emojified the topic of all non-archived channels\n"
-            "- Added new tasks to complete in Server Onboarding\n"
-            "- Removed more redundant permissions from bots\n"
-            "- Cleaned the pinned messages of most channels\n"
-            "- Added a requirement to include tags upon creating a post\n"
-            "- Simplified the guidelines thread for the forum (https://discord.com/channels/829053898333225010/1147203137195745431)\n"
-            "- Added a policy to never close threads that are inactive, only lock them\n"
-            "- Kicked more bots off the server\n"
-            "- Renamed some channels for consistency\n"
-            "- Disabled some custom AutoMod rules\n"
-        )
-    )
-    
-    embed.set_footer(
-        icon_url=ctx.guild.icon.url, 
-        text="That's all for Q2 2024. Next review due: 30 September 2024."
-    )
-    
-    webhook = Webhook.from_url(url=bot.WEBHOOK_URL, session=bot.session)
-    rtype = "feature"  # or "bugfix"
-    
-    # For editing the original message
-
-    # msg = await webhook.fetch_message(
-    #     1225532637217554503, 
-    #     thread=Object(id=1190736866308276394)
-    # )
-
-    # await msg.edit(
-    #     content=f'This is mostly a `{rtype}` release.', 
-    #     embed=embed
-    # )
-
-    await webhook.send(
-        content=f'This is mostly a `{rtype}` release.',
-        embed=embed, 
-        thread=Object(id=1190736866308276394),
-        silent=True
-    )
-    
-    await ctx.send("Done.")
 
 
 @commands.is_owner()
