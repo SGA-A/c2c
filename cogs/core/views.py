@@ -110,10 +110,11 @@ class GenericModal(discord.ui.Modal):
     ) -> None:
 
         self.interaction = interaction
-        super().__init__(title=title, timeout=180.0)
-        
+
         for keyword, arguments in kwargs.items():
             setattr(self.data, keyword, arguments)
+
+        super().__init__(title=title, timeout=180.0)
 
     data = discord.ui.TextInput(label="\u2800")
 
