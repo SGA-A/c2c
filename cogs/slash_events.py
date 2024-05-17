@@ -4,9 +4,8 @@ from traceback import print_exception
 
 from discord.ext import commands
 from discord.utils import format_dt, utcnow
-from discord import Interaction, app_commands, AppCommandOptionType
+from discord import Interaction, app_commands, AppCommandOptionType, Embed
 
-from .core.helpers import membed
 from .core.views import MessageDevelopers
 from .core.constants import COOLDOWN_PROMPTS
 
@@ -15,21 +14,26 @@ class SlashExceptionHandler(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         bot.tree.error(coro=self.__dispatch_to_app_command_handler)
+        self.kwargs = {"embed": Embed(colour=0x2B2D31), "view": MessageDevelopers()}
 
     async def __dispatch_to_app_command_handler(
-            self, 
-            interaction: Interaction, 
-            error: app_commands.AppCommandError
-        ) -> None:
+        self, 
+        interaction: Interaction, 
+        error: app_commands.AppCommandError
+    ) -> None:
         self.bot.dispatch("app_command_error", interaction, error)
 
     @commands.Cog.listener("on_app_command_error")
-    async def get_app_command_error(self, interaction: Interaction, error: app_commands.AppCommandError) -> None:
+    async def get_app_command_error(
+        self, 
+        interaction: Interaction, 
+        error: app_commands.AppCommandError
+    ) -> None:
 
         if not interaction.response.is_done():
             await interaction.response.defer(thinking=True)
-
-        embed = membed()
+        
+        embed = self.kwargs["embed"]
 
         if isinstance(error, app_commands.CheckFailure):
 
@@ -37,12 +41,12 @@ class SlashExceptionHandler(commands.Cog):
                 embed.title = choice(COOLDOWN_PROMPTS)
                 after_cd = format_dt(utcnow() + timedelta(seconds=error.retry_after), style="R")
                 embed.description = f"You can run this command again {after_cd}."
-                return await interaction.followup.send(embed=embed)
+                return await interaction.followup.send(**self.kwargs)
 
             elif isinstance(error, app_commands.MissingRole):
                 embed.description = "You're missing a role required to use this command."
                 embed.add_field(name="Missing Role", value=f"<@&{error.missing_role}>")
-                return await interaction.followup.send(embed=embed)
+                return await interaction.followup.send(**self.kwargs)
             
             else:
                 return  # we already respond
@@ -52,23 +56,26 @@ class SlashExceptionHandler(commands.Cog):
                 embed.description = f"{error.value} is not a member of this server."
             else:
                 embed.description = "An error occurred while processing your input."
+            return await interaction.followup.send(**self.kwargs)
         
         elif isinstance(error, app_commands.CommandNotFound):
-            exception = membed("This command no longer exists!")
+            embed.description = "This command no longer exists!"
+            return await interaction.followup.send(**self.kwargs)
 
         elif isinstance(error, app_commands.CommandAlreadyRegistered):
-            exception = membed("Another command with this name already exists.")
+            embed.description = "Another command with this name already exists."
+            return await interaction.followup.send(**self.kwargs)
         
         else:
             print_exception(type(error), error, error.__traceback__)
-            exception = membed(
+            embed.description = (
                 "Seems like the bot has stumbled upon an unexpected error. "
                 "Not to worry, these things happen from time to time. If this issue persists, "
                 "please let us know about it. We're always here to help!"
             )
-            exception.title = "Something went wrong"
+            embed.title = "Something went wrong"
 
-        await interaction.followup.send(embed=exception, view=MessageDevelopers())
+            return await interaction.followup.send(**self.kwargs)
 
 
 async def setup(bot: commands.Bot):
