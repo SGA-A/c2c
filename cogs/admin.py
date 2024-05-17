@@ -680,29 +680,18 @@ class Owner(commands.Cog):
 
         await msg.edit(embed=a)
 
-    async def do_via_webhook(self, all_ems: list[discord.Embed], rtype: str, edit_message_id: Optional[int] = None):
+    async def do_via_webhook(self, kwargs: dict, edit_message_id: Optional[int] = None) -> None:
+        """`edit_message_id` must be an ID that is in the same channel this webhook is designated in."""
         webhook = discord.Webhook.from_url(url=self.bot.WEBHOOK_URL, session=self.bot.session)
         if edit_message_id:
-            msg = await webhook.fetch_message(
-                1225532637217554503, 
-                thread=discord.Object(id=edit_message_id)
-            )
-
-            return await msg.edit(
-                content=f'This is mostly a `{rtype}` release.', 
-                embeds=all_ems
-            )
-
-        await webhook.send(
-            content=f'This is mostly a `{rtype}` release.',
-            embeds=all_ems, 
-            thread=discord.Object(id=1190736866308276394),
-            silent=True
-        )
+            del kwargs["silent"]
+            msg = await webhook.channel.fetch_message(edit_message_id)
+            await msg.reply(**kwargs)
+        else:
+            await webhook.send(**kwargs)
 
     @commands.command(name='dispatch-webhook', aliases=('dw',))
     async def dispatch_the_webhook_when(self, ctx: commands.Context):
-        await ctx.message.delete()
 
         all_ems = [
             discord.Embed(
@@ -740,19 +729,18 @@ class Owner(commands.Cog):
 
         second_em.set_footer(
             icon_url=ctx.guild.icon.url, 
-            text="That's all for Q2 2024. Next review due: 30 September 2024."
+            text="More to come in Q2.."
         )
         all_ems.append(second_em)
 
-        rtype = "feature"  # or "bugfix"
-        await ctx.send(
-            content=f'This is mostly a `{rtype}` release.',
-            embeds=all_ems, 
-            silent=True
+        content = (
+            "Changes are cumulative, any new changes are added as edits."
         )
+        kwargs = {"embeds": all_ems, "silent": True, "content": content}
+        await self.do_via_webhook(kwargs, edit_message_id=1241137977225248873)
+        await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
 
 async def setup(bot: commands.Bot):
     """Setup for cog."""
     await bot.add_cog(Owner(bot))
-    
