@@ -555,16 +555,14 @@ async def find_fav_cmd_for(user_id, conn: asqlite_Connection) -> str:
 
 class DepositOrWithdraw(discord.ui.Modal):
     def __init__(
-            self, *, 
-            title: str, 
-            default_val: int, 
-            conn: asqlite_Connection, 
-            message: discord.InteractionMessage, 
-            view: discord.ui.View
-        ) -> None:
+        self, *, 
+        title: str, 
+        default_val: int, 
+        message: discord.InteractionMessage, 
+        view: discord.ui.View
+    ) -> None:
         
         self.their_default = default_val
-        self.conn = conn
         self.message = message
         self.view = view
         self.amount.default = f"{self.their_default:,}"
@@ -602,17 +600,18 @@ class DepositOrWithdraw(discord.ui.Modal):
                     )
                 )
 
-            data = await self.conn.fetchone(
-                """
-                UPDATE bank 
-                SET 
-                    bank = bank - $0, 
-                    wallet = wallet + $0 
-                WHERE userID = $1 
-                RETURNING wallet, bank, bankspace
-                """, val, interaction.user.id
-            )
-            await self.conn.commit()
+            async with interaction.client.pool.acquire() as conn:
+                data = await conn.fetchone(
+                    """
+                    UPDATE bank 
+                    SET 
+                        bank = bank - $0, 
+                        wallet = wallet + $0 
+                    WHERE userID = $1 
+                    RETURNING wallet, bank, bankspace
+                    """, val, interaction.user.id
+                )
+                await conn.commit()
 
             prcnt_full = (data[1] / data[2]) * 100
 
@@ -637,18 +636,19 @@ class DepositOrWithdraw(discord.ui.Modal):
                 )
             )
 
-        updated = await self.conn.fetchone(
-            """
-            UPDATE bank 
-            SET 
-                bank = bank + $0, 
-                wallet = wallet - $0 
-            WHERE userID = $1 
-            RETURNING wallet, bank, bankspace
-            """, val, interaction.user.id
-        )
-     
-        await self.conn.commit()
+        async with interaction.client.pool.acquire() as conn:
+            updated = await conn.fetchone(
+                """
+                UPDATE bank 
+                SET 
+                    bank = bank + $0, 
+                    wallet = wallet - $0 
+                WHERE userID = $1 
+                RETURNING wallet, bank, bankspace
+                """, val, interaction.user.id
+            )
+            await conn.commit()
+
         prcnt_full = (updated[1] / updated[2]) * 100
 
         embed.set_field_at(0, name="Wallet", value=f"{CURRENCY} {updated[0]:,}")
@@ -1021,7 +1021,6 @@ class BalanceView(discord.ui.View):
             DepositOrWithdraw(
                 title=button.label, 
                 default_val=bank_amt, 
-                conn=conn, 
                 message=interaction.message, 
                 view=self
             )
@@ -1069,8 +1068,7 @@ class BalanceView(discord.ui.View):
         await interaction.response.send_modal(
             DepositOrWithdraw(
                 title=button.label, 
-                default_val=available_bankspace, 
-                conn=conn, 
+                default_val=available_bankspace,
                 message=interaction.message, 
                 view=self
             )
@@ -1159,50 +1157,63 @@ class BlackjackUi(discord.ui.View):
             except discord.NotFound:
                 pass
 
-    async def update_winning_data(
-        self,  
-        amount_after_multi: int, 
-        conn: asqlite_Connection
-    ) -> None:
+    async def update_winning_data(self, *, bet_amount: int) -> tuple:
+        """
+        Return a tuple containing elements in this order:
+        
+        Amount after multiplier effect, New amount balance, Percentage games won, multiplier
+        """
+        
+        async with self.interaction.client.pool.acquire() as conn:
 
-        await Economy.end_transaction(conn, user_id=self.interaction.user.id)
-        bj_lose, new_bj_win, new_amount_balance = await conn.fetchone(
-            f"""
-            UPDATE `{BANK_TABLE_NAME}`
-            SET 
-                wallet = wallet + $0,
-                bjw = bjw + 1,
-                bjwa = bjwa + $0
-            WHERE userID = $1
-            RETURNING bjl, bjw, wallet
-            """, amount_after_multi, self.interaction.user.id
-        )
+            their_multi = await Economy.get_multi_of(
+                user_id=self.interaction.user.id, 
+                multi_type="robux", 
+                conn=conn
+            )
 
-        await conn.commit()
-        prctnw = (new_bj_win / (new_bj_win + bj_lose)) * 100
-        return new_amount_balance, prctnw
+            amount_after_multi = int(((their_multi / 100) * bet_amount) + bet_amount)
 
-    async def update_losing_data(
-        self, 
-        namount: int, 
-        conn: asqlite_Connection
-    ) -> None:
+            await Economy.end_transaction(conn, user_id=self.interaction.user.id)
+            bj_lose, new_bj_win, new_amount_balance = await conn.fetchone(
+                f"""
+                UPDATE `{BANK_TABLE_NAME}`
+                SET 
+                    wallet = wallet + $0,
+                    bjw = bjw + 1,
+                    bjwa = bjwa + $0
+                WHERE userID = $1
+                RETURNING bjl, bjw, wallet
+                """, amount_after_multi, self.interaction.user.id
+            )
 
-        await Economy.end_transaction(conn, user_id=self.interaction.user.id)
-        bj_win, new_bj_lose, new_amount_balance = await conn.fetchone(
-            f"""
-            UPDATE `{BANK_TABLE_NAME}`
-            SET 
-                wallet = wallet - $0,
-                bjla = bjla + $0,
-                bjl = bjl + 1
-            WHERE userID = $1
-            RETURNING bjw, bjl, wallet
-            """, namount, self.interaction.user.id
-        )
+            await conn.commit()
+            prctnw = (new_bj_win / (new_bj_win + bj_lose)) * 100
+        return amount_after_multi, new_amount_balance, prctnw, their_multi
 
-        await conn.commit()
-        prnctl = (new_bj_lose / (new_bj_lose + bj_win)) * 100
+    async def update_losing_data(self, *, bet_amount: int) -> tuple:
+        """
+        Return a tuple containing elements in this order:
+        
+        New amount balance, Percentage games lost
+        """
+
+        async with self.interaction.client.pool.acquire() as conn:
+            await Economy.end_transaction(conn, user_id=self.interaction.user.id)
+            bj_win, new_bj_lose, new_amount_balance = await conn.fetchone(
+                f"""
+                UPDATE `{BANK_TABLE_NAME}`
+                SET
+                    wallet = wallet - $0,
+                    bjla = bjla + $0,
+                    bjl = bjl + 1
+                WHERE userID = $1
+                RETURNING bjw, bjl, wallet
+                """, bet_amount, self.interaction.user.id
+            )
+
+            await conn.commit()
+            prnctl = (new_bj_lose / (new_bj_lose + bj_win)) * 100
         return new_amount_balance, prnctl
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -1230,44 +1241,41 @@ class BlackjackUi(discord.ui.View):
             d_fver_d = [num for num in self.bot.games[interaction.user.id][-3]]
             del self.bot.games[interaction.user.id]
 
-            async with self.bot.pool.acquire() as conn:
-                conn: asqlite_Connection
+            new_amount_balance, prnctl = await self.update_losing_data(bet_amount=namount)
 
-                new_amount_balance, prnctl = await self.update_losing_data(namount, conn)
+            embed.colour = discord.Colour.brand_red()
+            embed.description=(
+                f"**You lost. You went over 21 and busted.**\n"
+                f"You lost {CURRENCY} **{namount:,}**. "
+                f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
+                f"You lost {prnctl:.1f}% of the games."
+            )
 
-                embed.colour = discord.Colour.brand_red()
-                embed.description=(
-                    f"**You lost. You went over 21 and busted.**\n"
-                    f"You lost {CURRENCY} **{namount:,}**. "
-                    f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-                    f"You lost {prnctl:.1f}% of the games."
+            embed.set_field_at(
+                index=0,
+                name=f"{interaction.user.name} (Player)",  
+                value=(
+                    f"**Cards** - {' '.join(d_fver_p)}\n"
+                    f"**Total** - `{player_sum}`"
                 )
-
-                embed.set_field_at(
-                    index=0,
-                    name=f"{interaction.user.name} (Player)",  
-                    value=(
-                        f"**Cards** - {' '.join(d_fver_p)}\n"
-                        f"**Total** - `{player_sum}`"
-                    )
+            )
+            
+            embed.set_field_at(
+                index=1,
+                name=f"{interaction.client.user.name} (Dealer)", 
+                value=(
+                    f"**Cards** - {' '.join(d_fver_d)}\n"
+                    f"**Total** - `{calculate_hand(dealer_hand)}`"
                 )
-                
-                embed.set_field_at(
-                    index=1,
-                    name=f"{interaction.client.user.name} (Dealer)", 
-                    value=(
-                        f"**Cards** - {' '.join(d_fver_d)}\n"
-                        f"**Total** - `{calculate_hand(dealer_hand)}`"
-                    )
-                )
+            )
 
-                embed.set_author(
-                    name=f"{interaction.user.name}'s losing blackjack game", 
-                    icon_url=interaction.user.display_avatar.url
-                )
-                embed.remove_footer()
+            embed.set_author(
+                name=f"{interaction.user.name}'s losing blackjack game", 
+                icon_url=interaction.user.display_avatar.url
+            )
+            embed.remove_footer()
 
-                await interaction.response.edit_message(content=None, embed=embed, view=None)
+            await interaction.response.edit_message(content=None, embed=embed, view=None)
 
         elif player_sum == 21:
             self.stop()
@@ -1279,45 +1287,44 @@ class BlackjackUi(discord.ui.View):
 
             del self.bot.games[interaction.user.id]
 
-            async with self.bot.pool.acquire() as conn:
-                conn: asqlite_Connection
+            (   amount_after_multi, 
+                new_amount_balance, 
+                prctnw, 
+                new_multi 
+            ) = await self.update_winning_data(bet_amount=namount)
 
-                new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
-                amount_after_multi = int(((new_multi / 100) * namount) + namount)
-                new_amount_balance, prctnw = await self.update_winning_data(amount_after_multi, conn)
+            embed.colour = discord.Colour.brand_green()
+            embed.description = (
+                f"**You win! You got to 21**.\n"
+                f"You won {CURRENCY} **{amount_after_multi:,}**. "
+                f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
+                f"You won {prctnw:.1f}% of the games."
+            )
 
-                embed.colour = discord.Colour.brand_green()
-                embed.description = (
-                    f"**You win! You got to {player_sum}**.\n"
-                    f"You won {CURRENCY} **{amount_after_multi:,}**. "
-                    f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-                    f"You won {prctnw:.1f}% of the games."
+            embed.set_field_at(
+                index=0,
+                name=f"{interaction.user.name} (Player)", 
+                value=(
+                    f"**Cards** - {' '.join(d_fver_p)}\n"
+                    f"**Total** - `{player_sum}`"
                 )
+            )
 
-                embed.set_field_at(
-                    index=0,
-                    name=f"{interaction.user.name} (Player)", 
-                    value=(
-                        f"**Cards** - {' '.join(d_fver_p)}\n"
-                        f"**Total** - `{player_sum}`"
-                    )
+            embed.set_field_at(
+                index=1,
+                name=f"{interaction.client.user.name} (Dealer)", 
+                value=(
+                    f"**Cards** - {' '.join(d_fver_d)}\n"
+                    f"**Total** - `{calculate_hand(dealer_hand)}`"
                 )
+            )
 
-                embed.set_field_at(
-                    index=1,
-                    name=f"{interaction.client.user.name} (Dealer)", 
-                    value=(
-                        f"**Cards** - {' '.join(d_fver_d)}\n"
-                        f"**Total** - `{calculate_hand(dealer_hand)}`"
-                    )
-                )
-
-                embed.set_author(
-                    name=f"{interaction.user.name}'s winning blackjack game", 
-                    icon_url=interaction.user.display_avatar.url
-                )
-                embed.set_footer(text=f"Multiplier: {new_multi:,}%")
-                await interaction.response.edit_message(content=None, embed=embed, view=None)
+            embed.set_author(
+                name=f"{interaction.user.name}'s winning blackjack game", 
+                icon_url=interaction.user.display_avatar.url
+            )
+            embed.set_footer(text=f"Multiplier: {new_multi:,}%")
+            await interaction.response.edit_message(content=None, embed=embed, view=None)
         else:
 
             d_fver_p = [number for number in self.bot.games[interaction.user.id][-2]]
@@ -1382,13 +1389,12 @@ class BlackjackUi(discord.ui.View):
 
         embed = interaction.message.embeds[0]
         if dealer_total > 21:
-            async with self.bot.pool.acquire() as conn:
-                conn: asqlite_Connection
 
-                new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
-                amount_after_multi = int(((new_multi / 100) * namount) + namount)
-                
-                new_amount_balance, prctnw = await self.update_winning_data(amount_after_multi, conn)
+            (   amount_after_multi, 
+                new_amount_balance, 
+                prctnw, 
+                new_multi 
+            ) = await self.update_winning_data(bet_amount=namount)
 
             embed.colour = discord.Colour.brand_green()
             embed.description = (
@@ -1425,10 +1431,7 @@ class BlackjackUi(discord.ui.View):
             await interaction.response.edit_message(content=None, embed=embed, view=None)
 
         elif dealer_total > player_sum:
-            async with self.bot.pool.acquire() as conn:
-                conn: asqlite_Connection
-
-                new_amount_balance, prnctl = await self.update_losing_data(namount, conn)
+            new_amount_balance, prnctl = await self.update_losing_data(bet_amount=namount)
 
             embed.colour = discord.Colour.brand_red()
             embed.description = (
@@ -1464,12 +1467,12 @@ class BlackjackUi(discord.ui.View):
             await interaction.response.edit_message(content=None, embed=embed, view=None)
 
         elif dealer_total < player_sum:
-            async with self.bot.pool.acquire() as conn:
-                conn: asqlite_Connection
-
-                new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
-                amount_after_multi = int(((new_multi / 100) * namount) + namount)
-                new_amount_balance, prctnw = await self.update_winning_data(amount_after_multi, conn)
+            
+            (   amount_after_multi, 
+                new_amount_balance, 
+                prctnw, 
+                new_multi 
+            ) = await self.update_winning_data(bet_amount=namount)
 
             embed.colour = discord.Colour.brand_green()
             embed.description = (
@@ -1559,10 +1562,7 @@ class BlackjackUi(discord.ui.View):
         del self.bot.games[interaction.user.id]
         embed = interaction.message.embeds[0]
 
-        async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            new_amount_balance, prcntl = await self.update_losing_data(namount, conn)
+        new_amount_balance, prcntl = await self.update_losing_data(bet_amount=namount)
 
         embed.colour = discord.Colour.brand_red()
         embed.description = (
