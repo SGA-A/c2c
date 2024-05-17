@@ -511,7 +511,7 @@ class Utility(commands.Cog):
             (
                 f"{result['jpeg_url']}",
                 f"{result['author']}",
-                {result['created_at']}
+                result['created_at']
             )
             for result in posts_xml
         ]
@@ -955,7 +955,7 @@ class Utility(commands.Cog):
 
         repo = self.g.get_repo('SGA-A/c2c')
 
-        commits = repo.get_commits[:3]
+        commits = repo.get_commits()[:3]
 
         revision = [
             f"[`{commit.sha[:6]}`]({commit.html_url}) {commit.commit.message.splitlines()[0]} "
