@@ -15,28 +15,28 @@ class ContextCommandHandler(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.err = commands.errors
+        self.kwargs = {"embed": Embed(colour=0x2B2D31), "view": MessageDevelopers()}
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, err: Exception):
         """The function that handles all the errors passed into the bot via text-based commands."""
-        
-        contact_view = MessageDevelopers()
-        embed = Embed(colour=0x2B2D31)
+
+        embed = self.kwargs["embed"]
 
         if isinstance(err, commands.errors.UserInputError):
 
             if isinstance(err, self.err.MissingRequiredArgument):
                 embed.description = "Some required arguments are missing."
-                return await ctx.reply(embed=embed, view=contact_view)
+                return await ctx.reply(**self.kwargs)
 
             embed.description = "That didn't work. Check your inputs are valid."
-            await ctx.reply(embed=embed, view=contact_view)
+            await ctx.reply(**self.kwargs)
 
         elif isinstance(err, self.err.CheckFailure):
 
             if isinstance(err, self.err.NotOwner):
                 embed.description = "You do not own this bot."
-                await ctx.reply(embed=embed, view=contact_view)
+                await ctx.reply(**self.kwargs)
 
             elif isinstance(err, self.err.MissingPermissions):
                 embed.description = "You're missing permissions required to use this command."
@@ -44,22 +44,22 @@ class ContextCommandHandler(commands.Cog):
                     name=f"Missing Permissions ({len(err.missing_permissions)})", 
                     value="\n".join(err.replace('_', ' ').title() for err in err.missing_permissions)
                 )
-                await ctx.reply(embed=embed, view=contact_view)
+                await ctx.reply(**self.kwargs)
 
             elif isinstance(err, self.err.MissingRole):
                 embed.description = "You're missing a role required to use this command."
                 embed.add_field(name="Missing Role", value=f"<@&{err.missing_role}>")
-                await ctx.reply(embed=embed, view=contact_view)
+                await ctx.reply(**self.kwargs)
 
         elif isinstance(err, self.err.CommandOnCooldown):
             embed.title = choice(COOLDOWN_PROMPTS)
             after_cd = format_dt(utcnow() + timedelta(seconds=err.retry_after), style="R")
             embed.description = f"You can run this command again {after_cd}."
-            await ctx.send(embed=embed, view=contact_view)
+            await ctx.send(**self.kwargs)
 
         elif isinstance(err, self.err.CommandNotFound):
             embed.description = "Could not find what you were looking for."
-            await ctx.reply(embed=embed, view=contact_view)
+            await ctx.reply(**self.kwargs)
 
         else:
             print_exception(type(err), err, err.__traceback__)
@@ -71,7 +71,7 @@ class ContextCommandHandler(commands.Cog):
                 "please let us know about it. We're always here to help!"
             )
             
-            await ctx.reply(embed=embed, view=contact_view)
+            await ctx.reply(**self.kwargs)
 
 
 async def setup(bot: commands.Bot):
