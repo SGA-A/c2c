@@ -17,14 +17,13 @@ async def button_response(interaction: discord.Interaction, **kwargs) -> None | 
 
 
 class PaginatorInput(discord.ui.Modal):
-    def __init__(self, their_view: discord.ui.View):
+    def __init__(self, their_view: 'Pagination'):
         self.their_view = their_view
+        self.page_num.placeholder = f"A number between 1 and {their_view.total_pages}."
         super().__init__(title="Input a Page", timeout=45.0)
 
     page_num = discord.ui.TextInput(
-        style=discord.TextStyle.short,
         label='Page',
-        required=True,
         min_length=1,
         max_length=4
     )
@@ -51,7 +50,7 @@ class Pagination(discord.ui.View):
         self.get_page = get_page
         self.index = 1
         self.total_pages: Optional[int] = None
-        self.cd = commands.CooldownMapping.from_cooldown(1, 3.0, lambda i: i.user)
+        self.cd = commands.CooldownMapping.from_cooldown(rate=1, per=3.0, type=lambda i: i.user)
         super().__init__(timeout=45.0)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -174,7 +173,7 @@ class Pagination(discord.ui.View):
 
 
 class PaginationSimple(discord.ui.View):
-    """Pagination menu soon with support for refreshing the pagination."""
+    """A regular pagination menu with no extra features."""
     
     def __init__(self, ctx, invoker_id: int, get_page: Optional[Callable] = None) -> None:
         self.ctx = ctx
@@ -220,17 +219,10 @@ class PaginationSimple(discord.ui.View):
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
         """Update the page index in response to changes in the current page."""
+    
         emb, self.total_pages = await self.get_page(self.index)
         self.update_buttons()
-
-        if not interaction.response.is_done():
-            await interaction.response.defer()
-
-        return await interaction.followup.edit_message(
-            message_id=self.message.id, 
-            embed=emb, 
-            view=self
-        )
+        await button_response(interaction, embed=emb, view=self)
 
     def update_buttons(self) -> None:
         """Disable or re-enable buttons based on position in paginator."""
@@ -266,7 +258,11 @@ class PaginationSimple(discord.ui.View):
 
 
 class PaginationItem(discord.ui.View):
-    """Pagination menu with support for direct queries to a specific page."""
+    """
+    Pagination menu with forward and backward buttons only.
+    
+    Disabling logic has been stripped away.
+    """
     
     def __init__(self, interaction: discord.Interaction, get_page: Optional[Callable] = None) -> None:
         self.interaction = interaction
@@ -293,19 +289,13 @@ class PaginationItem(discord.ui.View):
     async def navigate(self) -> None:
         """Get through the paginator properly."""
         emb, self.total_pages = await self.get_page(self.index)
-        if self.total_pages == 1:
-            self.stop()
-            return await self.interaction.response.send_message(embed=emb)
         await self.interaction.response.send_message(embed=emb, view=self)
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
         """Update the page index in response to changes in the current page."""
         emb, self.total_pages = await self.get_page(self.index)
-        if interaction.response.is_done():
-            message = await interaction.original_response()
-            return await interaction.followup.edit_message(
-                message_id=message.id, embed=emb, view=self)
-        await interaction.response.edit_message(embed=emb, view=self)
+        self.update_buttons()
+        await button_response(interaction, embed=emb, view=self)
 
     @discord.ui.button(style=discord.ButtonStyle.grey, emoji=discord.PartialEmoji.from_str("<:left:1212498142726066237>"), row=2)
     async def previous(self, interaction: discord.Interaction, _: discord.Button) -> None:
