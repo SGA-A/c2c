@@ -511,7 +511,7 @@ class Utility(commands.Cog):
             (
                 f"{result['jpeg_url']}",
                 f"{result['author']}",
-                f"{result['created_at']}"
+                {result['created_at']}
             )
             for result in posts_xml
         ]
@@ -523,7 +523,7 @@ class Utility(commands.Cog):
 
             for item_attrs in additional_notes[offset:offset + length]:
                 embed = discord.Embed(
-                    timestamp=datetime.datetime.fromtimestamp(int(item_attrs[2])),
+                    timestamp=datetime.datetime.fromtimestamp(item_attrs[-1]),
                     title=item_attrs[1],
                     url=item_attrs[0],
                     colour=0x2B2D31
@@ -955,7 +955,7 @@ class Utility(commands.Cog):
 
         repo = self.g.get_repo('SGA-A/c2c')
 
-        commits = repo.get_commits()[:3]
+        commits = repo.get_commits[:3]
 
         revision = [
             f"[`{commit.sha[:6]}`]({commit.html_url}) {commit.commit.message.splitlines()[0]} "
@@ -1174,7 +1174,7 @@ class Utility(commands.Cog):
         em.set_author(name=user.name, icon_url=user.display_avatar.url)
         paginator = PaginationSimple(
             interaction, 
-            invoker_id=interaction.user.id
+            invoker_id=user.id
         )
         length = 1
 
