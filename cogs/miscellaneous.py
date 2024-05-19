@@ -27,6 +27,8 @@ from .core.helpers import membed
 
 ARROW = "<:arrowe:1180428600625877054>"
 API_EXCEPTION = "The API fucked up, try again later."
+FORUM_ID = 1147176894903627888
+UPLOAD_FILE_DESCRIPTION = "A file to upload alongside the thread."
 RESPONSES = {
     403: "Forbidden - Access was denied",
     404: "Not Found",
@@ -37,6 +39,22 @@ RESPONSES = {
     424: "Invalid Parameters - The given parameters were invalid",
     500: "Internal Server Error - Some unknown error occured on the konachan website's server",
     503: "Service Unavailable - The konachan website currently cannot handle the request"
+}
+FORUM_TAG_IDS = {
+    'game': 1147178989329322024, 
+    'political': 1147179277343793282, 
+    'meme': 1147179514825297960, 
+    'anime/manga': 1147179594869387364, 
+    'reposts': 1147179787949969449, 
+    'career': 1147180119887192134, 
+    'rant': 1147180329057140797, 
+    'information': 1147180466210873364, 
+    'criticism': 1147180700022345859, 
+    'health': 1147180978356363274, 
+    'advice': 1147181072065515641, 
+    'showcase': 1147181147370049576, 
+    'coding': 1147182042744901703, 
+    'general discussion': 1147182171140923392
 }
 
 
@@ -155,7 +173,7 @@ class Utility(commands.Cog):
     @staticmethod
     async def owners_nolimit(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
         """Any of the owners of the bot bypass all cooldown restrictions."""
-        if interaction.user.id in {546086191414509599, 992152414566232139}:
+        if interaction.user.id in interaction.client.owner_ids:
             return None
         return app_commands.Cooldown(1, 7)
 
@@ -1194,6 +1212,59 @@ class Utility(commands.Cog):
         
         paginator.get_page = get_page_part
         await paginator.navigate()
+
+    @app_commands.command(name='upload', description='Upload a new forum thread')
+    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.describe(
+        name="The name of the thread.",
+        description="The content of the message to send with the thread.",
+        file=UPLOAD_FILE_DESCRIPTION,
+        file2=UPLOAD_FILE_DESCRIPTION,
+        file3=UPLOAD_FILE_DESCRIPTION,
+        tags="The tags to apply to the thread, seperated by spaces."
+    )
+    @app_commands.default_permissions(manage_guild=True)
+    async def create_new_thread(
+        self, 
+        interaction: discord.Interaction, 
+        name: str, 
+        description: Optional[str], 
+        tags: str, 
+        file: Optional[discord.Attachment], 
+        file2: Optional[discord.Attachment],
+        file3: Optional[discord.Attachment]
+    ) -> None:
+        
+        await interaction.response.defer(thinking=True)
+
+        if interaction.guild.id != 829053898333225010:
+            return await interaction.followup.send(
+                ephemeral=True, 
+                embed=membed("This command can't be used here.")
+            )
+
+        forum: discord.ForumChannel = self.bot.get_channel(FORUM_ID)
+        tags = tags.lower().split()
+        
+        files = [
+            await param_value.to_file() 
+            for param_name, param_value in iter(interaction.namespace) 
+            if param_name.startswith("f") and param_value
+        ]
+
+        applicable_tags = [forum.get_tag(tag_id) for tagname in tags if (tag_id := FORUM_TAG_IDS.get(tagname)) is not None]
+    
+        thread, _ = await forum.create_thread(
+            name=name,
+            content=description,
+            files=files,
+            applied_tags=applicable_tags
+        )
+
+        await interaction.followup.send(
+            ephemeral=True, 
+            embed=membed(f"Your thread was created here: {thread.jump_url}.")
+        )
 
 
 async def setup(bot: commands.Bot):
