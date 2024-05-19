@@ -218,11 +218,10 @@ class PaginationSimple(discord.ui.View):
                 return
             self.message = await self.ctx.original_response()
             return
-        
+
         if self.is_finished():
             return await self.ctx.send(**kwargs)
         self.message = await self.ctx.send(**kwargs)
-
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
         """Update the page index in response to changes in the current page."""
@@ -239,22 +238,105 @@ class PaginationSimple(discord.ui.View):
         self.children[2].disabled = self.index == self.total_pages
         self.children[3].disabled = self.index >= self.total_pages - 1
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:start:1212509961943252992>"), row=1)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:start:1212509961943252992>"), row=0)
     async def first(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index = 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:left:1212498142726066237>"), row=1)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:left:1212498142726066237>"), row=0)
     async def previous(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index -= 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:right:1212498140620394548>"), row=1)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:right:1212498140620394548>"), row=0)
     async def next_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index += 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:final:1212509960483643392>"), row=1)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:final:1212509960483643392>"), row=0)
+    async def last_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
+        self.index = self.total_pages
+        await self.edit_page(interaction)
+
+    @staticmethod
+    def compute_total_pages(total_results: int, results_per_page: int) -> int:
+        return ((total_results - 1) // results_per_page) + 1
+
+
+class RefreshPagination(discord.ui.View):
+    def __init__(self, interaction: discord.Interaction, get_page: Optional[Callable] = None) -> None:
+        self.interaction = interaction
+        self.get_page = get_page
+        self.index = 1
+        self.total_pages: Optional[int] = None
+        super().__init__(timeout=45.0)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Make sure only original user that invoked interaction can interact"""
+        if interaction.user.id == self.interaction.user.id:
+            return True
+        await interaction.response.send_message(embed=NOT_YOUR_MENU, ephemeral=True)
+        return False
+
+    async def on_timeout(self) -> None:
+        try:
+            for item in self.children:
+                item.disabled = True
+            await self.interaction.edit_original_response(view=self)
+        except discord.NotFound:
+            pass
+
+    async def navigate(self) -> None:
+        """Get through the paginator properly."""
+        emb, self.total_pages = await self.get_page(self.index)
+        kwargs = {"embed": emb, "view": self}
+
+        match self.total_pages:
+            case 1:
+                self.stop()
+                del kwargs["view"]
+            case _:
+                self.update_buttons()
+
+        await self.interaction.response.send_message(**kwargs)
+
+    async def edit_page(self, interaction: discord.Interaction, force_refresh: Optional[bool] = False) -> None:
+        """Update the page index in response to changes in the current page."""
+        emb, self.total_pages = await self.get_page(self.index, force_refresh)
+
+        self.update_buttons()
+        await button_response(interaction, embed=emb, view=self)
+
+    def update_buttons(self) -> None:
+        """Disable or re-enable buttons based on position in paginator."""
+        first_check = self.index == 1
+        last_check = self.index == self.total_pages
+        
+        self.children[0].disabled = first_check
+        self.children[1].disabled = first_check
+        self.children[3].disabled = last_check
+        self.children[4].disabled = last_check
+
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:start:1212509961943252992>"), row=0)
+    async def first(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
+        self.index = 1
+        await self.edit_page(interaction)
+
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:left:1212498142726066237>"), row=0)
+    async def previous(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
+        self.index -= 1
+        await self.edit_page(interaction)
+
+    @discord.ui.button(emoji="<:refreshicon:1205432056369389590>", row=0)
+    async def refresh_paginator(self, interaction: discord.Interaction, _: discord.ui.Button):
+        await self.edit_page(interaction, force_refresh=True)
+
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:right:1212498140620394548>"), row=0)
+    async def next_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
+        self.index += 1
+        await self.edit_page(interaction)
+
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:final:1212509960483643392>"), row=0)
     async def last_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index = self.total_pages
         await self.edit_page(interaction)
@@ -299,7 +381,7 @@ class PaginationItem(discord.ui.View):
         await self.interaction.response.send_message(embed=emb, view=self)
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
-        """Update the page index in response to changes in the current page."""
+        """Update the page index in response to changes in the current page."""        
         emb, self.total_pages = await self.get_page(self.index)
         self.update_buttons()
         await button_response(interaction, embed=emb, view=self)
@@ -326,8 +408,3 @@ class PaginationItem(discord.ui.View):
         """Based off the total elements available in the iterable, determine how many pages there
         should be within the paginator."""
         return ((total_results - 1) // results_per_page) + 1
-
-
-# class RefreshPagination(PaginationSimple):
-#     def __init__(self, ctx, invoker_id: int, get_page: Callable | None = None) -> None:
-#         super().__init__(ctx, invoker_id, get_page)
