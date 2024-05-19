@@ -2859,7 +2859,7 @@ class Economy(commands.Cog):
     @staticmethod
     async def owners_nolimit(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
         """Any of the owners of the bot bypass all cooldown restrictions."""
-        if interaction.user.id in {546086191414509599, 992152414566232139}:
+        if interaction.user.id in interaction.client.owner_ids:
             return None
         return app_commands.Cooldown(1, 5)
 
@@ -7209,6 +7209,7 @@ class Economy(commands.Cog):
                     weights=(55 / 3, 55 / 3, 55 / 3, 45 / 3, 45 / 3, 45 / 3)
                 )
             
+            embed = discord.Embed()
             async with conn.transaction():
                 if their_roll > bot_roll:
                     amount_after_multi = int(((pmulti / 100) * amount) + amount)
@@ -7222,7 +7223,7 @@ class Economy(commands.Cog):
 
                     prcntw = (updated[1] / (id_lose_amount + updated[1])) * 100
 
-                    embed = discord.Embed(colour=discord.Color.brand_green())
+                    embed.colour = discord.Color.brand_green()
                     embed.description=(
                         f"**You've rolled higher!**\n"
                         f"You won {CURRENCY} **{amount_after_multi:,}**.\n"
@@ -7236,14 +7237,14 @@ class Economy(commands.Cog):
                     )
 
                 elif their_roll == bot_roll:
-                    embed = discord.Embed(colour=discord.Color.yellow())
+                    embed.colour = discord.Color.yellow()
                     embed.description = "**Tie.** You lost nothing nor gained anything!"
 
                     embed.set_author(
                         name=f"{interaction.user.name}'s gambling game", 
                         icon_url=interaction.user.display_avatar.url
                     )
-                
+                                    
                 else:
                     updated = await self.update_bank_three_new(
                         interaction.user, 
@@ -7256,7 +7257,7 @@ class Economy(commands.Cog):
                     new_total = id_won_amount + updated[1]
                     prcntl = (updated[1] / new_total) * 100
 
-                    embed = discord.Embed(colour=discord.Color.brand_red())
+                    embed.colour = discord.Color.brand_red()
                     embed.description=(
                         f"**You've rolled lower!**\n"
                         f"You lost {CURRENCY} **{amount:,}**.\n"
