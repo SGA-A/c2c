@@ -2,9 +2,9 @@ from discord.ext import commands
 import discord
 
 from traceback import print_exception
-from typing import Optional, Callable
+from typing import Optional, Callable, Union
 
-from .helpers import membed, determine_exponent
+from .helpers import membed, determine_exponent, economy_check
 
 
 NOT_YOUR_MENU = membed("This menu is not for you.")
@@ -174,9 +174,9 @@ class Pagination(discord.ui.View):
 
 class PaginationSimple(discord.ui.View):
     """A regular pagination menu with no extra features."""
-    
+
     def __init__(self, ctx, invoker_id: int, get_page: Optional[Callable] = None) -> None:
-        self.ctx = ctx
+        self.ctx: Union[commands.Context, discord.Interaction] = ctx
         self.invoker_id = invoker_id
         self.get_page = get_page
         self.index = 1
@@ -273,10 +273,7 @@ class RefreshPagination(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Make sure only original user that invoked interaction can interact"""
-        if interaction.user.id == self.interaction.user.id:
-            return True
-        await interaction.response.send_message(embed=NOT_YOUR_MENU, ephemeral=True)
-        return False
+        return await economy_check(interaction, self.interaction.user)
 
     async def on_timeout(self) -> None:
         try:
@@ -362,10 +359,7 @@ class PaginationItem(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Make sure only original user that invoked interaction can interact"""
-        if interaction.user == self.interaction.user:
-            return True
-        await interaction.response.send_message(embed=NOT_YOUR_MENU, ephemeral=True)
-        return False
+        return await economy_check(interaction, self.interaction.user)
 
     async def on_timeout(self) -> None:
         try:
