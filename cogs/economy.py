@@ -1889,14 +1889,14 @@ class DropdownLB(discord.ui.Select):
         self.economy = bot.get_cog("Economy")
 
         options = [
-            SelectOption(label='Bank + Wallet', description='Sort by the sum of bank and wallet.'),
+            SelectOption(label='Money Net', description='Sort by the sum of bank and wallet.'),
             SelectOption(label='Wallet', description='Sort by the wallet amount only.'),
             SelectOption(label='Bank', description='Sort by the bank amount only.'),
             SelectOption(label='Inventory Net', description='Sort by the net value of your inventory.'),
             SelectOption(label='Bounty', description="Sort by the sum paid for capturing a player."),
             SelectOption(label='Commands', description="Sort by total commands ran."),
             SelectOption(label='Level', description="Sort by player level."),
-            SelectOption(label='Net Worth', description="Sort by the total net worth.")
+            SelectOption(label='Net Worth', description="Sort by the sum of bank, wallet, and inventory value.")
         ]
 
         super().__init__(options=options)
