@@ -155,7 +155,7 @@ class TrustOrBlock(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.voice is not None:
             return True
-        await interaction.response.edit_message(embed=membed("You disconnected."), view=None)
+        await interaction.response.edit_message(view=None, embed=membed("You disconnected."))
         return False
 
     async def on_timeout(self):
@@ -189,7 +189,7 @@ class PrivacyView(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user.voice is not None:
             return True
-        await interaction.response.edit_message(embed=membed("You disconnected."), view=None)
+        await interaction.response.edit_message(view=None, embed=membed("You disconnected."))
         return False
 
     async def on_timeout(self):
@@ -200,7 +200,7 @@ class PrivacyView(discord.ui.View):
             pass
     
     async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item) -> None:
-        await interaction.response.edit_message(embed=membed("Something went wrong."), view=None)        
+        await interaction.response.edit_message(view=None, embed=membed("Something went wrong."))        
 
 
 class TempVoice(commands.Cog):
@@ -232,7 +232,10 @@ class TempVoice(commands.Cog):
         )
 
     async def upon_joining_creator(
-            self, owner: discord.Member, creator_channel_id: int):
+        self, 
+        owner: discord.Member, 
+        creator_channel_id: int
+    ) -> None:
         user_data = self.active_voice_channels[owner.id]
 
         category: discord.CategoryChannel = owner.guild.get_channel(creator_channel_id).category
@@ -396,7 +399,10 @@ class TempVoice(commands.Cog):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if self.active_voice_channels.get(interaction.user.id) is not None:
             return True
-        await interaction.response.send_message(embed=membed("You haven't created your own channel yet."))
+        await interaction.response.send_message(
+            ephemeral=True, 
+            embed=membed("You haven't created your own channel yet.")
+        )
         return False
     
     @app_commands.guilds(*APP_GUILDS_IDS)
@@ -405,6 +411,7 @@ class TempVoice(commands.Cog):
     async def setup_voice(self, interaction: discord.Interaction, creator_channel: discord.VoiceChannel):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(
+                ephemeral=True,
                 embed=membed("You are not an admin.")
         )
         
@@ -431,7 +438,7 @@ class TempVoice(commands.Cog):
         embed.colour = discord.Colour.blurple()
         embed.set_footer(text="Permissions are required, double check they are set.")
 
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @voice.command(name="rename", description="Change the name of your temporary voice channel")
     @app_commands.checks.cooldown(2, 600.0)
@@ -443,8 +450,7 @@ class TempVoice(commands.Cog):
         self.active_voice_channels[user.id].update({"name": channel_name})
 
         await user.voice.channel.edit(name=channel_name)
-        await interaction.response.send_message(
-            embed=membed(f"Renamed the channel to **{channel_name}**"))
+        await interaction.response.send_message(embed=membed(f"Renamed the channel to **{channel_name}**"))
 
     @voice.command(name="status", description="Set the status of your temporary voice channel")
     @app_commands.checks.cooldown(3, 60.0)
@@ -455,9 +461,7 @@ class TempVoice(commands.Cog):
         self.active_voice_channels[interaction.user.id].update({"status": text})
 
         await channel.edit(status=text)
-        await interaction.response.send_message(
-            embed=membed(f"Set the status of {channel.mention} successfully.")
-        )
+        await interaction.response.send_message(embed=membed(f"Set the status of {channel.mention} successfully."))
 
     @voice.command(name="bitrate", description="Change the bitrate of your temporary voice channel")
     @app_commands.checks.cooldown(1, 15)
@@ -475,7 +479,8 @@ class TempVoice(commands.Cog):
         await voice.channel.edit(bitrate=(bitrate*1000))
 
         await interaction.response.send_message(
-            embed=membed(f"Changed the bitrate of {voice.channel.mention} to **{bitrate}** kbps."))                
+            embed=membed(f"Changed the bitrate of {voice.channel.mention} to **{bitrate}** kbps.")
+        )                
 
     @voice.command(name="limit", description="Change the user limit of your temporary voice channel")
     @app_commands.checks.cooldown(1, 15)
@@ -521,8 +526,9 @@ class TempVoice(commands.Cog):
 
         await member.move_to(None, reason=f"Requested by {user.name} (ID: {user.id})")
         await interaction.followup.send(
-            embed=membed(f"Kicked {member.mention} from {user_voice.channel.mention}."), 
-            ephemeral=True)
+            ephemeral=True,
+            embed=membed(f"Kicked {member.mention} from {user_voice.channel.mention}.")
+        )
 
     @voice.command(name="trust", description="Trust users with permanent access to your temporary voice channel")
     async def change_trusted_users(self, interaction: discord.Interaction):
@@ -548,27 +554,31 @@ class TempVoice(commands.Cog):
     async def voice_info(self, interaction: discord.Interaction):
         user = interaction.user
         data = self.active_voice_channels[user.id]
-        embed = discord.Embed(title="Temporary Voice Channel Information", colour=0x2B2D31, url=user.voice.channel.jump_url)
-        
+
         privacy_broken = data["privacy"].split()
         privacy = ["Locked", "Hidden", "Closed Chat"]
         privacy = {privacy[i] for i, check in enumerate(privacy_broken) if check == "0"}
 
-        embed.description = (
+        embed = membed(
             f"- **Bitrate:** {data['bitrate'] // 1000} kbps\n"
             f"- **User Limit:** {data['limit'] or 'No limit'}\n"
             f"- **Privacy:** {', '.join(privacy) or 'Public Configuration'}\n"
         )
 
+        embed.url = user.voice.channel.jump_url
+        embed.title = data["name"]
+
         embed.add_field(
             name="Trusted Members\U000000b9", 
             value=", ".join({self.bot.get_user(int(trusted)).mention for trusted in data["trusted"]}) or "*None.*", 
-            inline=False)
+            inline=False
+        )
         
         embed.add_field(
             name="Blocked Members\U000000b2", 
             value=", ".join({self.bot.get_user(int(blocked)).mention for blocked in data["blocked"]}) or "*None.*", 
-            inline=False)
+            inline=False
+        )
         
         embed.set_footer(
             text=(
@@ -586,7 +596,7 @@ class TempVoice(commands.Cog):
 
         await interaction.response.send_message(
             embed=membed(
-                f"Reset {user.voice.channel.mention}. Changes are applied upon reconnecting."
+                f"Reset {user.voice.channel.mention}.\nChanges are applied upon reconnecting."
             )
         )
 
