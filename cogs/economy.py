@@ -31,7 +31,7 @@ from typing import (
     Callable
 )
 
-
+import sqlite3
 import discord
 import datetime
 import aiofiles
@@ -704,7 +704,7 @@ class ConfirmResetData(discord.ui.View):
             item.disabled = True
         self.stop()
         
-        tables_to_delete = [INV_TABLE_NAME, BANK_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME]
+        tables_to_delete = [INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME, BANK_TABLE_NAME]
         
         embed.title = "Confirmed"
         embed.colour = discord.Colour.brand_red()
@@ -2829,7 +2829,7 @@ class Economy(commands.Cog):
             await conn.commit()
 
         embed = discord.Embed(
-            title=f"{user.display_name}'s Showcase", 
+            title=f"{user.global_name}'s Showcase", 
             description="\n".join(ui_data) or "Nothing to see here!"
         )
         embed.set_thumbnail(url=user.display_avatar.url)
@@ -3314,6 +3314,7 @@ class Economy(commands.Cog):
         amount: Union[float, int] = 0, 
         mode: str = "wallet"
     ) -> Optional[Any]:
+        
         """
         Modifies a user's balance in a given mode: either wallet (default) or bank.
         
@@ -3325,9 +3326,9 @@ class Economy(commands.Cog):
         data = await conn_input.fetchone(
             f"""
             UPDATE {BANK_TABLE_NAME} 
-            SET {mode} = {mode} + ? 
-            WHERE userID = ? RETURNING `{mode}`
-            """, (amount, user.id)
+            SET {mode} = {mode} + $0 
+            WHERE userID = $1 RETURNING `{mode}`
+            """, amount, user.id
         )
         return data
 
@@ -3635,40 +3636,64 @@ class Economy(commands.Cog):
         await conn_input.execute(f"INSERT INTO `{COOLDOWN_TABLE_NAME}` (userID) VALUES($0)", user.id)
 
     @staticmethod
-    def is_no_cooldown(cooldown_value: float, mode="t") -> Union[bool, str]:
-        """Check if a user has no cooldowns."""
-        if not cooldown_value:
-            return True
+    async def check_has_cd(
+        conn: asqlite_Connection, 
+        user_id: int, 
+        cd_type: Optional[str] = None, 
+        mode="t", 
+        until = "N/A"
+    ) -> Union[bool, str]:
+        """
+        Check if a user has no cooldowns.
+        
+        To save queries, if you can, make the query yourself in
+        advance and pass it in to the `until` kwarg.
+        """
+        
+        if isinstance(until, str):
+            until = (
+                """
+                SELECT until 
+                FROM cooldowns 
+                WHERE userID = $0 AND cooldown = $1
+                """
+            )
+            
+            until = await conn.fetchone(until, user_id, cd_type)
+            if until:
+                until, = until
+
+        if not until:
+            return None
+        
         current_time = discord.utils.utcnow()
-        timestamp_to_dt = datetime.datetime.fromtimestamp(cooldown_value, tz=timezone('UTC'))
-        time_left = (timestamp_to_dt - current_time).total_seconds()
+        time_left = datetime.datetime.fromtimestamp(until, tz=timezone('UTC'))
+        time_left = (time_left - current_time).total_seconds()
         
         if time_left > 0:
             when = current_time + datetime.timedelta(seconds=time_left)
             return discord.utils.format_dt(when, style=mode), discord.utils.format_dt(when, style="R")
-        return True
+        return False
 
     @staticmethod
     async def update_cooldown(
         conn_input: asqlite_Connection, *, 
-        user: USER_ENTRY, 
+        user_id: USER_ENTRY, 
         cooldown_type: str, 
         new_cd: str
     ) -> Any:
-        """Update a user's cooldown. Requires accessing the return value via the index, so [0].
+        """Update a user's cooldown.
+        
+        Raises `sqlite3.IntegrityError` when foreign userID constraint fails.
+        """
 
-        Use this func to reset and create a cooldown."""
-
-        data = await conn_input.fetchone(
-            f"""
-            UPDATE `{COOLDOWN_TABLE_NAME}` 
-            SET `{cooldown_type}` = ? 
-            WHERE userID = ? 
-            RETURNING `{cooldown_type}`
-            """, (new_cd, user.id)
+        await conn_input.execute(
+            """
+            INSERT INTO cooldowns (userID, cooldown, until) 
+            VALUES ($0, $1, $2)
+            ON CONFLICT(userID, cooldown) DO UPDATE SET until = $2
+            """, user_id, cooldown_type, new_cd
         )
-
-        return data
 
     @staticmethod
     async def declare_transaction(conn: asqlite_Connection, *, user_id: int) -> bool:
@@ -6027,7 +6052,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=em, ephemeral=True)
 
             em.set_author(
-                name=f"{member.display_name}'s Inventory", 
+                name=f"{member.global_name}'s Inventory", 
                 icon_url=member.display_avatar.url
             )
             paginator = RefreshPagination(interaction)
@@ -6128,29 +6153,32 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
             
-            data = await conn.fetchall(
+            data = await conn.fetchone(
                 """
-                SELECT work 
-                FROM cooldowns 
-                WHERE userID = $0 
-                UNION ALL 
-                SELECT job 
-                FROM bank 
-                WHERE userID = $0
-                """, interaction.user.id
+                SELECT bank.job, COALESCE(cooldowns.until, 0.0)
+                FROM bank
+                LEFT JOIN cooldowns
+                ON bank.userID = cooldowns.userID AND cooldowns.cooldown = $0
+                WHERE bank.userID = $1
+                """, "working", interaction.user.id
             )
             
-            if not data:
+            if data is None:
                 return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
 
-            job_name = data[1][0]
+            job_name, current_cd = data
             if job_name == "None":
                 return await interaction.response.send_message(
                     ephemeral=True,
                     embed=membed("You don't have a job, get one first.")
                 )
 
-            has_cd = self.is_no_cooldown(data[0][0])
+            has_cd = await self.check_has_cd(
+                conn, 
+                user_id=interaction.user.id,
+                until=current_cd
+            )
+
             if isinstance(has_cd, tuple):
                 return await interaction.response.send_message(
                     embed=membed(f"You can work again at {has_cd[0]} ({has_cd[1]}).")
@@ -6158,16 +6186,22 @@ class Economy(commands.Cog):
 
             async with conn.transaction():
                 ncd = (discord.utils.utcnow() + datetime.timedelta(minutes=40)).timestamp()
-                await self.update_cooldown(conn, user=interaction.user, cooldown_type="work", new_cd=ncd)
+                
+                await self.update_cooldown(
+                    conn, 
+                    user_id=interaction.user.id, 
+                    cooldown_type="working", 
+                    new_cd=ncd
+                )
 
-            possible_minigames = choices((1, 2), k=1, weights=(85, 15))[0]
-            method_name = {
-                2: "do_order",
-                1: "do_tiles"
-            }.get(possible_minigames)
+        possible_minigames = choices((1, 2), k=1, weights=(80, 20))[0]
+        method_name = {
+            2: "do_order",
+            1: "do_tiles"
+        }.get(possible_minigames)
 
-            method_name = getattr(self, method_name)
-            await method_name(interaction, job_name)
+        method_name = getattr(self, method_name)
+        await method_name(interaction, job_name)
 
     @work.command(name="apply", description="Apply for a job", extras={"exp_gained": 1})
     @app_commands.rename(chosen_job="job")
@@ -6182,21 +6216,27 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            data = await conn.fetchall(
+            data = await conn.fetchone(
                 """
-                SELECT job_change 
-                FROM cooldowns 
-                WHERE userID = $0 
-                UNION ALL 
-                SELECT job FROM bank 
-                WHERE userID = $0
-                """, interaction.user.id
+                SELECT bank.job, COALESCE(cooldowns.until, 0.0)
+                FROM bank
+                LEFT JOIN cooldowns
+                ON bank.userID = cooldowns.userID AND cooldowns.cooldown = $1
+                WHERE bank.userID = $0
+                """, "job_change", interaction.user.id
             )
 
-            if not data:
-                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
+            if data is None:
+                return await interaction.response.send_message(
+                    ephemeral=True,
+                    embed=self.not_registered
+                )
 
-            has_cd = self.is_no_cooldown(cooldown_value=data[0][0])
+            has_cd = await self.check_has_cd(
+                conn, 
+                user_id=interaction.user.id,
+                until=data[-1]
+            )
             
             if isinstance(has_cd, tuple):
                 embed = discord.Embed(
@@ -6208,11 +6248,11 @@ class Economy(commands.Cog):
 
             async with conn.transaction():
                 
-                if data[1][0] != "None":
+                if data[0] != "None":
                     return await interaction.response.send_message(
                         ephemeral=True,
                         embed=membed(
-                            f"You are already working as a **{data[1][0]}**.\n"
+                            f"You are already working as a **{data[0]}**.\n"
                             "You'll have to resign first using /work resign."
                         )
                     )
@@ -6220,16 +6260,15 @@ class Economy(commands.Cog):
                 ncd = (discord.utils.utcnow() + datetime.timedelta(days=2)).timestamp()
                 await self.update_cooldown(
                     conn, 
-                    user=interaction.user, 
+                    user_id=interaction.user.id, 
                     cooldown_type="job_change", 
                     new_cd=ncd
                 )
-                
                 await self.change_job_new(interaction.user, conn, job_name=chosen_job)
-                embed = discord.Embed()
+
+                embed = membed("You can start working now for every 40 minutes.")
                 embed.title = f"Congratulations, you are now working as a {chosen_job}"
-                embed.description = "You can start working now for every 40 minutes."
-                embed.colour = 0x2B2D31
+
                 await interaction.response.send_message(embed=embed)
     
     @work.command(name="resign", description="Resign from your current job")
@@ -6238,28 +6277,34 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            data = await conn.fetchall(
+            data = await conn.fetchone(
                 """
-                SELECT job_change 
-                FROM cooldowns 
-                WHERE userID = $0 
-                UNION ALL 
-                SELECT job 
-                FROM bank 
-                WHERE userID = $0
-                """, interaction.user.id
+                SELECT bank.job, COALESCE(cooldowns.until, 0.0)
+                FROM bank
+                LEFT JOIN cooldowns
+                ON bank.userID = cooldowns.userID AND cooldowns.cooldown = $1
+                WHERE bank.userID = $0
+                """, "job_change", interaction.user.id
             )
 
             if not data:
-                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
+                return await interaction.response.send_message(
+                    ephemeral=True, 
+                    embed=self.not_registered
+                )
 
-            if data[1][0] == "None":
+            if data[0] == "None":
                 return await interaction.response.send_message(
                     ephemeral=True,
                     embed=membed("You're already unemployed.")
                 )
 
-            has_cd = self.is_no_cooldown(cooldown_value=data[0][0])
+            has_cd = await self.check_has_cd(
+                conn, 
+                user_id=interaction.user.id, 
+                until=data[-1]
+            )
+            
             if isinstance(has_cd, tuple):
                 embed = discord.Embed(
                     title="Cannot perform this action", 
@@ -6272,14 +6317,21 @@ class Economy(commands.Cog):
             value = await process_confirmation(
                 interaction=interaction, 
                 prompt=(
-                    f"Are you sure you want to resign from your current job as a **{data[1][0]}**?\n"
+                    f"Are you sure you want to resign from your current job as a **{data[0]}**?\n"
                     "You won't be able to apply to another job for the next 48 hours."
                 )
             )
 
             if value:
                 ncd = (discord.utils.utcnow() + datetime.timedelta(days=2)).timestamp()
-                await self.update_cooldown(conn, user=interaction.user, cooldown_type="job_change", new_cd=ncd)
+                
+                await self.update_cooldown(
+                    conn, 
+                    user_id=interaction.user.id, 
+                    cooldown_type="job_change", 
+                    new_cd=ncd
+                )
+
                 await self.change_job_new(interaction.user, conn, job_name='None')
     
     @app_commands.command(name="balance", description="Get someone's balance. Wallet, bank, and net worth.")
@@ -6381,43 +6433,75 @@ class Economy(commands.Cog):
 
                 await interaction.response.send_message(embed=balance, view=view)
 
-    @app_commands.command(name="weekly", description="Get a weekly injection of robux to your bank")
-    @app_commands.guilds(*APP_GUILDS_IDS)
-    async def weekly(self, interaction: discord.Interaction) -> None:
-        """Get a weekly injection of robux once per week."""
-
+    async def do_weekly_or_monthly(
+        self, 
+        interaction: discord.Interaction, 
+        recurring_income_type: str,
+        weeks_away: int
+    ) -> None:
+        
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            ncd = await conn.fetchone("SELECT weekly FROM cooldowns WHERE userID = $0", interaction.user.id)
-            
-            if ncd is None:
-                return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
-            
-            has_cd = self.is_no_cooldown(ncd[0])
+            multiplier = {
+                "weekly": 10_000_000,
+                "monthly": 100_000_000,
+                "yearly": 1_000_000_000
+            }.get(recurring_income_type)
+
+            has_cd = await self.check_has_cd(
+                conn, 
+                user_id=interaction.user.id, 
+                cd_type=recurring_income_type
+            )
+            noun_period = recurring_income_type[:-2]
 
             if isinstance(has_cd, tuple):
                 return await interaction.response.send_message(
-                    embed=membed(f"You already got your weekly robux this week, try again {has_cd[1]}.")
+                    embed=membed(f"You already got your {recurring_income_type} robux this {noun_period}, try again {has_cd[1]}.")
                 )
-            
-            success = membed()
-            success.title = f"{interaction.user.display_name}'s Weekly Robux"
-            success.url = "https://www.youtube.com/watch?v=ue_X8DskUN4"
             
             async with conn.transaction():
-                next_week = discord.utils.utcnow() + datetime.timedelta(weeks=1)
-                ncd = discord.utils.format_dt(next_week, style="R")
+                next_cd = discord.utils.utcnow() + datetime.timedelta(weeks=weeks_away)
+
+                try:
+                    await self.update_cooldown(
+                        conn, 
+                        user_id=interaction.user.id, 
+                        cooldown_type=recurring_income_type, 
+                        new_cd=next_cd.timestamp()
+                    )
+
+                except sqlite3.IntegrityError:
+                    return await interaction.response.send_message(embed=self.not_registered)
+
+                await self.update_bank_new(interaction.user, conn, multiplier)
+                next_cd = discord.utils.format_dt(next_cd, style="R")
                 
-                success.description=(
-                    f"You just got {CURRENCY} **10,000,000** for checking in this week.\n"
-                    f"See you next week ({ncd})!"
+                success = membed(
+                    f"You just got {CURRENCY} **{multiplier:,}** for checking in this {noun_period}.\n"
+                    f"See you next {noun_period} ({next_cd})!"
                 )
-                
-                await self.update_cooldown(conn, user=interaction.user, cooldown_type="weekly", new_cd=next_week.timestamp())
-                await self.update_bank_new(interaction.user, conn, 10_000_000)
+
+                success.title = f"{interaction.user.global_name}'s {recurring_income_type.title()} Robux"
+                success.url = "https://www.youtube.com/watch?v=ue_X8DskUN4"
 
             await interaction.response.send_message(embed=success)
+
+    @app_commands.command(name="weekly", description="Get a weekly injection of robux")
+    @app_commands.guilds(*APP_GUILDS_IDS)
+    async def weekly(self, interaction: discord.Interaction) -> None:
+        await self.do_weekly_or_monthly(interaction, "weekly", weeks_away=1)
+    
+    @app_commands.command(description="Get a monthly injection of robux")
+    @app_commands.guilds(*APP_GUILDS_IDS)
+    async def monthly(self, interaction: discord.Interaction) -> None:
+        await self.do_weekly_or_monthly(interaction, "monthly", weeks_away=4)
+    
+    @app_commands.command(description="Get a yearly injection of robux")
+    @app_commands.guilds(*APP_GUILDS_IDS)
+    async def yearly(self, interaction: discord.Interaction) -> None:
+        await self.do_weekly_or_monthly(interaction, "yearly", weeks_away=52)
 
     @app_commands.command(name="resetmydata", description="Opt out of the virtual economy, deleting all of your data")
     @app_commands.guilds(*APP_GUILDS_IDS)
