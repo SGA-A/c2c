@@ -2857,11 +2857,8 @@ class Economy(commands.Cog):
             return False
 
     @staticmethod
-    async def owners_nolimit(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
-        """Any of the owners of the bot bypass all cooldown restrictions."""
-        if interaction.user.id in interaction.client.owner_ids:
-            return None
-        return app_commands.Cooldown(1, 5)
+    async def owners_nolimit(_: discord.Interaction) -> Optional[app_commands.Cooldown]:
+        return None
 
     @tasks.loop(hours=1)
     async def batch_update(self):
