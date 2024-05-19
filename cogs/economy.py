@@ -36,7 +36,7 @@ import discord
 import datetime
 import aiofiles
 
-from .core.paginator import PaginationItem, PaginationSimple
+from .core.paginator import PaginationItem, RefreshPagination
 from .core.helpers import (
     determine_exponent, 
     membed,
@@ -1091,7 +1091,7 @@ class BalanceView(discord.ui.View):
 
             bank = nd[0] + nd[1]
             inv = await Economy.calculate_inventory_value(self.viewing, conn)
-            rank = await Economy.calculate_alternate_net_ranking(self.viewing, conn)
+            rank = await Economy.calculate_net_ranking_for(self.viewing, conn)
 
             space = (nd[1] / nd[2]) * 100
             
@@ -3183,7 +3183,7 @@ class Economy(commands.Cog):
     # ------------------ BANK FUNCS ------------------ #
 
     @staticmethod
-    async def calculate_alternate_net_ranking(user: USER_ENTRY, conn: asqlite_Connection) -> int:
+    async def calculate_net_ranking_for(user: USER_ENTRY, conn: asqlite_Connection) -> int:
         """Calculate the alternative net ranking of a user based on their net worth."""
         val = await conn.fetchone(
             """
@@ -6007,15 +6007,17 @@ class Economy(commands.Cog):
             em = membed()
             length = 8
 
-            owned_items = await conn.fetchall(
+            query = (
                 """
                 SELECT shop.itemName, shop.emoji, inventory.qty
                 FROM shop
                 INNER JOIN inventory 
                     ON shop.itemID = inventory.itemID
                 WHERE inventory.userID = $0
-                """, member.id
+                """
             )
+
+            owned_items = await conn.fetchall(query, member.id)
 
             if not owned_items:
                 if member.id == interaction.user.id:
@@ -6028,13 +6030,18 @@ class Economy(commands.Cog):
                 name=f"{member.display_name}'s Inventory", 
                 icon_url=member.display_avatar.url
             )
-            paginator = PaginationSimple(
-                interaction, 
-                invoker_id=interaction.user.id
-            )
+            paginator = RefreshPagination(interaction)
 
-            async def get_page_part(page: int):
+            async def get_page_part(page: int, force_refresh: Optional[bool] = False):
                 """Helper function to determine what page of the paginator we're on."""
+
+                if force_refresh:
+                    nonlocal owned_items
+                    owned_items = await conn.fetchall(query, member.id)
+
+                n = paginator.compute_total_pages(len(owned_items), length)
+                page = min(page, n)
+                paginator.index = page
 
                 offset = (page - 1) * length
                 em.description = ""
@@ -6042,7 +6049,6 @@ class Economy(commands.Cog):
                 for item in owned_items[offset:offset + length]:
                     em.description += f"{item[1]} **{item[0]}** \U00002500 {item[2]:,}\n"
 
-                n = paginator.compute_total_pages(len(owned_items), length)
                 em.set_footer(text=f"Page {page} of {n}")
                 return em, n
             
@@ -6345,12 +6351,12 @@ class Economy(commands.Cog):
 
                 bank = nd[0] + nd[1]
                 inv = await self.calculate_inventory_value(user, conn)
-                rank = await self.calculate_alternate_net_ranking(user, conn)
+                rank = await self.calculate_net_ranking_for(user, conn)
 
                 space = (nd[1] / nd[2]) * 100
 
                 balance = discord.Embed(
-                    title=f"{user.name}'s balances", 
+                    title=f"{user.global_name}'s Balances", 
                     colour=0x2B2D31, 
                     timestamp=discord.utils.utcnow(), 
                     url="https://dis.gd/support"
