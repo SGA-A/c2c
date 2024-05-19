@@ -1118,6 +1118,9 @@ class Utility(commands.Cog):
     ) -> Union[None, discord.Message]:
         """Shows a user's enlarged avatar (if possible)."""
         embed = membed()
+
+        if username.bot:
+            username = await self.bot.fetch_user(username.id)
         
         if not username.banner:
             embed.description = f"{username.mention} does not have a banner."
@@ -1213,7 +1216,7 @@ class Utility(commands.Cog):
         paginator.get_page = get_page_part
         await paginator.navigate()
 
-    @app_commands.command(name='upload', description='Upload a new forum thread')
+    @app_commands.command(name='post', description='Upload a new forum thread')
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(
         name="The name of the thread.",
