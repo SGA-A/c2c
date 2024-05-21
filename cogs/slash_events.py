@@ -30,13 +30,13 @@ class SlashExceptionHandler(commands.Cog):
 
         if isinstance(error, app_commands.CheckFailure):
 
-            if isinstance(error, app_commands.CommandOnCooldown):
-                embed.title = choice(COOLDOWN_PROMPTS)
-                after_cd = format_dt(utcnow() + timedelta(seconds=error.retry_after), style="R")
-                embed.description = f"You can run this command again {after_cd}."
-                return await interaction.followup.send(**self.kwargs)
-            else:
+            if not isinstance(error, app_commands.CommandOnCooldown):
                 return  # we already respond
+            
+            embed.title = choice(COOLDOWN_PROMPTS)
+            after_cd = format_dt(utcnow() + timedelta(seconds=error.retry_after), style="R")
+            embed.description = f"You can run this command again {after_cd}."
+            return await interaction.followup.send(**self.kwargs)
             
         elif isinstance(error, app_commands.TransformerError):
 
