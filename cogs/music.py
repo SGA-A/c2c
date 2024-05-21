@@ -16,7 +16,7 @@ from .core.helpers import membed
 youtube_dl.utils.bug_reports_message = lambda: ''
 
 
-ytdl_format_options = {
+YTDL_FORMAT_OPTIONS = {
     'format': 'bestaudio/best',
     'outtmpl': '%(extractor)s-%(id)s-%(title)s.%(ext)s',
     'restrictfilenames': True,
@@ -27,12 +27,15 @@ ytdl_format_options = {
     'quiet': True,
     'no_warnings': True,
     'default_search': 'auto',
-    'source_address': '0.0.0.0',  # bind to ipv4 since ipv6 addresses cause issues sometimes
+    'source_address': '0.0.0.0'
 }
 
-ffmpeg_options = {'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5','options': '-vn -filter:a "volume=0.25"'}
+FFMPEG_OPTIONS = {
+    'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5', 
+    'options': '-vn -filter:a "volume=0.25"'
+}
 
-ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
+ytdl = youtube_dl.YoutubeDL(YTDL_FORMAT_OPTIONS)
 
 
 class YTDLSource(discord.PCMVolumeTransformer):
@@ -45,16 +48,16 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.url = data.get('url')
 
     @classmethod
-    async def from_url(cls, url, *, loop=None, stream=False):
+    async def from_url(cls, url, *, loop=None):
         loop = loop or get_event_loop()
-        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=not stream))
+        data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
 
         if 'entries' in data:
             # take first item from a playlist
             data = data['entries'][0]
 
-        filename = data['url'] if stream else ytdl.prepare_filename(data)
-        return cls(discord.FFmpegPCMAudio(filename, **ffmpeg_options), data=data)
+        filename = data['url']
+        return cls(discord.FFmpegPCMAudio(filename, **FFMPEG_OPTIONS), data=data)
 
 
 class Music(commands.Cog):
@@ -65,7 +68,12 @@ class Music(commands.Cog):
         role = interaction.guild.get_role(990900517301522432)
         if (role is None) or (role in interaction.user.roles):
             return True
-        await interaction.response.send_message(embed=membed(f"You need {role.mention} to use music commands."))
+        
+        await interaction.response.send_message(
+            ephemeral=True, 
+            embed=membed(f"You need the {role.mention} role to use music commands.")
+        )
+
         return False
 
     async def play_source(self, voice_client):
@@ -84,12 +92,15 @@ class Music(commands.Cog):
                 )
                 return
             return interaction.guild.voice_client
-        return await interaction.user.voice.channel.connect(self_deaf=True)
+        
+        voice = await interaction.user.voice.channel.connect()
+        await interaction.guild.me.edit(deafen=True)
+        return voice
 
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(description='Quickly join and play some music')
     async def preset(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         voice = await self.do_join_checks(interaction)
         if not voice:
@@ -99,7 +110,7 @@ class Music(commands.Cog):
             voice.stop()
 
         await self.bot.loop.create_task(self.play_source(voice))
-        await interaction.followup.send(embed=membed("Now playing: ` Scaramouche Battle Theme.mp3 `"))
+        await interaction.followup.send(embed=membed("Now playing: `Scaramouche Battle Theme.mp3`."))
 
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(description='Plays a file from the local filesystem')
@@ -109,7 +120,7 @@ class Music(commands.Cog):
         interaction: discord.Interaction, 
         song: Literal["Say You Won't Let Go"]
     ) -> None:
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         voice = await self.do_join_checks(interaction)
         if not voice:
@@ -123,13 +134,13 @@ class Music(commands.Cog):
         file_name = basename(pathn)
         
         voice.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
-        await interaction.followup.send(embed=membed(f'Now playing: ` {file_name} `'))
+        await interaction.followup.send(embed=membed(f'Now playing: ` {file_name} `.'))
 
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(query="Could be a search term or a YouTube track link.")
     @app_commands.command(description="Streams music via url from YouTube")
     async def stream(self, interaction: discord.Interaction, query: str):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         voice = await self.do_join_checks(interaction)
         if not voice:
@@ -138,14 +149,14 @@ class Music(commands.Cog):
         if voice.is_playing():
             voice.stop()
 
-        player = await YTDLSource.from_url(query, loop=self.bot.loop, stream=True)
+        player = await YTDLSource.from_url(query, loop=self.bot.loop)
         voice.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
-        await interaction.followup.send(embed=membed(f'Now playing: [{player.title}]({player.url})'))
+        await interaction.followup.send(embed=membed(f'Now playing: [{player.title}]({player.url}).'))
 
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(description='Pause the player')
     async def pause(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         voice = await self.do_join_checks(interaction)
         if not voice:
@@ -160,7 +171,7 @@ class Music(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(description='Resume the player')
     async def resume(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         voice = await self.do_join_checks(interaction)
         if not voice:
@@ -176,19 +187,19 @@ class Music(commands.Cog):
     @app_commands.describe(volume="The volume to set the player to")
     @app_commands.command(description="Changes the player's volume")
     async def volume(self, interaction: discord.Interaction, volume: app_commands.Range[int, 1, 250]):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         voice = await self.do_join_checks(interaction)
         if not voice:
             return
 
         voice.source.volume = volume / 100
-        await interaction.followup.send(embed=membed(f"Changed volume of the player to {volume}%"))
+        await interaction.followup.send(embed=membed(f"Changed volume of the player to {volume}%."))
 
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(description='Stop the player')
     async def stop(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         voice = await self.do_join_checks(interaction)
         if not voice:
@@ -203,10 +214,10 @@ class Music(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(description='Disconnect the bot from voice')
     async def leave(self, interaction: discord.Interaction):
-        await interaction.response.defer()
+        await interaction.response.defer(ephemeral=True)
 
         if interaction.guild.voice_client is None:
-            return await interaction.followup.send(embed=membed("Not connected to a voice channel."))
+            return await interaction.followup.send(embed=membed("I'm not in a voice channel."))
         
         if interaction.user not in interaction.guild.me.voice.channel.members:
             return await interaction.followup.send(
