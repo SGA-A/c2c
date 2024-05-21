@@ -13,17 +13,9 @@ from .core.constants import COOLDOWN_PROMPTS
 class SlashExceptionHandler(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        bot.tree.error(coro=self.__dispatch_to_app_command_handler)
+        bot.tree.error(coro=self.get_app_command_error)
         self.kwargs = {"embed": Embed(colour=0x2B2D31), "view": MessageDevelopers()}
 
-    async def __dispatch_to_app_command_handler(
-        self, 
-        interaction: Interaction, 
-        error: app_commands.AppCommandError
-    ) -> None:
-        self.bot.dispatch("app_command_error", interaction, error)
-
-    @commands.Cog.listener("on_app_command_error")
     async def get_app_command_error(
         self, 
         interaction: Interaction, 
@@ -34,6 +26,7 @@ class SlashExceptionHandler(commands.Cog):
             await interaction.response.defer(thinking=True)
         
         embed = self.kwargs["embed"]
+        embed.title = None
 
         if isinstance(error, app_commands.CheckFailure):
 
@@ -42,16 +35,11 @@ class SlashExceptionHandler(commands.Cog):
                 after_cd = format_dt(utcnow() + timedelta(seconds=error.retry_after), style="R")
                 embed.description = f"You can run this command again {after_cd}."
                 return await interaction.followup.send(**self.kwargs)
-
-            elif isinstance(error, app_commands.MissingRole):
-                embed.description = "You're missing a role required to use this command."
-                embed.add_field(name="Missing Role", value=f"<@&{error.missing_role}>")
-                return await interaction.followup.send(**self.kwargs)
-            
             else:
                 return  # we already respond
             
         elif isinstance(error, app_commands.TransformerError):
+
             if error.type.value == AppCommandOptionType.user.value:
                 embed.description = f"{error.value} is not a member of this server."
             else:
