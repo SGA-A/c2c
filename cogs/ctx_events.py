@@ -15,13 +15,13 @@ class ContextCommandHandler(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.err = commands.errors
-        self.kwargs = {"embed": Embed(colour=0x2B2D31), "view": MessageDevelopers()}
+        self.kwargs = {"view": MessageDevelopers()}
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, err: Exception):
         """The function that handles all the errors passed into the bot via text-based commands."""
 
-        embed = self.kwargs["embed"]
+        embed = Embed(colour=0x2B2D31)
 
         if isinstance(err, commands.errors.UserInputError):
 
