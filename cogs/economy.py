@@ -811,7 +811,7 @@ class RememberPositionView(discord.ui.View):
             await Economy.update_bank_new(interaction.user, conn, self.base)
             await conn.commit()
 
-        await interaction.response.edit_message(content=None, embed=embed, view=None)
+        await interaction.response.edit_message(embed=embed, view=None)
 
 
 class RememberPosition(discord.ui.Button):
@@ -1109,7 +1109,7 @@ class BalanceView(discord.ui.View):
             balance.set_footer(text=f"Global Rank: #{rank}")
 
         self.checks(nd[1], nd[0], nd[2]-nd[1])
-        await interaction.response.edit_message(content=None, embed=balance, view=self)
+        await interaction.response.edit_message(embed=balance, view=self)
 
     @discord.ui.button(emoji=discord.PartialEmoji.from_str("<:terminate:1205810058357907487>"))
     async def close_view(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -1150,7 +1150,6 @@ class BlackjackUi(discord.ui.View):
 
             try:
                 await self.interaction.edit_original_response(
-                    content=None, 
                     view=None, 
                     embed=membed("You backed off so the game ended.")
                 )
@@ -1275,7 +1274,7 @@ class BlackjackUi(discord.ui.View):
             )
             embed.remove_footer()
 
-            await interaction.response.edit_message(content=None, embed=embed, view=None)
+            await interaction.response.edit_message(embed=embed, view=None)
 
         elif player_sum == 21:
             self.stop()
@@ -1324,7 +1323,7 @@ class BlackjackUi(discord.ui.View):
                 icon_url=interaction.user.display_avatar.url
             )
             embed.set_footer(text=f"Multiplier: {new_multi:,}%")
-            await interaction.response.edit_message(content=None, embed=embed, view=None)
+            await interaction.response.edit_message(embed=embed, view=None)
         else:
 
             d_fver_p = [number for number in self.bot.games[interaction.user.id][-2]]
@@ -1350,14 +1349,7 @@ class BlackjackUi(discord.ui.View):
                 )
             )
 
-            await interaction.response.edit_message( 
-                embed=embed, 
-                view=self,
-                content=(
-                    "Press **Hit** to hit, **Stand** to finalize your deck or "
-                    "**Forfeit** to end your hand prematurely."
-                )
-            )
+            await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(label='Stand', style=discord.ButtonStyle.primary)
     async def stand_bj(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -1428,7 +1420,7 @@ class BlackjackUi(discord.ui.View):
             )
             embed.set_footer(text=f"Multiplier: {new_multi:,}%")
 
-            await interaction.response.edit_message(content=None, embed=embed, view=None)
+            await interaction.response.edit_message(embed=embed, view=None)
 
         elif dealer_total > player_sum:
             new_amount_balance, prnctl = await self.update_losing_data(bet_amount=namount)
@@ -1464,7 +1456,7 @@ class BlackjackUi(discord.ui.View):
             )
             embed.remove_footer()
             
-            await interaction.response.edit_message(content=None, embed=embed, view=None)
+            await interaction.response.edit_message(embed=embed, view=None)
 
         elif dealer_total < player_sum:
             
@@ -1506,7 +1498,7 @@ class BlackjackUi(discord.ui.View):
 
             embed.set_footer(text=f"Multiplier: {new_multi:,}%")
 
-            await interaction.response.edit_message(content=None, embed=embed, view=None)
+            await interaction.response.edit_message(embed=embed, view=None)
         else:
             async with self.bot.pool.acquire() as conn:
                 conn: asqlite_Connection
@@ -1542,7 +1534,7 @@ class BlackjackUi(discord.ui.View):
 
             embed.remove_footer()
 
-            await interaction.response.edit_message(content=None, embed=embed, view=None)
+            await interaction.response.edit_message(embed=embed, view=None)
 
     @discord.ui.button(label='Forfeit', style=discord.ButtonStyle.primary)
     async def forfeit_bj(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -1596,7 +1588,7 @@ class BlackjackUi(discord.ui.View):
 
         embed.remove_footer()
 
-        await interaction.response.edit_message(content=None, embed=embed, view=None)
+        await interaction.response.edit_message(embed=embed, view=None)
 
 
 class HighLow(discord.ui.View):
@@ -1874,7 +1866,7 @@ class InvestmentModal(discord.ui.Modal, title="Increase Investment"):
             await conn.commit()
 
             sembed = await self.economy.servant_preset(interaction.user.id, dtls)
-            await interaction.response.edit_message(content=None, embed=sembed, view=self.the_view)
+            await interaction.response.edit_message(embed=sembed, view=self.the_view)
 
     async def on_error(self, interaction: discord.Interaction, error):
         print_exception(type(error), error, error.__traceback__)
@@ -1997,7 +1989,7 @@ class Servants(discord.ui.Select):
             )
             sembed = await self.economy.servant_preset(self.owner_id, dtls)  # servant embed
 
-        await interaction.response.edit_message(content=None, embed=sembed, view=self.view)
+        await interaction.response.edit_message(embed=sembed, view=self.view)
 
 
 class SelectTaskMenu(discord.ui.Select):
@@ -2228,7 +2220,7 @@ class ServantsManager(discord.ui.View):
             )
 
             sembed = await self.economy.servant_preset(self.child.owner_id, dtls) 
-            await interaction.response.edit_message(content=None, embed=sembed, view=self)
+            await interaction.response.edit_message(embed=sembed, view=self)
             
             if not val:
                 return
@@ -2380,7 +2372,7 @@ class ServantsManager(discord.ui.View):
                 await conn.commit()
 
                 sembed = await self.economy.servant_preset(self.child.owner_id, dtls)
-                await interaction.message.edit(content=None, embed=sembed, view=self)
+                await interaction.message.edit(embed=sembed, view=self)
         await interaction.response.send_message(embed=membed(selection), delete_after=5.0)
 
     @discord.ui.button(label="\u200b", emoji="\U0001f48b", style=discord.ButtonStyle.secondary, row=2)
@@ -2423,7 +2415,7 @@ class ServantsManager(discord.ui.View):
             if dtls is not None:
                 await conn.commit()
                 sembed = await self.economy.servant_preset(self.child.owner_id, dtls)
-                await interaction.message.edit(content=None, embed=sembed, view=self)
+                await interaction.message.edit(embed=sembed, view=self)
             await interaction.response.send_message(embed=membed(selection), delete_after=5.0)
 
     @discord.ui.button(emoji="\U00002728", label="Add Photo", style=discord.ButtonStyle.success, row=3)
@@ -2829,7 +2821,7 @@ class Economy(commands.Cog):
             await conn.commit()
 
         embed = discord.Embed(
-            title=f"{user.global_name}'s Showcase", 
+            title=f"{user.display_name}'s Showcase", 
             description="\n".join(ui_data) or "Nothing to see here!"
         )
         embed.set_thumbnail(url=user.display_avatar.url)
@@ -3002,7 +2994,7 @@ class Economy(commands.Cog):
 
             lb.set_footer(text="Ranked globally")
 
-            if chosen_choice == 'Bank + Wallet':
+            if chosen_choice == 'Money Net':
 
                 data = await conn.fetchall(
                     f"""
@@ -4218,8 +4210,6 @@ class Economy(commands.Cog):
         The person that is confirming has to send items, in exchange they get coins.
         """
 
-        # TODO Build checks for ensuring they actually have the specified quantity of items.
-
         if not can_continue:
             return
         
@@ -5002,7 +4992,7 @@ class Economy(commands.Cog):
                 f"and got paid {CURRENCY} **{cost:,}**."
             )
 
-            embed.title = f"{interaction.user.global_name}'s Sale Receipt"
+            embed.title = f"{interaction.user.display_name}'s Sale Receipt"
             embed.set_footer(text="Thanks for your business.")
             await respond(interaction, embed=embed)
             
@@ -6049,7 +6039,7 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=em, ephemeral=True)
 
             em.set_author(
-                name=f"{member.global_name}'s Inventory", 
+                name=f"{member.display_name}'s Inventory", 
                 icon_url=member.display_avatar.url
             )
             paginator = RefreshPagination(interaction)
@@ -6405,7 +6395,7 @@ class Economy(commands.Cog):
                 space = (nd[1] / nd[2]) * 100
 
                 balance = discord.Embed(
-                    title=f"{user.global_name}'s Balances", 
+                    title=f"{user.display_name}'s Balances", 
                     colour=0x2B2D31, 
                     timestamp=discord.utils.utcnow(), 
                     url="https://dis.gd/support"
@@ -6480,7 +6470,7 @@ class Economy(commands.Cog):
                     f"See you next {noun_period} ({next_cd})!"
                 )
 
-                success.title = f"{interaction.user.global_name}'s {recurring_income_type.title()} Robux"
+                success.title = f"{interaction.user.display_name}'s {recurring_income_type.title()} Robux"
                 success.url = "https://www.youtube.com/watch?v=ue_X8DskUN4"
 
             await interaction.response.send_message(embed=success)
@@ -6717,7 +6707,7 @@ class Economy(commands.Cog):
         self, 
         interaction: discord.Interaction, 
         stat: Literal[
-            "Bank + Wallet", 
+            "Money Net", 
             "Wallet", 
             "Bank", 
             "Inventory Net", 
@@ -7070,23 +7060,20 @@ class Economy(commands.Cog):
         
         initial.add_field(
             name=f"{interaction.user.name} (Player)", 
-            value=f"**Cards** - {' '.join(shallow_pv)}\n**Total** - `{player_sum}`")
+            value=f"**Cards** - {' '.join(shallow_pv)}\n**Total** - `{player_sum}`"
+        )
+        
         initial.add_field(
             name=f"{self.bot.user.name} (Dealer)", 
-            value=f"**Cards** - {shallow_dv[0]} `?`\n**Total** - ` ? `")
+            value=f"**Cards** - {shallow_dv[0]} `?`\n**Total** - ` ? `"
+        )
         
         initial.set_author(icon_url=interaction.user.display_avatar.url, name=f"{interaction.user.name}'s blackjack game")
         initial.set_footer(text="K, Q, J = 10  |  A = 1 or 11")
         
         await interaction.response.send_message(
             embed=initial, 
-            view=BlackjackUi(interaction=interaction),
-            content=(
-                "What do you want to do?\n"
-                "Press **Hit** to to request an additional card, "
-                "**Stand** to finalize your deck "
-                "or **Forfeit** to end your hand prematurely, sacrificing half of your original bet."
-            )
+            view=BlackjackUi(interaction=interaction)
         )
 
     async def do_wallet_checks(
@@ -7145,9 +7132,8 @@ class Economy(commands.Cog):
     @app_commands.command(name="bet", description="Bet your robux on a dice roll", extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    @app_commands.rename(exponent_amount='robux')
-    @app_commands.describe(exponent_amount=ROBUX_DESCRIPTION)
-    async def bet(self, interaction: discord.Interaction, exponent_amount: str) -> None:
+    @app_commands.describe(robux=ROBUX_DESCRIPTION)
+    async def bet(self, interaction: discord.Interaction, robux: str) -> None:
         """Bet your robux on a gamble to win or lose robux."""
 
         # --------------- Contains checks before betting i.e. has keycard, meets bet constraints. -------------
@@ -7156,7 +7142,7 @@ class Economy(commands.Cog):
 
             data = await conn.fetchone(
                 f"""
-                SELECT wallet, betw, betl 
+                SELECT wallet, betw, betl
                 FROM `{BANK_TABLE_NAME}` 
                 WHERE userID = $0
                 """, interaction.user.id
@@ -7169,14 +7155,14 @@ class Economy(commands.Cog):
             pmulti = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
             has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
 
-            amount = await self.do_wallet_checks(
+            robux = await self.do_wallet_checks(
                 interaction=interaction, 
                 has_keycard=has_keycard,
                 wallet_amount=wallet_amt,
-                exponent_amount=exponent_amount
+                exponent_amount=robux
             )
             
-            if amount is None:
+            if robux is None:
                 return
             
             # --------------------------------------------------------
@@ -7209,7 +7195,7 @@ class Economy(commands.Cog):
             embed = discord.Embed()
             async with conn.transaction():
                 if their_roll > bot_roll:
-                    amount_after_multi = int(((pmulti / 100) * amount) + amount)
+                    amount_after_multi = int(((pmulti / 100) * robux) + robux)
                     updated = await self.update_bank_three_new(
                         interaction.user, 
                         conn, 
@@ -7246,9 +7232,9 @@ class Economy(commands.Cog):
                     updated = await self.update_bank_three_new(
                         interaction.user, 
                         conn, 
-                        "betla", amount,
+                        "betla", robux,
                         "betl", 1, 
-                        "wallet", -amount
+                        "wallet", -robux
                     )
 
                     new_total = id_won_amount + updated[1]
@@ -7257,7 +7243,7 @@ class Economy(commands.Cog):
                     embed.colour = discord.Color.brand_red()
                     embed.description=(
                         f"**You've rolled lower!**\n"
-                        f"You lost {CURRENCY} **{amount:,}**.\n"
+                        f"You lost {CURRENCY} **{robux:,}**.\n"
                         f"You now have {CURRENCY} **{updated[2]:,}**.\n"
                         f"You've lost {prcntl:.1f}% of all games."
                     )
