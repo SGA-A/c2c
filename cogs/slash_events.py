@@ -1,6 +1,6 @@
 from random import choice
 from datetime import timedelta
-from traceback import print_exception
+from traceback import format_exc
 
 from discord.ext import commands
 from discord.utils import format_dt, utcnow
@@ -15,6 +15,7 @@ class SlashExceptionHandler(commands.Cog):
         self.bot = bot
         bot.tree.error(coro=self.get_app_command_error)
         self.kwargs = {"embed": Embed(colour=0x2B2D31), "view": MessageDevelopers()}
+        self.console_logs_channel = bot.get_partial_messageable(1152342672405704754, guild_id=829053898333225010)
 
     async def get_app_command_error(
         self, 
@@ -55,7 +56,6 @@ class SlashExceptionHandler(commands.Cog):
             return await interaction.followup.send(**self.kwargs)
         
         else:
-            print_exception(type(error), error, error.__traceback__)
             embed.description = (
                 "Seems like the bot has stumbled upon an unexpected error. "
                 "Not to worry, these things happen from time to time. If this issue persists, "
@@ -63,7 +63,10 @@ class SlashExceptionHandler(commands.Cog):
             )
             embed.title = "Something went wrong"
 
-            return await interaction.followup.send(**self.kwargs)
+            await interaction.followup.send(**self.kwargs)
+
+            exc = format_exc().split("The above exception", maxsplit=1)[0]
+            await self.console_logs_channel.send(f'```py\n{exc}\n```')
 
 
 async def setup(bot: commands.Bot):
