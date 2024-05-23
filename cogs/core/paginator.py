@@ -117,10 +117,13 @@ class Pagination(discord.ui.View):
 
         self.children[2].label = f"{self.index} / {self.total_pages}"
 
-        self.children[0].disabled = self.index <= 2
-        self.children[1].disabled = self.index == 1
-        self.children[3].disabled = self.index == self.total_pages
-        self.children[4].disabled = self.index >= self.total_pages - 1
+        is_first_item_check = self.index == 1
+        is_last_item_check = self.index == self.total_pages
+
+        self.children[0].disabled = is_first_item_check
+        self.children[1].disabled = is_first_item_check
+        self.children[3].disabled = is_last_item_check
+        self.children[4].disabled = is_last_item_check
 
     @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:start:1212509961943252992>"), row=1)
     async def first(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
@@ -142,10 +145,10 @@ class Pagination(discord.ui.View):
             return
 
         val = await determine_exponent(interaction, modal.page_num.value)
-
+        
         if val is None:
             return
-
+        
         if isinstance(val, str):
             return await interaction.followup.send(
                 ephemeral=True, 
@@ -167,8 +170,9 @@ class Pagination(discord.ui.View):
 
     @staticmethod
     def compute_total_pages(total_results: int, results_per_page: int) -> int:
-        """Based off the total elements available in the iterable, determine how many pages there
-        should be within the paginator."""
+        """
+        Based off the total elements available in the iterable, 
+        determine how many pages there should be within the paginator."""
         return ((total_results - 1) // results_per_page) + 1
 
 
@@ -233,10 +237,13 @@ class PaginationSimple(discord.ui.View):
     def update_buttons(self) -> None:
         """Disable or re-enable buttons based on position in paginator."""
 
-        self.children[0].disabled = self.index <= 2
-        self.children[1].disabled = self.index == 1
-        self.children[2].disabled = self.index == self.total_pages
-        self.children[3].disabled = self.index >= self.total_pages - 1
+        is_first_item_check = self.index == 1
+        is_last_item_check = self.index == self.total_pages
+
+        self.children[0].disabled = is_first_item_check
+        self.children[1].disabled = is_first_item_check
+        self.children[2].disabled = is_last_item_check
+        self.children[3].disabled = is_last_item_check
 
     @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:start:1212509961943252992>"), row=0)
     async def first(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
@@ -264,6 +271,7 @@ class PaginationSimple(discord.ui.View):
 
 
 class RefreshPagination(discord.ui.View):
+    """Based on `PaginationSimple`, but with an option to refresh the data being paginated."""
     def __init__(self, interaction: discord.Interaction, get_page: Optional[Callable] = None) -> None:
         self.interaction = interaction
         self.get_page = get_page
@@ -306,13 +314,13 @@ class RefreshPagination(discord.ui.View):
 
     def update_buttons(self) -> None:
         """Disable or re-enable buttons based on position in paginator."""
-        first_check = self.index == 1
-        last_check = self.index == self.total_pages
+        is_first_item_check = self.index == 1
+        is_last_item_check = self.index == self.total_pages
         
-        self.children[0].disabled = first_check
-        self.children[1].disabled = first_check
-        self.children[3].disabled = last_check
-        self.children[4].disabled = last_check
+        self.children[0].disabled = is_first_item_check
+        self.children[1].disabled = is_first_item_check
+        self.children[3].disabled = is_last_item_check
+        self.children[4].disabled = is_last_item_check
 
     @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:start:1212509961943252992>"), row=0)
     async def first(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
@@ -377,7 +385,6 @@ class PaginationItem(discord.ui.View):
     async def edit_page(self, interaction: discord.Interaction) -> None:
         """Update the page index in response to changes in the current page."""        
         emb, self.total_pages = await self.get_page(self.index)
-        self.update_buttons()
         await button_response(interaction, embed=emb, view=self)
 
     @discord.ui.button(style=discord.ButtonStyle.grey, emoji=discord.PartialEmoji.from_str("<:left:1212498142726066237>"), row=2)
@@ -402,3 +409,20 @@ class PaginationItem(discord.ui.View):
         """Based off the total elements available in the iterable, determine how many pages there
         should be within the paginator."""
         return ((total_results - 1) // results_per_page) + 1
+
+
+# class RefreshSelectPagination(PaginationItem):
+#     """
+#     A pagination menu that has its pages changed 
+#     each time a different select menu option is selected.
+
+#     Inherits from the `PaginationItem` class.
+#     """
+
+#     def __init__(
+#         self, 
+#         interaction: discord.Interaction, 
+#         get_page: Callable | None = None,
+#         selec
+#     ) -> None:
+#         super().__init__(interaction, get_page)
