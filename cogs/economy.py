@@ -9,7 +9,7 @@ from math import floor, ceil
 from pytz import timezone
 from pluralizer import Pluralizer
 from discord import app_commands, SelectOption
-from asqlite import Connection as asqlite_Connection
+from asqlite import ProxiedConnection as asqlite_Connection
 from traceback import print_exception
 from textwrap import dedent
 
@@ -1633,21 +1633,24 @@ class HighLow(discord.ui.View):
             embed=membed("The game ended because you didn't answer in time.")
         )
 
-    async def send_win(self, interaction: discord.Interaction, button: discord.ui.Button, conn: asqlite_Connection):
-        new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
-        total = self.their_bet * (new_multi // 100 + 1)
-        new_balance = await Economy.update_bank_new(interaction.user, conn, total)
-        await Economy.end_transaction(conn, user_id=self.interaction.user.id)
+    async def send_win(self, interaction: discord.Interaction, button: discord.ui.Button):
+        async with interaction.client.pool.acquire() as conn:
+            new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
+            total = self.their_bet * (new_multi // 100 + 1)
+            new_balance = await Economy.update_bank_new(interaction.user, conn, total)
+            await Economy.end_transaction(conn, user_id=self.interaction.user.id)
+            await conn.commit()
+
         await self.make_clicked_blurple_only(button)
 
-        win = discord.Embed(
-            colour=discord.Colour.brand_green(),
-            description=(
-                f'**You won {CURRENCY} {total:,}!**\n'
-                f'Your hint was **{self.hint_provided}**. '
-                f'The hidden number was **{self.true_value}**.\n'
-                f'Your new balance is {CURRENCY} **{new_balance[0]:,}**.'
-            )
+        win = interaction.message.embeds[0]
+
+        win.colour = discord.Colour.brand_green()
+        win.description = (
+            f'**You won {CURRENCY} {total:,}!**\n'
+            f'Your hint was **{self.hint_provided}**. '
+            f'The hidden number was **{self.true_value}**.\n'
+            f'Your new balance is {CURRENCY} **{new_balance[0]:,}**.'
         )
 
         win.set_author(
@@ -1659,60 +1662,55 @@ class HighLow(discord.ui.View):
 
         await interaction.response.edit_message(embed=win, view=self)
 
-    async def send_loss(self, interaction: discord.Interaction, button: discord.ui.Button, conn: asqlite_Connection):
-        new_amount = await Economy.update_bank_new(interaction.user, conn, -self.their_bet)
-        await Economy.end_transaction(conn, user_id=self.interaction.user.id)
+    async def send_loss(self, interaction: discord.Interaction, button: discord.ui.Button):
+        async with interaction.client.pool.acquire() as conn:
+            new_amount = await Economy.update_bank_new(interaction.user, conn, -self.their_bet)
+            await Economy.end_transaction(conn, user_id=self.interaction.user.id)
+            await conn.commit()
+
         await self.make_clicked_blurple_only(button)
 
-        lose = discord.Embed()
+        lose = interaction.message.embeds[0]
+
+        lose.colour = discord.Colour.brand_red()
         lose.description = (
             f'**You lost {CURRENCY} {self.their_bet:,}!**\n'
             f'Your hint was **{self.hint_provided}**. '
             f'The hidden number was **{self.true_value}**.\n'
-            f'Your new balance is {CURRENCY} **{new_amount[0]:,}**.')
+            f'Your new balance is {CURRENCY} **{new_amount[0]:,}**.'
+        )
+        lose.remove_footer()
         
-        lose.colour = discord.Colour.brand_red()
         lose.set_author(
             name=f"{interaction.user.name}'s losing high-low game", 
-            icon_url=interaction.user.display_avatar.url)
+            icon_url=interaction.user.display_avatar.url
+        )
         await interaction.response.edit_message(embed=lose, view=self)
 
     @discord.ui.button(label='Lower', style=discord.ButtonStyle.primary)
     async def low(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button for highlow interface to allow users to guess lower."""
-        async with interaction.client.pool.acquire() as conn:
-            conn: asqlite_Connection
 
-            async with conn.transaction():
-
-                if self.true_value < self.hint_provided:
-                    return await self.send_win(interaction, button, conn)
-                await self.send_loss(interaction, button, conn)
+        if self.true_value < self.hint_provided:
+            return await self.send_win(interaction, button)
+        await self.send_loss(interaction, button)
 
     @discord.ui.button(label='JACKPOT!', style=discord.ButtonStyle.primary)
     async def jackpot(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button for highlow interface to guess jackpot, meaning the guessed number is the actual number."""
 
-        async with interaction.client.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            async with conn.transaction():
-                if self.hint_provided == self.true_value:
-                    await self.send_win(interaction, button, conn)
-                    return await self.message.add_reaction("\U0001f911")
-                await self.send_loss(interaction, button, conn)
+        if self.hint_provided == self.true_value:
+            await self.send_win(interaction, button)
+            return await interaction.message.add_reaction("\U0001f389")
+        await self.send_loss(interaction, button)
 
     @discord.ui.button(label='Higher', style=discord.ButtonStyle.primary)
     async def high(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Button for highlow interface to allow users to guess higher."""
         
-        async with interaction.client.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            async with conn.transaction():
-                if self.true_value > self.hint_provided:
-                    return await self.send_win(interaction, button, conn)
-                await self.send_loss(interaction, button, conn)
+        if self.true_value > self.hint_provided:
+            return await self.send_win(interaction, button)
+        await self.send_loss(interaction, button)
 
 
 class ImageModal(discord.ui.Modal):
@@ -3982,41 +3980,41 @@ class Economy(commands.Cog):
     )
 
     @share.command(name="robux", description="Share robux with another user", extras={"exp_gained": 5})
-    @app_commands.rename(recipient="user", share_amount="quantity")
+    @app_commands.rename(recipient="user")
     @app_commands.describe(
         recipient='The user receiving the robux shared.', 
-        share_amount=ROBUX_DESCRIPTION
+        quantity=ROBUX_DESCRIPTION
     )
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def share_robux(
         self, 
         interaction: discord.Interaction, 
         recipient: USER_ENTRY,
-        share_amount: str
+        quantity: str
     ) -> None:
         """"Give an amount of robux to another user."""
 
-        user = interaction.user
+        sender = interaction.user
 
         async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            if not (await self.can_call_out_either(user, recipient, conn)):
+            if not (await self.can_call_out_either(sender, recipient, conn)):
                 return await interaction.response.send_message(ephemeral=True, embed=NOT_REGISTERED)
             else:
-                share_amount = await determine_exponent(
+                quantity = await determine_exponent(
                     interaction=interaction, 
-                    rinput=share_amount
+                    rinput=quantity
                 )
-                if share_amount is None:
+                if quantity is None:
                     return
 
-                wallet_amt_host = await Economy.get_wallet_data_only(user, conn)
+                wallet_amt_host = await Economy.get_wallet_data_only(sender, conn)
 
-                if isinstance(share_amount, str):
-                    share_amount = wallet_amt_host
+                if isinstance(quantity, str):
+                    quantity = wallet_amt_host
                 
-                if share_amount > wallet_amt_host:
+                if quantity > wallet_amt_host:
                     return await interaction.response.send_message(
                         ephemeral=True,
                         embed=membed("You don't have that much money to share.")
@@ -4027,7 +4025,7 @@ class Economy(commands.Cog):
                     await self.declare_transaction(conn, user_id=interaction.user.id)
                     value = await process_confirmation(
                         interaction=interaction, 
-                        prompt=f"Are you sure you want to share {CURRENCY} **{share_amount:,}** with {recipient.mention}?"
+                        prompt=f"Are you sure you want to share {CURRENCY} **{quantity:,}** with {recipient.mention}?"
                     )
                     await self.end_transaction(conn, user_id=interaction.user.id)
                     await conn.commit()
@@ -4036,20 +4034,20 @@ class Economy(commands.Cog):
 
                 await self.update_wallet_many(
                     conn, 
-                    (-int(share_amount), user.id), 
-                    (int(share_amount), recipient.id)
+                    (-int(quantity), sender.id), 
+                    (int(quantity), recipient.id)
                 )
                 await conn.commit()
 
                 return await respond(
                     interaction=interaction,
-                    embed=membed(f"Shared {CURRENCY} **{share_amount:,}** with {recipient.mention}!")
+                    embed=membed(f"Shared {CURRENCY} **{quantity:,}** with {recipient.mention}!")
                 )
 
     @share.command(name='items', description='Share items with another user', extras={"exp_gained": 5})
-    @app_commands.rename(recipient='user', item_name='item')
+    @app_commands.rename(recipient='user')
     @app_commands.describe(
-        item_name=ITEM_DESCRPTION, 
+        item=ITEM_DESCRPTION, 
         quantity='The amount of this item to share.', 
         recipient='The user receiving the item.'
     )
@@ -4059,21 +4057,21 @@ class Economy(commands.Cog):
         interaction: discord.Interaction, 
         recipient: USER_ENTRY,
         quantity: int, 
-        item_name: str
+        item: str
     ) -> None:
         """Give an amount of items to another user."""
 
-        primm = interaction.user
+        sender = interaction.user
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
             
-            if not (await self.can_call_out_either(primm, recipient, conn)):
+            if not (await self.can_call_out_either(sender, recipient, conn)):
                 return await interaction.response.send_message(ephemeral=True, embed=NOT_REGISTERED)
 
-            item_details = await Economy.partial_match_for(interaction, item_name, conn)
-            if item_details is None:
+            item = await Economy.partial_match_for(interaction, item, conn)
+            if item is None:
                 return
-            item_id, item_name, ie = item_details
+            item_id, item_name, ie = item
 
             attrs = await conn.fetchone(
                 """
@@ -4082,7 +4080,7 @@ class Economy(commands.Cog):
                 INNER JOIN shop ON inventory.itemID = shop.itemID
                 LEFT JOIN settings ON inventory.userID = settings.userID AND settings.setting = 'share_item_confirmations'
                 WHERE inventory.userID = $0 AND inventory.itemID = $1
-                """, primm.id, item_id
+                """, sender.id, item_id
             )
 
             if attrs is None:
@@ -4112,7 +4110,7 @@ class Economy(commands.Cog):
                     if not value:
                         return
 
-                await self.update_inv_by_id(primm, -quantity, item_id, conn)
+                await self.update_inv_by_id(sender, -quantity, item_id, conn)
                 
                 await conn.execute(
                     """
@@ -4696,10 +4694,15 @@ class Economy(commands.Cog):
                     return
                 
                 await self.update_inv_by_id(interaction.user, -quantity, item_details[0], conn)
-                await conn.execute("UPDATE inventory SET qty = qty + $0 WHERE userID = $1 AND itemID = $2", for_quantity, interaction.user.id, item2_details[0])
-
                 await self.update_inv_by_id(with_who, -for_quantity, item2_details[0], conn)
-                await conn.execute("UPDATE inventory SET qty = qty + $0 WHERE userID = $1 AND itemID = $2", quantity, with_who.id, item_details[0])
+
+                await conn.executemany(
+                    "UPDATE inventory SET qty = qty + $0 WHERE userID = $1 AND itemID = $2",
+                    [
+                        (for_quantity, interaction.user.id, item2_details[0]), 
+                        (quantity, with_who.id, item_details[0])
+                    ]
+                )
 
             embed = discord.Embed(colour=0xFFFFFF)
             embed.title = "Your Trade Receipt"
@@ -4924,13 +4927,13 @@ class Economy(commands.Cog):
 
     @shop.command(name='sell', description='Sell an item from your inventory', extras={"exp_gained": 4})
     @app_commands.describe(
-        item_name='The name of the item you want to sell.', 
+        item='The name of the item you want to sell.', 
         sell_quantity='The amount of this item to sell. Defaults to 1.'
     )
     async def sell(
         self, 
         interaction: discord.Interaction, 
-        item_name: str, 
+        item: str, 
         sell_quantity: Optional[app_commands.Range[int, 1]] = 1
     ) -> None:
         """Sell an item you already own."""
@@ -4940,7 +4943,7 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            item_details = await Economy.partial_match_for(interaction, item_name, conn)
+            item_details = await Economy.partial_match_for(interaction, item, conn)
 
             if item_details is None:
                 return
@@ -5251,81 +5254,80 @@ class Economy(commands.Cog):
             
             slay_name, work_until, skill_level = data
 
-            async with conn.transaction():
+
+            if not work_until:
+
+                embed = membed(
+                    f"What would you like {slay_name.title()} to do?\n"
+                    "Some tasks require your servant to attain a certain skill level.\n"
+                    "- 25 energy points are required for <:battery_green:1203056234731671683>\n"
+                    "- 50 energy points are required for <:battery_yellow:1203056272396648558>\n"
+                    "- 75 energy points are required for <:battery_red:1203056297310822411>\n"
+                    f"You can only pick 1 task for {slay_name.title()} to complete."
+                )
+                embed.title = "Task Menu"
                 
-                if not work_until:
-
-                    embed = membed(
-                        f"What would you like {slay_name.title()} to do?\n"
-                        "Some tasks require your servant to attain a certain skill level.\n"
-                        "- 25 energy points are required for <:battery_green:1203056234731671683>\n"
-                        "- 50 energy points are required for <:battery_yellow:1203056272396648558>\n"
-                        "- 75 energy points are required for <:battery_red:1203056297310822411>\n"
-                        f"You can only pick 1 task for {slay_name.title()} to complete."
+                return await interaction.response.send_message(
+                    embed=embed, 
+                    view=DispatchServantView(
+                        slay_name, 
+                        skill_level, 
+                        interaction
                     )
-                    embed.title = "Task Menu"
-                    
-                    return await interaction.response.send_message(
-                        embed=embed, 
-                        view=DispatchServantView(
-                            slay_name, 
-                            skill_level, 
-                            interaction
-                        )
-                    )
-
-                current_time = discord.utils.utcnow()
-                timestamp_to_dt = datetime.datetime.fromtimestamp(work_until, tz=timezone('UTC'))
-                time_left = (timestamp_to_dt - current_time).total_seconds()
-                
-                if time_left:
-                    when = timestamp_to_dt + datetime.timedelta(seconds=time_left)
-                    relative = discord.utils.format_dt(when, style="R")
-                    when = discord.utils.format_dt(when)
-                    return await interaction.response.send_message(
-                        ephemeral=True,
-                        embed=membed(
-                            f"{slay_name} is still working.\n"
-                            f"They'll be back at {when} ({relative})."
-                        )
-                    )
-
-                data = await conn.fetchone(
-                    """
-                    UPDATE `slay` SET 
-                        tasks_completed = tasks_completed + 1, 
-                        status = 1, 
-                        energy = CASE WHEN energy - toreduce < 0 THEN 0 ELSE energy - toreduce END, 
-                        work_until = 0 
-                    WHERE userID = $0 AND slay_name = $1 
-                    RETURNING toadd, hex, gender
-                    """, interaction.user.id, slay_name
                 )
 
-                embed = discord.Embed(
-                    title="Task Complete", 
-                    colour=data[1] or GENDER_COLOURS.get(data[2], 0x2B2D31)
-                )
-
-                embed.description = (
-                    f"**{slay_name} has given you:**\n"
-                    f"- {CURRENCY} {data[0]:,}"
-                )
-                embed.set_footer(text="No taxes!")
-
-                res = choices((0, 1), weights=(0.85, 0.15), k=1)
-                await self.update_bank_new(interaction.user, conn, data[0])
-                
-                if res[0]:
-                    qty = randint(1, 5)
-                    item_name, ie = await self.update_user_inventory_with_random_item(
-                        user_id=interaction.user.id, 
-                        conn=conn, 
-                        qty=qty
+            current_time = discord.utils.utcnow()
+            timestamp_to_dt = datetime.datetime.fromtimestamp(work_until, tz=timezone('UTC'))
+            time_left = (timestamp_to_dt - current_time).total_seconds()
+            
+            if time_left:
+                when = timestamp_to_dt + datetime.timedelta(seconds=time_left)
+                relative = discord.utils.format_dt(when, style="R")
+                when = discord.utils.format_dt(when)
+                return await interaction.response.send_message(
+                    ephemeral=True,
+                    embed=membed(
+                        f"{slay_name} is still working.\n"
+                        f"They'll be back at {when} ({relative})."
                     )
-                    embed.description += f"\n- {qty}x {ie} {item_name} (bonus)\n"
-                
-                await interaction.response.send_message(embed=embed)
+                )
+
+            data = await conn.fetchone(
+                """
+                UPDATE `slay` SET 
+                    tasks_completed = tasks_completed + 1, 
+                    status = 1, 
+                    energy = CASE WHEN energy - toreduce < 0 THEN 0 ELSE energy - toreduce END, 
+                    work_until = 0 
+                WHERE userID = $0 AND slay_name = $1 
+                RETURNING toadd, hex, gender
+                """, interaction.user.id, slay_name
+            )
+
+            embed = discord.Embed(
+                title="Task Complete", 
+                colour=data[1] or GENDER_COLOURS.get(data[2], 0x2B2D31)
+            )
+
+            embed.description = (
+                f"**{slay_name} has given you:**\n"
+                f"- {CURRENCY} {data[0]:,}"
+            )
+            embed.set_footer(text="No taxes!")
+
+            res = choices((0, 1), weights=(0.85, 0.15), k=1)
+            await self.update_bank_new(interaction.user, conn, data[0])
+            
+            if res[0]:
+                qty = randint(1, 5)
+                item_name, ie = await self.update_user_inventory_with_random_item(
+                    user_id=interaction.user.id, 
+                    conn=conn, 
+                    qty=qty
+                )
+                embed.description += f"\n- {qty}x {ie} {item_name} (bonus)\n"
+            await conn.commit()
+            await interaction.response.send_message(embed=embed)
 
     @commands.command(name='reasons', description='Identify causes of registration errors')
     async def not_registered_why(self, ctx: commands.Context) -> None:
@@ -5877,9 +5879,8 @@ class Economy(commands.Cog):
     @app_commands.command(name='slots', description='Try your luck on a slot machine', extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    @app_commands.rename(amount='robux')
-    @app_commands.describe(amount=ROBUX_DESCRIPTION)
-    async def slots(self, interaction: discord.Interaction, amount: str) -> None:
+    @app_commands.describe(robux=ROBUX_DESCRIPTION)
+    async def slots(self, interaction: discord.Interaction, robux: str) -> None:
         """Play a round of slots. At least one matching combination is required to win."""
 
         async with self.bot.pool.acquire() as conn:
@@ -5890,14 +5891,14 @@ class Economy(commands.Cog):
         slot_stuff = await conn.fetchone("SELECT slotw, slotl, wallet FROM `bank` WHERE userID = $0", interaction.user.id)
         id_won_amount, id_lose_amount, wallet_amt = slot_stuff[0], slot_stuff[1], slot_stuff[-1]
 
-        amount = await self.do_wallet_checks(
+        robux = await self.do_wallet_checks(
             interaction=interaction,
             wallet_amount=wallet_amt,
-            exponent_amount=amount,
+            exponent_amount=robux,
             has_keycard=has_keycard
         )
         
-        if amount is None:
+        if robux is None:
             return
 
         # ------------------ THE SLOT MACHINE ITESELF ------------------------
@@ -5905,11 +5906,13 @@ class Economy(commands.Cog):
         emoji_outcome = generate_slot_combination()
         freq1, freq2, freq3 = emoji_outcome
 
-        async with conn.transaction():
-            if emoji_outcome.count(freq1) > 1:
+        if emoji_outcome.count(freq1) > 1:
 
-                new_multi = BONUS_MULTIPLIERS[f'{freq1 * emoji_outcome.count(freq1)}']
-                amount_after_multi = int(((new_multi / 100) * amount) + amount)
+            new_multi = BONUS_MULTIPLIERS[f'{freq1 * emoji_outcome.count(freq1)}']
+            amount_after_multi = int(((new_multi / 100) * robux) + robux)
+
+            async with conn.transaction():
+                conn: asqlite_Connection
                 updated = await self.update_bank_three_new(
                     interaction.user, 
                     conn, 
@@ -5918,29 +5921,31 @@ class Economy(commands.Cog):
                     "slotw", 1
                 )
 
-                prcntw = (updated[2] / (id_lose_amount + updated[2])) * 100
+            prcntw = (updated[2] / (id_lose_amount + updated[2])) * 100
 
-                embed = discord.Embed(
-                    colour=discord.Color.brand_green(),
-                    description=(
-                        f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
-                        f"**It's a match!** You've won {CURRENCY} **{amount_after_multi:,}**.\n"
-                        f"Your new balance is {CURRENCY} **{updated[1]:,}**.\n"
-                        f"You've won {prcntw:.1f}% of all slots games."
-                    )
+            embed = discord.Embed(
+                colour=discord.Color.brand_green(),
+                description=(
+                    f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
+                    f"**It's a match!** You've won {CURRENCY} **{amount_after_multi:,}**.\n"
+                    f"Your new balance is {CURRENCY} **{updated[1]:,}**.\n"
+                    f"You've won {prcntw:.1f}% of all slots games."
                 )
+            )
 
-                embed.set_author(
-                    name=f"{interaction.user.name}'s winning slot machine", 
-                    icon_url=interaction.user.display_avatar.url
-                )
-                embed.set_footer(text=f"Multiplier: {new_multi}%")
+            embed.set_author(
+                name=f"{interaction.user.name}'s winning slot machine", 
+                icon_url=interaction.user.display_avatar.url
+            )
+            embed.set_footer(text=f"Multiplier: {new_multi}%")
 
-            elif emoji_outcome.count(freq2) > 1:
+        elif emoji_outcome.count(freq2) > 1:
 
-                new_multi = BONUS_MULTIPLIERS[f'{freq2 * emoji_outcome.count(freq2)}']
-                amount_after_multi = floor(((new_multi / 100) * amount) + amount)
+            new_multi = BONUS_MULTIPLIERS[f'{freq2 * emoji_outcome.count(freq2)}']
+            amount_after_multi = int(((new_multi / 100) * robux) + robux)
 
+            async with conn.transaction():
+                conn: asqlite_Connection
                 updated = await self.update_bank_three_new(
                     interaction.user, 
                     conn, 
@@ -5949,51 +5954,54 @@ class Economy(commands.Cog):
                     "slotw", 1
                 )
 
-                prcntw = (updated[2] / (id_lose_amount + updated[2])) * 100
+            prcntw = (updated[2] / (id_lose_amount + updated[2])) * 100
 
-                embed = discord.Embed(
-                    colour=discord.Color.brand_green(),
-                    description=(
-                        f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
-                        f"**It's a match!** You've won {CURRENCY} **{amount_after_multi:,}**.\n"
-                        f"Your new balance is {CURRENCY} **{updated[1]:,}**.\n"
-                        f"You've won {prcntw:.1f}% of all slots games."
-                    )
+            embed = discord.Embed(
+                colour=discord.Color.brand_green(),
+                description=(
+                    f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
+                    f"**It's a match!** You've won {CURRENCY} **{amount_after_multi:,}**.\n"
+                    f"Your new balance is {CURRENCY} **{updated[1]:,}**.\n"
+                    f"You've won {prcntw:.1f}% of all slots games."
                 )
+            )
 
-                embed.set_footer(text=f"Multiplier: {new_multi}%")
-                embed.set_author(
-                    name=f"{interaction.user.name}'s winning slot machine",
-                    icon_url=interaction.user.display_avatar.url
-                )
+            embed.set_footer(text=f"Multiplier: {new_multi}%")
+            embed.set_author(
+                name=f"{interaction.user.name}'s winning slot machine",
+                icon_url=interaction.user.display_avatar.url
+            )
 
-            else:
+        else:
+
+            async with conn.transaction():
+                conn: asqlite_Connection
                 updated = await self.update_bank_three_new(
                     interaction.user, 
                     conn, 
-                    "slotla", amount, 
-                    "wallet", -amount, 
+                    "slotla", robux, 
+                    "wallet", -robux, 
                     "slotl", 1
                 )
 
-                prcntl = (updated[-1] / (updated[-1] + id_won_amount)) * 100
+            prcntl = (updated[-1] / (updated[-1] + id_won_amount)) * 100
 
-                embed = discord.Embed(
-                    colour=discord.Color.brand_red(),
-                    description=(
-                        f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
-                        f"**No match!** You've lost {CURRENCY} **{amount:,}**.\n"
-                        f"Your new balance is {CURRENCY} **{updated[1]:,}**.\n"
-                        f"You've lost {prcntl:.1f}% of all slots games."
-                    )
+            embed = discord.Embed(
+                colour=discord.Color.brand_red(),
+                description=(
+                    f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
+                    f"**No match!** You've lost {CURRENCY} **{robux:,}**.\n"
+                    f"Your new balance is {CURRENCY} **{updated[1]:,}**.\n"
+                    f"You've lost {prcntl:.1f}% of all slots games."
                 )
+            )
 
-                embed.set_author(
-                    name=f"{interaction.user.name}'s losing slot machine", 
-                    icon_url=interaction.user.display_avatar.url
-                )
+            embed.set_author(
+                name=f"{interaction.user.name}'s losing slot machine", 
+                icon_url=interaction.user.display_avatar.url
+            )
 
-            await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
     
     @app_commands.command(name='inventory', description='View your currently owned items')
@@ -6233,18 +6241,18 @@ class Economy(commands.Cog):
                 )
                 return await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            async with conn.transaction():
-                
-                if data[0] != "None":
-                    return await interaction.response.send_message(
-                        ephemeral=True,
-                        embed=membed(
-                            f"You are already working as a **{data[0]}**.\n"
-                            "You'll have to resign first using /work resign."
-                        )
+            if data[0] != "None":
+                return await interaction.response.send_message(
+                    ephemeral=True,
+                    embed=membed(
+                        f"You are already working as a **{data[0]}**.\n"
+                        "You'll have to resign first using /work resign."
                     )
+                )
 
-                ncd = (discord.utils.utcnow() + datetime.timedelta(days=2)).timestamp()
+            ncd = (discord.utils.utcnow() + datetime.timedelta(days=2)).timestamp()
+            async with conn.transaction():
+
                 await self.update_cooldown(
                     conn, 
                     user_id=interaction.user.id, 
@@ -6253,10 +6261,10 @@ class Economy(commands.Cog):
                 )
                 await self.change_job_new(interaction.user, conn, job_name=chosen_job)
 
-                embed = membed("You can start working now for every 40 minutes.")
-                embed.title = f"Congratulations, you are now working as a {chosen_job}"
+            embed = membed("You can start working now for every 40 minutes.")
+            embed.title = f"Congratulations, you are now working as a {chosen_job}"
 
-                await interaction.response.send_message(embed=embed)
+            await interaction.response.send_message(embed=embed)
     
     @work.command(name="resign", description="Resign from your current job")
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
@@ -6448,8 +6456,8 @@ class Economy(commands.Cog):
                     embed=membed(f"You already got your {recurring_income_type} robux this {noun_period}, try again {has_cd[1]}.")
                 )
             
+            next_cd = discord.utils.utcnow() + datetime.timedelta(weeks=weeks_away)
             async with conn.transaction():
-                next_cd = discord.utils.utcnow() + datetime.timedelta(weeks=weeks_away)
 
                 try:
                     await self.update_cooldown(
@@ -6463,15 +6471,15 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(embed=self.not_registered)
 
                 await self.update_bank_new(interaction.user, conn, multiplier)
-                next_cd = discord.utils.format_dt(next_cd, style="R")
-                
-                success = membed(
-                    f"You just got {CURRENCY} **{multiplier:,}** for checking in this {noun_period}.\n"
-                    f"See you next {noun_period} ({next_cd})!"
-                )
 
-                success.title = f"{interaction.user.display_name}'s {recurring_income_type.title()} Robux"
-                success.url = "https://www.youtube.com/watch?v=ue_X8DskUN4"
+            next_cd = discord.utils.format_dt(next_cd, style="R")    
+            success = membed(
+                f"You just got {CURRENCY} **{multiplier:,}** for checking in this {noun_period}.\n"
+                f"See you next {noun_period} ({next_cd})!"
+            )
+
+            success.title = f"{interaction.user.display_name}'s {recurring_income_type.title()} Robux"
+            success.url = "https://www.youtube.com/watch?v=ue_X8DskUN4"
 
             await interaction.response.send_message(embed=success)
 
@@ -6784,70 +6792,72 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(embed=embed)
 
                 result = choices((0, 1), weights=(49, 51), k=1)
-                async with conn.transaction():
-                    if not result[0]:
-                        emote = choice(
-                            (
-                                "<a:kekRealize:970295657233539162>", "<:smhlol:1160157952410386513>", 
-                                "<:z_HaH:783399959068016661>", "<:lmao:784308818418728972>", 
-                                "<:lamaww:789865027007414293>", "<a:StoleThisEmote5:791327136296075327>", 
-                                "<:jerryLOL:792239708364341258>", "<:dogkekw:797946573144850432>"
-                            )
+
+                if not result[0]:
+                    emote = choice(
+                        (
+                            "<a:kekRealize:970295657233539162>", "<:smhlol:1160157952410386513>", 
+                            "<:z_HaH:783399959068016661>", "<:lmao:784308818418728972>", 
+                            "<:lamaww:789865027007414293>", "<a:StoleThisEmote5:791327136296075327>", 
+                            "<:jerryLOL:792239708364341258>", "<:dogkekw:797946573144850432>"
                         )
-                        
-                        fine = randint(1, prim_d[0])
-                        embed.description = (
-                            f'You were caught lol {emote}\n'
-                            f'You paid {robbing.mention} {CURRENCY} **{fine:,}**.'
-                        )
-
-                        b = prim_d[-1]
-                        if b:
-                            fine += b
-                            embed.description += (
-                                "\n\n**Bounty Status:**\n"
-                                f"{robbing.mention} was also given your bounty of **{CURRENCY} {b:,}**."
-                            )
-
-                        await self.update_wallet_many(
-                            conn, 
-                            (fine, robbing.id), 
-                            (-fine, interaction.user.id)
-                        )
-
-                        return await interaction.response.send_message(embed=embed)
-
-                    amt_stolen = randint(1_000_000, host_d[0])
-                    amt_dropped = floor((25 / 100) * amt_stolen)
-                    total = amt_stolen - amt_dropped
-                    percent_stolen = int((total/amt_stolen) * 100)
+                    )
                     
+                    fine = randint(1, prim_d[0])
+                    embed.description = (
+                        f'You were caught lol {emote}\n'
+                        f'You paid {robbing.mention} {CURRENCY} **{fine:,}**.'
+                    )
+
+                    b = prim_d[-1]
+                    if b:
+                        fine += b
+                        embed.description += (
+                            "\n\n**Bounty Status:**\n"
+                            f"{robbing.mention} was also given your bounty of **{CURRENCY} {b:,}**."
+                        )
+
                     await self.update_wallet_many(
                         conn, 
-                        (-amt_stolen, robbing.id), 
-                        (total, interaction.user.id)
+                        (fine, robbing.id), 
+                        (-fine, interaction.user.id)
                     )
-                    
-                    if percent_stolen <= 25:
-                        embed.title = "You stole a TINY portion!"
-                        embed.set_thumbnail(url="https://i.imgur.com/nZmHhJX.png")
-                    elif percent_stolen <= 50:
-                        embed.title = "You stole a small portion!"
-                        embed.set_thumbnail(url="https://i.imgur.com/148ClcS.png")
-                    elif percent_stolen <= 75:
-                        embed.title = "You stole a fairly decent chunk!"
-                        embed.set_thumbnail(url="https://i.imgur.com/eNIT8qw.png")
-                    else:
-                        embed.title = "You stole BASICALLY EVERYTHING YOU POSSIBLY COULD!"
-                        embed.set_thumbnail(url="https://i.imgur.com/jY3PzTv.png")
-                    
-                    embed.description = (
-                        f"**You managed to get:**\n"
-                        f"{CURRENCY} {amt_stolen:,} (but dropped {CURRENCY} {amt_dropped:,} while escaping)"
-                    )
+                    await conn.commit()
 
-                    embed.set_footer(text=f"You stole {CURRENCY} {total:,} in total")
-                    await interaction.response.send_message(embed=embed)
+                    return await interaction.response.send_message(embed=embed)
+
+                amt_stolen = randint(1_000_000, host_d[0])
+                amt_dropped = floor((25 / 100) * amt_stolen)
+                total = amt_stolen - amt_dropped
+                percent_stolen = int((total/amt_stolen) * 100)
+                
+                await self.update_wallet_many(
+                    conn, 
+                    (-amt_stolen, robbing.id), 
+                    (total, interaction.user.id)
+                )
+                await conn.commit()
+                
+                if percent_stolen <= 25:
+                    embed.title = "You stole a TINY portion!"
+                    embed.set_thumbnail(url="https://i.imgur.com/nZmHhJX.png")
+                elif percent_stolen <= 50:
+                    embed.title = "You stole a small portion!"
+                    embed.set_thumbnail(url="https://i.imgur.com/148ClcS.png")
+                elif percent_stolen <= 75:
+                    embed.title = "You stole a fairly decent chunk!"
+                    embed.set_thumbnail(url="https://i.imgur.com/eNIT8qw.png")
+                else:
+                    embed.title = "You stole BASICALLY EVERYTHING YOU POSSIBLY COULD!"
+                    embed.set_thumbnail(url="https://i.imgur.com/jY3PzTv.png")
+                
+                embed.description = (
+                    f"**You managed to get:**\n"
+                    f"{CURRENCY} {amt_stolen:,} (but dropped {CURRENCY} {amt_dropped:,} while escaping)"
+                )
+
+                embed.set_footer(text=f"You stole {CURRENCY} {total:,} in total")
+                await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='bankrob', description="Gather people to rob someone's bank")
     @app_commands.guilds(*APP_GUILDS_IDS)
@@ -7177,75 +7187,77 @@ class Economy(commands.Cog):
                 )
             
             embed = discord.Embed()
-            async with conn.transaction():
-                if their_roll > bot_roll:
-                    amount_after_multi = int(((pmulti / 100) * robux) + robux)
-                    updated = await self.update_bank_three_new(
-                        interaction.user, 
-                        conn, 
-                        "betwa", amount_after_multi,
-                        "betw", 1, 
-                        "wallet", amount_after_multi
-                    )
 
-                    prcntw = (updated[1] / (id_lose_amount + updated[1])) * 100
+            if their_roll > bot_roll:
+                amount_after_multi = int(((pmulti / 100) * robux) + robux)
+                updated = await self.update_bank_three_new(
+                    interaction.user, 
+                    conn, 
+                    "betwa", amount_after_multi,
+                    "betw", 1, 
+                    "wallet", amount_after_multi
+                )
+                await conn.commit()
 
-                    embed.colour = discord.Color.brand_green()
-                    embed.description=(
-                        f"**You've rolled higher!**\n"
-                        f"You won {CURRENCY} **{amount_after_multi:,}**.\n"
-                        f"You now have {CURRENCY} **{updated[2]:,}**.\n"
-                        f"You've won {prcntw:.1f}% of all games."
-                    )
+                prcntw = (updated[1] / (id_lose_amount + updated[1])) * 100
 
-                    embed.set_author(
-                        name=f"{interaction.user.name}'s winning gambling game", 
-                        icon_url=interaction.user.display_avatar.url
-                    )
+                embed.colour = discord.Color.brand_green()
+                embed.description=(
+                    f"**You've rolled higher!**\n"
+                    f"You won {CURRENCY} **{amount_after_multi:,}**.\n"
+                    f"You now have {CURRENCY} **{updated[2]:,}**.\n"
+                    f"You've won {prcntw:.1f}% of all games."
+                )
 
-                elif their_roll == bot_roll:
-                    embed.colour = discord.Color.yellow()
-                    embed.description = "**Tie.** You lost nothing nor gained anything!"
+                embed.set_author(
+                    name=f"{interaction.user.name}'s winning gambling game", 
+                    icon_url=interaction.user.display_avatar.url
+                )
 
-                    embed.set_author(
-                        name=f"{interaction.user.name}'s gambling game", 
-                        icon_url=interaction.user.display_avatar.url
-                    )
-                                    
-                else:
-                    updated = await self.update_bank_three_new(
-                        interaction.user, 
-                        conn, 
-                        "betla", robux,
-                        "betl", 1, 
-                        "wallet", -robux
-                    )
+            elif their_roll == bot_roll:
+                embed.colour = discord.Color.yellow()
+                embed.description = "**Tie.** You lost nothing nor gained anything!"
 
-                    new_total = id_won_amount + updated[1]
-                    prcntl = (updated[1] / new_total) * 100
+                embed.set_author(
+                    name=f"{interaction.user.name}'s gambling game", 
+                    icon_url=interaction.user.display_avatar.url
+                )
+                                
+            else:
+                updated = await self.update_bank_three_new(
+                    interaction.user, 
+                    conn, 
+                    "betla", robux,
+                    "betl", 1, 
+                    "wallet", -robux
+                )
+                await conn.commit()
 
-                    embed.colour = discord.Color.brand_red()
-                    embed.description=(
-                        f"**You've rolled lower!**\n"
-                        f"You lost {CURRENCY} **{robux:,}**.\n"
-                        f"You now have {CURRENCY} **{updated[2]:,}**.\n"
-                        f"You've lost {prcntl:.1f}% of all games."
-                    )
+                new_total = id_won_amount + updated[1]
+                prcntl = (updated[1] / new_total) * 100
 
-                    embed.set_author(
-                        name=f"{interaction.user.name}'s losing gambling game", 
-                        icon_url=interaction.user.display_avatar.url
-                    )
-                
-                embed.add_field(name=interaction.user.name, value=f"Rolled `{their_roll}` {''.join(badges)}")
-                embed.add_field(name=self.bot.user.name, value=f"Rolled `{bot_roll}`")
-                embed.set_footer(text=f"Multiplier: {pmulti:,}%")
+                embed.colour = discord.Color.brand_red()
+                embed.description=(
+                    f"**You've rolled lower!**\n"
+                    f"You lost {CURRENCY} **{robux:,}**.\n"
+                    f"You now have {CURRENCY} **{updated[2]:,}**.\n"
+                    f"You've lost {prcntl:.1f}% of all games."
+                )
 
-                await interaction.response.send_message(embed=embed)
+                embed.set_author(
+                    name=f"{interaction.user.name}'s losing gambling game", 
+                    icon_url=interaction.user.display_avatar.url
+                )
+            
+            embed.add_field(name=interaction.user.name, value=f"Rolled `{their_roll}` {''.join(badges)}")
+            embed.add_field(name=self.bot.user.name, value=f"Rolled `{bot_roll}`")
+            embed.set_footer(text=f"Multiplier: {pmulti:,}%")
 
-    @sell.autocomplete('item_name')
+            await interaction.response.send_message(embed=embed)
+
+    @sell.autocomplete('item')
     @use_item.autocomplete('item')
-    @share_items.autocomplete('item_name')
+    @share_items.autocomplete('item')
     @trade_items_for_coins.autocomplete('item')
     @trade_items_for_items.autocomplete('item')
     async def owned_items_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
