@@ -6725,28 +6725,26 @@ class Economy(commands.Cog):
         await interaction.response.send_message(embed=lb, view=lb_view)
 
     @app_commands.command(name='rob', description="Attempt to steal from someone's pocket", extras={"exp_gained": 4})
-    @app_commands.rename(other="user")
     @app_commands.guilds(*APP_GUILDS_IDS)
-    @app_commands.describe(other='The user you want to rob money from.')
+    @app_commands.rename(robbing="user")
+    @app_commands.describe(robbing='The user you want to rob money from.')
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    async def rob_the_user(self, interaction: discord.Interaction, other: discord.Member) -> None:
+    async def rob_the_user(self, interaction: discord.Interaction, robbing: discord.Member) -> None:
         """Rob someone else."""
-        primary_id = str(interaction.user.id)
-        other_id = str(other.id)
 
         embed = membed()
-        if other_id == primary_id:
+        if interaction.user.id == robbing.id:
             embed.description = 'Seems pretty foolish to steal from yourself'
             return await interaction.response.send_message(embed=embed)
-        elif other.bot:
+        elif robbing.bot:
             embed.description = 'You are not allowed to steal from bots, back off my kind'
             return await interaction.response.send_message(embed=embed)
         else:
             async with self.bot.pool.acquire() as conn:
                 conn: asqlite_Connection
 
-                if not (await self.can_call_out_either(interaction.user, other, conn)):
-                    embed.description = f'Either you or {other.mention} are not registered.'
+                if not (await self.can_call_out_either(interaction.user, robbing, conn)):
+                    embed.description = f'Either you or {robbing.mention} are not registered.'
                     return await interaction.response.send_message(embed=embed, ephemeral=True)
 
                 prim_d = await conn.fetchone(
@@ -6756,7 +6754,7 @@ class Economy(commands.Cog):
                     LEFT JOIN settings 
                         ON bank.userID = settings.userID AND settings.setting = 'passive_mode'
                     WHERE bank.userID = $0
-                    """, primary_id
+                    """, interaction.user.id
                 )
 
                 host_d = await conn.fetchone(
@@ -6766,7 +6764,7 @@ class Economy(commands.Cog):
                     LEFT JOIN settings 
                         ON bank.userID = settings.userID AND settings.setting = 'passive_mode' 
                     WHERE bank.userID = $0
-                    """, other_id
+                    """, robbing.id
                 )
 
                 if prim_d[-1]:
@@ -6774,18 +6772,18 @@ class Economy(commands.Cog):
                     return await interaction.response.send_message(embed=embed)
                 
                 if host_d[-1]:
-                    embed.description = f"{other.mention} is in passive mode, you can't rob them!"
+                    embed.description = f"{robbing.mention} is in passive mode, you can't rob them!"
                     return await interaction.response.send_message(embed=embed)
 
                 if host_d[0] < 1_000_000:
-                    embed.description = f"{other.mention} doesn't even have {CURRENCY} **1,000,000**, not worth it."
+                    embed.description = f"{robbing.mention} doesn't even have {CURRENCY} **1,000,000**, not worth it."
                     return await interaction.response.send_message(embed=embed)
                 
                 if prim_d[0] < 10_000_000:
                     embed.description = f"You need at least {CURRENCY} **10,000,000** in your wallet to rob someone."
                     return await interaction.response.send_message(embed=embed)
 
-                result = choices([0, 1], weights=(49, 51), k=1)
+                result = choices((0, 1), weights=(49, 51), k=1)
                 async with conn.transaction():
                     if not result[0]:
                         emote = choice(
@@ -6800,7 +6798,7 @@ class Economy(commands.Cog):
                         fine = randint(1, prim_d[0])
                         embed.description = (
                             f'You were caught lol {emote}\n'
-                            f'You paid {other.mention} {CURRENCY} **{fine:,}**.'
+                            f'You paid {robbing.mention} {CURRENCY} **{fine:,}**.'
                         )
 
                         b = prim_d[-1]
@@ -6808,38 +6806,26 @@ class Economy(commands.Cog):
                             fine += b
                             embed.description += (
                                 "\n\n**Bounty Status:**\n"
-                                f"{other.mention} was also given your bounty of **{CURRENCY} {b:,}**."
+                                f"{robbing.mention} was also given your bounty of **{CURRENCY} {b:,}**."
                             )
-
-                            await self.update_bank_new(other, conn, +fine)
-                            await conn.execute(
-                                """
-                                UPDATE `bank` 
-                                SET 
-                                    bounty = 0, 
-                                    wallet = wallet - $0 
-                                WHERE userID = $1
-                                """, fine, primary_id
-                            )
-                            return await interaction.response.send_message(embed=embed)
 
                         await self.update_wallet_many(
                             conn, 
-                            (fine, other_id), 
-                            (-fine, primary_id)
+                            (fine, robbing.id), 
+                            (-fine, interaction.user.id)
                         )
 
                         return await interaction.response.send_message(embed=embed)
 
                     amt_stolen = randint(1_000_000, host_d[0])
-                    lost = floor((25 / 100) * amt_stolen)
-                    total = amt_stolen - lost
-                    percent_stolen = floor((total/amt_stolen) * 100)
+                    amt_dropped = floor((25 / 100) * amt_stolen)
+                    total = amt_stolen - amt_dropped
+                    percent_stolen = int((total/amt_stolen) * 100)
                     
                     await self.update_wallet_many(
                         conn, 
-                        (total, primary_id), 
-                        (-total, other_id)
+                        (-amt_stolen, robbing.id), 
+                        (total, interaction.user.id)
                     )
                     
                     if percent_stolen <= 25:
@@ -6857,7 +6843,7 @@ class Economy(commands.Cog):
                     
                     embed.description = (
                         f"**You managed to get:**\n"
-                        f"{CURRENCY} {amt_stolen:,} (but dropped {CURRENCY} {lost:,} while escaping)"
+                        f"{CURRENCY} {amt_stolen:,} (but dropped {CURRENCY} {amt_dropped:,} while escaping)"
                     )
 
                     embed.set_footer(text=f"You stole {CURRENCY} {total:,} in total")
@@ -6881,16 +6867,15 @@ class Economy(commands.Cog):
     @app_commands.command(name='coinflip', description='Bet your robux on a coin flip', extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(
-        bet_on='The side of the coin you bet it will flip on.', 
-        amount=ROBUX_DESCRIPTION
+        side='The side of the coin you bet it will flip on.', 
+        robux=ROBUX_DESCRIPTION
     )
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    @app_commands.rename(bet_on='side', amount='robux')
-    async def coinflip(self, interaction: discord.Interaction, bet_on: str, amount: str) -> None:
+    async def coinflip(self, interaction: discord.Interaction, side: str, robux: str) -> None:
         """Flip a coin and make a bet on what side of the coin it flips to."""
 
         user = interaction.user
-        bet_on = "heads" if "h" in bet_on.lower() else "tails"
+        bet_on = "heads" if "h" in side.lower() else "tails"
         
         async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
@@ -6908,7 +6893,7 @@ class Economy(commands.Cog):
             wallet_amt, = wallet_amt
 
             has_keycard = await self.user_has_item_from_id(
-                user_id=interaction.user.id,
+                user_id=user.id,
                 item_id=1,
                 conn=conn
             )
@@ -6916,7 +6901,7 @@ class Economy(commands.Cog):
             amount = await self.do_wallet_checks(
                 interaction=interaction,
                 wallet_amount=wallet_amt,
-                exponent_amount=amount,
+                exponent_amount=robux,
                 has_keycard=has_keycard
             )
 
@@ -6944,9 +6929,8 @@ class Economy(commands.Cog):
     @app_commands.command(name="blackjack", description="Test your skills at blackjack", extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.checks.dynamic_cooldown(owners_nolimit)
-    @app_commands.rename(bet_amount='robux')
-    @app_commands.describe(bet_amount=ROBUX_DESCRIPTION)
-    async def play_blackjack(self, interaction: discord.Interaction, bet_amount: str) -> None:
+    @app_commands.describe(robux=ROBUX_DESCRIPTION)
+    async def play_blackjack(self, interaction: discord.Interaction, robux: str) -> None:
         """Play a round of blackjack with the bot. Win by reaching 21 or a score higher than the bot without busting."""
 
         # ------ Check the user is registered or already has an ongoing game ---------
@@ -6974,7 +6958,7 @@ class Economy(commands.Cog):
             interaction=interaction, 
             has_keycard=has_keycard,
             wallet_amount=wallet_amt,
-            exponent_amount=bet_amount
+            exponent_amount=robux
         )
         
         if namount is None:
@@ -7080,7 +7064,7 @@ class Economy(commands.Cog):
         self, 
         interaction: discord.Interaction,  
         wallet_amount: int, 
-        exponent_amount : str | int,
+        exponent_amount : Union[str, int],
         has_keycard: Optional[bool] = False
     ) -> Union[int, None]:
         """Reusable wallet checks that are common amongst most gambling commands."""
