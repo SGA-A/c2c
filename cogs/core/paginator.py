@@ -1,13 +1,19 @@
-from discord.ext import commands
-import discord
-
 from traceback import print_exception
 from typing import Optional, Callable, Union
+
+from discord.ext import commands
+import discord
 
 from .helpers import membed, determine_exponent, economy_check
 
 
 NOT_YOUR_MENU = membed("This menu is not for you.")
+
+# Button emojis
+GO_FIRST_PAGE_EMOJI = discord.PartialEmoji.from_str("<:start:1212509961943252992>")
+MOVE_LEFT_EMOJI = discord.PartialEmoji.from_str("<:left:1212498142726066237>")
+MOVE_RIGHT_EMOJI = discord.PartialEmoji.from_str("<:right:1212498140620394548>")
+GO_LAST_PAGE_EMOJI = discord.PartialEmoji.from_str("<:final:1212509960483643392>")
 
 
 async def button_response(interaction: discord.Interaction, **kwargs) -> None | discord.Message:
@@ -125,12 +131,12 @@ class Pagination(discord.ui.View):
         self.children[3].disabled = is_last_item_check
         self.children[4].disabled = is_last_item_check
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:start:1212509961943252992>"), row=1)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_FIRST_PAGE_EMOJI, row=1)
     async def first(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index = 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:left:1212498142726066237>"), row=1)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_LEFT_EMOJI, row=1)
     async def previous(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index -= 1
         await self.edit_page(interaction)
@@ -158,12 +164,12 @@ class Pagination(discord.ui.View):
         self.index = min(self.total_pages, val)
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:right:1212498140620394548>"), row=1)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_RIGHT_EMOJI, row=1)
     async def next_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index += 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:final:1212509960483643392>"), row=1)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_LAST_PAGE_EMOJI, row=1)
     async def last_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index = self.total_pages
         await self.edit_page(interaction)
@@ -245,22 +251,22 @@ class PaginationSimple(discord.ui.View):
         self.children[2].disabled = is_last_item_check
         self.children[3].disabled = is_last_item_check
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:start:1212509961943252992>"), row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_FIRST_PAGE_EMOJI, row=0)
     async def first(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index = 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:left:1212498142726066237>"), row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_LEFT_EMOJI, row=0)
     async def previous(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index -= 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:right:1212498140620394548>"), row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_RIGHT_EMOJI, row=0)
     async def next_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index += 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:final:1212509960483643392>"), row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_LAST_PAGE_EMOJI, row=0)
     async def last_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index = self.total_pages
         await self.edit_page(interaction)
@@ -322,12 +328,12 @@ class RefreshPagination(discord.ui.View):
         self.children[3].disabled = is_last_item_check
         self.children[4].disabled = is_last_item_check
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:start:1212509961943252992>"), row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_FIRST_PAGE_EMOJI, row=0)
     async def first(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index = 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:left:1212498142726066237>"), row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_LEFT_EMOJI, row=0)
     async def previous(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index -= 1
         await self.edit_page(interaction)
@@ -336,12 +342,12 @@ class RefreshPagination(discord.ui.View):
     async def refresh_paginator(self, interaction: discord.Interaction, _: discord.ui.Button):
         await self.edit_page(interaction, force_refresh=True)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:right:1212498140620394548>"), row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_RIGHT_EMOJI, row=0)
     async def next_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index += 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=discord.PartialEmoji.from_str("<:final:1212509960483643392>"), row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_LAST_PAGE_EMOJI, row=0)
     async def last_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index = self.total_pages
         await self.edit_page(interaction)
@@ -387,7 +393,7 @@ class PaginationItem(discord.ui.View):
         emb, self.total_pages = await self.get_page(self.index)
         await button_response(interaction, embed=emb, view=self)
 
-    @discord.ui.button(style=discord.ButtonStyle.grey, emoji=discord.PartialEmoji.from_str("<:left:1212498142726066237>"), row=2)
+    @discord.ui.button(style=discord.ButtonStyle.grey, emoji=MOVE_LEFT_EMOJI, row=2)
     async def previous(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         
         if self.index - 1 < 1:
@@ -396,7 +402,7 @@ class PaginationItem(discord.ui.View):
             self.index -= 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.grey, emoji=discord.PartialEmoji.from_str("<:right:1212498140620394548>"), row=2)
+    @discord.ui.button(style=discord.ButtonStyle.grey, emoji=MOVE_RIGHT_EMOJI, row=2)
     async def next_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         if self.index + 1 > self.total_pages:
             self.index = 1
