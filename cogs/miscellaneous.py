@@ -1,28 +1,27 @@
+import datetime
 from io import BytesIO
-from github import Github
 from random import choice
 from unicodedata import name
 from time import perf_counter
+from re import compile as compile_it
+from xml.etree.ElementTree import fromstring
+from typing import Literal, Union, Optional, List
+
+import discord
+from github import Github
+from discord.ext import commands
+from discord import app_commands
 from waifuim import WaifuAioClient
 from psutil import Process, cpu_count
 from waifuim.exceptions import APIException
-from typing import Literal, Union, Optional, List
-from re import compile as compile_it
-from xml.etree.ElementTree import fromstring
-
-from discord.ext import commands
-from discord import app_commands
-
-import discord
-import datetime
 
 from cogs.economy import (
     APP_GUILDS_IDS, 
     USER_ENTRY, 
     total_commands_used_by_user
 )
-from .core.paginator import Pagination, PaginationSimple
 from .core.helpers import membed
+from .core.paginator import Pagination, PaginationSimple
 
 
 ARROW = "<:arrowe:1180428600625877054>"
@@ -78,6 +77,7 @@ def format_dt(dt: datetime.datetime, style: Optional[str] = None) -> str:
     return f'<t:{int(dt.timestamp())}:{style}>'
 
 
+
 def format_relative(dt: datetime.datetime) -> str:
     return format_dt(dt, 'R')
 
@@ -96,7 +96,7 @@ def extract_domain(website):
 
 
 def return_random_color():
-    colors_crayon = (
+    crayon_colours = (
         discord.Color.from_rgb(255, 204, 204),
         discord.Color.from_rgb(255, 232, 204),
         discord.Color.from_rgb(242, 255, 204),
@@ -112,7 +112,7 @@ def return_random_color():
         discord.Color.from_rgb(191, 252, 198),
         discord.Color.from_rgb(80, 85, 252)
     )
-    return choice(colors_crayon)
+    return choice(crayon_colours)
 
 
 class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
@@ -402,15 +402,17 @@ class Utility(commands.Cog):
         if message.embeds:
             for embed in message.embeds:
                 counter += 1
-                nembed = discord.Embed(
-                    colour=embed.colour,
-                    description=f"{embed.colour} - [`{embed.colour.value}`](https:/www.google.com)")
+                nembed = discord.Embed(colour=embed.colour)
+                nembed.description = f"{embed.colour} - [`{embed.colour.value}`](https:/www.google.com)"
                 all_embeds.append(nembed)
 
         if counter:
             return await interaction.response.send_message(embeds=all_embeds)
 
-        await interaction.response.send_message(content="No embeds were found within this message.", ephemeral=True)
+        await interaction.response.send_message(
+            ephemeral=True, 
+            embed=membed("No embeds were found within this message.")
+        )
 
     @app_commands.command(name='bored', description="Find something to do if you're bored")
     @app_commands.guilds(*APP_GUILDS_IDS)
@@ -504,7 +506,7 @@ class Utility(commands.Cog):
         if isinstance(posts_xml, int):
             embed = membed("Failed to make this request.")
             embed.add_field(name="Cause", value=RESPONSES.get(posts_xml, "Not Known."))
-
+            embed.set_footer(f"{posts_xml}. That's an error.")
             return await interaction.response.send_message(embed=embed)
 
         if not len(posts_xml):
@@ -828,7 +830,7 @@ class Utility(commands.Cog):
                 buffer = BytesIO(await response.read())
                 end = perf_counter()
                 return await interaction.followup.send(
-                    content=f"Done. Took ` {end-start:.2f}s `.", 
+                    content=f"Took ` {end-start:.2f}s `.", 
                     file=discord.File(buffer, 'clip.gif')
                 )
 
@@ -903,7 +905,7 @@ class Utility(commands.Cog):
             headers=headers
         )
 
-    @app_commands.command(name="locket", description="Insert people into a heart-shaped locket")
+    @commands.command(name="locket", description="Insert people into a heart-shaped locket")
     @app_commands.describe(user="The user to add to the locket.", user2="The second user to add to the locket.")
     @app_commands.guilds(*APP_GUILDS_IDS)
     async def locket_manip(
@@ -1100,12 +1102,16 @@ class Utility(commands.Cog):
                 await ctx.send(embed=embed)
 
     @commands.command(name='avatar', description="Display a user's enlarged avatar")
-    async def avatar(self, ctx, *, username: Union[discord.Member, discord.User] = None) -> None:
-        """Shows a user's enlarged avatar (if possible)."""
-        embed = discord.Embed(colour=0x2B2D31)
-        username = username or ctx.author
+    async def avatar(
+        self, 
+        ctx: commands.Context,
+        *, 
+        username: Union[discord.Member, discord.User] = commands.Author
+    ) -> None:
+        embed = membed()
+
         avatar = username.display_avatar.with_static_format('png')
-        embed.set_author(name=username.name, url=username.display_avatar.url)
+        embed.set_author(name=username.display_name, url=username.display_avatar.url)
         embed.set_image(url=avatar)
         await ctx.send(embed=embed)
 
@@ -1116,7 +1122,6 @@ class Utility(commands.Cog):
         *, 
         username: Union[discord.Member, discord.User] = commands.Author
     ) -> Union[None, discord.Message]:
-        """Shows a user's enlarged avatar (if possible)."""
         embed = membed()
 
         if username.bot:
@@ -1126,7 +1131,7 @@ class Utility(commands.Cog):
             embed.description = f"{username.mention} does not have a banner."
             return await ctx.send(embed=embed)
 
-        embed.set_author(name=username.name, url=username.display_avatar.url)
+        embed.set_author(name=username.display_name, url=username.display_avatar.url)
         embed.set_image(url=username.banner.with_static_format('png'))
         await ctx.send(embed=embed)
 
@@ -1192,7 +1197,7 @@ class Utility(commands.Cog):
 
         em = membed(f"- Estimated Results: {results_count}\n- Search Time: {search_time}ms")
 
-        em.set_author(name=user.name, icon_url=user.display_avatar.url)
+        em.set_author(name=user.display_name, icon_url=user.display_avatar.url)
         paginator = PaginationSimple(
             interaction, 
             invoker_id=user.id
@@ -1221,10 +1226,10 @@ class Utility(commands.Cog):
     @app_commands.describe(
         name="The name of the thread.",
         description="The content of the message to send with the thread.",
+        tags="The tags to apply to the thread, seperated by spaces.",
         file=UPLOAD_FILE_DESCRIPTION,
         file2=UPLOAD_FILE_DESCRIPTION,
-        file3=UPLOAD_FILE_DESCRIPTION,
-        tags="The tags to apply to the thread, seperated by spaces."
+        file3=UPLOAD_FILE_DESCRIPTION
     )
     @app_commands.default_permissions(manage_guild=True)
     async def create_new_thread(
