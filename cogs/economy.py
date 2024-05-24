@@ -1,17 +1,13 @@
 """The virtual economy system of the bot."""
-from asyncio import sleep
-from string import ascii_letters, digits
-from shelve import open as open_shelve
+import sqlite3
+import datetime
 from re import search
-from ImageCharts import ImageCharts
-from discord.ext import commands, tasks
-from math import floor, ceil
-from pytz import timezone
-from pluralizer import Pluralizer
-from discord import app_commands, SelectOption
-from asqlite import ProxiedConnection as asqlite_Connection
-from traceback import print_exception
+from shelve import open
+from asyncio import sleep
 from textwrap import dedent
+from math import floor, ceil
+from traceback import print_exception
+from string import ascii_letters, digits
 
 from random import (
     randint, 
@@ -31,12 +27,15 @@ from typing import (
     Callable
 )
 
-import sqlite3
 import discord
-import datetime
 import aiofiles
+from pytz import timezone
+from pluralizer import Pluralizer
+from ImageCharts import ImageCharts
+from discord.ext import commands, tasks
+from discord import app_commands, SelectOption
+from asqlite import ProxiedConnection as asqlite_Connection
 
-from .core.paginator import PaginationItem, RefreshPagination
 from .core.helpers import (
     determine_exponent, 
     membed,
@@ -46,8 +45,10 @@ from .core.helpers import (
     labour_productivity_via,
     economy_check
 )
+
 from .core.views import process_confirmation
 from .core.constants import CURRENCY, APP_GUILDS_IDS
+from .core.paginator import PaginationItem, RefreshPagination
 
 
 def swap_elements(x, index1, index2) -> None:
@@ -372,6 +373,26 @@ def generate_slot_combination() -> str:
     return slot_combination
 
 
+def find_slot_matches(*args) -> Union[None, int]:
+    """
+    Find any suitable matches in a slot outcome.
+
+    The function takes in multiple arguments, each being the individual emoji.
+    
+    If there is a match, return the outcome's associated multiplier.
+    
+    Return `None` if no match found.
+
+    This only checks the first two elements, but you must provide all three.
+    """
+
+    for emoji in args[:-1]:
+        occurences = args.count(emoji)
+        if occurences > 1:
+            return BONUS_MULTIPLIERS[emoji*occurences]
+    return None
+
+
 def generate_progress_bar(percentage: Union[float, int]) -> str:
     """
     Generate a visual representation of a progress bar based on the given percentage.
@@ -423,7 +444,7 @@ def generate_progress_bar(percentage: Union[float, int]) -> str:
 
 def get_profile_key_value(key: str) -> Any:
     """Fetch a profile key (attribute) from the database. Returns None if no key is found."""
-    with open_shelve("C:\\Users\\georg\\Documents\\c2c\\db-shit\\profile_mods") as dbmr:
+    with open("C:\\Users\\georg\\Documents\\c2c\\db-shit\\profile_mods") as dbmr:
         return dbmr.get(key)
 
 
@@ -487,7 +508,7 @@ def modify_profile(
         since only the key name is required to delete a key.
     """
 
-    with open_shelve("C:\\Users\\georg\\Documents\\c2c\\database\\profile_mods") as dbm:
+    with open("C:\\Users\\georg\\Documents\\c2c\\database\\profile_mods") as dbm:
         match typemod:
             case "update" | "create":
                 dbm.update({f'{key}': new_value})
@@ -5873,6 +5894,7 @@ class Economy(commands.Cog):
                 bet=robux, 
                 value=number
             )
+
             await Economy.declare_transaction(conn, user_id=interaction.user.id)
             await interaction.response.send_message(view=hl_view, embed=query)
 
@@ -5904,12 +5926,13 @@ class Economy(commands.Cog):
         # ------------------ THE SLOT MACHINE ITESELF ------------------------
 
         emoji_outcome = generate_slot_combination()
-        freq1, freq2, freq3 = emoji_outcome
+        emoji_1, emoji_2, emoji_3 = emoji_outcome
+        multiplier = find_slot_matches(emoji_1, emoji_2, emoji_3)
+        slot_machine = discord.Embed()
 
-        if emoji_outcome.count(freq1) > 1:
+        if multiplier:
 
-            new_multi = BONUS_MULTIPLIERS[f'{freq1 * emoji_outcome.count(freq1)}']
-            amount_after_multi = int(((new_multi / 100) * robux) + robux)
+            amount_after_multi = int(((multiplier / 100) * robux) + robux)
 
             async with conn.transaction():
                 conn: asqlite_Connection
@@ -5923,54 +5946,19 @@ class Economy(commands.Cog):
 
             prcntw = (updated[2] / (id_lose_amount + updated[2])) * 100
 
-            embed = discord.Embed(
-                colour=discord.Color.brand_green(),
-                description=(
-                    f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
-                    f"**It's a match!** You've won {CURRENCY} **{amount_after_multi:,}**.\n"
-                    f"Your new balance is {CURRENCY} **{updated[1]:,}**.\n"
-                    f"You've won {prcntw:.1f}% of all slots games."
-                )
+            slot_machine.colour = discord.Color.brand_green()
+            slot_machine.description = (
+                f"**\U0000003e** {emoji_1} {emoji_2} {emoji_3} **\U0000003c**\n\n"
+                f"**It's a match!** You've won {CURRENCY} **{amount_after_multi:,}**.\n"
+                f"Your new balance is {CURRENCY} **{updated[1]:,}**.\n"
+                f"You've won {prcntw:.1f}% of all slots games."
             )
 
-            embed.set_author(
+            slot_machine.set_author(
                 name=f"{interaction.user.name}'s winning slot machine", 
                 icon_url=interaction.user.display_avatar.url
             )
-            embed.set_footer(text=f"Multiplier: {new_multi}%")
-
-        elif emoji_outcome.count(freq2) > 1:
-
-            new_multi = BONUS_MULTIPLIERS[f'{freq2 * emoji_outcome.count(freq2)}']
-            amount_after_multi = int(((new_multi / 100) * robux) + robux)
-
-            async with conn.transaction():
-                conn: asqlite_Connection
-                updated = await self.update_bank_three_new(
-                    interaction.user, 
-                    conn, 
-                    "slotwa", amount_after_multi, 
-                    "wallet", amount_after_multi, 
-                    "slotw", 1
-                )
-
-            prcntw = (updated[2] / (id_lose_amount + updated[2])) * 100
-
-            embed = discord.Embed(
-                colour=discord.Color.brand_green(),
-                description=(
-                    f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
-                    f"**It's a match!** You've won {CURRENCY} **{amount_after_multi:,}**.\n"
-                    f"Your new balance is {CURRENCY} **{updated[1]:,}**.\n"
-                    f"You've won {prcntw:.1f}% of all slots games."
-                )
-            )
-
-            embed.set_footer(text=f"Multiplier: {new_multi}%")
-            embed.set_author(
-                name=f"{interaction.user.name}'s winning slot machine",
-                icon_url=interaction.user.display_avatar.url
-            )
+            slot_machine.set_footer(text=f"Multiplier: {multiplier}%")
 
         else:
 
@@ -5986,23 +5974,20 @@ class Economy(commands.Cog):
 
             prcntl = (updated[-1] / (updated[-1] + id_won_amount)) * 100
 
-            embed = discord.Embed(
-                colour=discord.Color.brand_red(),
-                description=(
-                    f"**\U0000003e** {freq1} {freq2} {freq3} **\U0000003c**\n\n"
-                    f"**No match!** You've lost {CURRENCY} **{robux:,}**.\n"
-                    f"Your new balance is {CURRENCY} **{updated[1]:,}**.\n"
-                    f"You've lost {prcntl:.1f}% of all slots games."
-                )
+            slot_machine.colour = discord.Color.brand_red()
+            slot_machine.description = (
+                f"**\U0000003e** {emoji_1} {emoji_2} {emoji_3} **\U0000003c**\n\n"
+                f"**No match!** You've lost {CURRENCY} **{robux:,}**.\n"
+                f"Your new balance is {CURRENCY} **{updated[1]:,}**.\n"
+                f"You've lost {prcntl:.1f}% of all slots games."
             )
 
-            embed.set_author(
+            slot_machine.set_author(
                 name=f"{interaction.user.name}'s losing slot machine", 
                 icon_url=interaction.user.display_avatar.url
             )
 
-        await interaction.response.send_message(embed=embed)
-
+        await interaction.response.send_message(embed=slot_machine)
     
     @app_commands.command(name='inventory', description='View your currently owned items')
     @app_commands.guilds(*APP_GUILDS_IDS)
