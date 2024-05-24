@@ -3,15 +3,14 @@ from pytz import timezone
 from time import perf_counter
 from datetime import timedelta, datetime
 
+import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
 from .core.paginator import Pagination
-from .core.views import process_confirmation
 from .core.helpers import membed, respond
 from .core.constants import APP_GUILDS_IDS
-
-import discord
+from .core.views import process_confirmation
 
 
 def do_boilerplate_role_checks(role: discord.Role, guild: discord.Guild, my_top: discord.Role) -> str | None:
@@ -89,7 +88,7 @@ class RoleManagement(app_commands.Group):
             success.description = f"Added {role.mention} to **{how_many}** members."
             await respond(
                 interaction=interaction,
-                content=f"Took {end_time - start_time:.2f}s", 
+                content=f"Took ` {end_time - start_time:.2f}s `.", 
                 embed=success
             )
 
@@ -120,7 +119,7 @@ class RoleManagement(app_commands.Group):
             success.description = f"Removed {new_role.mention} from **{how_many}** members."
             await respond(
                 interaction=interaction,
-                content=f"Took {end_time - start_time:.2f}s", 
+                content=f"Took ` {end_time - start_time:.2f}s `.", 
                 embed=success
             )
 
@@ -443,7 +442,7 @@ class RoleManagement(app_commands.Group):
         count = len(users_without_it)
         if not count:
             return await interaction.followup.send(
-                embed=membed("Nobody in the base role doesn't have the new role already.")
+                embed=membed("Everybody in base role has the new role already.")
         )
         
         resp = do_boilerplate_role_checks(new_role, interaction.guild, interaction.guild.me.top_role)
@@ -477,7 +476,7 @@ class RoleManagement(app_commands.Group):
 
         if not how_many:
             return await interaction.followup.send(
-                embed=membed("Nobody in the base role has the new role.")
+                embed=membed("Nobody in base role has the new role.")
             )
         
         resp = do_boilerplate_role_checks(new_role, interaction.guild, interaction.guild.me.top_role)
