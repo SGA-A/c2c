@@ -1,5 +1,6 @@
-import discord
 from typing import Optional
+
+import discord
 
 from .helpers import economy_check, respond
 
