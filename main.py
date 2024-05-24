@@ -1,18 +1,14 @@
 from __future__ import annotations
 
-from asyncio import run
-from aiohttp import ClientSession
-from asqlite import create_pool
-
-from dotenv import load_dotenv
-from datetime import datetime
-from pathlib import Path
-from traceback import print_exception
 from os import environ
-from sys import version, stderr
-
 from re import compile
+from asyncio import run
 from logging import INFO
+from pathlib import Path
+from datetime import datetime
+from sys import version, stderr
+from aiohttp import ClientSession
+from traceback import print_exception
 
 from typing import (
     Any,
@@ -39,12 +35,14 @@ from discord import (
     ui,
 )
 
-
-from discord.utils import setup_logging
+from dotenv import load_dotenv
+from asqlite import create_pool
 from discord.ext import commands
+from discord.utils import setup_logging
 
 from cogs.core.helpers import membed
 from cogs.core.constants import APP_GUILDS_IDS
+
 
 if TYPE_CHECKING:
     from discord.abc import Snowflake
@@ -517,12 +515,12 @@ class TimeConverter(commands.Converter):
 
 
 @bot.command(name='convert')
-async def convert_time(ctx, time: TimeConverter):
-    await ctx.send(f"Converted time: {time} seconds")
+async def convert_time(ctx: commands.Context, time: TimeConverter) -> None:
+    await ctx.send(embed=membed(f"Converted time: {time} seconds"))
 
 
 @bot.command(name="test")
-async def testit(ctx):
+async def testit(ctx: commands.Context) -> None:
     embed = Embed()
     embed.title = "Your balance"
     embed.add_field(name="Field 1", value="240,254,794")
@@ -538,52 +536,59 @@ async def testit(ctx):
 @commands.is_owner()
 @bot.command(name='reload', aliases=("rl",))
 async def reload_cog(ctx: commands.Context, cog_name: cogs):
+    embed = membed()
+
     try:
         await bot.reload_extension(f"cogs.{cog_name}")
+        embed.description = "Done."
     except commands.ExtensionNotLoaded:
-        return await ctx.reply(embed=membed("That extension has not been loaded in yet."))
+        embed.description = "That extension has not been loaded in yet."
     except commands.ExtensionNotFound:
-        return await ctx.reply(embed=membed("Could not find an extension with that name."))
+        embed.description = "Could not find an extension with that name."
     except commands.NoEntryPointError:
-        return await ctx.reply(embed=membed("The extension does not have a setup function."))
-    
+        embed.description = "The extension does not have a setup function."
     except commands.ExtensionFailed as e:
         print(e)
-        return await ctx.reply(embed=membed("The extension failed to load. See the console for traceback."))
-    
-    await ctx.reply(embed=membed("Done."))
+        embed.description = "The extension failed to load. See the console for traceback."
+    finally:
+        await ctx.reply(embed=embed)
+
 
 @commands.is_owner()
 @bot.command(name='unload', aliases=("ul",))
 async def unload_cog(ctx: commands.Context, cog_name: cogs):
-
+    embed = membed()
+    
     try:
         await bot.unload_extension(f"cogs.{cog_name}")
+        embed.description = "Done."
     except commands.ExtensionNotLoaded:
-        return await ctx.reply("That extension has not been loaded in yet.")
+        embed.description = "That extension has not been loaded in yet."
     except commands.ExtensionNotFound:
-        return await ctx.reply("Could not find an extension with that name.")
+        embed.description = "Could not find an extension with that name."
     
-    await ctx.reply(embed=membed("Done."))
+    await ctx.reply(embed=embed)
 
 
 @commands.is_owner()
-@bot.command(name='load', aliases=("ld",))
+@bot.command(name='load', aliases=("l",))
 async def load_cog(ctx: commands.Context, cog_name: cogs):
+    embed = membed()
+
     try:
         await bot.load_extension(f"cogs.{cog_name}")
+        embed.description = "Done."
     except commands.ExtensionAlreadyLoaded:
-        return await ctx.send("That extension is already loaded.")
+        embed.description = "That extension is already loaded."
     except commands.ExtensionNotFound:
-        return await ctx.send("Could not find an extension with that name.")
+        embed.description = "Could not find an extension with that name."
     except commands.NoEntryPointError:
-        return await ctx.send("The extension does not have a setup function.")
-    
+        embed.description = "The extension does not have a setup function."
     except commands.ExtensionFailed as e:
         print(e)
-        return await ctx.send("The extension failed to load. See the console for traceback.")
+        embed.description = "The extension failed to load. See the console for traceback."
 
-    await ctx.message.add_reaction("\U00002705")
+    await ctx.reply(embed=embed)
 
 
 async def do_guild_checks(interaction: Interaction):
