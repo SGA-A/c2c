@@ -1,13 +1,12 @@
-import discord
 import asyncio
 import sqlite3
 import datetime
+from typing import Annotated, Optional
 
+import discord
 from discord import app_commands
 from discord.ext import commands
-
-from typing import Annotated, Optional
-from asqlite import Connection as asqlite_Connection
+from asqlite import ProxiedConnection as asqlite_Connection
 
 from .core.helpers import membed
 from .core.constants import APP_GUILDS_IDS
@@ -590,7 +589,7 @@ class Tags(commands.Cog):
             deleted_info = await conn.fetchone(query, *args)
 
             if deleted_info is None:
-                return await ctx.send(embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE), ephemeral=True)
+                return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
             await ctx.send(embed=membed(f'Tag named {deleted_info[1]!r} (ID {deleted_info[0]}) successfully deleted.'))
 
     @tag.command(description="Remove a tag that you own by its ID", aliases=('delete_id',))
@@ -616,7 +615,13 @@ class Tags(commands.Cog):
                 return await ctx.send(embed=membed(TAG_NOT_FOUND_RESPONSE), ephemeral=True)
             await ctx.send(embed=membed(f'Tag named {deleted_info[1]!r} (ID {deleted_info[0]}) successfully deleted.'))
 
-    async def _send_tag_info(self, ctx: commands.Context, conn: asqlite_Connection, tag_name: str, row: sqlite3.Row):
+    async def _send_tag_info(
+        self, 
+        ctx: commands.Context, 
+        conn: asqlite_Connection, 
+        tag_name: str, 
+        row: sqlite3.Row
+    ) -> None:
         """Expects row in this format: rowid, uses, ownerID, created_at"""
 
         embed = discord.Embed(colour=discord.Colour.blurple())
@@ -662,10 +667,10 @@ class Tags(commands.Cog):
     async def info(self, ctx: commands.Context, *, name: Annotated[str, TagName]):
         
         async with self.bot.pool.acquire() as conn:
+            
             name = await self.non_owned_partial_matching(ctx, name, conn)
             if not name:
                 return
-
             
             record = await conn.fetchone(
                 """
@@ -694,7 +699,7 @@ class Tags(commands.Cog):
             row: tuple[int] = await conn.fetchone("SELECT COUNT(*) FROM tags WHERE ownerID=$0", user.id)
             count = row[0]
 
-            if count == 0:
+            if not count:
                 return await ctx.send(embed=membed(f"{user.mention} has no tags."))
 
             val = await send_boilerplate_confirm(
@@ -717,7 +722,7 @@ class Tags(commands.Cog):
 
             offset = (page - 1) * length
             em.description = ""
-            for index, tag in enumerate(results[offset:offset + length], start=offset + 1):
+            for index, tag in enumerate(results[offset:offset+length], start=offset+1):
                 em.description += f'{index}. {tag[0]} (ID: {tag[1]})\n'
 
             n = paginator.compute_total_pages(len(results), length)
