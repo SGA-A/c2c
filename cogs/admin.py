@@ -1,9 +1,9 @@
 """The administrative cog. Only for use by the bot owners."""
-from datetime import datetime
 from re import findall
 from textwrap import indent
-from contextlib import redirect_stdout
+from datetime import datetime
 from traceback import format_exc
+from contextlib import redirect_stdout
 
 from typing import (
     Optional, 
@@ -12,8 +12,8 @@ from typing import (
     Union
 )
 
-import asyncio
 import io
+import asyncio
 import discord
 
 from discord import app_commands
@@ -22,26 +22,6 @@ from asqlite import Connection as asqlite_Connection
 
 from .core.helpers import membed, determine_exponent
 from .core.constants import CURRENCY, APP_GUILDS_IDS
-
-
-FORUM_ID = 1147176894903627888
-UPLOAD_FILE_DESCRIPTION = "A file to upload alongside the thread."
-FORUM_TAG_IDS = {
-    'game': 1147178989329322024, 
-    'political': 1147179277343793282, 
-    'meme': 1147179514825297960, 
-    'anime/manga': 1147179594869387364, 
-    'reposts': 1147179787949969449, 
-    'career': 1147180119887192134, 
-    'rant': 1147180329057140797, 
-    'information': 1147180466210873364, 
-    'criticism': 1147180700022345859, 
-    'health': 1147180978356363274, 
-    'advice': 1147181072065515641, 
-    'showcase': 1147181147370049576, 
-    'coding': 1147182042744901703, 
-    'general discussion': 1147182171140923392
-}
 
 
 class InviteButton(discord.ui.View):
@@ -71,6 +51,7 @@ class InviteButton(discord.ui.View):
         perms.connect = True
         perms.speak = True
         perms.move_members = True
+        perms.deafen_members = True
 
         self.add_item(
             discord.ui.Button(
@@ -92,6 +73,12 @@ class Owner(commands.Cog):
         await ctx.send(embed=membed("You do not own this bot."))
         return False
     
+    async def interaction_check(self, interaction: discord.Interaction):
+        if interaction.user.id in self.bot.owner_ids:
+            return True
+        await interaction.response.send_message(embed=membed("You do not own this bot."))
+        return False
+    
     @staticmethod
     def cleanup_code(content: str) -> str:
         """Automatically removes code blocks from the code."""
@@ -110,35 +97,34 @@ class Owner(commands.Cog):
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
         
-        await ctx.send(
-            content=(
-                f"**Uptime**: {int(days)} days, {int(hours)} hours, "
-                f"{int(minutes)} minutes and {int(seconds)} seconds."
-            )
+        uptime_embed = membed(
+            f"{int(days)} days, {int(hours)} hours, "
+            f"{int(minutes)} minutes and {int(seconds)} seconds."
         )
+        uptime_embed.title = "Uptime"
+        await ctx.send(embed=uptime_embed)
 
     @app_commands.command(name="config", description="Adjust a user's robux directly")
-    @app_commands.default_permissions(administrator=True)
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(
         configuration='Whether to add, remove, or specify robux.',
         amount='The amount of robux to modify. Supports Shortcuts (exponents only).',
-        member='The member to modify the balance of.',
-        ephemeral='Whether or not the response is only visible to you.',
-        deposit_mode='The type of balance to modify.')
-    @app_commands.rename(ephemeral='is_hidden', member='user', deposit_mode='medium')
+        user='The member to modify the balance of. Defaults to you.',
+        is_private='Whether or not the response is only visible to you. Defaults to False.',
+        medium='The type of balance to modify. Defaults to the wallet.'
+    )
     async def config(
         self, 
         interaction: discord.Interaction,
         configuration: Literal["add", "remove", "make"], 
         amount: str,
-        member: Optional[discord.Member],
-        ephemeral: Optional[bool] = False,
-        deposit_mode: Optional[Literal["wallet", "bank"]] = "wallet"
+        user: Optional[discord.Member],
+        is_private: Optional[bool] = True,
+        medium: Optional[Literal["wallet", "bank"]] = "wallet"
     ) -> None:
         """Generates or deducts a given amount of robux to the mentioned user."""
         
-        member = member or interaction.user
+        user = user or interaction.user
         real_amount = await determine_exponent(
             interaction=interaction, 
             rinput=amount
@@ -148,7 +134,7 @@ class Owner(commands.Cog):
         embed = membed()
         
         if isinstance(real_amount, str):
-            embed.description = "This shortcut is not supported here."
+            embed.description = "Shortcuts are not supported here."
             return await interaction.response.send_message(embed=embed)
 
         async with self.bot.pool.acquire() as conn:
@@ -158,41 +144,41 @@ class Owner(commands.Cog):
                 query = (
                     f"""
                     UPDATE `bank` 
-                    SET `{deposit_mode}` = `{deposit_mode}` + ?
+                    SET `{medium}` = `{medium}` + ?
                     WHERE userID = ?
                     """
                 )
 
-                embed.description = f"Added {CURRENCY} **{real_amount:,}** to {member.mention}!"
+                embed.description = f"Added {CURRENCY} **{real_amount:,}** to {user.mention}!"
             elif configuration.startswith("r"):
                 query = (
                     f"""
                     UPDATE `bank` 
-                    SET `{deposit_mode}` = `{deposit_mode}` - ?
+                    SET `{medium}` = `{medium}` - ?
                     WHERE userID = ?
                     """
                 )
-                embed.description = f"Deducted {CURRENCY} **{real_amount:,}** from {member.mention}!"
+                embed.description = f"Deducted {CURRENCY} **{real_amount:,}** from {user.mention}!"
             else:
                 query = (
                     f"""
                     UPDATE `bank` 
-                    SET `{deposit_mode}` = ?
+                    SET `{medium}` = ?
                     WHERE userID = ?
                     """
                 )
-                embed.description = f"Set {CURRENCY} **{real_amount:,}** to {member.mention}!"
+                embed.description = f"Set {CURRENCY} **{real_amount:,}** to {user.mention}!"
 
-            await conn.execute(query, (real_amount, member.id))
+            await conn.execute(query, (real_amount, user.id))
             await conn.commit()
 
-            await interaction.response.send_message(embed=embed, ephemeral=ephemeral)
+            await interaction.response.send_message(embed=embed, ephemeral=is_private)
 
     @commands.command(name='threader', aliases=('ct', 'cthr'), description='Create a thread in a text channel')
     async def create_thread(self, ctx: commands.Context, thread_name: str):
         """Create a forum channel quickly with only name of thread required as argument."""
         if not isinstance(ctx.channel, discord.TextChannel):
-            await ctx.send(content="You need to be in a text channel.", delete_after=5.0)
+            await ctx.send(delete_after=5.0, embed=membed("You need to be in a text channel to use this."))
 
         await ctx.channel.create(
             name=thread_name, 
@@ -213,7 +199,7 @@ class Owner(commands.Cog):
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
     @commands.command(name='eval', description='Evaluates arbitrary code')
-    async def eval(self, ctx: commands.Context, *, script_body: str):
+    async def evaluate(self, ctx: commands.Context, *, script_body: str) -> Union[None | discord.Message]:
         """Evaluates arbitrary code."""
 
         env = {
@@ -355,8 +341,7 @@ class Owner(commands.Cog):
         channel = self.bot.get_partial_messageable(902138223571116052)
         original = channel.get_partial_message(1140258074297376859)
         
-        r = discord.Embed()
-        r.title = "Rules & Guidelines"
+        r = discord.Embed(title="Rules & Guidelines", colour=discord.Colour.from_rgb(208, 189, 196))
         r.description=(
             'We look forward to seeing you become a regular here! '
             'However, ensure that you are familiar with our Server Guidelines!\n\n'
@@ -380,7 +365,6 @@ class Owner(commands.Cog):
             '[Discord Community Guidelines](https://discord.com/guidelines/)\n'
             '[Discord Terms of Service](https://discord.com/terms)'
         )
-        r.colour = discord.Colour.from_rgb(208, 189, 196)
         r.set_footer(
             icon_url='https://cdn.discordapp.com/emojis/1170379416845692928.gif?size=160&quality=lossless',
             text='Thanks for reading and respecting our guidelines! Now go have fun!'
@@ -512,6 +496,7 @@ class Owner(commands.Cog):
         
         temporary = discord.Embed(
             title="Temporary Removal of the Economy System",
+            colour=discord.Colour.from_rgb(102, 127, 163),
             description=(
                 "as the title states, we have removed the Economy System in c2c "
                 "(**for now**). <a:aaaaa:944505181150773288>\n\nthe reason being is "
@@ -528,9 +513,9 @@ class Owner(commands.Cog):
                 "programme that will **require a lot of time**. This is made hindered by"
                 " the current academic situation both the developers are in at this time,"
                 " so please bear with us and we will not dissapoint (especially with"
-                " <@992152414566232139> "
-                "<a:ehe:928612599132749834>)!"),
-            colour=discord.Colour.from_rgb(102, 127, 163))
+                " <@992152414566232139> <a:ehe:928612599132749834>)!"
+            )
+        )
         
         temporary.add_field(
             name="Roadmap",
@@ -546,7 +531,9 @@ class Owner(commands.Cog):
                 'every command that currently exists.\n<:yelA:1166790134801379378> **July 2024 '
                 '(early)**: new commands/essential functions to the Economy system added.\n<:red'
                 'A:1166790106422722560> **August 2024 (late)**: economy system '
-                'fully operational and ready for use.'))
+                'fully operational and ready for use.'
+            )
+        )
         
         temporary.add_field(
             name="Acknowledgement",
@@ -583,13 +570,20 @@ class Owner(commands.Cog):
     @commands.hybrid_command(name='repeat', description='Repeat what you typed', aliases=('say',))
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(
-        message='what you want me to say', 
-        channel='what channel i should send in'
+        message='What you want me to say.', 
+        channel='What channel i should send in.'
     )
     async def repeat(
         self, 
         ctx: commands.Context, 
-        channel: Optional[Union[discord.TextChannel, discord.VoiceChannel, discord.ForumChannel, discord.Thread]], 
+        channel: Optional[
+            Union[
+                discord.TextChannel, 
+                discord.VoiceChannel, 
+                discord.ForumChannel, 
+                discord.Thread
+            ]
+        ] = commands.CurrentChannel, 
         *, 
         message: str
     ) -> None:
@@ -606,62 +600,17 @@ class Owner(commands.Cog):
                 message = message.replace(f'<{match}>', f"{emoji}")
                 continue
             if ctx.interaction:
-                return await ctx.send("Could not find that emoji.", ephemeral=True)
+                return await ctx.send(ephemeral=True, embed=membed("Could not find that emoji."))
             return
 
-        channel = channel or ctx.channel
         await channel.send(message)
         if ctx.interaction:
-            await ctx.send(content=f"Sent this message to {channel.mention}.", ephemeral=True)
-
-    @app_commands.command(name='upload', description='Upload a new forum thread')
-    @app_commands.guilds(*APP_GUILDS_IDS)
-    @app_commands.describe(
-        name="The name of the thread.",
-        description="The content of the message to send with the thread.",
-        file=UPLOAD_FILE_DESCRIPTION,
-        file2=UPLOAD_FILE_DESCRIPTION,
-        file3=UPLOAD_FILE_DESCRIPTION,
-        tags="The tags to apply to the thread, seperated by spaces."
-    )
-    @app_commands.default_permissions(manage_guild=True)
-    async def create_new_thread(
-        self, 
-        interaction: discord.Interaction, 
-        name: str, 
-        description: Optional[str], 
-        tags: str, 
-        file: Optional[discord.Attachment], 
-        file2: Optional[discord.Attachment],
-        file3: Optional[discord.Attachment]) -> None:
-
-        await interaction.response.defer(thinking=True)
-
-        forum: discord.ForumChannel = self.bot.get_channel(FORUM_ID)
-        tags = tags.lower().split()
-        
-        files = [
-            await param_value.to_file() 
-            for param_name, param_value in iter(interaction.namespace) 
-            if param_name.startswith("f") and param_value
-        ]
-
-        applicable_tags = [forum.get_tag(tag_id) for tagname in tags if (tag_id := FORUM_TAG_IDS.get(tagname)) is not None]
-    
-        thread, _ = await forum.create_thread(
-            name=name,
-            content=description,
-            files=files,
-            applied_tags=applicable_tags
-        )
-
-        await interaction.followup.send(
-            ephemeral=True, 
-            embed=membed(f"Your thread was created here: {thread.jump_url}.")
-        )
+            await ctx.send(ephemeral=True, embed=membed(f"Sent this message to {channel.mention}."))
 
     @commands.command(name="uforuma", description="Update the forum announcement", aliases=("ufa",))
     async def upload2(self, ctx: commands.Context):
+        await ctx.message.delete()
+
         channel: discord.PartialMessageable = self.bot.get_partial_messageable(1147203137195745431)
         msg = channel.get_partial_message(1147203137195745431)
         a = membed(
@@ -690,8 +639,8 @@ class Owner(commands.Cog):
         else:
             await webhook.send(**kwargs)
 
-    @commands.command(name='dispatch-webhook', aliases=('dw',))
-    async def dispatch_the_webhook_when(self, ctx: commands.Context):
+    @commands.command(name='dispatch-webhook', aliases=('dw',), description="Dispatch customizable quarterly updates")
+    async def dispatch_webhook(self, ctx: commands.Context):
 
         all_ems = [
             discord.Embed(
