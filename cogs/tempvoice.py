@@ -1,7 +1,7 @@
 from typing import Optional, Literal
-from asqlite import Connection as asqlite_Connection
 
 import discord
+from asqlite import Connection as asqlite_Connection
 from discord import app_commands
 from datetime import timedelta
 from discord.ext import commands
