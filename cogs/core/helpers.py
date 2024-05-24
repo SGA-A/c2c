@@ -1,15 +1,14 @@
-import discord
-
 from re import compile
 from random import choices
 from typing import Optional, Union
-from pytz import timezone
 from datetime import datetime, timedelta
+
+import discord
+from pytz import timezone
 
 
 def labour_productivity_via(*, investment: int) -> float:
     """Find a suitable productivity level of a slave based on the investment"""
-    # Set your desired ranges
     lower_limit = 1000
     upper_limit = 5000e7
 
@@ -32,28 +31,19 @@ def parse_duration(input_duration: str) -> datetime:
     # Extract days and hours from the input duration using the pattern
     match = pattern.match(input_duration)
 
-    # Get the number of days and hours from the match
     days = int(match.group(1)) if match.group(1) else 0
     hours = int(match.group(2)) if match.group(2) else 0
 
-    # Check if both days and hours are 0
     if days == 0 and hours == 0:
         raise ValueError("Invalid duration, years-duration and/or seconds-duration is unsupported.")
 
-    # Calculate the timedelta based on the extracted days and hours
     duration = timedelta(days=days, hours=hours)
 
     # Check if the duration exceeds 14 days
     if duration.days > 14:
         raise ValueError("Duration cannot exceed 14 days.")
-
-    # Get the current datetime
-    current_datetime = datetime.now()
-
-    # Calculate the datetime after the specified duration
-    res_date = current_datetime + duration
     
-    return res_date
+    return discord.utils.utcnow() + duration
 
 
 def datetime_to_string(datetime_obj: datetime) -> str:
@@ -85,8 +75,9 @@ def string_to_datetime(string_obj: str) -> datetime:
     my_datetime = my_datetime.replace(tzinfo=timezone("UTC"))
     return my_datetime
 
+
 async def respond(interaction: discord.Interaction, **kwargs) -> Union[None, discord.WebhookMessage]:
-    """Determine if we should respond to the interaction or send followups"""
+    """Determine if we should respond to the interaction or send followups."""
     if interaction.response.is_done():
         return await interaction.followup.send(**kwargs)
     await interaction.response.send_message(**kwargs)
@@ -97,11 +88,14 @@ def membed(custom_description: Optional[str] = None) -> discord.Embed:
     membedder = discord.Embed(colour=0x2B2D31, description=custom_description)
     return membedder
 
+
 async def determine_exponent(interaction: discord.Interaction, rinput: str) -> str | int:
     """
     Finds out what the exponential value entered is equivalent to in numerical form. (e.g, 1e6)
 
-    Can handle normal integers and "max"/"all" is always returned 'as-is', not converted to numerical form.
+    Can handle normal integers.
+    
+    The shorthands "max" and "all" always return 'as-is', and must be handled yourself.
     """
 
     rinput = rinput.lower()
@@ -125,8 +119,8 @@ async def determine_exponent(interaction: discord.Interaction, rinput: str) -> s
     except (ValueError, TypeError):
         await respond(
             interaction=interaction,
-            embed=membed("You need to provide a real positive number."), 
-            ephemeral=True
+            ephemeral=True,
+            embed=membed("You need to provide a real positive number.")
         )
         return
 
@@ -136,8 +130,8 @@ async def economy_check(interaction: discord.Interaction, original: Union[discor
     if original == interaction.user:
         return True
     await interaction.response.send_message(
-        embed=membed(f"This menu is controlled by {original.mention}."),
         ephemeral=True,
-        delete_after=5.0
+        delete_after=5.0,
+        embed=membed(f"This menu is controlled by {original.mention}.")
     )
     return False
