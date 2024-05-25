@@ -1,8 +1,8 @@
 from traceback import print_exception
 from typing import Optional, Callable, Union
 
-from discord.ext import commands
 import discord
+from discord.ext import commands
 
 from .helpers import membed, determine_exponent, economy_check
 
@@ -417,18 +417,41 @@ class PaginationItem(discord.ui.View):
         return ((total_results - 1) // results_per_page) + 1
 
 
-# class RefreshSelectPagination(PaginationItem):
-#     """
-#     A pagination menu that has its pages changed 
-#     each time a different select menu option is selected.
+class RefreshSelectPagination(PaginationItem):
+    """
+    A pagination menu that has its pages changed 
+    each time a different select menu option is selected.
 
-#     Inherits from the `PaginationItem` class.
-#     """
+    You should instantiate the select menu first before this view.
 
-#     def __init__(
-#         self, 
-#         interaction: discord.Interaction, 
-#         get_page: Callable | None = None,
-#         selec
-#     ) -> None:
-#         super().__init__(interaction, get_page)
+    Inherits from the `PaginationItem` class.
+    """
+
+    def __init__(
+        self, 
+        interaction: discord.Interaction, 
+        select: discord.ui.Select, 
+        get_page: Callable | None = None
+    ) -> None:
+        
+        super().__init__(interaction, get_page=get_page)
+        self.add_item(select)
+
+
+class RefreshSelectPaginationExtended(RefreshPagination):
+    """
+    Similar to `RefreshSelectPagination`, but with a refresh button as well.
+    
+    The conditions for it apply to this one as well.
+
+    Inherits from the `RefreshPagination` class.
+    """
+
+    def __init__(
+        self, 
+        interaction: discord.Interaction,
+        select: discord.ui.Select, 
+    ) -> None:
+        
+        self.select = select
+        super().__init__(interaction, get_page=self.select.get_page)
