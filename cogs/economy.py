@@ -48,7 +48,7 @@ from .core.helpers import (
 
 from .core.views import process_confirmation
 from .core.constants import CURRENCY, APP_GUILDS_IDS
-from .core.paginator import PaginationItem, RefreshPagination
+from .core.paginator import PaginationItem, RefreshPagination, RefreshSelectPaginationExtended
 
 
 def swap_elements(x, index1, index2) -> None:
@@ -3747,7 +3747,7 @@ class Economy(commands.Cog):
             """
             INSERT INTO multipliers (userID, amount, multi_type, cause, description)
             VALUES ($0, $1, $2, $3, $4)
-            ON CONFLICT(userID, cause) DO UPDATE SET amount = $1
+            ON CONFLICT(userID, cause) DO UPDATE SET amount = amount + $1, description = $4
             """, user_id, multi_amount, multi_type, cause, description
         )
 
@@ -3852,11 +3852,11 @@ class Economy(commands.Cog):
             await interaction.followup.send(embed=tip, ephemeral=True)
 
     async def add_exp_or_levelup(
-            self, 
-            interaction: discord.Interaction, 
-            connection: asqlite_Connection, 
-            exp_gainable: int
-        ) -> None:
+        self, 
+        interaction: discord.Interaction, 
+        connection: asqlite_Connection, 
+        exp_gainable: int
+    ) -> None:
 
         record = await connection.fetchone(
             """
@@ -3876,6 +3876,15 @@ class Economy(commands.Cog):
         if xp < exp_needed:
             return
         
+        await self.add_multiplier(
+            connection,
+            user_id=interaction.user.id,
+            multi_amount=2,
+            multi_type="xp",
+            cause="level",
+            description=f"Level {level+1}"
+        )
+
         await connection.execute(
             """
             UPDATE `bank` 
@@ -3986,12 +3995,16 @@ class Economy(commands.Cog):
         user: Optional[USER_ENTRY], 
         multiplier: Optional[MULTIPLIER_TYPES] = "robux"
     ) -> None:
-        await interaction.response.send_message(
+        
+        if interaction.user.id not in self.bot.owner_ids:
+            return await interaction.response.send_message(
             embed=membed(
                 "We are working on making this feature better!\n"
                 "Track our progress [here](https://github.com/SGA-A/c2c/issues/35)."
             )
         )
+
+        _ = RefreshSelectPaginationExtended(interaction)
 
     share = app_commands.Group(
         name='share', 
@@ -4917,15 +4930,14 @@ class Economy(commands.Cog):
                 for i, item in enumerate(shop_sorted)
             ]
 
+            emb = membed()
+            emb.title = "Shop"
+
             async def get_page_part(page: int):
                 wallet = await self.get_wallet_data_only(interaction.user, conn)
                 wallet = wallet or 0
 
-                emb = discord.Embed(
-                    title="Shop",
-                    color=0x2B2D31,
-                    description=f"> You have {CURRENCY} **{wallet:,}**.\n\n"
-                )
+                emb.description = f"> You have {CURRENCY} **{wallet:,}**.\n\n"
 
                 length = 6
                 offset = (page - 1) * length
@@ -5535,13 +5547,13 @@ class Economy(commands.Cog):
                 )
                 
                 await Economy.declare_transaction(conn, user_id=interaction.user.id)
+                await conn.commit()
                 value = await process_confirmation(
                     interaction=interaction, 
                     prompt=massive_prompt
                 )
-                await conn.commit()
-                await Economy.end_transaction(conn, user_id=interaction.user.id)
 
+                await Economy.end_transaction(conn, user_id=interaction.user.id)
                 if value:
 
                     await conn.execute("DELETE FROM inventory WHERE userID = ?", interaction.user.id)
@@ -5558,8 +5570,17 @@ class Economy(commands.Cog):
                         WHERE userID = $3
                         """, 0, 1, randint(100_000_000, 500_000_000), interaction.user.id
                     )
+                    
+                    await self.add_multiplier(
+                        conn,
+                        user_id=interaction.user.id,
+                        multi_amount=10,
+                        multi_type="robux",
+                        cause="prestige",
+                        description=f"Prestige {prestige+1}"
+                    )
 
-                    await conn.commit()
+                await conn.commit()
             else:
                 emoji = PRESTIGE_EMOTES.get(prestige + 1)
                 emoji = search(r':(\d+)>', emoji)
