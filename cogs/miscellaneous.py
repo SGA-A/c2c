@@ -570,7 +570,7 @@ class Utility(commands.Cog):
                 "neko", "kitsune", "waifu", "husbando", "ai", "ass", "boobs", 
                 "creampie", "paizuri", "pussy", "random", "ecchi", "fucking"
             ]
-        ]
+        ] = "neko"
     ) -> None:
 
         api_urls = {
@@ -589,8 +589,6 @@ class Utility(commands.Cog):
             "fucking": "https://nekos.pro/api/fucking"
         }
 
-        if filter_by is None:
-            filter_by = "neko"
         api_urls = api_urls.get(filter_by)
 
         if (isinstance(api_urls, str)) and (not interaction.channel.is_nsfw()):
@@ -606,7 +604,7 @@ class Utility(commands.Cog):
             if resp.status != 200:
                 return await interaction.response.send_message(embed=membed(API_EXCEPTION))
 
-            embed = discord.Embed(colour=discord.Colour.from_rgb(243, 157, 30))
+            embed = discord.Embed(colour=0xFF9D2C)
             data = await resp.json()
 
             if (extract_domain(api_urls) == "nekos.pro") and (not api_urls.endswith("ai")):
@@ -639,13 +637,11 @@ class Utility(commands.Cog):
         except APIException as ae:
             return await interaction.response.send_message(ae.detail)
 
-        embed = discord.Embed(
-            colour=discord.Colour.from_rgb(243, 157, 30), 
-            description=(
-                f"Made <t:{int(image.uploaded_at.timestamp())}:R>\n"
-                f"NSFW Toggle Enabled: {is_nsfw}\n"
-                f"Tags: "
-            )
+        embed = discord.Embed(colour=0xFF9D2C)
+        embed.description = (
+            f"Made <t:{int(image.uploaded_at.timestamp())}:R>\n"
+            f"NSFW Toggle Enabled: {is_nsfw}\n"
+            f"Tags: "
         )
 
         embed.set_author(name=image.artist or 'Unknown Source')
@@ -698,12 +694,10 @@ class Utility(commands.Cog):
         except APIException as ae:
             return await interaction.response.send_message(embed=membed(ae.detail))
 
-        embed = discord.Embed(
-            colour=discord.Colour.from_rgb(243, 157, 30), 
-            description=(
-                f"Made <t:{int(image.uploaded_at.timestamp())}:R>\n"
-                "Tags: "
-            )
+        embed = discord.Embed(colour=0xFF9D2C)
+        embed.description=(
+            f"Made <t:{int(image.uploaded_at.timestamp())}:R>\n"
+            "Tags: "
         )
 
         embed.set_author(name=image.artist or 'Unknown Source')
