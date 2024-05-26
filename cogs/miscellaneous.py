@@ -211,9 +211,9 @@ class Utility(commands.Cog):
             title=guild.name,
             colour=guild.me.color,
             description=(
-                f"Owner: {guild.owner.name}\n"
-                f"Maximum File Size: {guild.filesize_limit / 1_000_000}MB\n"
-                f"Role Count: {len(guild.roles)}\n"
+                f"\U00002726 Owner: {guild.owner.name}\n"
+                f"\U00002726 Maximum File Size: {guild.filesize_limit / 1_000_000}MB\n"
+                f"\U00002726 Role Count: {len(guild.roles)}\n"
             )
         )
 
@@ -235,18 +235,18 @@ class Utility(commands.Cog):
         embed.add_field(
             name="Member Info",
             value=(
-                f"Humans: {guild.member_count-total_bots:,}\n"
-                f"Bots: {total_bots:,}\n"
-                f"Total: {guild.member_count:,}\n"
+                f"\U00002023 Humans: {guild.member_count-total_bots:,}\n"
+                f"\U00002023 Bots: {total_bots:,}\n"
+                f"\U00002023 Total: {guild.member_count:,}\n"
             )
         )
 
         embed.add_field(
             name="Channel Info",
             value=(
-                f"<:categoryCh:1226619447171875006> {len(guild.categories)}\n"
-                f"<:textCh:1226619349037482154> {len(guild.text_channels)}\n"
-                f"<:voiceCh:1226619160050663495> {len(guild.voice_channels)}"
+                f"\U00002023 <:categoryCh:1226619447171875006> {len(guild.categories)}\n"
+                f"\U00002023 <:textCh:1226619349037482154> {len(guild.text_channels)}\n"
+                f"\U00002023 <:voiceCh:1226619160050663495> {len(guild.voice_channels)}"
             )
         )
 
@@ -255,17 +255,12 @@ class Utility(commands.Cog):
         embed.add_field(
             name="Emojis",
             value=(
-                f"Static: {len(guild.emojis)-animated_emojis}/{guild.emoji_limit}\n"
-                f"Animated: {animated_emojis}/{guild.emoji_limit}"
+                f"\U00002023 Static: {len(guild.emojis)-animated_emojis}/{guild.emoji_limit}\n"
+                f"\U00002023 Animated: {animated_emojis}/{guild.emoji_limit}"
             )
         )
 
         embed.set_thumbnail(url=guild.icon.url)
-       
-        embed.set_author(
-            name=f"Requested by {interaction.user.name}", 
-            icon_url=interaction.user.display_avatar.url,
-        )
 
         await interaction.followup.send(embed=embed)
 
