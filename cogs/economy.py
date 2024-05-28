@@ -2759,7 +2759,8 @@ class ToggleButton(discord.ui.Button):
                 multi_amount=10,
                 multi_type="robux",
                 cause="tips",
-                description="Tips Enabled"
+                description="Tips Enabled",
+                on_conflict="NOTHING"
             )
             return
 
@@ -3973,7 +3974,6 @@ class Economy(commands.Cog):
             AND multi_type = $1
             """, user_id, multi_type
         )
-
         return int(multiplier)
     
     @staticmethod
@@ -4169,8 +4169,7 @@ class Economy(commands.Cog):
                     return
                 
                 exp_gainable *= ((multi/100)+1)
-                print(f"{exp_gainable=}")
-                await self.add_exp_or_levelup(interaction, connection, exp_gainable)
+                await self.add_exp_or_levelup(interaction, connection, int(exp_gainable))
 
     @commands.Cog.listener()
     async def on_command(self, ctx: commands.Context) -> None:
