@@ -72,6 +72,11 @@ def format_multiplier(multiplier):
     return description
 
 
+def selling_price_algo(base_price: int, multiplier: int) -> int:
+    """Calculate the selling price of an item based on its rarity and base price."""
+    return int(round(base_price * (1+multiplier/100), ndigits=-5))
+
+
 def number_to_ordinal(n) -> str:
     """Convert 01 to 1st, 02 to 2nd etc."""
     if 10 <= n % 100 <= 20:
@@ -2862,7 +2867,7 @@ class MultiplierSelect(discord.ui.Select):
         """
 
         unit = "x" if multi == "xp" else "%"
-        amount = amount if multi != "xp" else (amount or 100) / 100
+        amount = amount if multi != "xp" else (1 + (amount / 100))
 
         return f"{amount}{unit}"
 
@@ -2871,13 +2876,13 @@ class MultiplierSelect(discord.ui.Select):
         interaction: discord.Interaction,
         chosen_multiplier: MULTIPLIER_TYPES, 
         viewing: discord.Member
-    ) -> list:
+    ) -> tuple[int, list]:
 
         lowered = chosen_multiplier.lower()
         async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            pages = await conn.fetchall(
+            count = await conn.fetchone(
                 """
                 SELECT CAST(TOTAL(amount) AS INTEGER) 
                 FROM multipliers
@@ -2886,7 +2891,7 @@ class MultiplierSelect(discord.ui.Select):
                 """, viewing.id, lowered
             )
 
-            pages += await conn.fetchall(
+            pages = await conn.fetchall(
                 """
                 SELECT amount, description, expiry_timestamp
                 FROM multipliers
@@ -2896,7 +2901,7 @@ class MultiplierSelect(discord.ui.Select):
                 """, viewing.id, lowered
             )
 
-        return pages
+        return count, pages
 
     async def callback(self, interaction: discord.Interaction):
 
@@ -2904,13 +2909,13 @@ class MultiplierSelect(discord.ui.Select):
 
         for option in self.options:
             option.default = option.value == chosen_multiplier
+        
+        lowered = chosen_multiplier.lower()
 
         self.view: RefreshSelectPaginationExtended
         viewing = self.viewing
-
-        lowered = chosen_multiplier.lower()
         
-        pages = await MultiplierSelect.format_pages(
+        total_multi, pages = await MultiplierSelect.format_pages(
             interaction, 
             chosen_multiplier=lowered, 
             viewing=viewing
@@ -2918,26 +2923,30 @@ class MultiplierSelect(discord.ui.Select):
 
         embed = discord.Embed(title=f"{viewing.display_name}'s Multipliers")
         embed.colour, thumb_url = MultiplierSelect.colour_mapping[lowered]
-        representation = MultiplierSelect.repr_multi(amount=pages[0][0], multi=lowered)
         embed.set_thumbnail(url=thumb_url)
 
+        representation = MultiplierSelect.repr_multi(amount=total_multi[0], multi=lowered)
         self.view.index = 1
+
         async def get_page_part(page: int, force_refresh: Optional[bool] = False):
 
             if force_refresh:
-                nonlocal pages
-                pages = await MultiplierSelect.format_pages(
+                nonlocal pages, total_multi, representation
+
+                total_multi, pages = await MultiplierSelect.format_pages(
                     interaction, 
-                    chosen_multiplier=lowered,
+                    chosen_multiplier=lowered, 
                     viewing=viewing
                 )
+                representation = MultiplierSelect.repr_multi(amount=total_multi[0], multi=lowered)
 
             length = 6
-            offset = ((page - 1) * length) if (page != 1) else page
+            offset = (page - 1) * length
+
             embed.description = f"> {chosen_multiplier}: **{representation}**\n\n"
             n = self.view.compute_total_pages(len(pages), length)
 
-            if not pages[0][0]:
+            if not total_multi[0]:
                 embed.set_footer(text="Empty")
                 return embed, n
             
@@ -4130,22 +4139,37 @@ class Economy(commands.Cog):
 
         async with self.bot.pool.acquire() as connection:
             connection: asqlite_Connection
+            
             async with connection.transaction():
                 cmd = cmd.parent or cmd
-                
-                total = await add_command_usage(
-                    user_id=interaction.user.id, 
-                    command_name=f"/{cmd.name}", 
-                    conn=connection
+
+                args = await connection.fetchone(
+                    """
+                    WITH multi AS (
+                        SELECT COALESCE(SUM(amount), 0) AS total
+                        FROM multipliers
+                        WHERE (userID IS NULL OR userID = $0)
+                        AND multi_type = $1
+                    )
+
+                    INSERT INTO command_uses (userID, cmd_name, cmd_count)
+                    VALUES ($0, $2, 1)
+                    ON CONFLICT(userID, cmd_name) DO UPDATE SET cmd_count = cmd_count + 1 
+                    RETURNING cmd_count, (SELECT total FROM multi)
+                    """, interaction.user.id, "xp", f"/{cmd.name}", 
                 )
+
+                total, multi = args
 
                 if not total % 15:
                     await self.send_tip_if_enabled(interaction, connection)
 
                 exp_gainable = command.extras.get("exp_gained")
-                
                 if not exp_gainable:
                     return
+                
+                exp_gainable *= ((multi/100)+1)
+                print(f"{exp_gainable=}")
                 await self.add_exp_or_levelup(interaction, connection, exp_gainable)
 
     @commands.Cog.listener()
@@ -4195,21 +4219,13 @@ class Economy(commands.Cog):
         user: Optional[USER_ENTRY], 
         multiplier: Optional[Literal["Robux", "XP", "Luck"]] = "Robux"
     ) -> None:
-        
-        if interaction.user.id not in self.bot.owner_ids:
-            return await interaction.response.send_message(
-            embed=membed(
-                "We are working on making this feature better!\n"
-                "Track our progress [here](https://github.com/SGA-A/c2c/issues/35)."
-            )
-        )
 
         user = user or interaction.user
         lowered = multiplier.lower()
 
-        pages = await MultiplierSelect.format_pages(
+        total_multi, pages = await MultiplierSelect.format_pages(
             interaction, 
-            chosen_multiplier=lowered,
+            chosen_multiplier=lowered, 
             viewing=user
         )
 
@@ -4223,28 +4239,29 @@ class Economy(commands.Cog):
         async def get_page_part(page: int, force_refresh: Optional[bool] = False):
 
             if force_refresh:
-                nonlocal pages, multiplier
+                nonlocal pages, total_multi
 
-                pages = await MultiplierSelect.format_pages(
+                total_multi, pages = await MultiplierSelect.format_pages(
                     interaction, 
                     chosen_multiplier=lowered, 
                     viewing=user
                 )
 
             length = 6
-            offset = ((page - 1) * length) if (page != 1) else page
-            representation = MultiplierSelect.repr_multi(amount=pages[0][0], multi=lowered)
+            offset = ((page - 1) * length)
 
+            representation = MultiplierSelect.repr_multi(amount=total_multi[0], multi=lowered)
             embed.description = f"> {multiplier}: **{representation}**\n\n"
+
             n = paginator.compute_total_pages(len(pages), length)
 
-            if not pages[0][0]:
+            if not total_multi[0]:
                 embed.set_footer(text="Empty")
                 return embed, n
 
             embed.description += "\n".join(
-                format_multiplier(multiplier)
-                for multiplier in pages[offset:offset + length]
+                format_multiplier(multi)
+                for multi in pages[offset:offset + length]
             )
 
             embed.set_footer(text=f"Page {page} of {n}")
@@ -5231,7 +5248,7 @@ class Economy(commands.Cog):
 
             item_attrs = await conn.fetchone(
                 """
-                SELECT shop.cost, inventory.qty
+                SELECT shop.cost, inventory.qty, shop.sellable
                 FROM shop
                 INNER JOIN inventory ON shop.itemID = inventory.itemID
                 WHERE shop.itemID = $0 AND inventory.userID = $1
@@ -5245,7 +5262,15 @@ class Economy(commands.Cog):
                     embed=membed(f"You don't own a single {ie} **{item_name}**.")
                 )
 
-            cost, qty = item_attrs
+            cost, qty, sellable = item_attrs
+
+            if not sellable:
+                return await respond(
+                    interaction=interaction, 
+                    ephemeral=True,
+                    embed=membed(f"You can't sell **{ie} {item_name}**.")
+                )
+
             if qty < sell_quantity:
                 return await respond(
                     interaction=interaction,
@@ -5253,7 +5278,9 @@ class Economy(commands.Cog):
                     embed=membed(f"You don't have {ie} **{sell_quantity:,}x** {item_name}, so uh no.")
                 )
 
-            cost = floor((cost * sell_quantity) / 4)
+            multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
+            cost = selling_price_algo((cost / 4) * sell_quantity, multi)
+
             if await self.is_setting_enabled(conn, user_id=interaction.user.id, setting="selling_confirmations"):
                 await Economy.declare_transaction(conn, user_id=interaction.user.id)
 
@@ -5300,62 +5327,76 @@ class Economy(commands.Cog):
 
             data = await conn.fetchone(
                 """
+                WITH inventory_data AS (
+                    SELECT 
+                        qty, 
+                        itemID 
+                    FROM inventory 
+                    WHERE itemID = $1 AND userID = $2
+                ),
+                multiplier_data AS (
+                    SELECT 
+                        COALESCE(SUM(amount), 0) AS total_amount
+                    FROM multipliers
+                    WHERE (userID IS NULL OR userID = $2)
+                    AND multi_type = $3
+                )
                 SELECT 
-                    cost, 
-                    description, 
-                    image, 
-                    rarity, 
-                    emoji, 
-                    available 
-                FROM shop 
-                WHERE itemID = $0
-                """, item_id
+                    COALESCE(inventory_data.qty, 0) AS qty,
+                    shop.itemType,
+                    shop.cost,
+                    shop.description,
+                    shop.image,
+                    shop.rarity,
+                    shop.available,
+                    shop.sellable,
+                    multiplier_data.total_amount AS multiplier
+                FROM shop
+                LEFT JOIN inventory_data ON shop.itemID = inventory_data.itemID
+                CROSS JOIN multiplier_data
+                WHERE shop.itemID = $1
+                """, item_id, interaction.user.id, "robux"
             )
 
-            total_count, = await conn.fetchone(
-                """
-                SELECT COUNT(DISTINCT userID)
-                FROM inventory
-                WHERE itemID = $0
-                """, item_id
-            )
-            
-            their_count = await conn.fetchone(
-                """
-                SELECT qty
-                FROM inventory
-                WHERE itemID = $0 AND userID = $1
-                """, item_id, interaction.user.id
-            )
-            
-            if their_count is None:
-                their_count = 0
-            else:
-                their_count, = their_count
-
+            their_count, item_type, cost, description, image, rarity, available, sellable, multi = data
             dynamic_text = (
-                f"> *{data[1]}*\n\n"
-                f"This item {"can" if data[5] else "cannot"} be purchased.\n"
-                f"**{total_count}** {make_plural("person", total_count)} {plural_for_own(total_count)} this item.\n"
-                f"You own **{their_count:,}**."
+                f"> *{description}*\n\n"
+                f"You own **{their_count:,}**"
             )
 
             net = await self.calculate_inventory_value(interaction.user, conn)
             if their_count:
-                amt = ((their_count*data[0])/net)*100
+                amt = ((their_count*cost)/net)*100
                 dynamic_text += f" ({amt:.1f}% of your net worth)" if amt >= 0.1 else ""
 
             em = discord.Embed(
                 title=item_name,
                 description=dynamic_text, 
-                colour=RARITY_COLOUR.get(data[3], 0x2B2D31), 
+                colour=RARITY_COLOUR.get(rarity, 0x2B2D31), 
                 url="https://www.youtube.com"
             )
-            
-            em.set_thumbnail(url=data[2])
-            em.add_field(name="Buying price", value=f"{CURRENCY} {data[0]:,}")
-            em.add_field(name="Selling price", value=f"{CURRENCY} {floor(int(data[0]) / 4):,}")
-            em.set_footer(text=f"This is {data[3].lower()}!")
+
+            sell_val_orig = int(cost / 4)
+            sell_val_multi = selling_price_algo(sell_val_orig, multi)
+            em.add_field(
+                name="Value",
+                inline=False,
+                value=(
+                    f"- buy: {CURRENCY} {cost:,}\n"
+                    f"- sell: {CURRENCY} {sell_val_orig:,} ({CURRENCY} {sell_val_multi:,} with your {multi}% multi)"
+                )
+            )
+
+            em.add_field(
+                name="Additional Info",
+                value=(
+                    f"- {'can' if sellable else 'cannot'} be sold\n"
+                    f"- {'can' if available else 'cannot'} purchase in the shop"
+                )
+            )
+
+            em.set_thumbnail(url=image)
+            em.set_footer(text=f"{rarity} {item_type}")
             await respond(interaction=interaction, embed=em)
 
     servant = app_commands.Group(
@@ -5705,7 +5746,7 @@ class Economy(commands.Cog):
         if not applied_successfully:
             return await respond(
                 interaction=interaction,
-                embed=membed("You already have a Bitcoin multiplier active.")
+                embed=membed("You already have a <:btc:1244948562471551047> Bitcoin multiplier active.")
             )
 
         await Economy.update_inv_by_id(interaction.user, amount=-1, item_id=21, conn=conn)
