@@ -62,6 +62,16 @@ def swap_elements(x, index1, index2) -> None:
     x[index1], x[index2] = x[index2], x[index1]
 
 
+def format_multiplier(multiplier):
+    """Formats a multiplier for a more readable display."""
+    description = f"` {multiplier[0]} ` \U00002014 {multiplier[1]}"
+    if multiplier[2]:
+        expiry_time = datetime.datetime.fromtimestamp(multiplier[2], tz=timezone("UTC"))
+        expiry_time = discord.utils.format_dt(expiry_time, style="R")
+        description += f" (expires {expiry_time})"
+    return description
+
+
 def number_to_ordinal(n) -> str:
     """Convert 01 to 1st, 02 to 2nd etc."""
     if 10 <= n % 100 <= 20:
@@ -546,13 +556,13 @@ async def total_commands_used_by_user(user_id: int, conn: asqlite_Connection) ->
 
     total = await conn.fetchone(
         """
-        SELECT COALESCE(SUM(cmd_count), 0) FROM command_uses
+        SELECT TOTAL(cmd_count) 
+        FROM command_uses
         WHERE userID = $0
         """, user_id
     )
 
-    return total[0]
-
+    return int(total[0])
 
 
 async def find_fav_cmd_for(user_id, conn: asqlite_Connection) -> str:
@@ -2732,13 +2742,47 @@ class ToggleButton(discord.ui.Button):
     def __init__(self, setting_dropdown: SettingsDropdown, **kwargs):
         self.setting_dropdown = setting_dropdown
         super().__init__(**kwargs)
+    
+    async def edit_tips_multi(self, conn: asqlite_Connection, user_id: int, enabled: bool):
+        if self.setting_dropdown.current_setting != "tips":
+            return
+        
+        if enabled:
+            await Economy.add_multiplier(
+                conn, 
+                user_id=user_id,
+                multi_amount=10,
+                multi_type="robux",
+                cause="tips",
+                description="Tips Enabled"
+            )
+            return
+
+        await Economy.remove_multiplier_from_cause(
+            conn,
+            user_id=user_id,
+            cause="tips"
+        )
 
     async def callback(self, interaction: discord.Interaction):
         self.setting_dropdown.current_setting_state = int(not self.setting_dropdown.current_setting_state)
+
+        enabled = self.setting_dropdown.current_setting_state == 1
+        em = interaction.message.embeds[0]
+        em.set_field_at(
+            0, 
+            name="Current", 
+            value="<:Enabled:1231347743356616734> Enabled" if enabled else "<:Disabled:1231347741402071060> Disabled"
+        )
+
+        self.view.disable_button.disabled = not enabled
+        self.view.enable_button.disabled = enabled
+
+        await interaction.response.edit_message(embed=em, view=self.view)
+
         async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            em = interaction.message.embeds[0]
             await conn.execute(
                 """
                 INSERT INTO settings (userID, setting, value) 
@@ -2749,19 +2793,9 @@ class ToggleButton(discord.ui.Button):
                 self.setting_dropdown.current_setting, 
                 self.setting_dropdown.current_setting_state
             )
+
+            await self.edit_tips_multi(conn, interaction.user.id, enabled)
             await conn.commit()
-
-            enabled = self.setting_dropdown.current_setting_state == 1
-            em.set_field_at(
-                0, 
-                name="Current", 
-                value="<:Enabled:1231347743356616734> Enabled" if enabled else "<:Disabled:1231347741402071060> Disabled"
-            )
-
-            self.view.disable_button.disabled = not enabled
-            self.view.enable_button.disabled = enabled
-
-            await interaction.response.edit_message(embed=em, view=self.view)
 
 
 class UserSettings(discord.ui.View):
@@ -2783,6 +2817,140 @@ class UserSettings(discord.ui.View):
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await economy_check(interaction, self.interaction.user)
+
+
+class MultiplierSelect(discord.ui.Select):
+
+    colour_mapping = {
+        "robux": (0x59DDB3, "https://i.imgur.com/raX1Am0.png"),
+        "xp": (0xCDC700, "https://i.imgur.com/7hJ0oiO.png"),
+        "luck": (0x65D654, "https://i.imgur.com/9xZIFOg.png")
+    }
+
+    def __init__(self, selected_option: str, viewing: discord.Member) -> None:
+
+        defined_options = [
+            SelectOption(
+                label='Robux',
+                emoji="<:robuxMulti:1244414238219436072>"
+            ),
+            SelectOption(
+                label='XP',
+                emoji='<:xpMulti:1244934433828503604>'
+            ),
+            SelectOption(
+                label='Luck', 
+                emoji='<:luckMulti:1244414281332817930>'
+            )
+        ]
+
+        for option in defined_options:
+            if option.value.lower() == selected_option.lower():
+                option.default = True
+                break
+        
+        self.viewing = viewing
+        super().__init__(options=defined_options, row=0)
+
+    @staticmethod
+    def repr_multi(*, amount, multi: MULTIPLIER_TYPES):
+        """Represent a multiplier using proper formatting.
+        
+        For instance, to represent a user with no XP multiplier, instead of showing 0, show 1x.
+        
+        The units are also converted as necessary based on the type we're looking at.
+        """
+
+        unit = "x" if multi == "xp" else "%"
+        amount = amount if multi != "xp" else (amount or 100) / 100
+
+        return f"{amount}{unit}"
+
+    @staticmethod
+    async def format_pages(
+        interaction: discord.Interaction,
+        chosen_multiplier: MULTIPLIER_TYPES, 
+        viewing: discord.Member
+    ) -> list:
+
+        lowered = chosen_multiplier.lower()
+        async with interaction.client.pool.acquire() as conn:
+            conn: asqlite_Connection
+
+            pages = await conn.fetchall(
+                """
+                SELECT CAST(TOTAL(amount) AS INTEGER) 
+                FROM multipliers
+                WHERE (userID IS NULL OR userID = $0)
+                AND multi_type = $1
+                """, viewing.id, lowered
+            )
+
+            pages += await conn.fetchall(
+                """
+                SELECT amount, description, expiry_timestamp
+                FROM multipliers
+                WHERE (userID IS NULL OR userID = $0)
+                AND multi_type = $1
+                ORDER BY amount DESC
+                """, viewing.id, lowered
+            )
+
+        return pages
+
+    async def callback(self, interaction: discord.Interaction):
+
+        chosen_multiplier: str = self.values[0]
+
+        for option in self.options:
+            option.default = option.value == chosen_multiplier
+
+        self.view: RefreshSelectPaginationExtended
+        viewing = self.viewing
+
+        lowered = chosen_multiplier.lower()
+        
+        pages = await MultiplierSelect.format_pages(
+            interaction, 
+            chosen_multiplier=lowered, 
+            viewing=viewing
+        )
+
+        embed = discord.Embed(title=f"{viewing.display_name}'s Multipliers")
+        embed.colour, thumb_url = MultiplierSelect.colour_mapping[lowered]
+        representation = MultiplierSelect.repr_multi(amount=pages[0][0], multi=lowered)
+        embed.set_thumbnail(url=thumb_url)
+
+        self.view.index = 1
+        async def get_page_part(page: int, force_refresh: Optional[bool] = False):
+
+            if force_refresh:
+                nonlocal pages
+                pages = await MultiplierSelect.format_pages(
+                    interaction, 
+                    chosen_multiplier=lowered,
+                    viewing=viewing
+                )
+
+            length = 6
+            offset = ((page - 1) * length) if (page != 1) else page
+            embed.description = f"> {chosen_multiplier}: **{representation}**\n\n"
+            n = self.view.compute_total_pages(len(pages), length)
+
+            if not pages[0][0]:
+                embed.set_footer(text="Empty")
+                return embed, n
+            
+            embed.description += "\n".join(
+                format_multiplier(multiplier)
+                for multiplier in pages[offset:offset + length]
+            )
+
+            embed.set_footer(text=f"Page {page} of {n}")
+            return embed, n
+        
+        self.view.get_page = get_page_part
+        await self.view.edit_page(interaction)
 
 
 class Economy(commands.Cog):
@@ -2891,38 +3059,41 @@ class Economy(commands.Cog):
     async def before_update(self) -> None:
         self.batch_update.stop()
 
+    @staticmethod
     @tasks.loop()
-    async def check_for_expiry(self) -> None:
+    async def check_for_expiry(interaction: discord.Interaction) -> None:
         """Check for expired multipliers and remove them from the database."""
 
-        async with self.bot.pool.acquire() as conn:
+        async with interaction.client.pool.acquire() as conn:
             next_task = await conn.fetchone(
                 """
                 SELECT rowid, expiry_timestamp 
                 FROM multipliers 
                 WHERE expiry_timestamp IS NOT NULL 
-                ORDER BY expiry_timestamp ASC 
+                ORDER BY expiry_timestamp
                 LIMIT 1
                 """
             )
 
-            if next_task is None:
-                self.check_for_role.cancel()
-                return
-            
-            row_id, expiry = next_task
-            timestamp = datetime.datetime.fromtimestamp(expiry, tz=timezone("UTC"))
-            await discord.utils.sleep_until(timestamp)
+        if next_task is None:
+            Economy.check_for_expiry.cancel()
+            return
 
-            await conn.execute('DELETE FROM tasks WHERE rowid = $0', row_id)
+        row_id, expiry = next_task
+        timestamp = datetime.datetime.fromtimestamp(expiry, tz=timezone("UTC"))
+        await discord.utils.sleep_until(timestamp)
+
+        async with interaction.client.pool.acquire() as conn:
+            await conn.execute("DELETE FROM multipliers WHERE rowid = $0", row_id)
             await conn.commit()
 
-    async def start_check_for_expiry(self) -> None:
-        check = self.check_for_expiry
+    @staticmethod
+    def start_check_for_expiry(interaction) -> None:
+        check = Economy.check_for_expiry
         if check.is_running():
-            check.restart()
+            check.restart(interaction)
         else:
-            check.start()
+            check.start(interaction)
 
     @staticmethod
     async def partial_match_for(interaction: discord.Interaction, item_input: str, conn: asqlite_Connection) -> None | tuple:
@@ -3720,7 +3891,9 @@ class Economy(commands.Cog):
         multi_amount: int,
         multi_type: MULTIPLIER_TYPES,
         cause: str,
-        description: str
+        description: str,
+        expiry: Optional[float] = None,
+        on_conflict: Optional[str] = "UPDATE SET amount = amount + $1, description = $4"
     ) -> None:
         """
         Add a multiplier to the database.
@@ -3737,19 +3910,41 @@ class Economy(commands.Cog):
             The type of the multiplier. 
             Can be either 'xp', 'luck', or 'robux'.
         cause
-            Why the multiplier was added. Must be consistent in order to find it later.
+            Why the multiplier was added. 
+            Must be consistent in order to find it later.
         description
             A description of the multiplier. 
-            This will show up on their multiplier list.
+            This will show up on the user multiplier list.
+        expiry
+            The expiry timestamp of the multiplier.
+            Can be None if the multiplier is permanent.
+        on_conflict
+            The action to take when a conflict occurs.
+            Defaults to updating the amount and description.
+
+        Returns
+        ------------
+        A boolean, either True to indicate that the multiplier was updated/inserted, or False if it was not.
+
+        If you supplied a DO NOTHING clause to the `on_conflict` parameter, 
+        this will return `False` if the `on_conflict` clause was triggered. 
+        Otherwise, row insertion occurs, returning `True`. 
+        This is useful for apply temporary multipliers.
+
+        If you supplied a DO UPDATE clause (which is provided by default to the `on_conflict` parameter),
+        this will always return `True` because in either case an operation took place.
+        This is useful for applying permanent multipliers that can be updated incrementally.
         """
 
-        await conn.execute(
-            """
-            INSERT INTO multipliers (userID, amount, multi_type, cause, description)
-            VALUES ($0, $1, $2, $3, $4)
-            ON CONFLICT(userID, cause) DO UPDATE SET amount = amount + $1, description = $4
-            """, user_id, multi_amount, multi_type, cause, description
+        result = await conn.fetchone(
+            f"""
+            INSERT INTO multipliers (userID, amount, multi_type, cause, description, expiry_timestamp)
+            VALUES ($0, $1, $2, $3, $4, $5)
+            ON CONFLICT(userID, cause) DO {on_conflict} 
+            RETURNING rowid
+            """, user_id, multi_amount, multi_type, cause, description, expiry
         )
+        return result is not None
 
     @staticmethod
     async def remove_multiplier_from_cause(conn: asqlite_Connection, *, user_id: int, cause: str) -> None:
@@ -3763,12 +3958,14 @@ class Economy(commands.Cog):
 
         multiplier, = await conn.fetchone(
             """
-            SELECT COALESCE(SUM(amount), 0) 
-            FROM multipliers 
-            WHERE userID = $0 AND multi_type = $1
+            SELECT TOTAL(amount) 
+            FROM multipliers
+            WHERE (userID IS NULL OR userID = $0) 
+            AND multi_type = $1
             """, user_id, multi_type
         )
-        return multiplier
+
+        return int(multiplier)
     
     @staticmethod
     async def is_setting_enabled(conn: asqlite_Connection, *, user_id: int, setting: str) -> bool:
@@ -3801,6 +3998,7 @@ class Economy(commands.Cog):
             WHERE setting = $1
             """, interaction.user.id, view.setting_dropdown.current_setting
         )
+
         if data is None:
             view.clear_items()
             view.stop()
@@ -3960,6 +4158,7 @@ class Economy(commands.Cog):
             connection: asqlite_Connection
 
             cmd = cmd.parent or cmd
+
             await add_command_usage(
                 user_id=ctx.author.id, 
                 command_name=f">{cmd.name}", 
@@ -3988,12 +4187,13 @@ class Economy(commands.Cog):
     @app_commands.command(name="multipliers", description="View all of your multipliers within the bot")
     @app_commands.describe(
         user="The user whose multipliers you want to see. Defaults to your own.",
-        multiplier="The type of multiplier you want to see. Defaults to robux.")
+        multiplier="The type of multiplier you want to see. Defaults to robux."
+    )
     async def my_multi(
         self, 
         interaction: discord.Interaction, 
         user: Optional[USER_ENTRY], 
-        multiplier: Optional[MULTIPLIER_TYPES] = "robux"
+        multiplier: Optional[Literal["Robux", "XP", "Luck"]] = "Robux"
     ) -> None:
         
         if interaction.user.id not in self.bot.owner_ids:
@@ -4004,7 +4204,54 @@ class Economy(commands.Cog):
             )
         )
 
-        _ = RefreshSelectPaginationExtended(interaction)
+        user = user or interaction.user
+        lowered = multiplier.lower()
+
+        pages = await MultiplierSelect.format_pages(
+            interaction, 
+            chosen_multiplier=lowered,
+            viewing=user
+        )
+
+        embed = discord.Embed(title=f"{user.display_name}'s Multipliers")
+        embed.colour, thumb_url = MultiplierSelect.colour_mapping[lowered]
+        embed.set_thumbnail(url=thumb_url)
+
+        select_menu = MultiplierSelect(selected_option=lowered, viewing=user)
+        paginator = RefreshSelectPaginationExtended(interaction, select=select_menu)
+
+        async def get_page_part(page: int, force_refresh: Optional[bool] = False):
+
+            if force_refresh:
+                nonlocal pages, multiplier
+
+                pages = await MultiplierSelect.format_pages(
+                    interaction, 
+                    chosen_multiplier=lowered, 
+                    viewing=user
+                )
+
+            length = 6
+            offset = ((page - 1) * length) if (page != 1) else page
+            representation = MultiplierSelect.repr_multi(amount=pages[0][0], multi=lowered)
+
+            embed.description = f"> {multiplier}: **{representation}**\n\n"
+            n = paginator.compute_total_pages(len(pages), length)
+
+            if not pages[0][0]:
+                embed.set_footer(text="Empty")
+                return embed, n
+
+            embed.description += "\n".join(
+                format_multiplier(multiplier)
+                for multiplier in pages[offset:offset + length]
+            )
+
+            embed.set_footer(text=f"Page {page} of {n}")
+            return embed, n
+        
+        paginator.get_page = get_page_part
+        await paginator.navigate()
 
     share = app_commands.Group(
         name='share', 
@@ -5393,6 +5640,7 @@ class Economy(commands.Cog):
         quantity: int, 
         conn: asqlite_Connection
     ) -> None:
+        
         expansion = randint(1_600_000, 6_000_000)
         expansion *= quantity
         new_bankspace = await conn.fetchone(
@@ -5428,8 +5676,8 @@ class Economy(commands.Cog):
         await respond(interaction=interaction, embed=embed)
 
     @register_item('Trophy')
-    async def handle_trophy(interaction, quantity) -> None:
-        content = f'\nThey have **{quantity}** of them, WHAT A BADASS' if quantity > 1 else ''
+    async def flex_via_trophy(interaction: discord.Interaction, quantity: int, _: asqlite_Connection) -> None:
+        content = f'\n\nThey have **{quantity}** of them, WHAT A BADASS' if quantity > 1 else ''
         
         await respond(
             interaction=interaction,
@@ -5438,6 +5686,40 @@ class Economy(commands.Cog):
                 f"with their <:tr1:1165936712468418591> **~~PEPE~~ TROPHY**{content}"
             )
         )
+    
+    @register_item('Bitcoin')
+    async def gain_bitcoin_multiplier(interaction: discord.Interaction, _: int, conn: asqlite_Connection) -> None:
+        future_expiry = (discord.utils.utcnow() + datetime.timedelta(minutes=30)).timestamp()
+
+        applied_successfully = await Economy.add_multiplier(
+            conn, 
+            user_id=interaction.user.id, 
+            multi_amount=500,
+            multi_type="robux",
+            cause="bitcoin",
+            description="Bitcoin Multiplier",
+            expiry=future_expiry,
+            on_conflict="NOTHING"
+        )
+
+        if not applied_successfully:
+            return await respond(
+                interaction=interaction,
+                embed=membed("You already have a Bitcoin multiplier active.")
+            )
+
+        await Economy.update_inv_by_id(interaction.user, amount=-1, item_id=21, conn=conn)
+        await conn.commit()
+        
+        await respond(
+            interaction=interaction,
+            embed=membed(
+                "You just activated a **30 minute** <:btc:1244948562471551047> Bitcoin multiplier!\n"
+                "You'll get 500% more robux from transactions during this time."
+            )
+        )
+
+        Economy.start_check_for_expiry(interaction)
 
     @app_commands.command(name="use", description="Use an item you own from your inventory", extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_IDS)
@@ -5480,7 +5762,7 @@ class Economy(commands.Cog):
             if qty < quantity:
                 return await respond(
                     interaction=interaction,
-                    ephemral=True,
+                    ephemeral=True,
                     embed=membed(f"You don't own **{quantity}x {ie} {item_name}**, therefore cannot use this many.")
                 )
             
@@ -5492,9 +5774,7 @@ class Economy(commands.Cog):
                     embed=membed(f"{ie} **{item_name}** does not have a use yet.\nWait until it does!")
                 )
             
-            if item_name == "Bank Note":
-                return await handler(interaction, quantity, conn)
-            await handler(interaction, qty)
+            await handler(interaction, quantity, conn)
 
     @app_commands.command(name="prestige", description="Sacrifice currency stats in exchange for incremental perks")
     @app_commands.guilds(*APP_GUILDS_IDS)
@@ -7219,6 +7499,7 @@ class Economy(commands.Cog):
                     name=f"{interaction.user.name}'s winning gambling game", 
                     icon_url=interaction.user.display_avatar.url
                 )
+                embed.set_footer(text=f"Multiplier: {pmulti:,}%")
 
             elif their_roll == bot_roll:
                 embed.colour = discord.Color.yellow()
@@ -7228,7 +7509,7 @@ class Economy(commands.Cog):
                     name=f"{interaction.user.name}'s gambling game", 
                     icon_url=interaction.user.display_avatar.url
                 )
-                                
+
             else:
                 updated = await self.update_bank_three_new(
                     interaction.user, 
@@ -7254,10 +7535,9 @@ class Economy(commands.Cog):
                     name=f"{interaction.user.name}'s losing gambling game", 
                     icon_url=interaction.user.display_avatar.url
                 )
-            
+
             embed.add_field(name=interaction.user.name, value=f"Rolled `{their_roll}` {''.join(badges)}")
             embed.add_field(name=self.bot.user.name, value=f"Rolled `{bot_roll}`")
-            embed.set_footer(text=f"Multiplier: {pmulti:,}%")
 
             await interaction.response.send_message(embed=embed)
 
