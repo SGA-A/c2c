@@ -166,27 +166,30 @@ class RoleManagement(app_commands.Group):
 
     @app_commands.command(name="custom", description="Add or remove multiple roles in a single command")
     @app_commands.describe(
-        user="The user to add/remove roles to.", 
+        user="The user to add/remove roles to.",
         roles="Precede role name with +/- to add or remove. Separate each with spaces."
     )
     async def custom_roles(
-        self, 
-        interaction: discord.Interaction, 
-        user: discord.Member, 
+        self,
+        interaction: discord.Interaction,
+        user: discord.Member,
         roles: str
-        ) -> discord.WebhookMessage:
+    ) -> discord.WebhookMessage:
         await interaction.response.defer()
 
-        roles = roles.split()
+        pattern = compile(r'([+-])([^+-]+)')
+        role_changes = pattern.findall(roles)
+        
         added_roles = set()
         removed_roles = set()
 
-        for role in roles:
-            switch = role[0]
-            if switch not in ("+", "-"):
-                continue
+        for switch, role_name in role_changes:
+            role_name = role_name.strip()
             
-            rolemention = discord.utils.get(interaction.guild.roles, name=role[1:])
+            rolemention = discord.utils.find(
+                lambda r: r.name.lower() == role_name.lower(), 
+                interaction.guild.roles
+            )
 
             if rolemention is None:
                 continue
@@ -195,8 +198,8 @@ class RoleManagement(app_commands.Group):
 
             if switch == "+":
                 added_roles.add(rolemention)
-                continue
-            removed_roles.add(rolemention)
+            else:
+                removed_roles.add(rolemention)
 
         their_roles = set(user.roles)
         added_roles = added_roles.difference(their_roles)
@@ -204,28 +207,24 @@ class RoleManagement(app_commands.Group):
 
         if (not added_roles) and (not removed_roles):
             return await interaction.followup.send(embed=membed("No changes were made."))
-        
-        embed = discord.Embed(colour=0x2B2D31, title="Role Changes")
 
-        await user.add_roles(
-            *added_roles, 
-            reason=f"Custom request by {interaction.user} (ID: {interaction.user.id})"
-        )
+        embed = discord.Embed(colour=0x2B2D31, title=f"Role Changes: {user.display_name}")
+        embed.set_thumbnail(url=user.display_avatar.url)
 
-        embed.add_field(
-            name="Added", 
-            value="\n".join(role.mention for role in added_roles) or "\U0000200b"
-        )
+        if added_roles:
+            await user.add_roles(
+                *added_roles, 
+                reason=f"Custom request by {interaction.user.name} (ID: {interaction.user.id})"
+            )
+            embed.add_field(name="Added", value="\n".join(role.mention for role in added_roles) or "\u200b")
 
-        embed.add_field(
-            name="Removed", 
-            value="\n".join(role.mention for role in removed_roles) or "\U0000200b"
-        )
-        await user.remove_roles(
-            *removed_roles, 
-            reason=f"Custom request by {interaction.user} (ID: {interaction.user.id})"
-        )
-        
+        if removed_roles:
+            await user.remove_roles(
+                *removed_roles, 
+                reason=f"Custom request by {interaction.user.name} (ID: {interaction.user.id})"
+            )
+            embed.add_field(name="Removed", value="\n".join(role.mention for role in removed_roles) or "\u200b")
+
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="all", description="Adds a role to all members")
@@ -297,8 +296,8 @@ class RoleManagement(app_commands.Group):
     @app_commands.command(name="allroles", description="Lists all roles in the server")
     async def all_roles(self, interaction: discord.Interaction):
 
-        guild_roles = sorted(interaction.guild.roles, reverse=True)
-        guild_roles = [(role.mention, role.id) for role in guild_roles]
+        guild_roles = sorted(interaction.guild.roles[1:], reverse=True)
+        guild_roles = [(role.mention, role.id) for role in guild_roles] + [("@everyone", 829053898333225010)]
 
         async def get_page_part(page: int):
             emb = discord.Embed(
@@ -530,31 +529,33 @@ class Moderation(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             next_task = await conn.fetchone('SELECT * FROM tasks ORDER BY end_time ASC LIMIT 1')
 
-            # if no remaining tasks, stop the loop
-            if next_task is None:
-                self.check_for_role.cancel()
-                return
-            
-            # sleep until the task should be done
-            # if the time is before now, this should return immediately
-            
-            mod_to, role_id, end_time, in_guild = next_task
-            timestamp = datetime.fromtimestamp(end_time, tz=timezone("UTC"))
-            await discord.utils.sleep_until(timestamp)
+        # if no remaining tasks, stop the loop
+        if next_task is None:
+            self.check_for_role.cancel()
+            return
+        
+        # sleep until the task should be done
+        # if the time is before now, this should return immediately
+        
+        mod_to, role_id, end_time, in_guild = next_task
+        timestamp = datetime.fromtimestamp(end_time, tz=timezone("UTC"))
+        await discord.utils.sleep_until(timestamp)
 
-            # do your actual task stuff here
-            guild = self.bot.get_guild(in_guild)
-            
-            try:
-                mem: discord.Member = guild.get_member(mod_to)
-                guild = await mem.remove_roles(
-                    discord.Object(id=role_id),
-                    reason="Temporary role has expired"
-                )
-            except discord.HTTPException:
-                pass
-            finally:
-                # delete the task we just completed
+        # do your actual task stuff here
+        guild = self.bot.get_guild(in_guild)
+        
+        try:
+            mem: discord.Member = guild.get_member(mod_to)
+            guild = await mem.remove_roles(
+                discord.Object(id=role_id),
+                reason="Temporary role has expired"
+            )
+
+        except discord.HTTPException:
+            pass
+
+        finally:
+            async with self.bot.pool.acquire() as conn:
                 await conn.execute('DELETE FROM tasks WHERE mod_to = $0', mod_to)
                 await conn.commit()
 
