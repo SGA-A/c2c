@@ -62,6 +62,10 @@ def swap_elements(x, index1, index2) -> None:
     x[index1], x[index2] = x[index2], x[index1]
 
 
+def add_multi_to_original(*, multi: int, original: int) -> int:
+    return int(((multi / 100) * original) + original)
+
+
 def format_multiplier(multiplier):
     """Formats a multiplier for a more readable display."""
     description = f"` {multiplier[0]} ` \U00002014 {multiplier[1]}"
@@ -1207,7 +1211,7 @@ class BlackjackUi(discord.ui.View):
                 conn=conn
             )
 
-            amount_after_multi = int(((their_multi / 100) * bet_amount) + bet_amount)
+            amount_after_multi = add_multi_to_original(multi=their_multi, original=bet_amount)
 
             await Economy.end_transaction(conn, user_id=self.interaction.user.id)
             bj_lose, new_bj_win, new_amount_balance = await conn.fetchone(
@@ -1672,7 +1676,7 @@ class HighLow(discord.ui.View):
     async def send_win(self, interaction: discord.Interaction, button: discord.ui.Button):
         async with interaction.client.pool.acquire() as conn:
             new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
-            total = self.their_bet * (new_multi // 100 + 1)
+            total = add_multi_to_original(multi=new_multi, original=self.their_bet)
             new_balance = await Economy.update_bank_new(interaction.user, conn, total)
             await Economy.end_transaction(conn, user_id=self.interaction.user.id)
             await conn.commit()
@@ -4036,7 +4040,7 @@ class Economy(commands.Cog):
             view.add_item(view.disable_button)
             view.add_item(view.enable_button)
         return embed
-    
+
     async def send_tip_if_enabled(self, interaction: discord.Interaction, conn: asqlite_Connection) -> None:
         """Send a tip if the user has enabled tips."""
 
@@ -6273,7 +6277,7 @@ class Economy(commands.Cog):
 
         if multiplier:
 
-            amount_after_multi = int(((multiplier / 100) * robux) + robux)
+            amount_after_multi = add_multi_to_original(multi=multiplier, original=robux)
 
             async with conn.transaction():
                 conn: asqlite_Connection
@@ -7243,24 +7247,53 @@ class Economy(commands.Cog):
 
             if amount is None:
                 return
-
+            
             result = choice(("heads", "tails"))
+            embed = discord.Embed()
 
-            async with conn.transaction():
-                if result != bet_on:
-                    await self.update_bank_new(user, conn, -amount)
-                    return await interaction.response.send_message(
-                        embed=membed(
-                            f"You got {result}, meaning you lost {CURRENCY} **{amount:,}**."
-                        )
-                    )
-
-                await self.update_bank_new(user, conn, +amount)
-                return await interaction.response.send_message(
-                    embed=membed(
-                        f"You got {result}, meaning you won {CURRENCY} **{amount:,}**."
-                    )
+            if result != bet_on:
+                embed.set_author(
+                    icon_url=user.display_avatar.url, 
+                    name=f"{user.name}'s losing coinflip game"
                 )
+                embed.colour = discord.Colour.brand_red()
+
+                namount, = await self.update_bank_new(user, conn, -amount)
+                await conn.commit()
+
+                embed.description = (
+                    f"**You lost.** The coin landed on {result}.\n"
+                    f"You lost {CURRENCY} **{amount:,}**.\n"
+                    f"You now have {CURRENCY} **{namount:,}**."
+                )
+
+                return await interaction.response.send_message(embed=embed)
+            
+            their_multi = await self.get_multi_of(
+                user_id=user.id,
+                multi_type="robux",
+                conn=conn
+            )
+
+            embed.set_author(
+                icon_url=user.display_avatar.url, 
+                name=f"{user.name}'s winning coinflip game"
+            )
+            embed.colour = discord.Colour.brand_green()
+
+            embed.set_footer(text=f"Multiplier: {their_multi}%")
+            
+            amount = add_multi_to_original(multi=their_multi, original=amount)
+            namount, = await self.update_bank_new(user, conn, +amount)
+            await conn.commit()
+
+            embed.description = (
+                f"**You won!** The coin landed on the side you bet on.\n"
+                f"You won {CURRENCY} **{amount:,}**.\n"
+                f"You now have {CURRENCY} **{namount:,}**."
+            )
+
+            await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="blackjack", description="Test your skills at blackjack", extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_IDS)
@@ -7314,7 +7347,7 @@ class Economy(commands.Cog):
 
         if player_sum == 21:
             new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
-            amount_after_multi = int((new_multi / 100) * namount) + namount
+            amount_after_multi = add_multi_to_original(multi=new_multi, original=namount)
 
             new_bj_win, bj_lose, new_amount_balance = await conn.fetchone(
                 f"""
@@ -7515,7 +7548,7 @@ class Economy(commands.Cog):
             embed = discord.Embed()
 
             if their_roll > bot_roll:
-                amount_after_multi = int(((pmulti / 100) * robux) + robux)
+                amount_after_multi = add_multi_to_original(multi=pmulti, original=robux)
                 updated = await self.update_bank_three_new(
                     interaction.user, 
                     conn, 
