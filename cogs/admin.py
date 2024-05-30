@@ -1,6 +1,6 @@
 """The administrative cog. Only for use by the bot owners."""
 from re import findall
-from textwrap import indent
+from textwrap import indent, dedent
 from datetime import datetime
 from traceback import format_exc
 from contextlib import redirect_stdout
@@ -243,7 +243,10 @@ class Owner(commands.Cog):
 
             if ret is None:  # if nothing is returned
                 if value:
-                    await ctx.send(f'```py\n{value}\n```')
+                    try:
+                        await ctx.send(f'```py\n{value}\n```')
+                    except discord.HTTPException as e:
+                        return await ctx.send(e)
             else:
                 self._last_result = ret
                 await ctx.send(f'```py\n{value}{ret}\n```')
@@ -300,191 +303,104 @@ class Owner(commands.Cog):
             """
         )
 
-    @commands.command(name='uschedule', description='Update the planned changes tracker in cc', aliases=('us', 'usched'))
-    async def push_update(self, ctx):
-        """Push an update directly to the info channel."""
-
-        await ctx.message.delete()
-        channel = await self.bot.fetch_channel(1121445944576188517)
-        original = await channel.fetch_message(1142392804446830684)
-
-        embed = discord.Embed(
-            title='Update Schedule',
-            colour=discord.Colour.from_rgb(101, 242, 171),
-            description=(
-                'This embed will post any changes to the server in the near future.\n'
-                '- ~~Add more custom role colours~~ **DONE**\n'
-                '- Remove more redundant bots\n'
-                '- ~~Add new tasks to complete in Server Onboarding~~ **DONE**\n'
-                '- ~~Add emotes to the channel topic of every channel~~ **DONE**\n'
-                '- ~~Pick a more suitable role colour for The Crew~~ **DONE**'
-            )
-        )
-
-        # embed.add_field(
-        #     name="There's nothing here yet.", 
-        #     value="There are no planned changes for the server right now."
-        # )
-
-        # replace 'more' w/ 'any known'
-        embed.set_footer(
-            text='Check back later for more scheduled updates..', 
-            icon_url=('https://pa1.narvii.com/6025/9497042b3aad0518f08dd2bfefb0e2262f4a7149_hq.gif')
-        )
-
-        await original.edit(embed=embed)
-
     @commands.command(name='urules', description='Update the rules channel for cc', aliases=('ur',))
     async def push_update3(self, ctx: commands.Context):
         """Push an update to the rules channel."""
         await ctx.message.delete()
         channel = self.bot.get_partial_messageable(902138223571116052)
-        original = channel.get_partial_message(1140258074297376859)
+        original = channel.get_partial_message(1245691538319736863)
         
-        r = discord.Embed(title="Rules & Guidelines", colour=discord.Colour.from_rgb(208, 189, 196))
-        r.description=(
-            'We look forward to seeing you become a regular here! '
-            'However, ensure that you are familiar with our Server Guidelines!\n\n'
-            'Your entrance into the server confirms you accept the following rules as '
-            'well as agreement to any other rules that are implied elsewhere.\n'
-            '# 1. <:e1_comfy:1150361201352659066> Be Respectful!\n'
-            'Treat others the way you would want to be treated, '
-            'and avoid offensive language or behaviour.\n'
-            '# 2. <:pepe_blanket:798869466648674356> Be mindful of others!\n'
-            'Refrain from excessive messages, links, or images that '
-            'disrupt the flow of conversation.\n'
-            '# 3. <:threadwhite:1169704299509596190> Stay on topic.\n'
-            'Keep discussions relevant to the designated channels to maintain a focused '
-            'and organized environment. Innapropriate content is subject to removal!\n'
-            '# 4. <:Polarizer:1171491374756012152> Keep our server safe!\n'
-            'Any form of content that suggests normalization or '
-            'justification of NSFW content should not escape the '
-            'boundaries of <#1160547937420582942>, sanctions will be upheld for such cases.\n'
-            '# 5. <:discordthinking:1173681144718446703> Adhere to the Terms of Service.\n'
-            'Abide by Discord\'s terms of service and community guidelines at all times:\n'
-            '[Discord Community Guidelines](https://discord.com/guidelines/)\n'
-            '[Discord Terms of Service](https://discord.com/terms)'
-        )
-        r.set_footer(
-            icon_url='https://cdn.discordapp.com/emojis/1170379416845692928.gif?size=160&quality=lossless',
-            text='Thanks for reading and respecting our guidelines! Now go have fun!'
+        rule_content = (
+            "1. <:e1_comfy:1150361201352659066> **Be Respectful!** "
+            "Treat others the way you would want to be treated, and avoid offensive language or behaviour.\n"
+            "2. <:pepe_blanket:798869466648674356> **Be mindful of others!** "
+            "Refrain from excessive messages, links, or images that disrupt the flow of conversation.\n"
+            "3. <:threadwhite:1169704299509596190> **Stay on topic.** "
+            "Keep discussions relevant to the designated channels to maintain a focused "
+            "and organized environment. Innapropriate content is subject to removal!\n"
+            "4. <:Polarizer:1171491374756012152> **Keep our server safe.** "
+            "Any form of content that suggests normalization or justification of NSFW content should not escape the "
+            "boundaries of <#1160547937420582942>, sanctions will be upheld for such cases.\n"
+            "5. <:discordthinking:1173681144718446703> **Adhere to the Terms of Service.** "
+            "Abide by Discord\'s [terms of service](<https://discord.com/terms>) and [community guidelines](<https://discord.com/guidelines/>) at all times.\n\n"
+            "**That's all.** You can go have fun now! <a:anime_salute:1170379416845692928>"
         )
 
-        await original.edit(embed=r)
+        await original.edit(content=rule_content, suppress=True)
+
+    async def send_first_note(self, channel: discord.TextChannel):
+        the_msg = channel.get_partial_message(1245737782530281575)
+
+        info_content = (
+            "This is another hangout to theorize your day-to-day discussions. "
+            "cc was created on the **6th of April 2021** to provide "
+            "a space that fosters a chill and mature community that can talk "
+            "about anything and everything. The server is topicless, you initiate anything of your choosing. "
+            "Since we emphasise on this, we don't moderate our members at all, "
+            "but minute exceptions do apply for genuinely serious [rule violations.](https://discord.com/channels/829053898333225010/902138223571116052/1140258074297376859)\n\n"
+            "We hope you enjoy your stay, and we wish you a wonderful journey.\n"
+            "And don't forget; you're here forever."
+        )
+        
+        await the_msg.edit(content=info_content, suppress=True)
+
+    async def send_second_note(self, channel: discord.TextChannel):
+        the_msg = channel.get_partial_message(1245737784711446630)
+        role_content = (
+            """
+            Roles are similar to ranks or accessories that you can add to your profile.
+            There are a handful of self-assignable roles that you can pick up in <id:customize> by clicking on the buttons:
+            > - <@&1240739021366362143>: Assuming you're interested in developing on Discord, this role is for you. These give you access to monthly(ish) announcements on their API.
+            > - <@&1240739146272870422>: You can pick this role up and get access to Twitter announcements made by HoYoverse for Genshin Impact.
+            > - <@&1240738847856263371>: Want to see what 2021 \U00002014 2022 was like here? With this role, you'll get to see all of the archives.
+
+            We have a leveling system that gives you roles. These are based on how many messages you send in the server excluding slash commands[**\U000000b9**](https://discord.com/channels/829053898333225010/1121094935802822768/1166397053329477642), provided by <@437808476106784770>.
+            > - Check your rank by calling this command in any bot command channel: </rank:873658940360126466>.
+            > - For every minute that you send a message in a text channel, you get a random amount of XP.
+            > - The XP required to reach the next level increases significantly as you level up.
+            > - At every 20 levels, you get a role that grants a set of unique perks and permissions.
+
+            The diagram below provides an illustration of all the perks attainable.
+            """
+        )
+        
+        await the_msg.edit(content=dedent(role_content), suppress=True)
+
+    async def send_final_note(self, channel: discord.TextChannel):
+        the_msg = channel.get_partial_message(1245737791904813119)
+        invite_content = (
+            """
+            Want to invite your friends to the server?
+            Send them this permanent invite link: https://discord.gg/W3DKAbpJ5E
+            As always, thanks for sticking around!
+            """
+        )
+
+        await the_msg.edit(content=dedent(invite_content))
 
     @commands.command(name='uinfo', description='Update the information channel for cc')
-    async def push_update2(self, ctx):
+    async def push_update2(self, ctx: commands.Context):
         """Push to update the welcome and info embed within its respective channel."""
-        await ctx.message.delete()
-        channel = await self.bot.fetch_channel(1121445944576188517)
-        original = await channel.fetch_message(1140952278862401657)
-        a = "C:\\Users\\georg\\Downloads\\Media\\rsz_tic.png"
-        that_file = discord.File(a, filename="image.png")
-        
-        intro = discord.Embed(colour=discord.Colour.from_rgb(31, 16, 3))
-        intro.set_image(url="attachment://image.png")
-        
-        embed = discord.Embed(
-            title="Origins",
-            colour=0x2B2D31,
-            description=(
-                "**What is this server all about?!**\n"
-                "This is another hangout to theorize your day-to-day discussions.\n"
-                "The server was created on the **6th of April 2021** to provide "
-                "a space that fosters a chill and mature community that can talk "
-                "about anything and everything.\n\n"
-                "**What does cc actually stand for?**\n"
-                "We don't know either, our guess is something along the lines "
-                "of a collective community, this being the aim of the server to date.\n\n"
-                "We hope you enjoy your stay, and we wish you a wonderful journey.\n"
-                "And don't forget; you're here forever."
-            )
-        )
-        embed.set_thumbnail(url="https://i.imgur.com/7RufohA.png")
+        await ctx.send("\U0001f92b: initializing", silent=True)
 
-        roles = discord.Embed(
-            title="Server Roles",
-            colour=0x2B2D31,
-            description=(
-                "- <@&893550756953735278>\n"
-                "  - People who manage and moderate cc.\n\n"
-                "- <@&1140197893261758505>\n"
-                "  - People who have a high rating on the legacy starboard.\n\n"
-                "- <@&1121426143598354452>\n"
-                "  - People with access to private features.\n\n"
-                "- <@&990900517301522432>\n"
-                "  - People with full music control over music bots.\n\n"
-                "- Other custom roles\n"
-                "  - <@&1124762696110309579> and <@&1047576437177200770>.\n"
-                "  - Reach **Level 40** to make your own!"
-            )
-        )
-        
-        roles.set_thumbnail(url="https://i.imgur.com/ufnRnNx.png")
+        await asyncio.sleep(10)
 
-        ranks = discord.Embed(
-            title="Level Roles & Perks",
-            colour=0x2B2D31,
-            description=(
-                "Your activity in the server will not be left unrewarded!\n"
-                "Level up by participating in text channels.\n"
-                "The more active you are, the higher levels attained and the better perks you receive.\n\n"
-                "- <@&923930948909797396>\n\n"
-                "- <@&923931088613699584>\n"
-                "  - \U000023e3 **335,000,000**\n\n"
-                "- <@&923931156125204490>\n"
-                "  - Your own custom channel\n\n"
-                "- <@&923931553791348756>\n"
-                " - Request a feature for <@1047572530422108311>\n\n"
-                "- <@&923931585953280050>\n"
-                "  - \U000023e3 **1,469,000,000**\n\n"
-                "- <@&923931646783287337>\n"
-                "  - \U000023e3 **17,555,000,000**, 5 \U0001f3c6\n\n"
-                "- <@&923931683311456267>\n"
-                "  - \U000023e3 **56,241,532,113**\n"
-                "  - 3,500 free EXP\n\n"
-                "- <@&923931729016795266>\n"
-                "  - Request a feature for <@1047572530422108311>\n"
-                "  - Your own custom role\n\n"
-                "- <@&923931772020985866>\n"
-                "  - \U000023e3 **72,681,998,999**, 64 \U0001f3c6\n\n"
-                "- <@&923931819571810305>\n"
-                "  - The Personal Token of Appreciation\n\n"
-                "- <@&923931862001414284>\n"
-                "  - See Appendix 1"
-            )
+        destination = await self.bot.get_partial_messageable(
+            id=1121445944576188517, 
+            guild_id=829053898333225010, 
+            type=discord.ChannelType.text
         )
-        ranks.set_thumbnail(url="https://i.imgur.com/2V5LM2s.png")
 
-        second_embed = discord.Embed(
-            title="The Appendix 1",
-            colour=0x2B2D31,
-            description=(
-                "If you somehow manage to reach **<@&923931862001414284>**, out of 6 events, 1 will take place.\n"
-                "A dice will be rolled and the outcome will ultimately depend on a dice roll.\n\n"
-                "1. Your level of experience and wisdom will prove you worthy of receiving <@&912057500914843680>, a role only members of high authority can attain.\n"
-                "2. Your familiarity with this server will allow you to get 1 Month of Discord Nitro immediately when available.\n"
-                "3. This is a karma roll, you will receive nothing.\n"
-                "4. For the sake of nonplus, this event will not be disclosed until it is received.\n"
-                "5. This is a karma roll, you will receive nothing.\n"
-                "6. This is a special one: a face reveal or a voice reveal by the owner. The choice will be made by another dice roll.\n\n"
-                "**Notes**\n"
-                "You cannot earn EXP while executing slash commands.\n"
-                "Refer to this message for details: https://discord.com/channels/829053898333225010/1121094935802822768/1166397053329477642"
-            )
-        )
+        em = discord.utils.get(self.bot.emojis, name="specL")
         
-        second_embed.set_thumbnail(url="https://i.imgur.com/aoECtze.png")
-        second_embed.set_footer(text="Reminder: the perks from all roles are one-time use only and cannot be reused or recycled.")
+        await destination.send(content=f"{em}"*15, silent=True)
+        await self.send_first_note(channel=destination)
         
-        try:
-            await original.edit(
-                attachments=[that_file], 
-                embeds=[intro, embed, ranks, roles, second_embed]
-            )
-
-        except discord.HTTPException as err:
-            await ctx.send(str(err))
+        await destination.send(content=f"{em}"*15, silent=True)
+        await self.send_second_note(channel=destination)
+        
+        await destination.send(content=f"{em}"*15, silent=True)
+        await self.send_final_note(channel=destination)
 
     @commands.command(name='utracker', description='Update the economy system tracker', aliases=('ut',))
     async def override_economy(self, ctx: commands.Context):
@@ -632,12 +548,13 @@ class Owner(commands.Cog):
     async def do_via_webhook(self, kwargs: dict, edit_message_id: Optional[int] = None) -> None:
         """`edit_message_id` must be an ID that is in the same channel this webhook is designated in."""
         webhook = discord.Webhook.from_url(url=self.bot.WEBHOOK_URL, session=self.bot.session)
+        webhook = await webhook.fetch()
+
         if edit_message_id:
             del kwargs["silent"]
-            msg = await webhook.channel.fetch_message(edit_message_id)
-            await msg.reply(**kwargs)
-        else:
-            await webhook.send(**kwargs)
+            return await webhook.edit_message(edit_message_id, **kwargs)
+        
+        await webhook.send(**kwargs)
 
     @commands.command(name='dispatch-webhook', aliases=('dw',), description="Dispatch customizable quarterly updates")
     async def dispatch_webhook(self, ctx: commands.Context):
@@ -648,9 +565,8 @@ class Owner(commands.Cog):
                 title='Changelog',
                 description=(
                     "Changes taken place between <t:1711929600:d> - <t:1719705600:d> are noted here.\n\n"
-                    "- Added new colour roles\n"
-                    "- Changed the colour of some colour roles\n"
-                    "- Added new self roles obtainable via <id:customize>\n"
+                    "- ~~Added new colour roles~~ Superseded[**\U000000b2**](https://discord.com/channels/829053898333225010/1124782048041762867/1241137977225248873)\n"
+                    "- ~~Changed the colour of some colour roles~~ Superseded[**\U000000b2**](https://discord.com/channels/829053898333225010/1124782048041762867/1241137977225248873)\n"
                     "- Changed the default colour for <@&914565377961369632>\n"
                     "- Emojified the topic of all non-archived channels\n"
                     "- Added new tasks to complete in Server Onboarding\n"
@@ -669,12 +585,17 @@ class Owner(commands.Cog):
         ]
 
         second_em = membed(
-            "## Breaking change to channel opt-in[**\U000000b9**](https://discord.com/channels/829053898333225010/1124782048041762867)\n"
-            "- You'll now no longer see these opt in channels if you do not select them.\n"
-            "- When selected, you will get **roles** that allow you to see the channel instead of joining it.\n"
-            "- This means less clutter, more of the stuff you're interested in.\n"
-            "- There's also a new option allowing you to see the server archives.\n"
+            "### Breaking change to channel opt-in[**\U000000b9**](https://discord.com/channels/829053898333225010/1124782048041762867)\n"
+            "You'll now no longer see these opt in channels if you do not select them. "
+            "When selected, you will get **roles** that allow you to see the channel instead of joining it. "
+            "This means less clutter, more of the stuff you're interested in. "
+            "There's also a new option allowing you to see the server archives.\n"
+            "### The Colour Role Wipeout[**\U000000b2**](https://discord.com/channels/829053898333225010/1124782048041762867/1241137977225248873)\n"
+            "Since it received little to no usage, the deed had to be done. "
+            "We are bringing the functionality back however in the form of a slash command. "
+            "We'll reveal more details about it later before it's released."
         )
+        second_em.title = "Index"
 
         second_em.set_footer(
             icon_url=ctx.guild.icon.url, 
