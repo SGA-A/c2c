@@ -55,6 +55,20 @@ FORUM_TAG_IDS = {
     'coding': 1147182042744901703, 
     'general discussion': 1147182171140923392
 }
+EMOTE_DATA = {
+    "baka": "$0 thinks $1 is a BAKA! \U0001f92a",
+    "bite": "$1 was feeling a little zesty today <:umaro:798868098018312222>",
+    "blush": "look what you did to $1 <:froggysip:797944788624212038>",
+    "bored": "$1's level of boredom is unlike any other <:concerndoggo:797430206729945088>",
+    "cry": "<:StoleThisEmote10:795736747958861888> Tears are falling, $1 can't hold it in!",
+    "cuddle": "seems $1 needs a hug, and $0 is here for them! <:peeposmile:780717990215680010>",
+    "dance": "anyone else feeling like it?",
+    "facepalm": "honestly, $1 what are you doing <:whyyy:782394665705537577>",
+    "feed": "come here $1, let $0 feed you!! <:dino_roar:797944928566247484>",
+    "handhold": "$0 and $1 going in with this hug <:pepe_think:798869395722993674>",
+    "handshake": "$0, this is $1. let's get to business <:pepe_fingers:798870376893251594>",
+    "happy": "$1 is so happy, you're so happy, we're all so happy, hap- hap- happy days <a:e1_confetti:1124673505879933031>"
+}
 
 
 def extract_attributes(post_element, mode: Literal["post", "tag"]) -> Union[dict, str]:
@@ -169,13 +183,6 @@ class Utility(commands.Cog):
 
         self.bot.tree.add_command(self.image_src)
         self.bot.tree.add_command(self.get_embed_cmd)
-
-    @staticmethod
-    async def owners_nolimit(interaction: discord.Interaction) -> Optional[app_commands.Cooldown]:
-        """Any of the owners of the bot bypass all cooldown restrictions."""
-        if interaction.user.id in interaction.client.owner_ids:
-            return None
-        return app_commands.Cooldown(1, 7)
 
     async def cog_unload(self) -> None:
         self.bot.tree.remove_command(self.get_embed_cmd.name, type=self.get_embed_cmd.type)
@@ -555,66 +562,58 @@ class Utility(commands.Cog):
         await paginator.navigate(ephemeral=private)
 
     @anime.command(name='char', description="Retrieve SFW or NSFW anime images")
-    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     @app_commands.describe(filter_by='The type of image to retrieve.')
     async def get_via_nekos(
         self, 
         interaction: discord.Interaction, 
-        filter_by: Optional[
-            Literal[
-                "neko", "kitsune", "waifu", "husbando", "ai", "ass", "boobs", 
-                "creampie", "paizuri", "pussy", "random", "ecchi", "fucking"
-            ]
-        ] = "neko"
+        filter_by: Optional[Literal["neko", "kitsune", "waifu", "husbando"]] = "neko"
     ) -> None:
 
-        api_urls = {
-            "neko": ("https://nekos.best/api/v2/neko", 'https://nekos.pro/api/neko'),
-            "kitsune": ("https://nekos.best/api/v2/kitsune",),
-            "waifu": ("https://nekos.best/api/v2/waifu",),
-            "husbando": ("https://nekos.best/api/v2/husbando",),
-            "ai": "https://nekos.pro/api/ai",
-            "ass": "https://nekos.pro/api/ass",
-            "boobs": "https://nekos.pro/api/boobs",
-            "creampie": "https://nekos.pro/api/creampie",
-            "paizuri": "https://nekos.pro/api/paizuri",
-            "pussy": "https://nekos.pro/api/pussy",
-            "random": "https://nekos.pro/api/random",
-            "ecchi": "https://nekos.pro/api/ecchi",
-            "fucking": "https://nekos.pro/api/fucking"
-        }
-
-        api_urls = api_urls.get(filter_by)
-
-        if (isinstance(api_urls, str)) and (not interaction.channel.is_nsfw()):
-            return await interaction.response.send_message(
-                ephemeral=True,
-                embed=membed("This API endpoint **must** be used within an NSFW channel.")
-            )
-        
-        if isinstance(api_urls, tuple):
-            api_urls = choice(api_urls)
-        
-        async with self.bot.session.get(api_urls) as resp:
+        async with self.bot.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp:
             if resp.status != 200:
                 return await interaction.response.send_message(embed=membed(API_EXCEPTION))
 
-            embed = discord.Embed(colour=0xFF9D2C)
             data = await resp.json()
+            data = data["results"][0]
 
-            if (extract_domain(api_urls) == "nekos.pro") and (not api_urls.endswith("ai")):
-                embed.set_author(name=f"{data.setdefault('character_name', 'Unknown Source')}")
-                embed.set_image(url=data["url"])
-                embed.set_footer(text=f"ID: {data.get('id', 'Unknown ID')}")
-            
-            elif extract_domain(api_urls) == "nekos.best":
-                data = data["results"][0]
-                embed.set_author(name=f"{data['artist_name']}")
-                embed.set_image(url=data["url"])
-            
-            else:
-                embed.set_image(url=data["url"])
-                embed.set_footer(text=f"ID: {data.get('id', 'Unknown ID')}")
+            embed = discord.Embed(colour=0xFF9D2C)
+            embed.set_author(name=f"{data['artist_name']}")
+            embed.set_image(url=data["url"])
+
+            img_view = discord.ui.View()
+            img_view.add_item(ImageSourceButton(url=data["url"]))
+
+            await interaction.response.send_message(embed=embed, view=img_view)
+    
+    @anime.command(name='expression', description="Send an expression")
+    @app_commands.rename(expr="type")
+    @app_commands.describe(expr='The type of expression to use.', on="Who to use this expression on. Some are to be used on you.")
+    async def send_expression(
+        self, 
+        interaction: discord.Interaction, 
+        expr: Literal[
+            "baka", "bite", "blush", "bored", "cry", "cuddle", "dance", 
+            "facepalm", "feed", "handhold", "handshake", "happy"
+        ],
+        on: discord.Member
+    ) -> None:
+        if on.id == interaction.user.id:
+            return await interaction.response.send_message(
+                ephemeral=True,
+                embed=membed("You have to use this on someone other than yourself.")
+            )
+
+        async with self.bot.session.get(f"https://nekos.best/api/v2/{expr}") as resp:
+            if resp.status != 200:
+                return await interaction.response.send_message(embed=membed(API_EXCEPTION))
+
+            data = await resp.json()
+            data = data["results"][0]
+
+            embed = discord.Embed(colour=0xFF9D2C)
+            embed.description = EMOTE_DATA[expr].replace("$0", interaction.user.name).replace("$1", on.name)
+            embed.set_author(name=data['anime_name'])
+            embed.set_image(url=data["url"])
 
             img_view = discord.ui.View()
             img_view.add_item(ImageSourceButton(url=data["url"]))
@@ -622,7 +621,6 @@ class Utility(commands.Cog):
             await interaction.response.send_message(embed=embed, view=img_view)
 
     @anime.command(name='random', description="Get a completely random waifu image")
-    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def waifu_random_fetch(self, interaction: discord.Interaction) -> None:
 
         is_nsfw = interaction.channel.is_nsfw()
@@ -662,7 +660,6 @@ class Utility(commands.Cog):
         oppai="Include oppai within the sfw range.",
         selfies="Include photo-like image of a waifu.",
         uniform="Include girls wearing any kind of uniform.")
-    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def filter_waifu_search(
         self, 
         interaction: discord.Interaction, 
@@ -796,7 +793,6 @@ class Utility(commands.Cog):
 
     @app_commands.command(name='randomfact', description='Queries a random fact')
     @app_commands.guilds(*APP_GUILDS_IDS)
-    @app_commands.checks.dynamic_cooldown(owners_nolimit)
     async def random_fact(self, interaction: discord.Interaction) -> None:
         api_url = 'https://api.api-ninjas.com/v1/facts'
         parameters = {'X-Api-Key': self.bot.NINJAS_API_KEY}
