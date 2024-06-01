@@ -1,28 +1,44 @@
 On PC, hitting your up arrow will re-type the last slash command you sent as long as you have not chatted in between.
-At every 100 days in your /daily streak, you get a special item!
 Gambling is not a consistent way to make money, and you should make sure you cut your losses if you go on a losing streak!
 During bankrobs, you can die or be fined. Beware when entering!
 There is a 48 hour long cooldown to changing your job. Remember to pick wisely.
 Own a Shop Coupon? You can use it when you Shop buy an item from the shop, simply set the coupon option as true to apply it to your purchase.
-Make sure to check /multi view to see what your current multi is before you use the /shop sell command. The higher the multiplier you have, the more money you can get for sellable type items!
-You can flex on others by adding items in your showcase with the </showcase add:1197895802387968090> command. Just type the name of the item you wish to add.
-</highlow:1179817617435926680> is a fun guessing game to bet your money on, use it to flex your skills!
-Have you tried out all our gambling commands? Here's a list of all of them: </highlow:1179817617435926680>, </bet:1179817617603711000>, </slots:1179817617435926681>, </blackjack:1191457992076447784>, </coinflip:1179817617603710999>. Those with a <:lanyard:1165935243140796487> Keycard have higher chances of winning!
-Manage your own servant by calling </servant lookup:1201982950498107412>. Feeding your servant also gives you an immediate XP bump!
-You can view your own gambling stats in </profile:1179817617435926679> by setting the `category` option to Gambling Stats. The details are also displayed nicely on a pie chart.
+Make sure to check `/multipliers` to see what your current multi is before you use the `/shop sell` command. The higher the multiplier you have, the more money you can get for sellable type items!
+You can flex on others by adding items in your showcase with the `/showcase add` command. Just type the name of the item you wish to add.
+`/highlow` is a fun guessing game to bet your money on, use it to flex your skills!
+Have you tried out all our gambling commands? Here's a list of all of them: `/highlow`, /bet`, `/slots`, `/blackjack`, `/coinflip`. Those with a <:lanyard:1165935243140796487> Keycard have higher chances of winning!
+Manage your own servant by calling `/servant lookup`. Feeding your servant also gives you an immediate XP bump!
 If you right-click on someone's message and go to apps, you can extract the source of the image just by clicking the associated option!
-You can add a bio onto your </profile:1179817617435926679>! Use the </editprofile bio:1179817617251369077> to add one. There is more to customize through the /editprofile group commands.
-You can view specific details about an item with </item:1202694890471956521>. It allows you to see how many people own the item, the description, the art, and sometimes more!
-Prestiging is the first step into endgame with </prestige:1199683661432361001>
-Don't want to work for your coins? Rob someone else with </rob:1179817617603710998>!
-Scope out who has the highest net worth, pocket balance, and more with </leaderboard:1179817617603710997>.
+~~You can add a bio onto your `/profile`! Hit the button in `/settings` by navigating to "Profile Customization". There is so much more to customize as well!~~ We're replacing this tip in the future because it doesn't actually exist just yet, so ignore it for now, sorry!
+You can view specific details about an item with `/item`. It allows you to see how many people own the item, the description, the art, and sometimes more!
+Prestiging is the first step into endgame with `/prestige`.
+Don't want to work for your coins? Rob someone else with `/rob`!
+Scope out who has the highest net worth, pocket balance, and more with `/leaderboard`.
 Some drones are available for purchase in the shop. Use them to help add reward buffs or perform other nefarious activity.
 Work consistently enough each day and you can get promoted! This increases your pay and the chance for a job specific item to drop!
-You can search through commands within a category </help:1185851353520676914> and find every command supported currently.
+You can search through commands within a category (via `/help`) and find every command supported currently.
 Your servants have the possibility to fund billions towards your name. Use them to your advantage, unlock new skill levels and gain more power!
 You can send us feedback in the bot. If it's a bug or feature that is approved, you will be able to claim rewards!
 You have servants that can unlock certain tasks when they reach a certain skill level. Unlock them and gain huge rewards.
-You can deposit and withdraw robux just by viewing your </balance:1192188834134376500>! Click on the buttons associated with them to get started.
-You can change the status of your own temporary voice channel: </voice status:1218328248937873479>
-Manage your own temporary voice channel with the /voice subcommands. You'll need to setup the creator channel if you have not already and connect to it.
+You can deposit and withdraw robux just by viewing your `/balance`! Click on the buttons associated with them to get started.
+You can change the status of your own temporary voice channel with `/voice status`!
+Manage your own temporary voice channel with the `/voice` subcommands. You'll need to setup the creator channel if you have not already and connect to it.
 Some commands require the use of this prefix: `>` and some are slash commands. Check our help command to identify them accordingly!
+Through the `/balance` command, you have access to a lot of data about anyone, including you! You can see a user's global ranking in terms of their net worth (which is just the sum of inventory net and money net) giving you a good impression of what a user is like. Net worth, Inventory net and even bankspace is all displayed in a nice compact embed for display.
+Ever wanted to mock someone's expression? Now you can with `/anime expression`!
+You can now trade with other players in the economy system. It's scam free and ensures you are satisfied with what you're getting in return. Check it out by using the `/trade` subcommands.
+You can now customize your experience in the economy with the `/settings` command. Change how your profile looks, what transactions you confirm, and much more toggleable settings.
+Have you claimed your `/weekly`, `/monthly` and yearly?
+Don't want to take part in the economy anymore? You can erase your footprint by using `/resetmydata`, which permanently deletes all of your data from our records. We won't judge you of course, if you do.
+Are you bored right now? I might be able to help with `/bored`, giving you some ideas of what activity you could be doing other than using this platform (no pun intended)!
+Do some quick math with `/calc`, it's easy and all you need are your brain and the numbers you want to perform the operation on.
+We have determined you might like some of our image manipulation commands: `/image`, `/image2`. Give it a shot and see what it can do!
+We have determined you might like some of our image manipulation commands: `/locket`, `/alert`. You'll need someone to use it with on the former!
+Genuinely deep would you rather questions at your disposal, with [`>wyr`](https://www.google.com).
+Have you ever thought about how many times you used a command? That thought can now be answered with `/usage`, a detailed briefer on what commands you've used and the amount of times they've been used. It can reveal some insightful info about you! You can even see other player's command usage by passing in the player to the `user` argument. (If you're not happy with this, you are able to opt out via `/resetmydata`.
+You can now literally search the web (well only the images) with `/imagesearch`! Try it out today.
+Some of the most random but objective statements about the universe can be found here, starting with `/randomfact`.
+You can place your footprint on the global tag system we've implemented! You can store some useful text for later retrieval with it. Make one with [`>tag make`](https://www.google.com) and as long as the bot developer doesn't delete it (or you), it stays there **forever.**
+Temporary voice channels are designed to with you in mind. Every toggleable setting is included to make it your own. You can even block other users from joining your voice channel all together, or even make it hidden from public view! It's worth giving a short: just join the channel named "creator channel" to begin!
+High quality anime pics available at `/anime` subcommands, go check it out (if that's what you're interested in)!
+Remember that in `/blackjack`, I will always keep on hitting until I reach 17 if you stand early!
