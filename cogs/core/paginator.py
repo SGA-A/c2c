@@ -24,7 +24,7 @@ async def button_response(interaction: discord.Interaction, **kwargs) -> None | 
 
 class PaginatorInput(discord.ui.Modal):
     def __init__(self, their_view: 'Pagination'):
-        self.their_view = their_view
+        self.interaction: discord.Interaction | None = None
         self.page_num.placeholder = f"A number between 1 and {their_view.total_pages}."
         super().__init__(title="Input a Page", timeout=45.0)
 
@@ -35,8 +35,8 @@ class PaginatorInput(discord.ui.Modal):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
+        self.interaction = interaction
         self.stop()
-        await interaction.response.edit_message(view=self.their_view)
 
     async def on_error(self, interaction: discord.Interaction, error):
         self.stop()
@@ -150,19 +150,19 @@ class Pagination(discord.ui.View):
         if val:
             return
 
-        val = await determine_exponent(interaction, modal.page_num.value)
+        val = await determine_exponent(modal.interaction, modal.page_num.value)
         
         if val is None:
             return
         
         if isinstance(val, str):
-            return await interaction.followup.send(
+            return await modal.interaction.response.send_message(
                 ephemeral=True, 
                 embed=membed("Invalid page number.")
             )
 
         self.index = min(self.total_pages, val)
-        await self.edit_page(interaction)
+        await self.edit_page(modal.interaction)
 
     @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_RIGHT_EMOJI, row=1)
     async def next_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
