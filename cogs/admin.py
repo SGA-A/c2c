@@ -329,9 +329,10 @@ class Owner(commands.Cog):
         await original.edit(content=rule_content, suppress=True)
 
     async def send_first_note(self, channel: discord.TextChannel):
-        the_msg = channel.get_partial_message(1245737782530281575)
+        the_msg = await channel.fetch_message(1245737782530281575)
 
         info_content = (
+            "## Background\n"
             "This is another hangout to theorize your day-to-day discussions. "
             "cc was created on the **6th of April 2021** to provide "
             "a space that fosters a chill and mature community that can talk "
@@ -345,14 +346,19 @@ class Owner(commands.Cog):
         await the_msg.edit(content=info_content, suppress=True)
 
     async def send_second_note(self, channel: discord.TextChannel):
-        the_msg = channel.get_partial_message(1245737784711446630)
+        the_msg = await channel.fetch_message(1245737784711446630)
         role_content = (
             """
+            ## Roles\n
             Roles are similar to ranks or accessories that you can add to your profile.
             There are a handful of self-assignable roles that you can pick up in <id:customize> by clicking on the buttons:
             > - <@&1240739021366362143>: Assuming you're interested in developing on Discord, this role is for you. These give you access to monthly(ish) announcements on their API.
             > - <@&1240739146272870422>: You can pick this role up and get access to Twitter announcements made by HoYoverse for Genshin Impact.
             > - <@&1240738847856263371>: Want to see what 2021 \U00002014 2022 was like here? With this role, you'll get to see all of the archives.
+
+            There are also roles that are given out based on how active you are within the server on a weekly basis.
+            > - <@&1190772029830471781>: Given to users that sent at least 50 messages in the last week.
+            > - <@&1190772182591209492>: Given to users that sent at least 150 messages in the last week.
 
             We have a leveling system that gives you roles. These are based on how many messages you send in the server excluding slash commands[**\U000000b9**](https://discord.com/channels/829053898333225010/1121094935802822768/1166397053329477642), provided by <@437808476106784770>.
             > - Check your rank by calling this command in any bot command channel: </rank:873658940360126466>.
@@ -367,9 +373,10 @@ class Owner(commands.Cog):
         await the_msg.edit(content=dedent(role_content), suppress=True)
 
     async def send_final_note(self, channel: discord.TextChannel):
-        the_msg = channel.get_partial_message(1245737791904813119)
+        the_msg = await channel.fetch_message(1245737791904813119)
         invite_content = (
             """
+            ## Invite Link\n
             Want to invite your friends to the server?
             Send them this permanent invite link: https://discord.gg/W3DKAbpJ5E
             As always, thanks for sticking around!
@@ -381,25 +388,13 @@ class Owner(commands.Cog):
     @commands.command(name='uinfo', description='Update the information channel for cc')
     async def push_update2(self, ctx: commands.Context):
         """Push to update the welcome and info embed within its respective channel."""
-        await ctx.send("\U0001f92b: initializing", silent=True)
-
-        await asyncio.sleep(10)
-
-        destination = await self.bot.get_partial_messageable(
+        destination = self.bot.get_partial_messageable(
             id=1121445944576188517, 
             guild_id=829053898333225010, 
             type=discord.ChannelType.text
         )
 
-        em = discord.utils.get(self.bot.emojis, name="specL")
-        
-        await destination.send(content=f"{em}"*15, silent=True)
-        await self.send_first_note(channel=destination)
-        
-        await destination.send(content=f"{em}"*15, silent=True)
         await self.send_second_note(channel=destination)
-        
-        await destination.send(content=f"{em}"*15, silent=True)
         await self.send_final_note(channel=destination)
 
     @commands.command(name='utracker', description='Update the economy system tracker', aliases=('ut',))
