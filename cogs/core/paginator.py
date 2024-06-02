@@ -328,26 +328,26 @@ class RefreshPagination(discord.ui.View):
         self.children[3].disabled = is_last_item_check
         self.children[4].disabled = is_last_item_check
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_FIRST_PAGE_EMOJI, row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_FIRST_PAGE_EMOJI, row=1)
     async def first(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index = 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_LEFT_EMOJI, row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_LEFT_EMOJI, row=1)
     async def previous(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index -= 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(emoji="<:refreshicon:1205432056369389590>", row=0)
+    @discord.ui.button(emoji="<:refreshicon:1205432056369389590>", row=1)
     async def refresh_paginator(self, interaction: discord.Interaction, _: discord.ui.Button):
         await self.edit_page(interaction, force_refresh=True)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_RIGHT_EMOJI, row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_RIGHT_EMOJI, row=1)
     async def next_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index += 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_LAST_PAGE_EMOJI, row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_LAST_PAGE_EMOJI, row=1)
     async def last_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index = self.total_pages
         await self.edit_page(interaction)
@@ -383,10 +383,12 @@ class PaginationItem(discord.ui.View):
         except discord.NotFound:
             pass
 
-    async def navigate(self) -> None:
+    async def navigate(self, **kwargs) -> None:
         """Get through the paginator properly."""
         emb, self.total_pages = await self.get_page(self.index)
-        await self.interaction.response.send_message(embed=emb, view=self)
+        kwargs.update({"embed": emb, "view": self})
+
+        await self.interaction.response.send_message(**kwargs)
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
         """Update the page index in response to changes in the current page."""        
@@ -451,7 +453,17 @@ class RefreshSelectPaginationExtended(RefreshPagination):
         self, 
         interaction: discord.Interaction,
         select: discord.ui.Select, 
+        get_page: Callable | None = None
     ) -> None:
         
-        self.select = select
-        super().__init__(interaction, get_page=self.select.get_page)
+        super().__init__(interaction, get_page=get_page)
+        self.add_item(select)
+
+    async def navigate(self) -> None:
+        """Get through the paginator properly."""
+        emb, self.total_pages = await self.get_page(self.index)
+        self.update_buttons()
+
+        await self.interaction.response.send_message(embed=emb, view=self)
+    
+
