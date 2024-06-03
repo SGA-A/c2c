@@ -7,7 +7,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from .core.paginator import Pagination
+from .core.paginator import PaginationItem
 from .core.helpers import membed, respond
 from .core.constants import APP_GUILDS_IDS
 from .core.views import process_confirmation
@@ -298,22 +298,21 @@ class RoleManagement(app_commands.Group):
 
         guild_roles = sorted(interaction.guild.roles[1:], reverse=True)
         guild_roles = [(role.mention, role.id) for role in guild_roles] + [("@everyone", 829053898333225010)]
+        
+        emb = membed()
 
         async def get_page_part(page: int):
-            emb = discord.Embed(
-                color=0x7B87DD,
-                description=""
-            )
-
             length = 20
             offset = (page - 1) * length
+            emb.description = ""
 
             for role_attr in guild_roles[offset:offset + length]:
                 emb.description += f"{role_attr[0]} {role_attr[1]}\n"
-            n = Pagination.compute_total_pages(len(guild_roles), length)
+            n = PaginationItem.compute_total_pages(len(guild_roles), length)
+            emb.set_footer(text=f"Page {page} of {n}")
             return emb, n
 
-        await Pagination(interaction, get_page_part).navigate()
+        await PaginationItem(interaction, get_page=get_page_part).navigate()
     
     @app_commands.command(name="info", description="Check info for a role")
     @app_commands.describe(role="The role to check info for.")
