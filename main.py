@@ -64,16 +64,16 @@ class MyCommandTree(app_commands.CommandTree):
         guild: Optional[Union[Snowflake, int]] = None,
     ) -> Optional[app_commands.AppCommand] | Any:
         
-        app_commands = self._global_app_commands
+        commandsr = self._global_app_commands
         if guild:
             guild_id = guild.id if not isinstance(guild, int) else guild
             guild_commands = self._guild_app_commands.get(guild_id, {})
             if not guild_commands and self.fallback_to_global:
-                app_commands = self._global_app_commands
+                commandsr = self._global_app_commands
             else:
-                app_commands = guild_commands
+                commandsr = guild_commands
 
-        for cmd_name, cmd in app_commands.items():
+        for cmd_name, cmd in commandsr.items():
             if any(name in qualified_name for name in cmd_name.split()):
                 return cmd
 
@@ -102,7 +102,7 @@ class MyCommandTree(app_commands.CommandTree):
             return search_dict(self._global_app_commands)
 
     @staticmethod
-    def _unpack_app_commands(app_commands: List[app_commands.AppCommand]) -> AppCommandStore:
+    def _unpack_app_commands(commandsr: List[app_commands.AppCommand]) -> AppCommandStore:
         ret: AppCommandStore = {}
 
         def unpack_options(options: List[Union[app_commands.AppCommand, app_commands.AppCommandGroup, app_commands.Argument]]) -> None:
@@ -111,7 +111,7 @@ class MyCommandTree(app_commands.CommandTree):
                     ret[option.qualified_name] = option
                     unpack_options(option.options)
 
-        for command in app_commands:
+        for command in commandsr:
             ret[command.name] = command
             unpack_options(command.options)
 
@@ -119,7 +119,7 @@ class MyCommandTree(app_commands.CommandTree):
 
     async def _update_cache(
         self, 
-        app_cmds: List[app_commands.AppCommand], 
+        cmads: List[app_commands.AppCommand], 
         guild: Optional[Union[Snowflake, int]] = None
     ) -> None:
 
@@ -133,9 +133,9 @@ class MyCommandTree(app_commands.CommandTree):
                 _guild = guild
 
         if _guild:
-            self._guild_app_commands[_guild.id] = self._unpack_app_commands(app_cmds)
+            self._guild_app_commands[_guild.id] = self._unpack_app_commands(cmads)
         else:
-            self._global_app_commands = self._unpack_app_commands(app_cmds)
+            self._global_app_commands = self._unpack_app_commands(cmads)
 
     async def fetch_command(self, command_id: int, /, *, guild: Optional[Snowflake] = None) -> app_commands.AppCommand:
         res = await super().fetch_command(command_id, guild=guild)
