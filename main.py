@@ -348,6 +348,12 @@ async def total_command_count(interaction: Interaction) -> int:
     return bot.command_count
 
 
+async def yield_app_commands(interaction: Interaction) -> None:
+    if bot.command_count:
+        return
+    bot.command_count = (len(await bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(bot.commands)
+
+
 class TimeConverter(commands.Converter):
     time_regex = compile(r"(\d{1,5}(?:[.,]?\d{1,5})?)([smhd])")
     time_dict = {"h": 3600, "s": 1, "m": 60, "d": 86400}
@@ -372,7 +378,7 @@ class HelpDropdown(ui.Select):
         "Moderation": (0xF70E73, "https://emoji.discadia.com/emojis/74e65408-2adb-46dc-86a7-363f3096b6b2.PNG"),
         "Tags": (0x9EE1FF, "https://i.imgur.com/uHb7xhc.png"),
         "Utility": (0x0FFF87, "https://i.imgur.com/YHBLgVx.png"),
-        "Economy": (0xFFD700, "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Robux_2019_Logo_gold.svg/200px-Robux_2019_Logo_gold.svg.png"),
+        "Economy": (0xD0C383, "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Robux_2019_Logo_gold.svg/200px-Robux_2019_Logo_gold.svg.png"),
         "Music": (0x6953E0, "https://i.imgur.com/nFZTMFl.png"),
         "TempVoice": (0x821743, "https://i.imgur.com/b8u1MQj.png")
     }
@@ -476,7 +482,7 @@ class HelpDropdown(ui.Select):
         
         return pages
 
-    async def callback(self, interaction: Interaction):
+    async def callback(self, interaction: Interaction) -> None:
 
         chosen_category: str = self.values[0]
 
@@ -511,11 +517,12 @@ class HelpDropdown(ui.Select):
 
 @app_commands.describe(category="The category you want help on.")
 @bot.tree.command(name="help", description="Shows help for different categories")
-async def help_command_category(interaction: Interaction, category: classnames):
+async def help_command_category(interaction: Interaction, category: classnames) -> None:
     value = await do_guild_checks(interaction)
     if value is None:
         return
     
+    await yield_app_commands(interaction)
     pages = HelpDropdown.format_pages(chosen_help_category=category, guild_id=interaction.guild.id)
     embed = Embed(title=f"Help: {category}")
     embed.colour, thumb_url = HelpDropdown.colour_mapping[category]
@@ -534,7 +541,7 @@ async def help_command_category(interaction: Interaction, category: classnames):
     select_menu = HelpDropdown(selected_option=category)
     paginator = RefreshSelectPagination(interaction, select=select_menu, get_page=get_page_part)
 
-    await paginator.navigate()
+    await paginator.navigate(ephemeral=True)
 
 
 @bot.command(name='convert')
@@ -557,8 +564,8 @@ async def testit(ctx: commands.Context) -> None:
 
 
 @commands.is_owner()
-@bot.command(name='reload', aliases=("rl",))
-async def reload_cog(ctx: commands.Context, cog_name: cogs):
+@bot.command(name='reload', aliases=("rl",)) 
+async def reload_cog(ctx: commands.Context, cog_name: cogs) -> None:
     embed = membed()
 
     try:
@@ -579,7 +586,7 @@ async def reload_cog(ctx: commands.Context, cog_name: cogs):
 
 @commands.is_owner()
 @bot.command(name='unload', aliases=("ul",))
-async def unload_cog(ctx: commands.Context, cog_name: cogs):
+async def unload_cog(ctx: commands.Context, cog_name: cogs) -> None:
     embed = membed()
     
     try:
@@ -595,7 +602,7 @@ async def unload_cog(ctx: commands.Context, cog_name: cogs):
 
 @commands.is_owner()
 @bot.command(name='load', aliases=("l",))
-async def load_cog(ctx: commands.Context, cog_name: cogs):
+async def load_cog(ctx: commands.Context, cog_name: cogs) -> None:
     embed = membed()
 
     try:
@@ -614,7 +621,7 @@ async def load_cog(ctx: commands.Context, cog_name: cogs):
     await ctx.reply(embed=embed)
 
 
-async def do_guild_checks(interaction: Interaction):
+async def do_guild_checks(interaction: Interaction) -> Union[None, bool]:
     app_commands_not_supported = True
     if interaction.guild:
         gid = interaction.guild.id
