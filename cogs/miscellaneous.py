@@ -214,32 +214,32 @@ class Utility(commands.Cog):
                 continue
             total_bots += 1
 
-        embed = discord.Embed(
-            title=guild.name,
-            colour=guild.me.color,
-            description=(
-                f"\U00002726 Owner: {guild.owner.name}\n"
-                f"\U00002726 Maximum File Size: {guild.filesize_limit / 1_000_000}MB\n"
-                f"\U00002726 Role Count: {len(guild.roles)}\n"
-            )
+        serverinfo = discord.Embed(title=guild.name, colour=guild.me.color)
+        serverinfo.set_thumbnail(url=guild.icon.url)
+        serverinfo.description = (
+            f"\U00002726 Owner: {guild.owner.name}\n"
+            f"\U00002726 Maximum File Size: {guild.filesize_limit / 1_000_000}MB\n"
+            f"\U00002726 Role Count: {len(guild.roles)-1}\n"
         )
 
-        time = guild.created_at
-        tn_full, tn_relative = discord.utils.format_dt(time), discord.utils.format_dt(time, style="R")
-        embed.add_field(
+        tn_full, tn_relative = (
+            discord.utils.format_dt(guild.created_at), 
+            discord.utils.format_dt(guild.created_at, style="R")
+        )
+        
+        serverinfo.add_field(
             name="Created",
             value=f"{tn_full} ({tn_relative})",
         )
-        embed.add_field(name="\U0000200b", value="\U0000200b")
 
         if guild.description:
-            embed.add_field(
+            serverinfo.add_field(
                 name="Server Description",
                 value=guild.description,
                 inline=False
             )
 
-        embed.add_field(
+        serverinfo.add_field(
             name="Member Info",
             value=(
                 f"\U00002023 Humans: {guild.member_count-total_bots:,}\n"
@@ -248,7 +248,7 @@ class Utility(commands.Cog):
             )
         )
 
-        embed.add_field(
+        serverinfo.add_field(
             name="Channel Info",
             value=(
                 f"\U00002023 <:categoryCh:1226619447171875006> {len(guild.categories)}\n"
@@ -259,7 +259,7 @@ class Utility(commands.Cog):
 
         animated_emojis = sum(1 for emoji in guild.emojis if emoji.animated)
 
-        embed.add_field(
+        serverinfo.add_field(
             name="Emojis",
             value=(
                 f"\U00002023 Static: {len(guild.emojis)-animated_emojis}/{guild.emoji_limit}\n"
@@ -267,9 +267,7 @@ class Utility(commands.Cog):
             )
         )
 
-        embed.set_thumbnail(url=guild.icon.url)
-
-        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=serverinfo)
 
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(user="Whose command usage to display. Defaults to you.")
@@ -544,12 +542,10 @@ class Utility(commands.Cog):
             offset = (page - 1) * length
 
             for item_attrs in additional_notes[offset:offset + length]:
-                embed = discord.Embed(
-                    timestamp=datetime.datetime.fromtimestamp(int(item_attrs[-1])),
-                    title=item_attrs[1],
-                    url=item_attrs[0],
-                    colour=0x2B2D31
-                )
+                embed = membed()
+                embed.timestamp = datetime.datetime.fromtimestamp(int(item_attrs[-1]))
+                embed.title = item_attrs[1]
+                embed.url = item_attrs[0]
 
                 embed.set_image(url=item_attrs[0])
                 embeds.append(embed)
@@ -719,23 +715,24 @@ class Utility(commands.Cog):
 
         paginator = Pagination(interaction)
 
+        emb = membed()
+
+        emb.title = "Emojis"
+        emb.set_author(
+            name=interaction.guild.me.name, 
+            icon_url=self.bot.user.display_avatar.url
+        )
+        
         async def get_page_part(page: int):
-            emb = discord.Embed(
-                colour=0x2B2D31,
-                title="Emojis", 
-                description=(
-                    "> This is a command that fetches **all** of the emojis found"
-                    " in the bot's internal cache and their associated atributes.\n\n"
-                )
+            offset = (page - 1) * length
+            
+            emb.description = (
+                "> This is a command that fetches **all** of the emojis found"
+                " in the bot's internal cache and their associated atributes.\n\n"
             )
 
-            offset = (page - 1) * length
             for user in emotes_all[offset:offset + length]:
                 emb.description += f"{user}\n"
-            emb.set_author(
-                name=interaction.guild.me.name, 
-                icon_url=interaction.guild.me.display_avatar.url
-            )
             n = paginator.compute_total_pages(len(emotes_all), length)
             return emb, n
 
