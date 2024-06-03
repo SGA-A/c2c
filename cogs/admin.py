@@ -251,7 +251,7 @@ class Owner(commands.Cog):
                 self._last_result = ret
                 await ctx.send(f'```py\n{value}{ret}\n```')
 
-    @commands.command(name='blank', description='Sends newlines to clear a channel')
+    @commands.command(name='blank', description='Sends newlines to clear a channel', aliases=('b',))
     async def blank(self, ctx):
         """Clear out the channel."""
         await ctx.send(
