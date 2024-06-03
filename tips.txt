@@ -28,14 +28,14 @@ Through the `/balance` command, you have access to a lot of data about anyone, i
 Ever wanted to mock someone's expression? Now you can with `/anime expression`!
 You can now trade with other players in the economy system. It's scam free and ensures you are satisfied with what you're getting in return. Check it out by using the `/trade` subcommands.
 You can now customize your experience in the economy with the `/settings` command. Change how your profile looks, what transactions you confirm, and much more toggleable settings.
-Have you claimed your `/weekly`, `/monthly` and yearly?
+Have you claimed your `/weekly`, `/monthly` and `/yearly`?
 Don't want to take part in the economy anymore? You can erase your footprint by using `/resetmydata`, which permanently deletes all of your data from our records. We won't judge you of course, if you do.
 Are you bored right now? I might be able to help with `/bored`, giving you some ideas of what activity you could be doing other than using this platform (no pun intended)!
 Do some quick math with `/calc`, it's easy and all you need are your brain and the numbers you want to perform the operation on.
 We have determined you might like some of our image manipulation commands: `/image`, `/image2`. Give it a shot and see what it can do!
 We have determined you might like some of our image manipulation commands: `/locket`, `/alert`. You'll need someone to use it with on the former!
 Genuinely deep would you rather questions at your disposal, with [`>wyr`](https://www.google.com).
-Have you ever thought about how many times you used a command? That thought can now be answered with `/usage`, a detailed briefer on what commands you've used and the amount of times they've been used. It can reveal some insightful info about you! You can even see other player's command usage by passing in the player to the `user` argument. (If you're not happy with this, you are able to opt out via `/resetmydata`.
+Have you ever thought about how many times you used a command? That thought can now be answered with `/usage`, a detailed briefer on what commands you've used and the amount of times they've been used. It can reveal some insightful info about you! You can even see other player's command usage by passing in the player to the `user` argument. (If you're not happy with this, you are able to opt out via `/resetmydata`.)
 You can now literally search the web (well only the images) with `/imagesearch`! Try it out today.
 Some of the most random but objective statements about the universe can be found here, starting with `/randomfact`.
 You can place your footprint on the global tag system we've implemented! You can store some useful text for later retrieval with it. Make one with [`>tag make`](https://www.google.com) and as long as the bot developer doesn't delete it (or you), it stays there **forever.**
