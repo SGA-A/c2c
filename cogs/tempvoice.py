@@ -469,7 +469,7 @@ class TempVoice(commands.Cog):
     async def bitrate_voice(self, interaction: discord.Interaction, bitrate: app_commands.Range[int, 8, 96]):
         user = interaction.user
         voice = user.voice
-        
+
         bitrate_limit = interaction.guild.bitrate_limit
         if (bitrate * 1000) > bitrate_limit:
             return await interaction.response.send_message(
@@ -480,7 +480,7 @@ class TempVoice(commands.Cog):
 
         await interaction.response.send_message(
             embed=membed(f"Changed the bitrate of {voice.channel.mention} to **{bitrate}** kbps.")
-        )                
+        )
 
     @voice.command(name="limit", description="Change the user limit of your temporary voice channel")
     @app_commands.checks.cooldown(1, 15)
