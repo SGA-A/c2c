@@ -6380,14 +6380,14 @@ class Economy(commands.Cog):
                 paginator.index = page
 
                 offset = (page - 1) * length
-                em.description = ""
-                
-                for item in owned_items[offset:offset + length]:
-                    em.description += f"{item[1]} **{item[0]}** \U00002500 {item[2]:,}\n"
+                em.description = "\n".join(
+                    f"{item[1]} **{item[0]}** \U00002500 {item[2]:,}" 
+                    for item in owned_items[offset:offset + length]
+                )
 
                 em.set_footer(text=f"Page {page} of {n}")
                 return em, n
-            
+
             paginator.get_page = get_page_part
 
             await paginator.navigate()
