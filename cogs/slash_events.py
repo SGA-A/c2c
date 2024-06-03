@@ -66,7 +66,11 @@ class SlashExceptionHandler(commands.Cog):
             await interaction.followup.send(**self.kwargs)
 
             exc = format_exc().split("The above exception", maxsplit=1)[0]
-            await self.console_logs_channel.send(f'```py\n{exc}\n```')
+            
+            try:
+                await self.console_logs_channel.send(f'```py\n{exc}\n```')
+            except Exception:
+                pass
 
 
 async def setup(bot: commands.Bot):
