@@ -2,7 +2,6 @@
 import sqlite3
 import datetime
 from re import search
-from shelve import open
 from asyncio import sleep
 from textwrap import dedent
 from math import floor, ceil
@@ -461,12 +460,6 @@ def generate_progress_bar(percentage: Union[float, int]) -> str:
     return progress_bar
 
 
-def get_profile_key_value(key: str) -> Any:
-    """Fetch a profile key (attribute) from the database. Returns None if no key is found."""
-    with open("C:\\Users\\georg\\Documents\\c2c\\db-shit\\profile_mods") as dbmr:
-        return dbmr.get(key)
-
-
 def display_user_friendly_deck_format(deck: list, /) -> str:
     """Convert a deck view into a more user-friendly view of the deck."""
     remade = list()
@@ -503,42 +496,6 @@ def display_user_friendly_card_format(number: int, /) -> str:
     unfmt = number
     fmt = f"[`{chosen_suit} {unfmt}`](https://www.youtube.com)"
     return fmt
-
-
-def modify_profile(
-        typemod: Literal["update", "create", "delete"], 
-        key: str, 
-        new_value: Any
-    ) -> Union[dict, int, str]:
-    """Modify custom profile attributes (or keys) of any given discord user.
-    If "delete" is used on a key that does not exist, returns ``0``
-
-    Parameters
-    ----------
-    typemod
-        The type of modification to the profile.
-        Could be ``update`` to update an already existing key, 
-        or ``create`` to create a new key or ``delete`` to delete a key.
-    key 
-        The key to modify/delete.
-    new_value 
-        The new value to replace the old value with. 
-        For a typemod of ``delete``, this argument will not matter at all, 
-        since only the key name is required to delete a key.
-    """
-
-    with open("C:\\Users\\georg\\Documents\\c2c\\database\\profile_mods") as dbm:
-        match typemod:
-            case "update" | "create":
-                dbm.update({f'{key}': new_value})
-                return dict(dbm)
-            case "delete":
-                try:
-                    del dbm[f"{key}"]
-                except KeyError:
-                    return 0
-            case _:
-                return "invalid type of modification value entered"
 
 
 async def add_command_usage(user_id: int, command_name: str, conn: asqlite_Connection) -> int:
@@ -5944,7 +5901,8 @@ class Economy(commands.Cog):
 
         user = user or interaction.user
 
-        if (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id != user.id):
+        vis = True
+        if vis:
             return await interaction.response.send_message(
                 embed=membed(
                     f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
@@ -5952,7 +5910,7 @@ class Economy(commands.Cog):
                 )
             )
 
-        ephemerality = (get_profile_key_value(f"{user.id} vis") == "private") and (interaction.user.id == user.id)
+        ephemerality = (vis == "private") and (interaction.user.id == user.id)
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
@@ -6021,7 +5979,7 @@ class Economy(commands.Cog):
                     f"""
                     {PRESTIGE_EMOTES.get(prestige, "")} Prestige Level **{prestige}** {UNIQUE_BADGES.get(prestige, "")}
                     <:bountybag:1195653667135692800> Bounty: {CURRENCY} **{bounty:,}**
-                    {get_profile_key_value(f"{user.id} badges") or "No badges acquired yet"}
+                    {vis or "No badges acquired yet"}
                     """
                 )
                 
@@ -6068,16 +6026,6 @@ class Economy(commands.Cog):
                     value="\n".join(showcase_ui_new) or "No showcase"
                 )
 
-                if get_profile_key_value(f"{user.id} bio"):
-                    procfile.description += f"**Bio:** {get_profile_key_value(f'{user.id} bio')}"
-                if get_profile_key_value(f"{user.id} avatar_url"):
-                    try:
-                        procfile.set_thumbnail(url=get_profile_key_value(f"{user.id} avatar_url"))
-                    except discord.HTTPException:
-                        modify_profile("delete", f"{user.id} avatar_url", "placeholder")
-                        procfile.set_thumbnail(url=user.display_avatar.url)
-                else:
-                    procfile.set_thumbnail(url=user.display_avatar.url)
                 return await interaction.response.send_message(embed=procfile, ephemeral=ephemerality)
             else:
                 data = await conn.fetchone(

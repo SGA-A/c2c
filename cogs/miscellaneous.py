@@ -169,7 +169,7 @@ class Utility(commands.Cog):
         self.bot = bot
         self.process = Process()
         self.wf = WaifuAioClient(session=bot.session, token=bot.WAIFU_API_KEY, app_name="c2c")
-        self.g = Github('SGA-A', bot.GITHUB_TOKEN)
+        self.gh_repo = Github('SGA-A', bot.GITHUB_TOKEN).get_repo('SGA-A/c2c')
 
         self.image_src = app_commands.ContextMenu(
             name='Extract Image Source',
@@ -952,14 +952,11 @@ class Utility(commands.Cog):
     @app_commands.checks.cooldown(1, 10, key=lambda i: i.guild.id)
     async def about_the_bot(self, interaction: discord.Interaction) -> None:
 
-        await interaction.response.defer(thinking=True)
         lentxt = len(self.bot.commands)
         self.bot.command_count = self.bot.command_count or (len(await self.bot.tree.fetch_commands(guild=discord.Object(id=interaction.guild.id))) + 1 + lentxt)
         lenslash = self.bot.command_count - lentxt
 
-        repo = self.g.get_repo('SGA-A/c2c')
-
-        commits = repo.get_commits()[:3]
+        commits = self.gh_repo.get_commits()[:3]
 
         revision = [
             f"[`{commit.sha[:6]}`]({commit.html_url}) {commit.commit.message.splitlines()[0]} "
@@ -1047,8 +1044,12 @@ class Utility(commands.Cog):
             value=f"{int(days)}d {int(hours)}h {int(minutes)}m {int(seconds)}s"
         )
 
-        embed.set_footer(text=f'Made with discord.py v{discord.__version__}', icon_url='http://i.imgur.com/5BFecvA.png')
-        await interaction.followup.send(embed=embed)
+        embed.set_footer(
+            text=f'Made with discord.py v{discord.__version__}', 
+            icon_url='http://i.imgur.com/5BFecvA.png'
+        )
+        
+        await interaction.response.send_message(embed=embed)
 
     @commands.command(name="pickupline", description="Get pick up lines to use", aliases=('pul',))
     async def pick_up_lines(self, ctx: commands.Context) -> Union[None, discord.Message]:
@@ -1057,7 +1058,7 @@ class Utility(commands.Cog):
                 if resp.status != 200:
                     return await ctx.send(embed=membed(API_EXCEPTION))
                 data = await resp.json()
-                await ctx.reply(embed=membed(data["pickupline"]))
+                await ctx.send(embed=membed(data["pickupline"]))
 
     @commands.command(name="wyr", description="Get 'would you rather' questions to use")
     async def would_yr(self, ctx: commands.Context) -> Union[None, discord.Message]:
@@ -1066,7 +1067,7 @@ class Utility(commands.Cog):
                 if resp.status != 200:
                     return await ctx.send(embed=membed(API_EXCEPTION))
                 data = await resp.json()
-                await ctx.reply(
+                await ctx.send(
                     embed=membed(
                         f'Would you rather:\n'
                         f'1. {data["ops1"].capitalize()} or..\n'
@@ -1111,11 +1112,16 @@ class Utility(commands.Cog):
         if username.bot:
             username = await self.bot.fetch_user(username.id)
         
+        embed.set_author(
+            name=username.display_name, 
+            icon_url=username.display_avatar.url,
+            url=username.display_avatar.url
+        )
+
         if not username.banner:
-            embed.description = f"{username.mention} does not have a banner."
+            embed.description = "This user does not have a banner."
             return await ctx.send(embed=embed)
 
-        embed.set_author(name=username.display_name, url=username.display_avatar.url)
         embed.set_image(url=username.banner.with_static_format('png'))
         await ctx.send(embed=embed)
 
@@ -1157,8 +1163,8 @@ class Utility(commands.Cog):
         if from_only:
             if user.id not in self.bot.owner_ids:
                 return await interaction.response.send_message(
-                    ephemeral=True,
-                    embed=membed("You are not allowed to use this feature.")
+                    ephemeral=True, 
+                    embed=membed("You can't use this feature.")
                 )
             params.update({'siteSearch': from_only, 'siteSearchFilter': "i"})
 
@@ -1179,13 +1185,9 @@ class Utility(commands.Cog):
                 for image in images
             ]
 
-        em = membed(f"- Estimated Results: {results_count}\n- Search Time: {search_time}ms")
-
-        em.set_author(name=user.display_name, icon_url=user.display_avatar.url)
-        paginator = PaginationSimple(
-            interaction, 
-            invoker_id=user.id
-        )
+        em = membed()
+        em.set_author(name=f"{results_count} results ({search_time}ms)", icon_url=user.display_avatar.url)
+        paginator = PaginationSimple(interaction, invoker_id=user.id)
         length = 1
 
         async def get_page_part(page: int):
@@ -1226,18 +1228,15 @@ class Utility(commands.Cog):
         file2: Optional[discord.Attachment],
         file3: Optional[discord.Attachment]
     ) -> None:
-        
+
         await interaction.response.defer(thinking=True)
 
         if interaction.guild.id != 829053898333225010:
-            return await interaction.followup.send(
-                ephemeral=True, 
-                embed=membed("This command can't be used here.")
-            )
+            return await interaction.followup.send(embed=membed("This command can't be used here."))
 
         forum: discord.ForumChannel = self.bot.get_channel(FORUM_ID)
         tags = tags.lower().split()
-        
+
         files = [
             await param_value.to_file() 
             for param_name, param_value in iter(interaction.namespace) 
@@ -1245,7 +1244,7 @@ class Utility(commands.Cog):
         ]
 
         applicable_tags = [forum.get_tag(tag_id) for tagname in tags if (tag_id := FORUM_TAG_IDS.get(tagname)) is not None]
-    
+
         thread, _ = await forum.create_thread(
             name=name,
             content=description,
