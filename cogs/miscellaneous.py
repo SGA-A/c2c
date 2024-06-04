@@ -475,6 +475,7 @@ class Utility(commands.Cog):
         tag3='A tag to base your search on.' ,
         private='Hide the results from others. Defaults to True.',
         length='The maximum number of images to display at once. Defaults to 3.',
+        maximum='The maximum number of images to retrieve. Defaults to 30.',
         page='The page number to look through.'
     )
     @app_commands.autocomplete(
@@ -490,6 +491,7 @@ class Utility(commands.Cog):
         tag3: Optional[str],
         private: Optional[bool] = True,
         length: Optional[app_commands.Range[int, 1, 10]] = 3,
+        maximum: Optional[app_commands.Range[int, 1, 9999]] = 30,
         page: Optional[app_commands.Range[int, 1]] = 1
     ) -> None:
         
@@ -498,7 +500,7 @@ class Utility(commands.Cog):
 
         posts_xml = await self.retrieve_via_kona(
             tags=tagviewing, 
-            limit=9999, 
+            limit=maximum, 
             page=page, 
             mode="post"
         )
