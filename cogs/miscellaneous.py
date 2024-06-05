@@ -706,19 +706,11 @@ class Utility(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_IDS)
     async def emojis_paginator(self, interaction: discord.Interaction) -> None:
         length = 10
-        emotes_all = []
-        for i in self.bot.emojis:
-            if i.animated:
-                fmt = "<a:"
-            else:
-                fmt = "<:"
-            needed = f"{i} (**{i.name}**) - `{fmt}{i.name}:{i.id}>`"
-            emotes_all.append(needed)
+        all_emojis = [f"{i} (**{i.name}**) \U00002014 `{i}`" for i in self.bot.emojis]
 
         paginator = Pagination(interaction)
 
         emb = membed()
-
         emb.title = "Emojis"
         emb.set_author(
             name=interaction.guild.me.name, 
@@ -733,9 +725,9 @@ class Utility(commands.Cog):
                 " in the bot's internal cache and their associated atributes.\n\n"
             )
 
-            for user in emotes_all[offset:offset + length]:
+            for user in all_emojis[offset:offset + length]:
                 emb.description += f"{user}\n"
-            n = paginator.compute_total_pages(len(emotes_all), length)
+            n = paginator.compute_total_pages(len(all_emojis), length)
             return emb, n
 
         paginator.get_page = get_page_part
