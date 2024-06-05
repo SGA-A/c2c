@@ -211,13 +211,14 @@ class C2C(commands.Bot):
         )
 
 
-intents = Intents.none()
-intents.members = True
-intents.guild_messages = True
-intents.message_content = True
-intents.emojis_and_stickers = True
-intents.guilds = True
-intents.voice_states = True
+intents = Intents(
+    members=True,
+    guild_messages=True,
+    message_content=True,
+    emojis_and_stickers=True,
+    guilds=True,
+    voice_states=True
+)
 
 
 mentionable = AllowedMentions.none()
