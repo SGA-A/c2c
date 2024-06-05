@@ -951,6 +951,7 @@ class Utility(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.checks.cooldown(1, 10, key=lambda i: i.guild.id)
     async def about_the_bot(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(thinking=True)
 
         lentxt = len(self.bot.commands)
         self.bot.command_count = self.bot.command_count or (len(await self.bot.tree.fetch_commands(guild=discord.Object(id=interaction.guild.id))) + 1 + lentxt)
@@ -1049,7 +1050,7 @@ class Utility(commands.Cog):
             icon_url='http://i.imgur.com/5BFecvA.png'
         )
         
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
 
     @commands.command(name="pickupline", description="Get pick up lines to use", aliases=('pul',))
     async def pick_up_lines(self, ctx: commands.Context) -> Union[None, discord.Message]:
