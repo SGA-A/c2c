@@ -1000,22 +1000,22 @@ class Utility(commands.Cog):
         days, hours = divmod(hours, 24)
 
         embed.add_field(
-            name='<:membersb:1195752573555183666> Members',
+            name='<:membersb:1247991723284758610> Members',
             value=f'{total_members} total\n{total_unique} unique'
         )
 
         embed.add_field(
-            name='<:channelb:1195752572116541590> Channels', 
+            name='<:channelb:1247991694398460007> Channels', 
             value=f'{text + voice} total\n{text} text\n{voice} voice'
         )
 
         embed.add_field(
-            name='<:processb:1195752570069713047> Process', 
+            name='<:processb:1247991668804947968> Process', 
             value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU'
         )
 
         embed.add_field(
-            name='<:serversb:1195752568303927377> Guilds', 
+            name='<:serversb:1247991639427780661> Guilds', 
             value=(
                 f'{guilds} total\n'
                 f'{ARROW}{len(self.bot.emojis)} emojis\n'
@@ -1024,7 +1024,7 @@ class Utility(commands.Cog):
         )
 
         embed.add_field(
-            name='<:cmdsb:1195752574821879872> Commands', 
+            name='<:cmdsb:1247991799801315369> Commands', 
             value=(
                 f'{self.bot.command_count} total\n'
                 f'{ARROW}{lentxt} (prefix)\n'
@@ -1033,7 +1033,7 @@ class Utility(commands.Cog):
         )
 
         embed.add_field(
-            name='<:uptimeb:1195752565208522812> Uptime', 
+            name='<:uptimeb:1247991586743255042> Uptime', 
             value=f"{int(days)}d {int(hours)}h {int(minutes)}m {int(seconds)}s"
         )
 

@@ -2799,15 +2799,15 @@ class MultiplierSelect(discord.ui.Select):
         defined_options = [
             SelectOption(
                 label='Robux',
-                emoji="<:robuxMulti:1244414238219436072>"
+                emoji="<:robuxMulti:1247992187006750803>"
             ),
             SelectOption(
                 label='XP',
-                emoji='<:xpMulti:1244934433828503604>'
+                emoji='<:xpMulti:1247992334910623764>'
             ),
             SelectOption(
                 label='Luck', 
-                emoji='<:luckMulti:1244414281332817930>'
+                emoji='<:luckMulti:1247992217272844290>'
             )
         ]
 
