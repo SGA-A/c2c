@@ -7,7 +7,7 @@ from logging import INFO
 from pathlib import Path
 from datetime import datetime
 from sys import version, stderr
-from aiohttp import ClientSession
+from aiohttp import ClientSession, DummyCookieJar, TCPConnector
 from traceback import print_exception
 
 from typing import (
@@ -205,7 +205,10 @@ class C2C(commands.Bot):
         self.pool = await create_pool("C:\\Users\\georg\\Documents\\c2c\\database\\economy.db")
 
         self.time_launch = datetime.now()
-        self.session = ClientSession()
+        self.session = ClientSession(
+            connector=TCPConnector(limit=30, loop=self.loop, limit_per_host=5), 
+            cookie_jar=DummyCookieJar(loop=self.loop)
+        )
 
 
 intents = Intents.none()
