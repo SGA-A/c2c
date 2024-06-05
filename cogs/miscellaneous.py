@@ -200,6 +200,23 @@ class Utility(commands.Cog):
             posts_xml = await response.text()
             return parse_xml(posts_xml, mode=mode)
 
+    async def format_gif_api_response(
+        self, 
+        interaction: discord.Interaction, 
+        start: float, 
+        api_url: str, 
+        **attrs
+    ) -> Union[None, discord.WebhookMessage]:
+        
+        async with self.bot.session.get(api_url, **attrs) as response:
+            if response.status != 200:
+                await interaction.followup.send(embed=membed(API_EXCEPTION))
+            
+            buffer = BytesIO(await response.read())
+            end = perf_counter()
+            
+            await interaction.followup.send(content=f"Took ` {end-start:.2f}s `.", file=discord.File(buffer, 'clip.gif'))
+
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name='serverinfo', description="Show information about the server and its members")
     async def display_server_info(self, interaction: discord.Interaction) -> None:
@@ -791,26 +808,9 @@ class Utility(commands.Cog):
         async with self.bot.session.get(api_url, params=parameters) as resp:
             if resp.status != 200:
                 return await interaction.response.send_message(embed=membed(API_EXCEPTION))
+            
             text = await resp.json()
             await interaction.response.send_message(embed=membed(f"{text[0]['fact']}."))
-
-    async def format_api_response(
-        self, 
-        interaction: discord.Interaction, 
-        start: float, 
-        api_url: str, 
-        **attrs
-    ) -> Union[None, discord.WebhookMessage]:
-        async with self.bot.session.get(api_url, **attrs) as response:  # params=params, headers=headers
-            if response.status == 200:
-                buffer = BytesIO(await response.read())
-                end = perf_counter()
-                return await interaction.followup.send(
-                    content=f"Took ` {end-start:.2f}s `.", 
-                    file=discord.File(buffer, 'clip.gif')
-                )
-
-            await interaction.followup.send(embed=membed(API_EXCEPTION))
 
     @app_commands.command(name="image", description="Manipulate a user's avatar")
     @app_commands.describe(
@@ -839,7 +839,7 @@ class Utility(commands.Cog):
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
-        await self.format_api_response(
+        await self.format_gif_api_response(
             interaction,
             start=start,
             api_url=api_url,
@@ -873,7 +873,7 @@ class Utility(commands.Cog):
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
-        await self.format_api_response(
+        await self.format_gif_api_response(
             interaction,
             start=start,
             api_url=api_url,
@@ -881,7 +881,7 @@ class Utility(commands.Cog):
             headers=headers
         )
 
-    @commands.command(name="locket", description="Insert people into a heart-shaped locket")
+    @app_commands.command(name="locket", description="Insert people into a heart-shaped locket")
     @app_commands.describe(user="The user to add to the locket.", user2="The second user to add to the locket.")
     @app_commands.guilds(*APP_GUILDS_IDS)
     async def locket_manip(
@@ -890,7 +890,7 @@ class Utility(commands.Cog):
         user: Optional[discord.User], 
         user2: discord.User
     ) -> None:
-        
+
         start = perf_counter()
         await interaction.response.defer(thinking=True)
 
@@ -899,7 +899,7 @@ class Utility(commands.Cog):
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = "https://api.jeyy.xyz/v2/image/heart_locket"
 
-        await self.format_api_response(
+        await self.format_gif_api_response(
             interaction,
             start=start,
             api_url=api_url,
@@ -957,16 +957,14 @@ class Utility(commands.Cog):
             for commit in commits
         ]
 
-        embed = discord.Embed(
-            description=(
-                f'Latest Changes:\n'
-                f'{"\n".join(revision)}'
-            )
+        embed = discord.Embed(colour=discord.Colour.blurple())
+        embed.description = (
+            f'Latest Changes:\n'
+            f'{"\n".join(revision)}'
         )
         
         embed.title = 'Official Bot Server Invite'
         embed.url = 'https://discord.gg/W3DKAbpJ5E'
-        embed.colour = discord.Colour.blurple()
 
         geo = self.bot.get_user(546086191414509599)
         embed.set_author(name=geo.name, icon_url=geo.display_avatar.url)
@@ -1071,7 +1069,8 @@ class Utility(commands.Cog):
     @commands.command(name="alert", description="Create real incoming iphone alerts")
     async def alert_iph(self, ctx: commands.Context, *, custom_text: str) -> Union[None, discord.Message]:
         async with ctx.typing():
-            custom_text = '+'.join(custom_text.split(' '))
+            custom_text = custom_text.replace(" ", "+")
+
             async with self.bot.session.get(f"https://api.popcat.xyz/alert?text={custom_text}") as resp:
                 if resp.status != 200:
                     return await ctx.send(embed=membed(API_EXCEPTION))
