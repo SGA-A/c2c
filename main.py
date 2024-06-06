@@ -241,7 +241,7 @@ bot = C2C(
 print(version)
 
 
-cogs = Literal[
+cogs = [
     "admin", 
     "ctx_events", 
     "economy", 
@@ -356,6 +356,14 @@ async def yield_app_commands(interaction: Interaction) -> None:
     if bot.command_count:
         return
     bot.command_count = (len(await bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(bot.commands)
+
+
+def get_cog_name(*, shorthand: str) -> str:
+    # Match the shortened name with the full cog name
+    matches = [cog for cog in cogs if shorthand.lower() in cog]
+    if len(matches) >= 1:
+        return matches[0]
+    return None
 
 
 class TimeConverter(commands.Converter):
@@ -569,16 +577,18 @@ async def testit(ctx: commands.Context) -> None:
 
 @commands.is_owner()
 @bot.command(name='reload', aliases=("rl",)) 
-async def reload_cog(ctx: commands.Context, cog_name: cogs) -> None:
-    embed = membed()
+async def reload_cog(ctx: commands.Context, cog_input: str) -> None:
 
+    cog_name = get_cog_name(shorthand=cog_input)
+    if cog_name is None:
+        return await ctx.reply(embed=membed("This extension does not exist."))
+
+    embed = membed()
     try:
         await bot.reload_extension(f"cogs.{cog_name}")
-        embed.description = "Done."
+        embed.add_field(name="Reloaded", value=f"cogs/{cog_name}.py")
     except commands.ExtensionNotLoaded:
         embed.description = "That extension has not been loaded in yet."
-    except commands.ExtensionNotFound:
-        embed.description = "Could not find an extension with that name."
     except commands.NoEntryPointError:
         embed.description = "The extension does not have a setup function."
     except commands.ExtensionFailed as e:
@@ -590,32 +600,36 @@ async def reload_cog(ctx: commands.Context, cog_name: cogs) -> None:
 
 @commands.is_owner()
 @bot.command(name='unload', aliases=("ul",))
-async def unload_cog(ctx: commands.Context, cog_name: cogs) -> None:
-    embed = membed()
+async def unload_cog(ctx: commands.Context, cog_input: str) -> None:
+
+    cog_name = get_cog_name(shorthand=cog_input)
+    if cog_name is None:
+        return await ctx.reply(embed=membed("This extension does not exist."))
     
+    embed = membed()
     try:
         await bot.unload_extension(f"cogs.{cog_name}")
-        embed.description = "Done."
+        embed.add_field(name="Unloaded", value=f"cogs/{cog_name}.py")
     except commands.ExtensionNotLoaded:
         embed.description = "That extension has not been loaded in yet."
-    except commands.ExtensionNotFound:
-        embed.description = "Could not find an extension with that name."
     
     await ctx.reply(embed=embed)
 
 
 @commands.is_owner()
 @bot.command(name='load', aliases=("l",))
-async def load_cog(ctx: commands.Context, cog_name: cogs) -> None:
+async def load_cog(ctx: commands.Context, cog_input: str) -> None:
+    
+    cog_name = get_cog_name(shorthand=cog_input)
+    if cog_name is None:
+        return await ctx.reply(embed=membed("This extension does not exist."))
+    
     embed = membed()
-
     try:
         await bot.load_extension(f"cogs.{cog_name}")
-        embed.description = "Done."
+        embed.add_field(name="Loaded", value=f"cogs/{cog_name}.py")
     except commands.ExtensionAlreadyLoaded:
         embed.description = "That extension is already loaded."
-    except commands.ExtensionNotFound:
-        embed.description = "Could not find an extension with that name."
     except commands.NoEntryPointError:
         embed.description = "The extension does not have a setup function."
     except commands.ExtensionFailed as e:

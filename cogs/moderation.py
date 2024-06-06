@@ -33,6 +33,7 @@ def do_boilerplate_role_checks(role: discord.Role, guild: discord.Guild, my_top:
             """
         )
 
+
 class TimeConverter(app_commands.Transformer):
     time_regex = compile(r"(\d{1,5}(?:[.,]?\d{1,5})?)([smhd])")
     time_dict = {"h": 3600, "s": 1, "m": 60, "d": 86400}
@@ -560,19 +561,28 @@ class Moderation(commands.Cog):
 
     @commands.has_permissions(manage_threads=True)
     @commands.command(name="close", description="Close the invocation thread")
-    async def close_thread(self, ctx: commands.Context):
-        if not isinstance(ctx.channel, discord.Thread):
+    async def close_thread(self, ctx: commands.Context, channel_link: discord.Thread = commands.CurrentChannel):
+
+        if not isinstance(channel_link, discord.Thread):
             return await ctx.reply(embed=membed("This is not a thread."))
-        
+
         await ctx.message.delete()
-        await ctx.send(
-            embed=membed(
-                "This thread is now locked due to lack of use.\n"
-                "It may be re-opened if needed by contacting an admin."
-            )
+        response_method = channel_link.send
+        
+        if channel_link.archived:
+            await channel_link.edit(archived=False)
+            async for msg in channel_link.history(limit=1):
+                response_method = msg.edit
+
+        message = membed("This thread is now closed due to lack of use.")
+        message.add_field(
+            name="Want to re-open this thread?",
+            value="Contact any human with the <@&893550756953735278> role."
         )
 
-        return await ctx.channel.edit(
+        await response_method(embed=message)
+
+        await channel_link.edit(
             locked=True,
             archived=True,
             reason=f'Marked as closed by {ctx.author} (ID: {ctx.author.id})'
