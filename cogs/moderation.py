@@ -494,7 +494,7 @@ class RoleManagement(app_commands.Group):
 
 
 class Moderation(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
 
         self.purge_from_here_cmd = app_commands.ContextMenu(

@@ -25,9 +25,8 @@ from .core.constants import CURRENCY, APP_GUILDS_IDS
 
 
 class InviteButton(discord.ui.View):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self) -> None:
         super().__init__()
-        self.bot: commands.Bot = bot
 
         perms = discord.Permissions.none()
 
@@ -56,7 +55,10 @@ class InviteButton(discord.ui.View):
         self.add_item(
             discord.ui.Button(
                 label="Invite",
-                url=discord.utils.oauth_url(self.bot.user.id, permissions=perms)
+                url=discord.utils.oauth_url(
+                    client_id=1047572530422108311, 
+                    permissions=perms
+                )
             )
         )
 
@@ -475,8 +477,8 @@ class Owner(commands.Cog):
 
     @commands.command(name='invite', description='Links the invite for c2c')
     async def invite_bot(self, ctx: commands.Context) -> None:
-        content = membed("Remember that only developers can invite the bot.")
-        await ctx.send(embed=content, view=InviteButton(self.bot))
+        content = membed("Remember, only developers can invite the bot.")
+        await ctx.send(embed=content, view=InviteButton())
 
     @commands.hybrid_command(name='repeat', description='Repeat what you typed', aliases=('say',))
     @app_commands.guilds(*APP_GUILDS_IDS)

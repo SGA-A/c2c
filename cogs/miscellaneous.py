@@ -130,6 +130,7 @@ def return_random_color():
 
 
 class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
+
     fb_title = discord.ui.TextInput(
         style=discord.TextStyle.short,
         label="Title",
@@ -148,24 +149,28 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
         channel = interaction.guild.get_channel(1122902104802070572)
         embed = membed(self.message.value)
         embed.title = f'New Feedback: {self.fb_title.value or "Untitled"}'
-        embed.set_author(name=interaction.user.name, icon_url=interaction.user.display_avatar.url)
+        embed.set_author(
+            name=interaction.user.name, 
+            icon_url=interaction.user.display_avatar.url
+        )
 
         await channel.send(embed=embed)
-        await interaction.response.send_message(ephemeral=True, embed=membed("Your response has been submitted!"))
+        await interaction.response.send_message(
+            ephemeral=True, 
+            embed=membed("Your response has been submitted!")
+        )
 
     async def on_error(self, interaction: discord.Interaction, _):
-        return await interaction.response.send_message(
-            embed=membed("Your feedback could not be sent. Try again later.")
-        )
+        return await interaction.response.send_message(embed=membed("Couldn't send your feedback."))
 
 
 class ImageSourceButton(discord.ui.Button):
-    def __init__(self, url: Optional[str] = None):
+    def __init__(self, url: Optional[str] = None) -> None:
         super().__init__(url=url or "https://www.google.com", label="Source", row=1)
 
 
 class Utility(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.process = Process()
         self.wf = WaifuAioClient(session=bot.session, token=bot.WAIFU_API_KEY, app_name="c2c")

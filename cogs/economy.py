@@ -669,7 +669,7 @@ class DepositOrWithdraw(discord.ui.Modal):
 
 
 class ConfirmResetData(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction, user_to_remove: USER_ENTRY):
+    def __init__(self, interaction: discord.Interaction, user_to_remove: USER_ENTRY) -> None:
         self.interaction: discord.Interaction = interaction
         self.removing_user: USER_ENTRY = user_to_remove
         self.count = 0
@@ -929,13 +929,13 @@ class BalanceView(discord.ui.View):
     """View for the balance command to mange and deposit/withdraw money."""
 
     def __init__(
-            self, 
-            interaction: discord.Interaction, 
-            wallet: int, 
-            bank: int, 
-            bankspace: int, 
-            viewing: USER_ENTRY
-        ) -> None:
+        self, 
+        interaction: discord.Interaction, 
+        wallet: int, 
+        bank: int, 
+        bankspace: int, 
+        viewing: USER_ENTRY
+    ) -> None:
 
         self.interaction = interaction
         self.their_wallet = wallet
@@ -1598,6 +1598,7 @@ class HighLow(discord.ui.View):
         bet: int, 
         value: int
     ) -> None:
+
         self.interaction = interaction
         self.true_value = value
         self.hint_provided = hint_provided
@@ -1713,6 +1714,7 @@ class HighLow(discord.ui.View):
 class ImageModal(discord.ui.Modal):
 
     def __init__(self, their_choice, the_view):
+
         self.choice: str = their_choice
         self.the_view = the_view
         super().__init__(
@@ -1922,8 +1924,8 @@ class Leaderboard(discord.ui.View):
 
 class DispatchServantView(discord.ui.View):
     def __init__(self, chosen_slay: str, skill_lvl, interaction: discord.Interaction):
+        
         self.interaction = interaction
-
         super().__init__(timeout=45.0)
         self.add_item(SelectTaskMenu(chosen_slay, skill_lvl))
 
@@ -1941,12 +1943,12 @@ class DispatchServantView(discord.ui.View):
 
 class Servants(discord.ui.Select):
     def __init__(
-            self, 
-            bot: commands.Bot, 
-            their_slays: list, 
-            their_choice: str, 
-            owner_id: int
-        ) -> None:
+        self, 
+        bot: commands.Bot, 
+        their_slays: list, 
+        their_choice: str, 
+        owner_id: int
+    ) -> None:
 
         options = [
             SelectOption(
@@ -1988,7 +1990,7 @@ class Servants(discord.ui.Select):
 
 
 class SelectTaskMenu(discord.ui.Select):
-    def __init__(self, servant_name: str, skill_lvl: int):
+    def __init__(self, servant_name: str, skill_lvl: int) -> None:
 
         self.worker = servant_name
         self.skill_lvl = skill_lvl
@@ -2145,7 +2147,13 @@ class SelectTaskMenu(discord.ui.Select):
 class ServantsManager(discord.ui.View):
     pronouns = {"Female": ("her", "she"), "Male": ("his", "he")}
 
-    def __init__(self, interaction: discord.Interaction, their_choice, owner_id: int, owner_slays):
+    def __init__(
+        self, 
+        interaction: discord.Interaction, 
+        their_choice, 
+        owner_id: int, 
+        owner_slays: list
+    ) -> None:
         """
         Invoker is who is calling the command, 
         owner_id is what the owner of these servants we're looking at are.
@@ -2434,11 +2442,11 @@ class ServantsManager(discord.ui.View):
 
 class ItemQuantityModal(discord.ui.Modal):
     def __init__(
-            self, 
-            item_name: str, 
-            item_cost: int, 
-            item_emoji: str
-        ) -> None:
+        self, 
+        item_name: str, 
+        item_cost: int, 
+        item_emoji: str
+    ) -> None:
 
         self.item_cost = item_cost
         self.item_name = item_name
@@ -2624,7 +2632,13 @@ class ShopItem(discord.ui.Button):
         self.item_name = item_name
         self.cost = cost
         self.ie = ie
-        super().__init__(style=discord.ButtonStyle.primary, emoji=self.ie, label=item_name, **kwargs)
+
+        super().__init__(
+            style=discord.ButtonStyle.primary, 
+            emoji=self.ie, 
+            label=item_name, 
+            **kwargs
+        )
 
     async def callback(self, interaction: discord.Interaction):
         
@@ -2638,7 +2652,7 @@ class ShopItem(discord.ui.Button):
 
 
 class MatchView(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction):
+    def __init__(self, interaction: discord.Interaction) -> None:
         self.interaction = interaction
         self.chosen_item = 0
         super().__init__(timeout=15.0)
@@ -2658,10 +2672,21 @@ class MatchItem(discord.ui.Button):
     Helps users by not having to retype the item name more specifically.
     """
     
-    def __init__(self, item_id: int, item_name: str, ie: str, **kwargs):
+    def __init__(
+        self, 
+        item_id: int, 
+        item_name: str, 
+        ie: str, 
+        **kwargs
+    ) -> None:
         self.item_id = item_id
 
-        super().__init__(label=item_name, emoji=ie, custom_id=f"{item_id}", **kwargs)
+        super().__init__(
+            label=item_name, 
+            emoji=ie, 
+            custom_id=f"{item_id}", 
+            **kwargs
+        )
 
     async def callback(self, interaction: discord.Interaction):
         self.view.chosen_item = (int(self.custom_id), self.label, self.emoji)
@@ -2672,15 +2697,22 @@ class MatchItem(discord.ui.Button):
 
 
 class ProfileCustomizeButton(discord.ui.Button):
-    def __init__(self, **kwargs):
-        super().__init__(label="Edit Profile (in development)", row=2, disabled=True, **kwargs)
+    def __init__(self, **kwargs) -> None:
+
+        super().__init__(
+            label="Edit Profile (in development)", 
+            row=2, 
+            disabled=True, 
+            **kwargs
+        )
 
     async def callback(self, _: discord.Interaction):
         pass
 
 
 class SettingsDropdown(discord.ui.Select):
-    def __init__(self, data: tuple, default_setting: str):
+
+    def __init__(self, data: tuple, default_setting: str) -> None:
         """data is a list of tuples containing the settings and their brief descriptions."""
         options = [
             discord.SelectOption(label=" ".join(setting.split("_")).title(), description=brief, default=setting == default_setting, value=setting)
@@ -2705,11 +2737,11 @@ class SettingsDropdown(discord.ui.Select):
 
 
 class ToggleButton(discord.ui.Button):
-    def __init__(self, setting_dropdown: SettingsDropdown, **kwargs):
+    def __init__(self, setting_dropdown: SettingsDropdown, **kwargs) -> None:
         self.setting_dropdown = setting_dropdown
         super().__init__(**kwargs)
     
-    async def edit_tips_multi(self, conn: asqlite_Connection, user_id: int, enabled: bool):
+    async def edit_tips_multi(self, conn: asqlite_Connection, user_id: int, enabled: bool) -> None:
         if self.setting_dropdown.current_setting != "tips":
             return
         
@@ -2731,7 +2763,7 @@ class ToggleButton(discord.ui.Button):
             cause="tips"
         )
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction) -> None:
         self.setting_dropdown.current_setting_state = int(not self.setting_dropdown.current_setting_state)
 
         enabled = self.setting_dropdown.current_setting_state == 1
@@ -2766,7 +2798,13 @@ class ToggleButton(discord.ui.Button):
 
 
 class UserSettings(discord.ui.View):
-    def __init__(self, data: list, chosen_setting: str, interaction: discord.Interaction):
+    def __init__(
+        self, 
+        data: list, 
+        chosen_setting: str, 
+        interaction: discord.Interaction
+    ) -> None:
+        
         super().__init__(timeout=60.0)
         self.interaction = interaction
         
@@ -2774,7 +2812,7 @@ class UserSettings(discord.ui.View):
         self.disable_button = ToggleButton(self.setting_dropdown, label="Disable", style=discord.ButtonStyle.danger, row=1)
         self.enable_button = ToggleButton(self.setting_dropdown, label="Enable", style=discord.ButtonStyle.success, row=1)
     
-    async def on_timeout(self):
+    async def on_timeout(self) -> None:
         for item in self.children:
             item.disabled = True
         try:
@@ -2821,7 +2859,8 @@ class MultiplierSelect(discord.ui.Select):
 
     @staticmethod
     def repr_multi(*, amount, multi: MULTIPLIER_TYPES):
-        """Represent a multiplier using proper formatting.
+        """
+        Represent a multiplier using proper formatting.
         
         For instance, to represent a user with no XP multiplier, instead of showing 0, show 1x.
         
@@ -2926,7 +2965,7 @@ class MultiplierSelect(discord.ui.Select):
 
 class Economy(commands.Cog):
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot: commands.Bot = bot
 
         self.not_registered = membed(
@@ -2936,7 +2975,6 @@ class Economy(commands.Cog):
             "Find out what could've happened by calling "
             "[`>reasons`](https://www.google.com/)."
         )
-        self.batch_update.start()
 
     @staticmethod
     async def fetch_showdata(user: USER_ENTRY, conn: asqlite_Connection) -> tuple:

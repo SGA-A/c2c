@@ -12,7 +12,7 @@ from .core.constants import COOLDOWN_PROMPTS
 
 class ContextCommandHandler(commands.Cog):
     """The error handler for text-based commands that are called."""
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.err = commands.errors
         self.view = MessageDevelopers()

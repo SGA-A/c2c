@@ -38,7 +38,7 @@ ytdl = youtube_dl.YoutubeDL(YTDL_FORMAT_OPTIONS)
 
 
 class YTDLSource(discord.PCMVolumeTransformer):
-    def __init__(self, source, *, data, volume=0.5):
+    def __init__(self, source, *, data, volume=0.5) -> None:
         super().__init__(source, volume)
 
         self.data = data
@@ -47,7 +47,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.url = data.get('url')
 
     @classmethod
-    async def from_url(cls, url, *, loop=None):
+    async def from_url(cls, url, *, loop=None) -> "YTDLSource":
         loop = loop or get_event_loop()
         data = await loop.run_in_executor(None, lambda: ytdl.extract_info(url, download=False))
 
@@ -60,7 +60,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
 
 
 class Music(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot: commands.Bot = bot
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:

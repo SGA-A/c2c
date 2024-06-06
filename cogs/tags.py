@@ -11,6 +11,7 @@ from asqlite import ProxiedConnection as asqlite_Connection
 from .core.helpers import membed
 from .core.constants import APP_GUILDS_IDS
 from .core.paginator import PaginationSimple
+from .core.views import Confirm
 
 
 TAG_NOT_FOUND_SIMPLE_RESPONSE = "Tag not found, it may have been deleted when you called the command."
@@ -22,7 +23,7 @@ TAG_NOT_FOUND_RESPONSE = (
 
 
 class TagName(commands.clean_content):
-    def __init__(self, *, lower: bool = False):
+    def __init__(self, *, lower: bool = False) -> None:
         self.lower: bool = lower
         super().__init__()
 
@@ -48,7 +49,11 @@ class TagName(commands.clean_content):
 
 class TagEditModal(discord.ui.Modal, title='Edit Tag'):
     content = discord.ui.TextInput(
-        label='Tag Content', required=True, style=discord.TextStyle.long, min_length=1, max_length=2000
+        label='Tag Content', 
+        required=True, 
+        style=discord.TextStyle.long, 
+        min_length=1, 
+        max_length=2000
     )
 
     def __init__(self, text: str) -> None:
@@ -79,7 +84,13 @@ class TagMakeModal(discord.ui.Modal, title='Create New Tag'):
         placeholder="The content of this tag."
     )
 
-    def __init__(self, cog, ctx: commands.Context, conn: asqlite_Connection):
+    def __init__(
+        self, 
+        cog, 
+        ctx: commands.Context, 
+        conn: asqlite_Connection
+    ) -> None:
+
         super().__init__()
         self.cog: Tags = cog
         self.ctx = ctx
@@ -102,58 +113,15 @@ class TagMakeModal(discord.ui.Modal, title='Create New Tag'):
         content = str(self.content)
         if len(content) > 2000:
             return await interaction.response.send_message(
-                embed=membed('Tag content is a maximum of 2000 characters.'), 
+                embed=membed('Tag content must be a maximum of 2000 characters.'), 
                 ephemeral=True
             )
         
         await self.cog.create_tag(self.ctx, name, content, conn=self.conn)
 
 
-class Confirm(discord.ui.View):
-    """Chopped down version of the original confirmation interactive menu."""
-
-    def __init__(self):
-        super().__init__(timeout=45.0)
-        self.value = None
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id in interaction.client.owner_ids:
-            return True
-        await interaction.response.send_message(
-            ephemeral=True,
-            embed=membed("This confirmation menu is for developer use only.")
-        )
-        return False
-
-    @discord.ui.button(label='Cancel', style=discord.ButtonStyle.red)
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.children[1].style = discord.ButtonStyle.grey
-        button.style = discord.ButtonStyle.success
-        
-        for item in self.children:
-            item.disabled = True
-
-        await interaction.response.edit_message(view=self)
-        
-        self.value = False
-        self.stop()
-
-    @discord.ui.button(label='Confirm', style=discord.ButtonStyle.green)
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.children[0].style = discord.ButtonStyle.grey
-        button.style = discord.ButtonStyle.success
-
-        for item in self.children:
-            item.disabled = True
-        
-        await interaction.response.edit_message(view=self)
-
-        self.value = True
-        self.stop()
-
-
 async def send_boilerplate_confirm(ctx: commands.Context, custom_description: str) -> bool:
-    confirm = Confirm()
+    confirm = Confirm(controlling_user=ctx.author.id)
 
     confirmation = membed(custom_description)
     confirmation.title = "Pending Confirmation"
@@ -167,12 +135,6 @@ async def send_boilerplate_confirm(ctx: commands.Context, custom_description: st
         confirmation.title = "Timed out"
         confirmation.description = f"~~{confirmation.description}~~"
         confirmation.colour = discord.Colour.brand_red()
-    elif confirm.value:
-        confirmation.title = "Action Confirmed"
-        confirmation.colour = discord.Colour.green()
-    else:
-        confirmation.title = "Action Cancelled"
-        confirmation.colour = discord.Colour.brand_red()
     
     await msg.edit(embed=confirmation, view=confirm)
     return confirm.value
@@ -185,10 +147,10 @@ class MatchWord(discord.ui.Button):
     It is a generic button that, upon clicked, returns the word pressed for later use.
     """
     
-    def __init__(self, word: str):
+    def __init__(self, word: str) -> None:
         super().__init__(label=word)
 
-    async def callback(self, interaction: discord.Interaction):
+    async def callback(self, interaction: discord.Interaction) -> None:
         self.view.chosen_word = self.label
         self.view.stop()
 
@@ -197,14 +159,19 @@ class MatchWord(discord.ui.Button):
 
 class Tags(commands.Cog):
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
+        
         self.bot: commands.Bot = bot
 
         # ownerID: set(name)
         self._reserved_tags_being_made: set[str] = set()
 
     @staticmethod
-    async def partial_match_for(ctx: commands.Context, word_input: str, tag_results) -> None | tuple:
+    async def partial_match_for(
+        ctx: commands.Context, 
+        word_input: str, 
+        tag_results: list[sqlite3.Row]
+    ) -> None | tuple:
         """
         If the user types part of an name, get the tag name and its content indicated.
 
@@ -691,7 +658,7 @@ class Tags(commands.Cog):
     async def purge(self, ctx: commands.Context, user: Optional[discord.Member] = commands.Author):
 
         if (ctx.author.id != user.id) and (ctx.author.id not in self.bot.owner_ids):
-            return await ctx.send(embed=membed("Only bot owners can do this."))
+            return await ctx.send(embed=membed("Only bot developers can do this."))
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
