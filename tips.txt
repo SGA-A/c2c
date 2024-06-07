@@ -30,7 +30,6 @@ You can now trade with other players in the economy system. It's scam free and e
 You can now customize your experience in the economy with the `/settings` command. Change how your profile looks, what transactions you confirm, and much more toggleable settings.
 Have you claimed your `/weekly`, `/monthly` and `/yearly`?
 Don't want to take part in the economy anymore? You can erase your footprint by using `/resetmydata`, which permanently deletes all of your data from our records. We won't judge you of course, if you do.
-Are you bored right now? I might be able to help with `/bored`, giving you some ideas of what activity you could be doing other than using this platform (no pun intended)!
 Do some quick math with `/calc`, it's easy and all you need are your brain and the numbers you want to perform the operation on.
 We have determined you might like some of our image manipulation commands: `/image` and `/image2`. Give it a shot and see what it can do!
 We have determined you might like some of our image manipulation commands: `/locket` and [`>alert`](https://www.google.com). You'll need someone to use it with on the former!

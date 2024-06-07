@@ -436,30 +436,6 @@ class Utility(commands.Cog):
             embed=membed("No embeds were found within this message.")
         )
 
-    @app_commands.command(name='bored', description="Find something to do if you're bored")
-    @app_commands.guilds(*APP_GUILDS_IDS)
-    @app_commands.describe(activity_type='The type of activities to filter by.')
-    async def prompt_act(
-        self, 
-        interaction: discord.Interaction, 
-        activity_type: Optional[
-            Literal[
-                "education", "recreational", "social", "diy", 
-                "charity", "cooking", "relaxation", "music", "busywork"
-            ]
-        ] = ""
-    ) -> None:
-        
-        if activity_type:
-            activity_type = f"?type={activity_type}"
-        
-        async with self.bot.session.get(f"http://www.boredapi.com/api/activity{activity_type}") as response:
-            if response.status != 200:
-                return await interaction.response.send_message(embed=membed(API_EXCEPTION))
-            
-            resp = await response.json()
-            await interaction.response.send_message(embed=membed(f"{resp['activity']}."))
-
     anime = app_commands.Group(
         name='anime', 
         description="Surf through anime images and posts.", 
