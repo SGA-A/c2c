@@ -1005,42 +1005,6 @@ class Utility(commands.Cog):
         
         await interaction.followup.send(embed=embed)
 
-    @commands.command(name="pickupline", description="Get pick up lines to use", aliases=('pul',))
-    async def pick_up_lines(self, ctx: commands.Context) -> Union[None, discord.Message]:
-        async with ctx.typing():
-            async with self.bot.session.get("https://api.popcat.xyz/pickuplines") as resp:
-                if resp.status != 200:
-                    return await ctx.send(embed=membed(API_EXCEPTION))
-                data = await resp.json()
-                await ctx.send(embed=membed(data["pickupline"]))
-
-    @commands.command(name="wyr", description="Get 'would you rather' questions to use")
-    async def would_yr(self, ctx: commands.Context) -> Union[None, discord.Message]:
-        async with ctx.typing():
-            async with self.bot.session.get("https://api.popcat.xyz/wyr") as resp:
-                if resp.status != 200:
-                    return await ctx.send(embed=membed(API_EXCEPTION))
-                data = await resp.json()
-                await ctx.send(
-                    embed=membed(
-                        f'Would you rather:\n'
-                        f'1. {data["ops1"].capitalize()} or..\n'
-                        f'2. {data["ops2"].capitalize()}'
-                    )
-                )
-
-    @commands.command(name="alert", description="Create real incoming iphone alerts")
-    async def alert_iph(self, ctx: commands.Context, *, custom_text: str) -> Union[None, discord.Message]:
-        async with ctx.typing():
-            custom_text = custom_text.replace(" ", "+")
-
-            async with self.bot.session.get(f"https://api.popcat.xyz/alert?text={custom_text}") as resp:
-                if resp.status != 200:
-                    return await ctx.send(embed=membed(API_EXCEPTION))
-                embed: discord.Embed = membed()
-                embed.set_image(url=resp.url)
-                await ctx.send(embed=embed)
-
     @commands.command(name='avatar', description="Display a user's enlarged avatar")
     async def avatar(
         self, 
