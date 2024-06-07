@@ -594,11 +594,11 @@ class Utility(commands.Cog):
                 return await interaction.response.send_message(embed=membed(API_EXCEPTION))
 
             data = await resp.json()
-            data = data["results"][0]
+            data = data['results'][0]
 
             embed = discord.Embed(colour=0xFF9D2C)
             embed.set_author(name=f"{data['artist_name']}")
-            embed.set_image(url=data["url"])
+            embed.set_image(url=data['url'])
 
             img_view = discord.ui.View()
             img_view.add_item(ImageSourceButton(url=data["url"]))
@@ -617,6 +617,7 @@ class Utility(commands.Cog):
         ],
         on: discord.Member
     ) -> None:
+
         if on.id == interaction.user.id:
             return await interaction.response.send_message(
                 ephemeral=True,
@@ -628,15 +629,15 @@ class Utility(commands.Cog):
                 return await interaction.response.send_message(embed=membed(API_EXCEPTION))
 
             data = await resp.json()
-            data = data["results"][0]
+            data = data['results'][0]
 
             embed = discord.Embed(colour=0xFF9D2C)
             embed.description = EMOTE_DATA[expr].replace("$0", interaction.user.name).replace("$1", on.name)
             embed.set_author(name=data['anime_name'])
-            embed.set_image(url=data["url"])
+            embed.set_image(url=data['url'])
 
             img_view = discord.ui.View()
-            img_view.add_item(ImageSourceButton(url=data["url"]))
+            img_view.add_item(ImageSourceButton(url=data['url']))
 
             await interaction.response.send_message(embed=embed, view=img_view)
 
@@ -650,23 +651,13 @@ class Utility(commands.Cog):
         except APIException as ae:
             return await interaction.response.send_message(ae.detail)
 
-        embed = discord.Embed(colour=0xFF9D2C)
-        embed.description = (
-            f"Made <t:{int(image.uploaded_at.timestamp())}:R>\n"
-            f"NSFW Toggle Enabled: {is_nsfw}\n"
-            f"Tags: "
-        )
-
+        embed = discord.Embed()
+        embed.colour = 0xFF9D2C if not(is_nsfw) else 0xFFB6C1
         embed.set_author(name=image.artist or 'Unknown Source')
-        tags = set()
-        for item in image.tags:
-            tags.add(item.name)
-
-        embed.description += ", ".join(tags)
         embed.set_image(url=image.url)
 
         img_view = discord.ui.View()
-        img_view.add_item(ImageSourceButton(url=image.url))        
+        img_view.add_item(ImageSourceButton(url=image.url))
 
         await interaction.response.send_message(embed=embed, view=img_view)
 
@@ -707,16 +698,7 @@ class Utility(commands.Cog):
             return await interaction.response.send_message(embed=membed(ae.detail))
 
         embed = discord.Embed(colour=0xFF9D2C)
-        embed.description=(
-            f"Made <t:{int(image.uploaded_at.timestamp())}:R>\n"
-            "Tags: "
-        )
-
         embed.set_author(name=image.artist or 'Unknown Source')
-        tags = set()
-        for item in image.tags:
-            tags.add(item.name)
-        embed.description += ", ".join(tags)
         embed.set_image(url=image.url)
 
         img_view = discord.ui.View()
