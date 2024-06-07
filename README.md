@@ -1,8 +1,3 @@
-
-<div align="center">
-<img src=".github/99d48ed4682a0c26cb135ed5e5a788f9 (1).png" width="100" height="100"/>
-</div>
-
 <h2 align="center">c2c</h2>
 
 <p align="center">

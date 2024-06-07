@@ -24,7 +24,6 @@ from discord import (
     AllowedMentions,
     app_commands,
     AppCommandType,
-    CustomActivity,
     Embed,
     Interaction,
     Intents,
@@ -221,13 +220,8 @@ intents = Intents(
 )
 
 
-mentionable = AllowedMentions.none()
-mentionable.users = True
-
-
 bot = C2C(
-    activity=CustomActivity(name="Serving cc • /help"),
-    allowed_mentions=mentionable,
+    allowed_mentions=AllowedMentions.none(),
     case_insensitive=True,
     command_prefix=">",
     help_command=None,
