@@ -695,17 +695,14 @@ class ConfirmResetData(discord.ui.View):
         self.count += 1
         if self.count < 3:
             return await interaction.response.edit_message(view=self)
-        
+
         embed: discord.Embed = interaction.message.embeds[0]
         for item in self.children:
             item.disabled = True
         self.stop()
-        
-        tables_to_delete = [INV_TABLE_NAME, COOLDOWN_TABLE_NAME, SLAY_TABLE_NAME, BANK_TABLE_NAME]
-        
+
         embed.title = "Confirmed"
         embed.colour = discord.Colour.brand_red()
-
         await interaction.response.edit_message(embed=embed, view=self)
 
         async with interaction.client.pool.acquire() as conn:
@@ -715,28 +712,27 @@ class ConfirmResetData(discord.ui.View):
             await tr.start()
 
             try:
-                for table in tables_to_delete:
-                    await conn.execute(f"DELETE FROM {table} WHERE userID = $0", self.removing_user.id)
+                await conn.execute("DELETE FROM bank WHERE userID = $0", self.removing_user.id)
             except Exception as e:
                 print_exception(type(e), e, e.__traceback__)
 
                 await tr.rollback()
-                
+
                 return await interaction.followup.send(
                     embed=membed(
                         f"Failed to wipe {self.removing_user.mention}'s data.\n"
                         "Report this to the developers so they can get it fixed."
                     )
                 )
-            else:
-                await tr.commit()
 
-                whose = "your" if interaction.user.id == self.removing_user.id else f"{self.removing_user.mention}'s"
-                end_note = " Thanks for using the bot." if whose == "your" else ""
+            await tr.commit()
 
-                await interaction.followup.send(
-                    embed=membed(f"All of {whose} data has been wiped.{end_note}")
-                )
+            whose = "your" if interaction.user.id == self.removing_user.id else f"{self.removing_user.mention}'s"
+            end_note = " Thanks for using the bot." if whose == "your" else ""
+
+            await interaction.followup.send(
+                embed=membed(f"All of {whose} data has been wiped.{end_note}")
+            )
 
     @discord.ui.button(label='CANCEL', style=discord.ButtonStyle.primary)
     async def cancel_button_reset(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -3627,12 +3623,6 @@ class Economy(commands.Cog):
     # ------------------ INVENTORY FUNCS ------------------ #
 
     @staticmethod
-    async def open_inv_new(user: USER_ENTRY, conn_input: asqlite_Connection) -> None:
-        """Register a new user's inventory records into the db."""
-
-        await conn_input.execute(f"INSERT INTO `{INV_TABLE_NAME}` (userID) VALUES($0)", user.id)
-
-    @staticmethod
     async def get_one_inv_data_new(user: USER_ENTRY, item_name: str, conn_input: asqlite_Connection) -> Optional[Any]:
         """Fetch inventory data from one specific item inputted. Use this method before making any updates."""
         query = (
@@ -3815,11 +3805,6 @@ class Economy(commands.Cog):
     # ------------ cooldowns ----------------
 
     @staticmethod
-    async def open_cooldowns(user: USER_ENTRY, conn_input: asqlite_Connection) -> None:
-        """Create a new row in the CD table, adding specified actions for a user in the cooldowns table."""
-        await conn_input.execute(f"INSERT INTO `{COOLDOWN_TABLE_NAME}` (userID) VALUES($0)", user.id)
-
-    @staticmethod
     async def check_has_cd(
         conn: asqlite_Connection, 
         user_id: int, 
@@ -3873,7 +3858,7 @@ class Economy(commands.Cog):
 
         await conn_input.execute(
             """
-            INSERT INTO cooldowns (userID, cooldown, until) 
+            INSERT INTO cooldowns (userID, cooldown, until)
             VALUES ($0, $1, $2)
             ON CONFLICT(userID, cooldown) DO UPDATE SET until = $2
             """, user_id, cooldown_type, new_cd
@@ -6630,103 +6615,64 @@ class Economy(commands.Cog):
                 await self.change_job_new(interaction.user, conn, job_name='None')
     
     @app_commands.command(name="balance", description="Get someone's balance. Wallet, bank, and net worth.")
-    @app_commands.describe(user='The user to find the balance of.', with_force='Register this user if not already. Only for bot owners.')
+    @app_commands.describe(user='The user to find the balance of.')
     @app_commands.guilds(*APP_GUILDS_IDS)
     async def find_balance(
         self, 
         interaction: discord.Interaction, 
-        user: Optional[USER_ENTRY], 
-        with_force: Optional[bool]
+        user: Optional[USER_ENTRY]
     ) -> None:
-        
+
         user = user or interaction.user
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-            not_registered_check = await self.can_call_out(user, conn)
+            not_registered = await self.can_call_out(user, conn)
 
-            if not_registered_check and (user.id != interaction.user.id):
-                if with_force and (interaction.user.id in self.bot.owner_ids):
-                    await self.open_bank_new(user, conn)
-                    await self.open_inv_new(user, conn)
-                    await self.open_cooldowns(user, conn)
-                    await conn.commit()
-
-                    return await interaction.response.send_message(embed=membed(f"Force registered {user.mention}."))
-                await interaction.response.send_message(
-                    ephemeral=True, 
-                    embed=membed(f"{user.mention} isn't registered.")
-                )
-
-            elif not_registered_check and (user.id == interaction.user.id):
+            balance = membed()
+            if not_registered:
+                if interaction.user.id != user.id:
+                    balance.description = f"{user.mention} is not registered."
+                    return await interaction.response.send_message(ephemeral=True, embed=balance)
 
                 await self.open_bank_new(user, conn)
-                await self.open_inv_new(user, conn)
-                await self.open_cooldowns(user, conn)
-                await conn.commit()
+                balance.colour = discord.Colour.green()
 
-                norer = membed(
-                    "# <:successful:1183089889269530764> You are now registered.\n"
-                    "Your records have been added in our database.\n"
-                    "From now on, you may use any of the economy commands.\n"
-                    "Here are some of our top used commands:\n"
-                    "### 1. Start earning quick robux:\n"
-                    " - </bet:1172898644622585883>, "
-                    "</coinflip:1172898644622585882> </slots:1172898644287029332>, "
-                    "</step:1172898643884380166>, </highlow:1172898644287029331>\n"
-                    "### 2. Seek out employment:\n "
-                    " - </getjob:1172898643884380168>, </work:1172898644287029336>\n"
-                    "### 3. Customize your look:\n"
-                    " - </editprofile bio:1172898645532749948>, "
-                    "</editprofile avatar:1172898645532749948>\n"
-                    "### 4. Manage your Account:\n"
-                    " - </balance:1172898644287029337>, "
-                    "</withdraw:1172898644622585876>, </deposit:1172898644622585877>, "
-                    "</inventory:1172898644287029333>, </shop view:1172898645532749946>, "
-                    "</buy:1172898644287029334>"
-                )
-                
-                return await interaction.response.send_message(embed=norer)
-            else:
-                nd = await conn.fetchone(
-                    """
-                    SELECT wallet, bank, bankspace 
-                    FROM `bank` 
-                    WHERE userID = $0
-                    """, user.id
-                )
+            nd = await conn.fetchone(
+                """
+                SELECT wallet, bank, bankspace 
+                FROM `bank` 
+                WHERE userID = $0
+                """, user.id
+            )
 
-                bank = nd[0] + nd[1]
-                inv = await self.calculate_inventory_value(user, conn)
-                rank = await self.calculate_net_ranking_for(user, conn)
+            bank = nd[0] + nd[1]
+            inv = await self.calculate_inventory_value(user, conn)
+            rank = await self.calculate_net_ranking_for(user, conn)
+            space = (nd[1] / nd[2]) * 100
 
-                space = (nd[1] / nd[2]) * 100
+            balance.title = f"{user.display_name}'s Balances"
+            balance.url = "https://dis.gd/support"
+            balance.timestamp = discord.utils.utcnow()
 
-                balance = discord.Embed(
-                    title=f"{user.display_name}'s Balances", 
-                    colour=0x2B2D31, 
-                    timestamp=discord.utils.utcnow(), 
-                    url="https://dis.gd/support"
-                )
+            balance.add_field(name="Wallet", value=f"{CURRENCY} {nd[0]:,}")
+            balance.add_field(name="Bank", value=f"{CURRENCY} {nd[1]:,}")
+            balance.add_field(name="Bankspace", value=f"{CURRENCY} {nd[2]:,} ({space:.2f}% full)")
+            balance.add_field(name="Money Net", value=f"{CURRENCY} {bank:,}")
+            balance.add_field(name="Inventory Net", value=f"{CURRENCY} {inv:,}")
+            balance.add_field(name="Total Net", value=f"{CURRENCY} {inv + bank:,}")
 
-                balance.add_field(name="Wallet", value=f"{CURRENCY} {nd[0]:,}")
-                balance.add_field(name="Bank", value=f"{CURRENCY} {nd[1]:,}")
-                balance.add_field(name="Bankspace", value=f"{CURRENCY} {nd[2]:,} ({space:.2f}% full)")
-                balance.add_field(name="Money Net", value=f"{CURRENCY} {bank:,}")
-                balance.add_field(name="Inventory Net", value=f"{CURRENCY} {inv:,}")
-                balance.add_field(name="Total Net", value=f"{CURRENCY} {inv + bank:,}")
-                
-                balance.set_footer(text=f"Global Rank: #{rank}")
+            balance.set_footer(text=f"Global Rank: #{rank}")
 
-                view = BalanceView(
-                    interaction, 
-                    wallet=nd[0], 
-                    bank=nd[1], 
-                    bankspace=nd[2], 
-                    viewing=user
-                )
+            view = BalanceView(
+                interaction, 
+                wallet=nd[0], 
+                bank=nd[1], 
+                bankspace=nd[2], 
+                viewing=user
+            )
 
-                await interaction.response.send_message(embed=balance, view=view)
+            await interaction.response.send_message(embed=balance, view=view)
 
     async def do_weekly_or_monthly(
         self, 
