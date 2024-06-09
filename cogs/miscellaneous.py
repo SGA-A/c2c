@@ -900,10 +900,8 @@ class Utility(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.checks.cooldown(1, 10, key=lambda i: i.guild.id)
     async def about_the_bot(self, interaction: discord.Interaction) -> None:
-        await interaction.response.defer(thinking=True)
 
         commits = self.gh_repo.get_commits()[:3]
-
         revision = (
             f"[`{commit.sha[:6]}`]({commit.html_url}) {commit.commit.message.splitlines()[0]} "
             f"({format_relative(commit.commit.author.date)})"
@@ -1011,7 +1009,7 @@ class Utility(commands.Cog):
             icon_url='http://i.imgur.com/5BFecvA.png'
         )
         
-        await interaction.followup.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
     @commands.command(name='avatar', description="Display a user's enlarged avatar")
     async def avatar(
