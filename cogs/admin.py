@@ -121,7 +121,7 @@ class Owner(commands.Cog):
         configuration: Literal["add", "remove", "make"], 
         amount: str,
         user: Optional[discord.Member],
-        is_private: Optional[bool] = True,
+        is_private: Optional[bool] = False,
         medium: Optional[Literal["wallet", "bank"]] = "wallet"
     ) -> None:
         """Generates or deducts a given amount of robux to the mentioned user."""
