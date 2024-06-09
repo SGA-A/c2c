@@ -671,18 +671,13 @@ class ConfirmResetData(discord.ui.View):
         self.removing_user: USER_ENTRY = user_to_remove
         self.count = 0
         super().__init__(timeout=30.0)
-    
+
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await economy_check(interaction, self.interaction.user)
-    
+
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
-        for item in self.children:
-            item.disabled = True
         try:
-            embed = self.message.embeds[0]
-            embed.title="Timed Out"
-            embed.colour=discord.Colour.brand_red()
-            await self.message.edit(embed=embed, view=self)
+            await self.interaction.delete_original_response()
         except discord.NotFound:
             pass
 
@@ -693,14 +688,8 @@ class ConfirmResetData(discord.ui.View):
         if self.count < 3:
             return await interaction.response.edit_message(view=self)
 
-        embed: discord.Embed = interaction.message.embeds[0]
-        for item in self.children:
-            item.disabled = True
         self.stop()
-
-        embed.title = "Confirmed"
-        embed.colour = discord.Colour.brand_red()
-        await interaction.response.edit_message(embed=embed, view=self)
+        await self.interaction.delete_original_response()
 
         async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
@@ -715,7 +704,8 @@ class ConfirmResetData(discord.ui.View):
 
                 await tr.rollback()
 
-                return await interaction.followup.send(
+                return await interaction.response.send_message(
+                    content=interaction.user.mention,
                     embed=membed(
                         f"Failed to wipe {self.removing_user.mention}'s data.\n"
                         "Report this to the developers so they can get it fixed."
@@ -724,24 +714,21 @@ class ConfirmResetData(discord.ui.View):
 
             await tr.commit()
 
-            whose = "your" if interaction.user.id == self.removing_user.id else f"{self.removing_user.mention}'s"
-            end_note = " Thanks for using the bot." if whose == "your" else ""
+        whose = "your" if interaction.user.id == self.removing_user.id else f"{self.removing_user.mention}'s"
+        end_note = " Thanks for using the bot." if whose == "your" else ""
 
-            await interaction.followup.send(
-                embed=membed(f"All of {whose} data has been wiped.{end_note}")
-            )
+        await interaction.response.send_message(
+            content=interaction.user.mention, 
+            embed=membed(f"All of {whose} data has been wiped.{end_note}")
+        )
 
     @discord.ui.button(label='CANCEL', style=discord.ButtonStyle.primary)
     async def cancel_button_reset(self, interaction: discord.Interaction, _: discord.ui.Button):
-
-        for item in self.children:
-            item.disabled = True
         self.stop()
+        await self.interaction.delete_original_response()
 
-        embed: discord.Embed = self.message.embeds[0]
-        embed.title = "Cancelled"
-        embed.colour = discord.Colour.blurple()
-        await interaction.response.edit_message(embed=embed, view=self)
+        async with interaction.client.pool.acquire() as conn:
+            await Economy.end_transaction(conn, user_id=interaction.user.id)
 
 
 class RememberPositionView(discord.ui.View):
@@ -935,70 +922,84 @@ class BalanceView(discord.ui.View):
         self.their_bank = bank
         self.their_bankspace = bankspace
         self.viewing = viewing
+        self.conn = None
         super().__init__(timeout=120.0)
-        
+
         self.checks(self.their_bank, self.their_wallet, self.their_bankspace-self.their_bank)
 
     def checks(self, new_bank, new_wallet, any_new_bankspace_left) -> None:
         """Check if the buttons should be disabled or not."""
         if self.viewing.id != self.interaction.user.id:
             return  # ! already initialized disabled logic
-        
+
         self.children[0].disabled = (new_bank == 0)
         self.children[1].disabled = (new_wallet == 0) or (any_new_bankspace_left == 0)
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, self.interaction.user)
+    async def send_failure(self, interaction: discord.Interaction) -> None:
+        warning = discord.ui.View().add_item(
+            discord.ui.Button(
+                label="Explain This!", 
+                url="https://dankmemer.lol/tutorial/interaction-locks"
+            )
+        )
+        await interaction.response.send_message(
+            view=warning, 
+            ephemeral=True,
+            embed=membed(
+                "Either one of the following is true:\n"
+                "- You aren't registered anymore.\n"
+                "- You have not yet finished an ongoing command.\n"
+                "For the latter, you should first finish any previous "
+                "commands before using this one."
+            )
+        )
     
+    async def release_conn(self):
+        await self.interaction.client.pool.release(self.conn)
+        self.conn = None
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        #! Check it's the author of the original interaction running this
+        
+        value = await economy_check(interaction, self.interaction.user)
+        if not value:
+            return False
+
+        del value
+        self.conn = await self.interaction.client.pool.acquire()
+
+        #! Check if they're already in a transaction
+        #! Check if they exist in the database
+        #! Ensure connections are carried into item callbacks when meeting prerequisite
+
+        try:
+            await Economy.declare_transaction(self.conn, user_id=interaction.user.id)
+        except sqlite3.IntegrityError:
+            await self.send_failure(interaction)
+            await self.release_conn()
+            return False
+        else:
+            await Economy.end_transaction(self.conn, user_id=interaction.user.id)
+            return True
+
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
         for item in self.children:
             item.disabled = True
         try:
-            await self.interaction.edit_original_response(view=self)    
+            await self.interaction.edit_original_response(view=self)  
         except discord.NotFound:
             pass
-
-    async def has_assertion_failed(self, interaction: discord.Interaction, conn: asqlite_Connection):
-        """
-        Ensure the user is not in a transaction.
-        
-        Unlike normal interaction checks, return None on assertion failure.
-        """
-
-        data = await conn.fetchone("SELECT userID FROM transactions WHERE userID = $0", interaction.user.id)
-        try:
-            assert not data
-            return False
-        except AssertionError:
-            warning = discord.ui.View().add_item(
-                discord.ui.Button(
-                    label="Explain This!", 
-                    url="https://dankmemer.lol/tutorial/interaction-locks"
-                )
-            )
-            await interaction.response.send_message(
-                view=warning, 
-                ephemeral=True,
-                embed=membed(WARN_FOR_CONCURRENCY) 
-            )
-            return True
 
     @discord.ui.button(label="Withdraw", disabled=True)
     async def withdraw_money_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Withdraw money from the bank."""
 
-        async with interaction.client.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            check = await self.has_assertion_failed(interaction, conn)
-            if check:
-                return
-
-            bank_amt = await Economy.get_spec_bank_data(
-                interaction.user, 
-                field_name="bank", 
-                conn_input=conn
-            )
+        bank_amt = await Economy.get_spec_bank_data(
+            interaction.user, 
+            field_name="bank", 
+            conn_input=self.conn
+        )
+        await self.release_conn()
 
         if not bank_amt:
             return await interaction.response.send_message(
@@ -1020,20 +1021,14 @@ class BalanceView(discord.ui.View):
     async def deposit_money_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Deposit money into the bank."""
 
-        async with interaction.client.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            check = await self.has_assertion_failed(interaction, conn)
-            if check:
-                return
-
-            data = await conn.fetchone(
-                """
-                SELECT wallet, bank, bankspace 
-                FROM `bank` 
-                WHERE userID = $0
-                """, interaction.user.id
-            )
+        data = await self.conn.fetchone(
+            """
+            SELECT wallet, bank, bankspace 
+            FROM `bank` 
+            WHERE userID = $0
+            """, interaction.user.id
+        )
+        await self.release_conn()
 
         if not data[0]:
             return await interaction.response.send_message(
@@ -1065,38 +1060,36 @@ class BalanceView(discord.ui.View):
         )
     
     @discord.ui.button(emoji="<:refreshicon:1205432056369389590>")
-    async def refresh_balance(self, interaction: discord.Interaction, _: discord.ui.Button):
+    async def refresh_balance(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Refresh the current message to display the user's latest balance."""
 
-        async with interaction.client.pool.acquire() as conn:
-            conn: asqlite_Connection
+        nd = await self.conn.fetchone(
+            """
+            SELECT wallet, bank, bankspace 
+            FROM `bank` 
+            WHERE userID = $0
+            """, self.viewing.id
+        )
 
-            nd = await conn.fetchone(
-                """
-                SELECT wallet, bank, bankspace 
-                FROM `bank` 
-                WHERE userID = $0
-                """, self.viewing.id
-            )
+        bank = nd[0] + nd[1]
+        inv = await Economy.calculate_inventory_value(self.viewing, self.conn)
+        rank = await Economy.calculate_net_ranking_for(self.viewing, self.conn)
+        await self.release_conn()
 
-            bank = nd[0] + nd[1]
-            inv = await Economy.calculate_inventory_value(self.viewing, conn)
-            rank = await Economy.calculate_net_ranking_for(self.viewing, conn)
+        space = (nd[1] / nd[2]) * 100
 
-            space = (nd[1] / nd[2]) * 100
-            
-            balance = interaction.message.embeds[0]
-            balance.timestamp = discord.utils.utcnow()
-            balance.clear_fields()
+        balance = interaction.message.embeds[0]
+        balance.timestamp = discord.utils.utcnow()
+        balance.clear_fields()
 
-            balance.add_field(name="Wallet", value=f"{CURRENCY} {nd[0]:,}")
-            balance.add_field(name="Bank", value=f"{CURRENCY} {nd[1]:,}")
-            balance.add_field(name="Bankspace", value=f"{CURRENCY} {nd[2]:,} ({space:.2f}% full)")
-            balance.add_field(name="Money Net", value=f"{CURRENCY} {bank:,}")
-            balance.add_field(name="Inventory Net", value=f"{CURRENCY} {inv:,}")
-            balance.add_field(name="Total Net", value=f"{CURRENCY} {inv + bank:,}")
-            
-            balance.set_footer(text=f"Global Rank: #{rank}")
+        balance.add_field(name="Wallet", value=f"{CURRENCY} {nd[0]:,}")
+        balance.add_field(name="Bank", value=f"{CURRENCY} {nd[1]:,}")
+        balance.add_field(name="Bankspace", value=f"{CURRENCY} {nd[2]:,} ({space:.2f}% full)")
+        balance.add_field(name="Money Net", value=f"{CURRENCY} {bank:,}")
+        balance.add_field(name="Inventory Net", value=f"{CURRENCY} {inv:,}")
+        balance.add_field(name="Total Net", value=f"{CURRENCY} {inv + bank:,}")
+
+        balance.set_footer(text=f"Global Rank: #{rank}")
 
         self.checks(nd[1], nd[0], nd[2]-nd[1])
         await interaction.response.edit_message(embed=balance, view=self)
@@ -1104,6 +1097,7 @@ class BalanceView(discord.ui.View):
     @discord.ui.button(emoji=discord.PartialEmoji.from_str("<:terminate:1205810058357907487>"))
     async def close_view(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Close the balance view."""
+        await self.release_conn()
         self.stop()
         for item in self.children:
             item.disabled = True
@@ -3376,33 +3370,36 @@ class Economy(commands.Cog):
         Provide a tip if the total commands ran counter is a multiple of 15.
         """
 
-        cmd = interaction.command
+        cmd = interaction.command.parent or interaction.command
         if isinstance(cmd, app_commands.ContextMenu):
             return
 
+        query = (
+            """
+            WITH multi AS (
+                SELECT COALESCE(SUM(amount), 0) AS total
+                FROM multipliers
+                WHERE (userID IS NULL OR userID = $0)
+                AND multi_type = $1
+            )
+
+            INSERT INTO command_uses (userID, cmd_name, cmd_count)
+            VALUES ($0, $2, 1)
+            ON CONFLICT(userID, cmd_name) DO UPDATE SET cmd_count = cmd_count + 1 
+            RETURNING cmd_count, (SELECT total FROM multi)
+            """
+        )
+
         async with self.bot.pool.acquire() as connection:
             connection: asqlite_Connection
-            
+
             async with connection.transaction():
-                cmd = cmd.parent or cmd
+                try:
+                    data = await connection.fetchone(query, interaction.user.id, "xp", f"/{cmd.name}")
+                except sqlite3.IntegrityError:
+                    return
 
-                args = await connection.fetchone(
-                    """
-                    WITH multi AS (
-                        SELECT COALESCE(SUM(amount), 0) AS total
-                        FROM multipliers
-                        WHERE (userID IS NULL OR userID = $0)
-                        AND multi_type = $1
-                    )
-
-                    INSERT INTO command_uses (userID, cmd_name, cmd_count)
-                    VALUES ($0, $2, 1)
-                    ON CONFLICT(userID, cmd_name) DO UPDATE SET cmd_count = cmd_count + 1 
-                    RETURNING cmd_count, (SELECT total FROM multi)
-                    """, interaction.user.id, "xp", f"/{cmd.name}", 
-                )
-
-                total, multi = args
+                total, multi = data
 
                 if not total % 15:
                     await self.send_tip_if_enabled(interaction, connection)
@@ -3418,12 +3415,10 @@ class Economy(commands.Cog):
     async def on_command(self, ctx: commands.Context) -> None:
         """Track text commands ran."""
 
-        cmd = ctx.command
+        cmd = ctx.command.parent or ctx.command
 
         async with self.bot.pool.acquire() as connection:
             connection: asqlite_Connection
-
-            cmd = cmd.parent or cmd
 
             await add_command_usage(
                 user_id=ctx.author.id, 
@@ -5762,6 +5757,7 @@ class Economy(commands.Cog):
                     ephemeral=True,
                     embed=membed(f"{member.mention} isn't registered.")
                 )
+            await self.declare_transaction(conn, user_id=member.id)
 
             view = ConfirmResetData(
                 interaction=interaction, 
@@ -5777,7 +5773,6 @@ class Economy(commands.Cog):
                     "If you do, click `RESET MY DATA` **3** times."
                 )
             )
-            view.message = await interaction.original_response()
 
     @app_commands.command(name="withdraw", description="Withdraw robux from your bank account")
     @app_commands.guilds(*APP_GUILDS_IDS)

@@ -83,9 +83,11 @@ class Pagination(discord.ui.View):
         await super().on_error(interaction, error, item)
 
     async def on_timeout(self) -> None:
+
+        for item in self.children:
+            item.disabled = not(hasattr(item, "url") and item.url)
+
         try:
-            for item in self.children:
-                item.disabled = not(hasattr(item, "url") and item.url)
             await self.interaction.edit_original_response(view=self)
         except discord.NotFound:
             pass
@@ -201,9 +203,10 @@ class PaginationSimple(discord.ui.View):
         return False
 
     async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+
         try:
-            for item in self.children:
-                item.disabled = True
             await self.message.edit(view=self)
         except discord.NotFound:
             pass
@@ -290,9 +293,10 @@ class RefreshPagination(discord.ui.View):
         return await economy_check(interaction, self.interaction.user)
 
     async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+
         try:
-            for item in self.children:
-                item.disabled = True
             await self.interaction.edit_original_response(view=self)
         except discord.NotFound:
             pass
@@ -376,9 +380,10 @@ class PaginationItem(discord.ui.View):
         return await economy_check(interaction, self.interaction.user)
 
     async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+
         try:
-            for item in self.children:
-                item.disabled = True
             await self.interaction.edit_original_response(view=self)
         except discord.NotFound:
             pass
