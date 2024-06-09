@@ -1,25 +1,9 @@
 from re import compile
-from random import choices
 from typing import Optional, Union
 from datetime import datetime, timedelta
 
 import discord
 from pytz import timezone
-
-
-def labour_productivity_via(*, investment: int) -> float:
-    """Find a suitable productivity level of a slave based on the investment"""
-    lower_limit = 1000
-    upper_limit = 5000e7
-
-    # Map the productivity to a 1 to 10 scale
-    scaled_productivity = 1 + (investment - lower_limit) / (upper_limit - lower_limit) * 9
-
-    # Ensure the result is within the 1 to 10 range
-    ranan = max(1, min(10, scaled_productivity))
-    choicess = [0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1]
-    multi = choices(choicess, weights=[25, 20, 15, 14, 12, 5, 9])
-    return round(ranan+multi[0], 2)
 
 
 # ! Existing function that may be used sometime in the future

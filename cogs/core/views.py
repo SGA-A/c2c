@@ -42,11 +42,11 @@ class Confirm(discord.ui.View):
 
 
 async def process_confirmation(
-        interaction: discord.Interaction, 
-        prompt: str, 
-        view_owner: Optional[discord.Member] = None, 
-        **kwargs
-    ) -> bool:
+    interaction: discord.Interaction, 
+    prompt: str, 
+    view_owner: Optional[discord.Member] = None, 
+    **kwargs
+) -> bool:
     """
     Process a confirmation. This only updates the view.
     
@@ -103,14 +103,9 @@ class MessageDevelopers(discord.ui.View):
 
 
 class GenericModal(discord.ui.Modal):
-    def __init__(
-        self, 
-        title: str, 
-        interaction: Optional[discord.Interaction] = None, 
-        **kwargs
-    ) -> None:
+    def __init__(self, title: str, **kwargs) -> None:
 
-        self.interaction = interaction
+        self.interaction = None
 
         for keyword, arguments in kwargs.items():
             setattr(self.data, keyword, arguments)
