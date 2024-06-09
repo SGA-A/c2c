@@ -902,17 +902,13 @@ class Utility(commands.Cog):
     async def about_the_bot(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(thinking=True)
 
-        lentxt = len(self.bot.commands)
-        self.bot.command_count = self.bot.command_count or (len(await self.bot.tree.fetch_commands(guild=discord.Object(id=interaction.guild.id))) + 1 + lentxt)
-        lenslash = self.bot.command_count - lentxt
-
         commits = self.gh_repo.get_commits()[:3]
 
-        revision = [
+        revision = (
             f"[`{commit.sha[:6]}`]({commit.html_url}) {commit.commit.message.splitlines()[0]} "
             f"({format_relative(commit.commit.author.date)})"
             for commit in commits
-        ]
+        )
 
         embed = discord.Embed(colour=discord.Colour.blurple())
         embed.description = (
@@ -926,12 +922,8 @@ class Utility(commands.Cog):
         geo = self.bot.get_user(546086191414509599)
         embed.set_author(name=geo.name, icon_url=geo.display_avatar.url)
 
-        total_members = 0
-        total_unique = len(self.bot.users)
-
-        text = 0
-        voice = 0
-        guilds = 0
+        total_members, total_unique = 0, len(self.bot.users)
+        text, voice, guilds = 0, 0, 0
 
         for guild in self.bot.guilds:
             guilds += 1
@@ -953,6 +945,28 @@ class Utility(commands.Cog):
         minutes, seconds = divmod(diff.total_seconds(), 60)
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
+
+        async with interaction.client.pool.acquire() as conn:
+            slash_ran, total_ran, text_ran = await conn.fetchone(
+                """
+                WITH slash_commands AS (
+                    SELECT SUM(cmd_count) AS total_sum 
+                    FROM command_uses
+                    WHERE cmd_name LIKE '/%'
+                ),
+                total_commands AS (
+                    SELECT SUM(cmd_count) AS total_sum
+                    FROM command_uses
+                )
+                SELECT 
+                    slash_commands.total_sum AS slash_commands_sum,
+                    total_commands.total_sum AS total_commands_sum,
+                    (total_commands.total_sum - slash_commands.total_sum) AS text_commands_sum
+                FROM 
+                    slash_commands, 
+                    total_commands
+                """
+            )
 
         embed.add_field(
             name='<:membersb:1247991723284758610> Members',
@@ -979,11 +993,11 @@ class Utility(commands.Cog):
         )
 
         embed.add_field(
-            name='<:cmdsb:1247991799801315369> Commands', 
+            name='<:cmdsb:1247991799801315369> Commands Run', 
             value=(
-                f'{self.bot.command_count} total\n'
-                f'{ARROW}{lentxt} (prefix)\n'
-                f'{ARROW}{lenslash} (slash)'
+                f"{total_ran:,} total\n"
+                f"{ARROW} {slash_ran:,} slash\n"
+                f"{ARROW} {text_ran:,} text"
             )
         )
 

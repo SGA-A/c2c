@@ -188,6 +188,14 @@ class C2C(commands.Bot):
         self.command_count = None
         self.time_launch = None
 
+    async def yield_app_commands(self, interaction: Interaction) -> None:
+        """Fetch app commands via HTTP when they're not already in the tree."""
+
+        if self.command_count:
+            return
+
+        await self.tree.fetch_commands(guild=Object(id=interaction.guild.id))
+
     async def setup_hook(self):
         print("we're in.")
 
@@ -344,12 +352,6 @@ async def total_command_count(interaction: Interaction) -> int:
     # added 1 extra because there is 1 global command not detected here 
     bot.command_count = (len(await bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(bot.commands)
     return bot.command_count
-
-
-async def yield_app_commands(interaction: Interaction) -> None:
-    if bot.command_count:
-        return
-    bot.command_count = (len(await bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(bot.commands)
 
 
 def get_cog_name(*, shorthand: str) -> str:
@@ -527,9 +529,14 @@ async def help_command_category(interaction: Interaction, category: classnames) 
     value = await do_guild_checks(interaction)
     if value is None:
         return
-    
-    await yield_app_commands(interaction)
-    pages = HelpDropdown.format_pages(chosen_help_category=category, guild_id=interaction.guild.id)
+
+    await bot.yield_app_commands(interaction)
+
+    pages = HelpDropdown.format_pages(
+        chosen_help_category=category, 
+        guild_id=interaction.guild.id
+    )
+
     embed = Embed(title=f"Help: {category}")
     embed.colour, thumb_url = HelpDropdown.colour_mapping[category]
     embed.set_thumbnail(url=thumb_url)
@@ -545,7 +552,11 @@ async def help_command_category(interaction: Interaction, category: classnames) 
         return embed, n
 
     select_menu = HelpDropdown(selected_option=category)
-    paginator = RefreshSelectPagination(interaction, select=select_menu, get_page=get_page_part)
+    paginator = RefreshSelectPagination(
+        interaction, 
+        select=select_menu, 
+        get_page=get_page_part
+    )
 
     await paginator.navigate(ephemeral=True)
 
