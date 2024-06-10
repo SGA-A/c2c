@@ -14,13 +14,14 @@ from discord import app_commands
 from waifuim import WaifuAioClient
 from psutil import Process, cpu_count
 from waifuim.exceptions import APIException
+from pytz import timezone
 
 from cogs.economy import (
     APP_GUILDS_IDS, 
     USER_ENTRY, 
     total_commands_used_by_user
 )
-from .core.helpers import membed
+from .core.helpers import membed, number_to_ordinal
 from .core.paginator import Pagination, PaginationSimple
 
 
@@ -69,7 +70,17 @@ EMOTE_DATA = {
     "handshake": "$0, this is $1. let's get to business <:pepe_fingers:798870376893251594>",
     "happy": "$1 is so happy, you're so happy, we're all so happy, hap- hap- happy days <a:e1_confetti:1124673505879933031>"
 }
-
+EMBED_TIMEZONES = {
+    'Pacific': 'US/Pacific',
+    'Mountain': 'US/Mountain',
+    'Central': 'US/Central',
+    'Eastern': 'US/Eastern',
+    'Britain': 'Europe/London',
+    'Sydney': 'Australia/Sydney',
+    'Japan': 'Asia/Tokyo',
+    'Germany': 'Europe/Berlin',
+    'India': 'Asia/Kolkata'
+}
 
 def extract_attributes(post_element, mode: Literal["post", "tag"]) -> Union[dict, str]:
     if mode == "post":
@@ -898,7 +909,6 @@ class Utility(commands.Cog):
 
     @app_commands.command(name='about', description='Learn more about the bot')
     @app_commands.guilds(*APP_GUILDS_IDS)
-    @app_commands.checks.cooldown(1, 10, key=lambda i: i.guild.id)
     async def about_the_bot(self, interaction: discord.Interaction) -> None:
 
         commits = self.gh_repo.get_commits()[:3]
@@ -1181,6 +1191,35 @@ class Utility(commands.Cog):
             ephemeral=True, 
             embed=membed(f"Your thread was created here: {thread.jump_url}.")
         )
+
+    @commands.command(name="worldclock", description="See the world clock and the visual sunmap", aliases=('wc',))
+    async def worldclock(self, ctx: commands.Context):
+        now = datetime.datetime.now(tz=datetime.timezone.utc)
+        clock = discord.Embed(colour=0x2AA198, timestamp=now)
+
+        clock.title = "UTC"
+        clock.description = f"```prolog\n{now:%H:%M %p, %A} {number_to_ordinal(int(f"{now:%d}"))} {now:%Y}```"
+        clock.set_author(
+            icon_url="https://i.imgur.com/CIl9Dyp.png",
+            name="All formats given in 12h notation"
+        )
+
+        for location, tz in EMBED_TIMEZONES.items():
+            time_there = datetime.datetime.now(tz=timezone(tz))
+            clock.add_field(name=location, value=f"```prolog\n{time_there:%H:%M %p}```")
+
+        clock.add_field(
+            name="Legend",
+            inline=False,
+            value=(
+                "☀️ = The Sun's position directly overhead in relation to an observer.\n"
+                "🌕 = The Moon's position at its zenith in relation to an observer."
+            )
+        )
+
+        clock.set_image(url=f"https://www.timeanddate.com/scripts/sunmap.php?iso={now:'%Y%m%dT%H%M'}")
+        clock.set_footer(text="Sunmap image courtesy of timeanddate.com")
+        await ctx.send(embed=clock)
 
 
 async def setup(bot: commands.Bot):
