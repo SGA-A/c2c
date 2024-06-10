@@ -39,6 +39,15 @@ def datetime_to_string(datetime_obj: datetime) -> str:
     return f"{datetime_obj:%Y-%m-%d %H:%M:%S}"
 
 
+def number_to_ordinal(n: int) -> str:
+    """Convert 01 to 1st, 02 to 2nd etc."""
+    if 10 <= n % 100 <= 20:
+        return f"{n}th"
+    
+    suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+    return f"{n}{suffix}"
+
+
 def string_to_datetime(string_obj: str) -> datetime:
     """
     Convert a string object to a datetime object.

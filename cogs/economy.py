@@ -77,15 +77,6 @@ def selling_price_algo(base_price: int, multiplier: int) -> int:
     return int(round(base_price * (1+multiplier/100), ndigits=-5))
 
 
-def number_to_ordinal(n) -> str:
-    """Convert 01 to 1st, 02 to 2nd etc."""
-    if 10 <= n % 100 <= 20:
-        return f"{n}th"
-    
-    suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
-    return f"{n}{suffix}"
-
-
 """ALL VARIABLES AND CONSTANTS FOR THE ECONOMY ENVIRONMENT"""
 
 USER_ENTRY = Union[discord.Member, discord.User]
