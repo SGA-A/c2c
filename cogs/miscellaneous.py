@@ -15,7 +15,6 @@ from waifuim import WaifuAioClient
 from psutil import Process, cpu_count
 from waifuim.exceptions import APIException
 from pytz import timezone
-from pytz import timezone
 
 from cogs.economy import (
     APP_GUILDS_IDS, 
@@ -1192,35 +1191,6 @@ class Utility(commands.Cog):
             ephemeral=True, 
             embed=membed(f"Your thread was created here: {thread.jump_url}.")
         )
-
-    @commands.command(name="worldclock", description="See the world clock and the visual sunmap", aliases=('wc',))
-    async def worldclock(self, ctx: commands.Context):
-        now = datetime.datetime.now(tz=datetime.timezone.utc)
-        clock = discord.Embed(colour=0x2AA198, timestamp=now)
-
-        clock.title = "UTC"
-        clock.description = f"```prolog\n{now:%H:%M %p, %A} {number_to_ordinal(int(f"{now:%d}"))} {now:%Y}```"
-        clock.set_author(
-            icon_url="https://i.imgur.com/CIl9Dyp.png",
-            name="All formats given in 12h notation"
-        )
-
-        for location, tz in EMBED_TIMEZONES.items():
-            time_there = datetime.datetime.now(tz=timezone(tz))
-            clock.add_field(name=location, value=f"```prolog\n{time_there:%H:%M %p}```")
-
-        clock.add_field(
-            name="Legend",
-            inline=False,
-            value=(
-                "☀️ = The Sun's position directly overhead in relation to an observer.\n"
-                "🌕 = The Moon's position at its zenith in relation to an observer."
-            )
-        )
-
-        clock.set_image(url=f"https://www.timeanddate.com/scripts/sunmap.php?iso={now:'%Y%m%dT%H%M'}")
-        clock.set_footer(text="Sunmap image courtesy of timeanddate.com")
-        await ctx.send(embed=clock)
 
     @commands.command(name="worldclock", description="See the world clock and the visual sunmap", aliases=('wc',))
     async def worldclock(self, ctx: commands.Context):
