@@ -34,7 +34,7 @@ class InviteButton(discord.ui.View):
         perms.read_messages = True
         perms.send_messages_in_threads = True
         perms.send_messages = True
-        
+
         perms.manage_channels = True
         perms.manage_messages = True
         perms.manage_roles = True
@@ -42,7 +42,7 @@ class InviteButton(discord.ui.View):
 
         perms.create_instant_invite = True
         perms.external_emojis = True
-        
+
         perms.embed_links = True
         perms.attach_files = True
         perms.add_reactions = True

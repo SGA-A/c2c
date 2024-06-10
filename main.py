@@ -202,7 +202,7 @@ class C2C(commands.Bot):
         for file in Path("cogs").glob("**/*.py"):
             if "core" in file.parts:
                 continue
-            
+
             *tree, _ = file.parts
             try:
                 await self.load_extension(f"{".".join(tree)}.{file.stem}")

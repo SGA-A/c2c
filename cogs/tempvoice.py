@@ -64,7 +64,7 @@ class MemberSelect(discord.ui.UserSelect):
                     f"- You did not select yourself."
                 )
             )
-        
+
         overwrites_to_add = selected_without_admin - self.user_data
         overwrites = {**user.voice.channel.overwrites}        
         trust_or_block = discord.PermissionOverwrite()
@@ -77,10 +77,10 @@ class MemberSelect(discord.ui.UserSelect):
 
         for overwrite_entry in overwrites_to_add:
             overwrites.update({interaction.guild.get_member(int(overwrite_entry)): trust_or_block})
-        
+
         await user.voice.channel.edit(overwrites=overwrites)
         self.tempvoice.active_voice_channels[interaction.user.id].update({self.verb: selected_without_admin})
-        
+
         await interaction.edit_original_response(
             embed=membed(f"{self.mode}ed **{len(selected_without_admin)}** users."), 
             view=None
@@ -115,7 +115,7 @@ class PrivacyOptions(discord.ui.Select):
         self.view.stop()
         chosen = self.values[0]
         overwrites = self.voice_channel.overwrites_for(interaction.guild.default_role)
-        
+
         if chosen in {"Invisible", "Visible"}:
             colIndex = 1
             check = chosen == "Visible"
@@ -131,7 +131,7 @@ class PrivacyOptions(discord.ui.Select):
             check = chosen == "Unlock"
             content = f"{self.voice_channel.mention} has been **{"unlocked" if check else "locked"}**."
             overwrites.connect = check
-        
+
         self.privacy_setting[colIndex] = str(int(check))
         self.tempvoice.active_voice_channels[interaction.user.id].update({"privacy": " ".join(self.privacy_setting)})
 
@@ -143,7 +143,7 @@ class TrustOrBlock(discord.ui.View):
     def __init__(self, interaction: discord.Interaction, bot: commands.Bot, mode: Literal["Block", "Trust"]):
         self.interaction = interaction
         super().__init__(timeout=60.0)
-        
+
         self.add_item(
             MemberSelect(
                 bot=bot, 
