@@ -8,7 +8,7 @@ from discord import app_commands
 from discord.ext import commands
 from asqlite import ProxiedConnection as asqlite_Connection
 
-from .core.helpers import membed
+from .core.helpers import membed, re
 from .core.constants import APP_GUILDS_IDS
 from .core.paginator import PaginationSimple
 from .core.views import Confirm
@@ -152,9 +152,8 @@ class MatchWord(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction) -> None:
         self.view.chosen_word = self.label
+        self.interaction = interaction
         self.view.stop()
-
-        await interaction.response.edit_message(view=self.view)
 
 
 class Tags(commands.Cog):
@@ -201,8 +200,8 @@ class Tags(commands.Cog):
 
         for resulting_word in tag_results:
             match_view.add_item(MatchWord(word=resulting_word[0]))
-
-        msg = await ctx.send(
+        
+        await ctx.send(
             view=match_view,
             embed=membed(
                 "There is more than one tag with that name pattern.\n"
@@ -211,7 +210,6 @@ class Tags(commands.Cog):
         )
 
         await match_view.wait()
-        await msg.delete()
 
         if match_view.chosen_word:
             return match_view.chosen_word
@@ -499,7 +497,7 @@ class Tags(commands.Cog):
                 )
 
             modal = TagEditModal(content_row[0])
-            await ctx.interaction.response.send_modal(modal)
+            await modal.interaction.response.send_modal(modal)
             await modal.wait()
             ctx.interaction = modal.interaction
             content = modal.text
