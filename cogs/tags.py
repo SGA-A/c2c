@@ -480,7 +480,7 @@ class Tags(commands.Cog):
     async def edit(
         self,
         ctx: commands.Context,
-        name: Annotated[str, TagName(lower=True)],
+        name: str,
         *,
         content: Annotated[Optional[str], commands.clean_content] = None,
     ):
@@ -490,26 +490,22 @@ class Tags(commands.Cog):
                 return await ctx.send(embed=membed("Missing content to edit with."))
             
             async with self.bot.pool.acquire() as conn:
-                content_row: Optional[tuple[str]] = await conn.fetchone(
-                    """
-                    SELECT content 
-                    FROM tags 
-                    WHERE LOWER(name)=$0 AND ownerID=$1
-                    """, name, ctx.author.id
-                )
-                
-                if content_row is None:
-                    await ctx.send(embed=membed(TAG_NOT_FOUND_RESPONSE), ephemeral=True)
+                name = await self.owned_partial_matching(ctx, word_input=name, conn=conn)
+                if name is None:
                     return
 
-                modal = TagEditModal(content_row[0])
-                await ctx.interaction.response.send_modal(modal)
-                await modal.wait()
-                ctx.interaction = modal.interaction
-                content = modal.text
+                content_row: Optional[tuple[str]] = await conn.fetchone(
+                    "SELECT content FROM tags WHERE name = $0", name
+                )
+
+            modal = TagEditModal(content_row[0])
+            await ctx.interaction.response.send_modal(modal)
+            await modal.wait()
+            ctx.interaction = modal.interaction
+            content = modal.text
 
         if len(content) > 2000:
-            return await ctx.send(embed=membed('Tag content can only be up to 2000 characters.'))
+            return await ctx.send(ephemeral=True, embed=membed('Tag content can only be up to 2000 characters.'))
 
         async with self.bot.pool.acquire() as conn:
             
