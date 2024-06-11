@@ -303,7 +303,7 @@ class RoleManagement(app_commands.Group):
         emb = membed()
 
         async def get_page_part(page: int):
-            length = 20
+            length = 12
             offset = (page - 1) * length
             emb.description = ""
 
