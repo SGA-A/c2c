@@ -525,21 +525,34 @@ class Tags(commands.Cog):
     ):
 
         if content is None:
+
             async with self.bot.pool.acquire() as conn:
-                name = await self.owned_partial_matching(
+                name, interaction = await self.owned_partial_matching(
                     ctx, 
                     word_input=name, 
                     conn=conn, 
                     meth=self.partial_match_including_interaction
                 )
-
-                if not (all(name)):
-                    return
-                name, interaction = name
-
-                content_row: Optional[tuple[str]] = await conn.fetchone(
-                    "SELECT content FROM tags WHERE name = $0", name
+            if name is None:
+                return
+            
+            interaction = interaction or ctx.interaction
+            if interaction is None:
+                return await ctx.send(
+                    embed=membed(
+                        "## Missing content to edit with\n"
+                        "- Since you prefer the use of text commands for this, try to broaden your input.\n"
+                        "  - Pass in a smaller part of the tag name, and if there's more than one match, you'll get a list of suggestions.\n"
+                        "  - From there, you can select what you want to edit and it will work just fine.\n"
+                        "  - Try not to make it too vague though, otherwise the relevant one you want won't appear!\n"
+                        "- You can also type in the content of that field in the command name itself.\n"
+                        "- Regardless, you should know that because of this, tag names with more than one word need to be enclosed with speech quotes like \"this tag\"."
+                    ).set_image(url="https://i.imgur.com/5sPCTCZ.png")
                 )
+
+            content_row: Optional[tuple[str]] = await conn.fetchone(
+                "SELECT content FROM tags WHERE name = $0", name
+            )
 
             modal = TagEditModal(content_row[0])
             await interaction.response.send_modal(modal)
@@ -562,7 +575,7 @@ class Tags(commands.Cog):
             )
 
             if val is None:
-                return await ctx.send(embed=membed(TAG_NOT_FOUND_RESPONSE))
+                return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND_RESPONSE))
         
             await conn.commit()
             await ctx.send(embed=membed(f'Successfully edited tag named {name!r}.'))
@@ -618,7 +631,7 @@ class Tags(commands.Cog):
             deleted_info = await conn.fetchone(query, *args)
 
             if deleted_info is None:
-                return await ctx.send(embed=membed(TAG_NOT_FOUND_RESPONSE), ephemeral=True)
+                return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND_RESPONSE))
             await ctx.send(embed=membed(f'Tag named {deleted_info[1]!r} (ID {deleted_info[0]}) successfully deleted.'))
 
     async def _send_tag_info(
@@ -687,7 +700,7 @@ class Tags(commands.Cog):
             )
             
             if record is None:
-                return await ctx.send(embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
+                return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
 
             await self._send_tag_info(ctx, conn, tag_name=name, row=record)
 
@@ -788,7 +801,7 @@ class Tags(commands.Cog):
             row = await conn.fetchone("SELECT rowid FROM tags WHERE name=$0 AND ownerID=$1", tag, ctx.author.id)
 
             if row is None:
-                return await ctx.send(embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
+                return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
 
             await conn.execute("UPDATE tags SET ownerID = $0 WHERE rowid = $1", member.id, row[0])
             await conn.commit()
