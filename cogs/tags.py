@@ -1,7 +1,11 @@
 import asyncio
 import sqlite3
 import datetime
-from typing import Annotated, Optional
+from typing import (
+    Annotated, 
+    Optional, 
+    Callable
+)
 
 import discord
 from discord import app_commands
@@ -152,8 +156,10 @@ class MatchWord(discord.ui.Button):
 
     async def callback(self, interaction: discord.Interaction) -> None:
         self.view.chosen_word = self.label
-        self.interaction = interaction
         self.view.stop()
+
+        if hasattr(self.view, "interaction"):
+            self.view.interaction = interaction
 
 
 class Tags(commands.Cog):
@@ -165,12 +171,13 @@ class Tags(commands.Cog):
         # ownerID: set(name)
         self._reserved_tags_being_made: set[str] = set()
 
-    @staticmethod
     async def partial_match_for(
+        self,
         ctx: commands.Context, 
         word_input: str, 
-        tag_results: list[sqlite3.Row]
-    ) -> None | tuple:
+        tag_results: list[sqlite3.Row],
+        match_view: Optional[discord.ui.View] = None
+    ) -> None | str:
         """
         If the user types part of an name, get the tag name and its content indicated.
 
@@ -195,13 +202,13 @@ class Tags(commands.Cog):
         if length == 1:
             return tag_results[0][0]
 
-        match_view = discord.ui.View(timeout=15.0)
+        match_view = match_view or discord.ui.View(timeout=15.0)
         match_view.chosen_word = 0  # default is a falsey value
 
         for resulting_word in tag_results:
             match_view.add_item(MatchWord(word=resulting_word[0]))
         
-        await ctx.send(
+        msg = await ctx.send(
             view=match_view,
             embed=membed(
                 "There is more than one tag with that name pattern.\n"
@@ -210,6 +217,7 @@ class Tags(commands.Cog):
         )
 
         await match_view.wait()
+        await msg.delete()
 
         if match_view.chosen_word:
             return match_view.chosen_word
@@ -217,7 +225,32 @@ class Tags(commands.Cog):
         await ctx.send(embed=membed("No result selected, cancelled this request."))
         return None
 
-    async def non_owned_partial_matching(self, ctx: commands.Context, word_input: str, conn: asqlite_Connection):
+    async def partial_match_including_interaction(
+        self,
+        ctx: commands.Context, 
+        word_input: str, 
+        tag_results: list[sqlite3.Row]
+    ) -> tuple[None | str, discord.Interaction]:
+        """
+        Same as `partial_match_for()`, but when a button is clicked, return the interaction associated with it.
+
+        ## Returns
+        A tuple containing the actual value and the interaction created.
+        """
+
+        mv = discord.ui.View(timeout=15.0)
+        mv.interaction = None
+
+        ret = await self.partial_match_for(ctx, word_input, tag_results, mv)
+        return ret, mv.interaction
+
+    async def non_owned_partial_matching(
+        self, 
+        ctx: commands.Context, 
+        word_input: str, 
+        conn: asqlite_Connection,
+        meth: Optional[Callable] = None
+    ):
         """Partial matching for every existing tag"""
 
         tag_names = await conn.fetchall(
@@ -229,10 +262,17 @@ class Tags(commands.Cog):
             """, f"%{word_input}%"
         )
 
-        name = await self.partial_match_for(ctx, word_input, tag_results=tag_names)
+        meth = meth or self.partial_match_for
+        name = await meth(ctx, word_input, tag_results=tag_names)
         return name
 
-    async def owned_partial_matching(self, ctx: commands.Context, word_input: str, conn: asqlite_Connection):
+    async def owned_partial_matching(
+        self, 
+        ctx: commands.Context, 
+        word_input: str, 
+        conn: asqlite_Connection,
+        meth: Optional[Callable] = None
+    ) -> tuple | str | None:
         """Partial matching for tags that are owned by the invoker"""
 
         tag_names = await conn.fetchall(
@@ -244,7 +284,8 @@ class Tags(commands.Cog):
             """, ctx.author.id, f"%{word_input}%", 
         )
 
-        return await self.partial_match_for(ctx, word_input, tag_results=tag_names)
+        meth = meth or self.partial_match_for
+        return await meth(ctx, word_input, tag_results=tag_names)
 
     async def non_aliased_tag_autocomplete(self, _: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         
@@ -484,20 +525,24 @@ class Tags(commands.Cog):
     ):
 
         if content is None:
-            if ctx.interaction is None:
-                return await ctx.send(embed=membed("Missing content to edit with."))
-            
             async with self.bot.pool.acquire() as conn:
-                name = await self.owned_partial_matching(ctx, word_input=name, conn=conn)
-                if name is None:
+                name = await self.owned_partial_matching(
+                    ctx, 
+                    word_input=name, 
+                    conn=conn, 
+                    meth=self.partial_match_including_interaction
+                )
+
+                if not (all(name)):
                     return
+                name, interaction = name
 
                 content_row: Optional[tuple[str]] = await conn.fetchone(
                     "SELECT content FROM tags WHERE name = $0", name
                 )
 
             modal = TagEditModal(content_row[0])
-            await modal.interaction.response.send_modal(modal)
+            await interaction.response.send_modal(modal)
             await modal.wait()
             ctx.interaction = modal.interaction
             content = modal.text
