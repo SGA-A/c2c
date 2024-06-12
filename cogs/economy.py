@@ -3361,9 +3361,9 @@ class Economy(commands.Cog):
         Provide a tip if the total commands ran counter is a multiple of 15.
         """
 
-        cmd = interaction.command.parent or interaction.command
-        if isinstance(cmd, app_commands.ContextMenu):
+        if isinstance(interaction.command, app_commands.ContextMenu):
             return
+        cmd = interaction.command.parent or interaction.command
 
         query = (
             """
