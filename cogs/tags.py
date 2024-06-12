@@ -8,7 +8,7 @@ from discord import app_commands
 from discord.ext import commands
 from asqlite import ProxiedConnection as asqlite_Connection
 
-from .core.helpers import membed, re
+from .core.helpers import membed
 from .core.constants import APP_GUILDS_IDS
 from .core.paginator import PaginationSimple
 from .core.views import Confirm
