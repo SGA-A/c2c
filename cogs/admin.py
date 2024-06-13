@@ -471,8 +471,6 @@ class Owner(commands.Cog):
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
         await self.bot.pool.close()
         await self.bot.session.close()
-        utility_cog = self.bot.get_cog("Utility")
-        await utility_cog.wf.close()
         await self.bot.close()
 
     @commands.command(name='invite', description='Links the invite for c2c')
