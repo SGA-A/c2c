@@ -3403,7 +3403,7 @@ class Economy(commands.Cog):
                 await self.add_exp_or_levelup(interaction, connection, int(exp_gainable))
 
     @commands.Cog.listener()
-    async def on_command(self, ctx: commands.Context) -> None:
+    async def on_command_completion(self, ctx: commands.Context) -> None:
         """Track text commands ran."""
 
         cmd = ctx.command.parent or ctx.command

@@ -11,9 +11,7 @@ import discord
 from github import Github
 from discord.ext import commands
 from discord import app_commands
-from waifuim import WaifuAioClient
 from psutil import Process, cpu_count
-from waifuim.exceptions import APIException
 from pytz import timezone
 
 from cogs.economy import (
@@ -47,20 +45,6 @@ FORUM_TAG_IDS = {
     'showcase': 1147181147370049576, 
     'coding': 1147182042744901703, 
     'general discussion': 1147182171140923392
-}
-EMOTE_DATA = {
-    "baka": "$0 thinks $1 is a BAKA! \U0001f92a",
-    "bite": "$1 was feeling a little zesty today <:umaro:798868098018312222>",
-    "blush": "look what you did to $1 <:froggysip:797944788624212038>",
-    "bored": "$1's level of boredom is unlike any other <:concerndoggo:797430206729945088>",
-    "cry": "<:StoleThisEmote10:795736747958861888> Tears are falling, $1 can't hold it in!",
-    "cuddle": "seems $1 needs a hug, and $0 is here for them! <:peeposmile:780717990215680010>",
-    "dance": "anyone else feeling like it?",
-    "facepalm": "honestly, $1 what are you doing <:whyyy:782394665705537577>",
-    "feed": "come here $1, let $0 feed you!! <:dino_roar:797944928566247484>",
-    "handhold": "$0 and $1 going in with this hug <:pepe_think:798869395722993674>",
-    "handshake": "$0, this is $1. let's get to business <:pepe_fingers:798870376893251594>",
-    "happy": "$1 is so happy, you're so happy, we're all so happy, hap- hap- happy days <a:e1_confetti:1124673505879933031>"
 }
 EMBED_TIMEZONES = {
     'Pacific': 'US/Pacific',
@@ -176,7 +160,6 @@ class Utility(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.process = Process()
-        self.wf = WaifuAioClient(session=bot.session, token=bot.WAIFU_API_KEY, app_name="c2c")
         self.gh_repo = Github('SGA-A', bot.GITHUB_TOKEN).get_repo('SGA-A/c2c')
 
         self.image_src = app_commands.ContextMenu(
@@ -490,8 +473,8 @@ class Utility(commands.Cog):
         page: Optional[app_commands.Range[int, 1]] = 1
     ) -> None:
         
-        tags = [val for _, val in iter(interaction.namespace) if isinstance(val, str)]
-        tagviewing = ' '.join(tags)
+        tags = filter(lambda x: isinstance(x[1], str), iter(interaction.namespace))
+        tagviewing = ' '.join(val for _, val in tags)
 
         posts_xml = await self.retrieve_via_kona(
             tags=tagviewing, 
@@ -519,8 +502,6 @@ class Utility(commands.Cog):
             embed.title = "No posts found."
             return await interaction.response.send_message(ephemeral=True, embed=embed)
 
-        paginator = Pagination(interaction)
-
         additional_notes = [
             (
                 f"{result['jpeg_url']}",
@@ -544,12 +525,10 @@ class Utility(commands.Cog):
                 embed.set_image(url=item_attrs[0])
                 embeds.append(embed)
 
-            n = paginator.compute_total_pages(len(additional_notes), length)
+            n = Pagination.compute_total_pages(len(additional_notes), length)
             return embeds, n
-        
-        paginator.get_page = get_page_part
 
-        await paginator.navigate(ephemeral=private)
+        await Pagination(interaction, get_page=get_page_part).navigate(ephemeral=private)
 
     @anime.command(name='char', description="Retrieve SFW or NSFW anime images")
     @app_commands.describe(filter_by='The type of image to retrieve.')
@@ -574,153 +553,48 @@ class Utility(commands.Cog):
             img_view.add_item(ImageSourceButton(url=data["url"]))
 
             await interaction.response.send_message(embed=embed, view=img_view)
-    
-    @anime.command(name='expression', description="Send an expression")
-    @app_commands.rename(expr="type")
-    @app_commands.describe(expr='The type of expression to use.', on="Who to use this expression on. Some are to be used on you.")
-    async def send_expression(
-        self, 
-        interaction: discord.Interaction, 
-        expr: Literal[
-            "baka", "bite", "blush", "bored", "cry", "cuddle", "dance", 
-            "facepalm", "feed", "handhold", "handshake", "happy"
-        ],
-        on: discord.Member
-    ) -> None:
-
-        if on.id == interaction.user.id:
-            return await interaction.response.send_message(
-                ephemeral=True,
-                embed=membed("You have to use this on someone other than yourself.")
-            )
-
-        async with self.bot.session.get(f"https://nekos.best/api/v2/{expr}") as resp:
-            if resp.status != 200:
-                return await interaction.response.send_message(embed=membed(API_EXCEPTION))
-
-            data = await resp.json()
-            data = data['results'][0]
-
-            embed = discord.Embed(colour=0xFF9D2C)
-            embed.description = EMOTE_DATA[expr].replace("$0", interaction.user.name).replace("$1", on.name)
-            embed.set_author(name=data['anime_name'])
-            embed.set_image(url=data['url'])
-
-            img_view = discord.ui.View()
-            img_view.add_item(ImageSourceButton(url=data['url']))
-
-            await interaction.response.send_message(embed=embed, view=img_view)
 
     @anime.command(name='random', description="Get a completely random waifu image")
     async def waifu_random_fetch(self, interaction: discord.Interaction) -> None:
-
         is_nsfw = interaction.channel.is_nsfw()
-        which = 1
 
-        if which:
-            embed = discord.Embed(colour=0xFF9D2C)
-            async with self.bot.session.get(choice(ANIME_ENDPOINTS)) as resp:
-                if resp.status != 200:
-                    return await interaction.response.send_message(embed=membed(API_EXCEPTION))
-                data = await resp.json()
-                data = data["link"]
-
-            embed.set_image(url=data)
-            img_view = discord.ui.View()
-            img_view.add_item(ImageSourceButton(url=data))
-            return await interaction.response.send_message(embed=embed, view=img_view, ephemeral=True)
-
-        try:
-            image = await self.wf.search(is_nsfw=is_nsfw)
-        except APIException as ae:
-            return await interaction.response.send_message(ae.detail)
-
-        embed = discord.Embed()
-        embed.colour = 0xFF9D2C if not(is_nsfw) else 0xFFB6C1
-        embed.set_author(name=image.artist or 'Unknown Source')
-        embed.set_image(url=image.url)
-
-        img_view = discord.ui.View()
-        img_view.add_item(ImageSourceButton(url=image.url))
-
-        await interaction.response.send_message(embed=embed, view=img_view)
-
-    @anime.command(name='filter', description="Filter from SFW waifu images to send")
-    @app_commands.describe(
-        waifu="Include a female anime/manga character.",
-        maid="Include women/girls employed to do work in their uniform.",
-        marin_kitagawa="Include marin from My Dress-Up Darling.",
-        mori_calliope="Include the english VTuber Mori.",
-        raiden_shogun="Include the electro archon from Genshin Impact.",
-        oppai="Include oppai within the sfw range.",
-        selfies="Include photo-like image of a waifu.",
-        uniform="Include girls wearing any kind of uniform.")
-    async def filter_waifu_search(
-        self, 
-        interaction: discord.Interaction, 
-        waifu: Optional[bool], 
-        maid: Optional[bool], 
-        marin_kitagawa: Optional[bool], 
-        mori_calliope: Optional[bool], 
-        raiden_shogun: Optional[bool], 
-        oppai: Optional[bool], 
-        selfies: Optional[bool], 
-        uniform: Optional[bool]
-    ) -> None:
-
-        tags = [param.replace('_', '-') for param, _ in iter(interaction.namespace)]
-
-        if not tags:
-            return await interaction.response.send_message(
-                ephemeral=True,
-                embed=membed("You need to include at least 1 tag.")
-            )
-
-        try:
-            image = await self.wf.search(included_tags=tags, is_nsfw=False)
-        except APIException as ae:
-            return await interaction.response.send_message(embed=membed(ae.detail))
+        if not is_nsfw:
+            return await interaction.response.send_message(embed=membed("Must be used within an NSFW channel."))
 
         embed = discord.Embed(colour=0xFF9D2C)
-        embed.set_author(name=image.artist or 'Unknown Source')
-        embed.set_image(url=image.url)
+        async with self.bot.session.get(choice(ANIME_ENDPOINTS)) as resp:
+            if resp.status != 200:
+                return await interaction.response.send_message(embed=membed(API_EXCEPTION))
+            data = await resp.json()
+            data = data["link"]
 
+        embed.set_image(url=data)
         img_view = discord.ui.View()
-        img_view.add_item(ImageSourceButton(url=image.url))
-
-        await interaction.response.send_message(embed=embed, view=img_view)
+        img_view.add_item(ImageSourceButton(url=data))
+        return await interaction.response.send_message(embed=embed, view=img_view, ephemeral=True)
 
     @app_commands.command(name='emojis', description='Fetch all the emojis c2c can access')
     @app_commands.guilds(*APP_GUILDS_IDS)
     async def emojis_paginator(self, interaction: discord.Interaction) -> None:
-        length = 10
+        length = 8
         all_emojis = [f"{i} (**{i.name}**) \U00002014 `{i}`" for i in self.bot.emojis]
-
-        paginator = Pagination(interaction)
 
         emb = membed()
         emb.title = "Emojis"
+
+        me = interaction.guild.me
         emb.set_author(
-            name=interaction.guild.me.name, 
-            icon_url=self.bot.user.display_avatar.url
+            name=me.display_name, 
+            icon_url=me.display_avatar.url
         )
-        
+
         async def get_page_part(page: int):
             offset = (page - 1) * length
-            
-            emb.description = (
-                "> This is a command that fetches **all** of the emojis found"
-                " in the bot's internal cache and their associated atributes.\n\n"
-            )
-
-            for user in all_emojis[offset:offset + length]:
-                emb.description += f"{user}\n"
-            n = paginator.compute_total_pages(len(all_emojis), length)
+            emb.description = "\n".join(all_emojis[offset:offset + length])
+            n = Pagination.compute_total_pages(len(all_emojis), length)
             return emb, n
 
-        paginator.get_page = get_page_part
-
-        await paginator.navigate()
+        await Pagination(interaction, get_page=get_page_part).navigate()
 
     @app_commands.command(name='inviter', description='Creates a server invite link')
     @app_commands.guilds(*APP_GUILDS_IDS)
@@ -745,12 +619,7 @@ class Utility(commands.Cog):
             max_uses=maximum_uses
         )
 
-        match maximum_uses:
-            case 0:
-                maxim_usage = "No limit to maximum usage"
-            case _:
-                maxim_usage = f"Max usages set to {generated_invite.max_uses}"
-        
+        maxim_usage = f"Max usages set to {generated_invite.max_uses}" if maximum_uses else "No limit to maximum usage"
         formatted_expiry = discord.utils.format_dt(generated_invite.expires_at, 'R')
         success = discord.Embed(
             title='Successfully generated new invite link', 

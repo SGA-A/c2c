@@ -36,7 +36,6 @@ six==1.16.0
 soupsieve==2.5
 typing_extensions==4.10.0
 urllib3==2.2.1
-waifuim.py==4.2.4
 websockets==12.0
 wrapt==1.16.0
 yarl==1.9.4

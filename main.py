@@ -185,16 +185,17 @@ class C2C(commands.Bot):
 
         # Misc
         self.games = dict()
-        self.command_count = None
+        self.fetched_tree = False
         self.time_launch = None
 
     async def yield_app_commands(self, interaction: Interaction) -> None:
         """Fetch app commands via HTTP when they're not already in the tree."""
 
-        if self.command_count:
+        if self.fetched_tree:
             return
 
         await self.tree.fetch_commands(guild=Object(id=interaction.guild.id))
+        self.fetched_tree = True
 
     async def setup_hook(self):
         print("we're in.")
@@ -243,7 +244,7 @@ bot = C2C(
 print(version)
 
 
-cogs = [
+cogs = {
     "admin", 
     "ctx_events", 
     "economy", 
@@ -253,7 +254,7 @@ cogs = [
     "slash_events", 
     "tags",
     "tempvoice"
-]
+}
 
 classnames = Literal[
     "Economy", 
@@ -295,29 +296,6 @@ def fill_up_commands(category: classnames) -> dict:
     return all_cmds
 
 
-def generic_loop_slash_only_subcommands(all_cmds: dict, cmd_formatter: list, guild_id) -> set:
-    """Returns tuple with first element as set of commands, second being the total command count."""
-    for cmd in all_cmds:
-
-        command_manage = bot.tree.get_app_command(cmd, guild=Object(id=guild_id))
-
-        for option in command_manage.options:
-            if not isinstance(option, app_commands.AppCommandGroup):
-                continue
-
-            contains_subcommands = False
-            for option in command_manage.options:
-                if isinstance(option, app_commands.AppCommandGroup):
-                    contains_subcommands = True
-                    cmd_formatter.append(f"- {option.mention} \U00002014 {option.description}")
-
-            if contains_subcommands:
-                continue
-            cmd_formatter.append(f"- {command_manage.mention} \U00002014 {command_manage.description}")
-
-    return cmd_formatter
-
-
 def generic_loop_with_subcommand(all_cmds: dict, cmd_formatter: list, guild_id) -> set:
 
     for (cmd, cmd_details) in all_cmds.items():
@@ -342,16 +320,6 @@ def generic_loop_with_subcommand(all_cmds: dict, cmd_formatter: list, guild_id) 
         cmd_formatter.append(f"- {command_manage.mention} \U00002014 {command_manage.description}")
 
     return cmd_formatter
-
-
-async def total_command_count(interaction: Interaction) -> int:
-    """Return the total amount of commands detected within the bot, including text and slash commands."""
-    if bot.command_count:
-        return bot.command_count
-    
-    # added 1 extra because there is 1 global command not detected here 
-    bot.command_count = (len(await bot.tree.fetch_commands(guild=Object(id=interaction.guild.id))) + 1) + len(bot.commands)
-    return bot.command_count
 
 
 def get_cog_name(*, shorthand: str) -> str:
@@ -666,22 +634,19 @@ async def do_guild_checks(interaction: Interaction) -> Union[None, bool]:
 
 
 async def main():
-    try:
-        setup_logging(level=INFO)
 
-        load_dotenv()
-        TOKEN = environ.get("BOT_TOKEN")
-        bot.WEBHOOK_URL = environ.get("WEBHOOK_URL")
-        bot.GITHUB_TOKEN = environ.get("GITHUB_TOKEN")
-        bot.JEYY_API_KEY = environ.get("JEYY_API_KEY")
-        bot.NINJAS_API_KEY = environ.get("API_KEY")
-        bot.WAIFU_API_KEY = environ.get("WAIFU_API_KEY")
-        bot.GOOGLE_CUSTOM_SEARCH_API_KEY = environ.get("GOOGLE_CUSTOM_SEARCH_API_KEY")
-        bot.GOOGLE_CUSTOM_SEARCH_ENGINE = environ.get("GOOGLE_CUSTOM_SEARCH_ENGINE")
+    setup_logging(level=INFO)
+    load_dotenv()
+    
+    TOKEN = environ.get("BOT_TOKEN")
+    bot.WEBHOOK_URL = environ.get("WEBHOOK_URL")
+    bot.GITHUB_TOKEN = environ.get("GITHUB_TOKEN")
+    bot.JEYY_API_KEY = environ.get("JEYY_API_KEY")
+    bot.NINJAS_API_KEY = environ.get("API_KEY")
+    bot.GOOGLE_CUSTOM_SEARCH_API_KEY = environ.get("GOOGLE_CUSTOM_SEARCH_API_KEY")
+    bot.GOOGLE_CUSTOM_SEARCH_ENGINE = environ.get("GOOGLE_CUSTOM_SEARCH_ENGINE")
 
-        await bot.start(TOKEN)
-    finally:
-        await bot.close()
+    await bot.start(TOKEN)
 
 
 run(main())
