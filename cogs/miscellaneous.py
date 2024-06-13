@@ -29,17 +29,9 @@ ARROW = "<:arrowe:1180428600625877054>"
 API_EXCEPTION = "The API fucked up, try again later."
 FORUM_ID = 1147176894903627888
 UPLOAD_FILE_DESCRIPTION = "A file to upload alongside the thread."
-RESPONSES = {
-    403: "Forbidden - Access was denied",
-    404: "Not Found",
-    420: "Invalid Record - The record could not be saved",
-    421: "User Throttled - User is throttled, try again later",
-    422: "Locked - The resource is locked and cannot be modified",
-    423: "Already Exists - The resource already exists",
-    424: "Invalid Parameters - The given parameters were invalid",
-    500: "Internal Server Error - Some unknown error occured on the konachan website's server",
-    503: "Service Unavailable - The konachan website currently cannot handle the request"
-}
+ANIME_ENDPOINTS = (
+    "https://purrbot.site/api/img/nsfw/neko/img",
+)
 FORUM_TAG_IDS = {
     'game': 1147178989329322024, 
     'political': 1147179277343793282, 
@@ -510,25 +502,22 @@ class Utility(commands.Cog):
 
         if isinstance(posts_xml, int):
             embed = membed("Failed to make this request.")
-            embed.add_field(name="Cause", value=RESPONSES.get(posts_xml, "Not Known."))
-            embed.set_footer(f"{posts_xml}. That's an error.")
+            embed.title = f"{posts_xml}. That's an error."
             return await interaction.response.send_message(embed=embed)
 
         if not len(posts_xml):
-
-            return await interaction.response.send_message(
-                ephemeral=True,
-                embed=membed(
-                    "## No posts found.\n"
-                    "- There are a few known causes:\n"
-                    " - Entering an invalid tag name.\n"
-                    " - Accessing some posts under the `copyright` tag.\n"
-                    " - There are no posts found under this tag.\n"
-                    " - The page requested exceeds the max length.\n"
-                    "- You can find a tag by using /tagsearch "
-                    "or [the website.](https://konachan.net/tag)"
-                )
+            
+            embed = membed(
+                "- There are a few known causes:\n"
+                " - Entering an invalid tag name.\n"
+                " - Accessing some posts under the `copyright` tag.\n"
+                " - There are no posts found under this tag.\n"
+                " - The page requested exceeds the max length.\n"
+                "- You can find a tag by using /tagsearch "
+                "or [the website.](https://konachan.net/tag)"
             )
+            embed.title = "No posts found."
+            return await interaction.response.send_message(ephemeral=True, embed=embed)
 
         paginator = Pagination(interaction)
 
@@ -626,6 +615,20 @@ class Utility(commands.Cog):
     async def waifu_random_fetch(self, interaction: discord.Interaction) -> None:
 
         is_nsfw = interaction.channel.is_nsfw()
+        which = 1
+
+        if which:
+            embed = discord.Embed(colour=0xFF9D2C)
+            async with self.bot.session.get(choice(ANIME_ENDPOINTS)) as resp:
+                if resp.status != 200:
+                    return await interaction.response.send_message(embed=membed(API_EXCEPTION))
+                data = await resp.json()
+                data = data["link"]
+
+            embed.set_image(url=data)
+            img_view = discord.ui.View()
+            img_view.add_item(ImageSourceButton(url=data))
+            return await interaction.response.send_message(embed=embed, view=img_view, ephemeral=True)
 
         try:
             image = await self.wf.search(is_nsfw=is_nsfw)
