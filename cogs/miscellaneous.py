@@ -582,12 +582,6 @@ class Utility(commands.Cog):
         emb = membed()
         emb.title = "Emojis"
 
-        me = interaction.guild.me
-        emb.set_author(
-            name=me.display_name, 
-            icon_url=me.display_avatar.url
-        )
-
         async def get_page_part(page: int):
             offset = (page - 1) * length
             emb.description = "\n".join(all_emojis[offset:offset + length])
