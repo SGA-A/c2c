@@ -786,11 +786,12 @@ class Utility(commands.Cog):
     async def about_the_bot(self, interaction: discord.Interaction) -> None:
 
         commits = await self.get_commits()
-        revision = (
-            f"[`{commit.sha[:6]}`]({commit.html_url}) {commit.commit.message.splitlines()[0]} "
-            f"({format_relative(commit.commit.author.date)})"
+        to_iso = datetime.datetime.fromisoformat
+        revision = [
+            f"[`{commit['sha'][:6]}`]({commit['html_url']}) {commit['commit']['message'].splitlines()[0]} "
+            f"({format_relative(to_iso(commit['commit']['author']['date']))})"
             for commit in commits
-        )
+        ]
 
         embed = discord.Embed(colour=discord.Colour.blurple())
         embed.description = (
