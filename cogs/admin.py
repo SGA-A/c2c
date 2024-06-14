@@ -8,8 +8,7 @@ from contextlib import redirect_stdout
 from typing import (
     Optional, 
     Any, 
-    Literal, 
-    Union
+    Literal
 )
 
 import io
@@ -201,7 +200,7 @@ class Owner(commands.Cog):
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
 
     @commands.command(name='eval', description='Evaluates arbitrary code')
-    async def evaluate(self, ctx: commands.Context, *, script_body: str) -> Union[None | discord.Message]:
+    async def evaluate(self, ctx: commands.Context, *, script_body: str) -> None | discord.Message:
         """Evaluates arbitrary code."""
 
         env = {
@@ -254,7 +253,7 @@ class Owner(commands.Cog):
                 await ctx.send(f'```py\n{value}{ret}\n```')
 
     @commands.command(name='blank', description='Sends newlines to clear a channel', aliases=('b',))
-    async def blank(self, ctx):
+    async def blank(self, ctx: commands.Context):
         """Clear out the channel."""
         await ctx.send(
             """
@@ -487,14 +486,7 @@ class Owner(commands.Cog):
     async def repeat(
         self, 
         ctx: commands.Context, 
-        channel: Optional[
-            Union[
-                discord.TextChannel, 
-                discord.VoiceChannel, 
-                discord.ForumChannel, 
-                discord.Thread
-            ]
-        ] = commands.CurrentChannel, 
+        channel: Optional[discord.abc.GuildChannel] = commands.CurrentChannel, 
         *, 
         message: str
     ) -> None:
@@ -516,7 +508,11 @@ class Owner(commands.Cog):
 
         await channel.send(message)
         if ctx.interaction:
-            await ctx.send(ephemeral=True, embed=membed(f"Sent this message to {channel.mention}."))
+            await ctx.send(
+                delete_after=3.0, 
+                ephemeral=True, 
+                embed=membed(f"Sent this message to {channel.mention}.")
+            )
 
     @commands.command(name="uforuma", description="Update the forum announcement", aliases=("ufa",))
     async def upload2(self, ctx: commands.Context):

@@ -7,7 +7,6 @@ Make sure to check `/multipliers` to see what your current multi is before you u
 You can flex on others by adding items in your showcase with the `/showcase add` command. Just type the name of the item you wish to add.
 `/highlow` is a fun guessing game to bet your money on, use it to flex your skills!
 Have you tried out all our gambling commands? Here's a list of all of them: `/highlow`, `/bet`, `/slots`, `/blackjack`, `/coinflip`. Those with a <:lanyard:1165935243140796487> Keycard have higher chances of winning!
-Manage your own servant by calling `/servant lookup`. Feeding your servant also gives you an immediate XP bump!
 If you right-click on someone's message and go to apps, you can extract the source of the image just by clicking the associated option!
 ~~You can add a bio onto your `/profile`! Hit the button in `/settings` by navigating to "Profile Customization". There is so much more to customize as well!~~ We're replacing this tip in the future because it doesn't actually exist just yet, so ignore it for now, sorry!
 You can view specific details about an item with `/item`. It allows you to see how many people own the item, the description, the art, and sometimes more!
@@ -17,9 +16,7 @@ Scope out who has the highest net worth, pocket balance, and more with `/leaderb
 Some drones are available for purchase in the shop. Use them to help add reward buffs or perform other nefarious activity.
 Work consistently enough each day and you can get promoted! This increases your pay and the chance for a job specific item to drop!
 You can search through commands within a category (via `/help`) and find every command supported currently.
-Your servants have the possibility to fund billions towards your name. Use them to your advantage, unlock new skill levels and gain more power!
 You can send us feedback in the bot. If it's a bug or feature that is approved, you will be able to claim rewards!
-You have servants that can unlock certain tasks when they reach a certain skill level. Unlock them and gain huge rewards.
 You can deposit and withdraw robux just by viewing your `/balance`! Click on the buttons associated with them to get started.
 You can change the status of your own temporary voice channel with `/voice status`!
 Manage your own temporary voice channel with the `/voice` subcommands. You'll need to setup the creator channel if you have not already and connect to it.

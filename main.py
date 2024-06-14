@@ -16,8 +16,7 @@ from typing import (
     List,
     Literal,
     Optional,
-    TYPE_CHECKING,
-    Union,
+    TYPE_CHECKING
 )
 
 from discord import (
@@ -60,7 +59,7 @@ class MyCommandTree(app_commands.CommandTree):
     def find_app_command_by_names(
         self,
         *qualified_name: str,
-        guild: Optional[Union[Snowflake, int]] = None,
+        guild: Optional[Snowflake | int] = None,
     ) -> Optional[app_commands.AppCommand] | Any:
         
         bot_app_commands = self._global_app_commands
@@ -80,8 +79,8 @@ class MyCommandTree(app_commands.CommandTree):
 
     def get_app_command(
         self, 
-        value: Union[str, int],
-        guild: Optional[Union[Snowflake, int]] = None
+        value: str | int,
+        guild: Optional[Snowflake | int] = None
     ) -> Optional[app_commands.AppCommand]:
         
         def search_dict(d: AppCommandStore) -> Optional[app_commands.AppCommand]:
@@ -104,7 +103,7 @@ class MyCommandTree(app_commands.CommandTree):
     def _unpack_app_commands(bot_app_cmds: List[app_commands.AppCommand]) -> AppCommandStore:
         ret: AppCommandStore = {}
 
-        def unpack_options(options: List[Union[app_commands.AppCommand, app_commands.AppCommandGroup, app_commands.Argument]]) -> None:
+        def unpack_options(options: List[app_commands.AppCommand | app_commands.AppCommandGroup | app_commands.Argument]) -> None:
             for option in options:
                 if isinstance(option, app_commands.AppCommandGroup):
                     ret[option.qualified_name] = option
@@ -119,7 +118,7 @@ class MyCommandTree(app_commands.CommandTree):
     async def _update_cache(
         self, 
         bot_app_cmds: List[app_commands.AppCommand], 
-        guild: Optional[Union[Snowflake, int]] = None
+        guild: Optional[Snowflake | int] = None
     ) -> None:
 
         # because we support both int and Snowflake
@@ -612,7 +611,7 @@ async def load_cog(ctx: commands.Context, cog_input: str) -> None:
     await ctx.reply(embed=embed)
 
 
-async def do_guild_checks(interaction: Interaction) -> Union[None, bool]:
+async def do_guild_checks(interaction: Interaction) -> bool | None:
     app_commands_not_supported = True
     if interaction.guild:
         gid = interaction.guild.id

@@ -5,10 +5,9 @@ from unicodedata import name
 from time import perf_counter
 from re import compile as compile_it
 from xml.etree.ElementTree import fromstring
-from typing import Literal, Union, Optional, List
+from typing import Literal, Optional, List
 
 import discord
-from github import Github
 from discord.ext import commands
 from discord import app_commands
 from psutil import Process, cpu_count
@@ -58,7 +57,7 @@ EMBED_TIMEZONES = {
     'India': 'Asia/Kolkata'
 }
 
-def extract_attributes(post_element, mode: Literal["post", "tag"]) -> Union[dict, str]:
+def extract_attributes(post_element, mode: Literal["post", "tag"]) -> dict | str:
     if mode == "post":
         keys_to_extract = {"created_at", "jpeg_url", "author"}
         data = {key: post_element.get(key) for key in keys_to_extract}
@@ -160,7 +159,6 @@ class Utility(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.process = Process()
-        self.gh_repo = Github('SGA-A', bot.GITHUB_TOKEN).get_repo('SGA-A/c2c')
 
         self.image_src = app_commands.ContextMenu(
             name='Extract Image Source',
@@ -175,11 +173,21 @@ class Utility(commands.Cog):
         self.bot.tree.add_command(self.image_src)
         self.bot.tree.add_command(self.get_embed_cmd)
 
+    async def get_commits(self):
+        async with self.bot.session.get(
+            url="https://api.github.com/repos/SGA-A/c2c/commits",
+            headers={"Authorization": f"token {self.bot.GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+        ) as response:
+            if response.status == 200:
+                commits = await response.json()
+                return commits[:3]
+            return []
+
     async def cog_unload(self) -> None:
         self.bot.tree.remove_command(self.get_embed_cmd.name, type=self.get_embed_cmd.type)
         self.bot.tree.remove_command(self.image_src.name, type=self.image_src.type)
 
-    async def retrieve_via_kona(self, **params) -> Union[int, str]:
+    async def retrieve_via_kona(self, **params) -> int | str:
         """Returns a list of dictionaries for you to iterate through and fetch their attributes"""
         mode = params.pop("mode")
         base_url = f"https://konachan.net/{mode}.xml"
@@ -197,7 +205,7 @@ class Utility(commands.Cog):
         start: float, 
         api_url: str, 
         **attrs
-    ) -> Union[None, discord.WebhookMessage]:
+    ) -> None | discord.WebhookMessage:
         
         async with self.bot.session.get(api_url, **attrs) as response:
             if response.status != 200:
@@ -697,7 +705,7 @@ class Utility(commands.Cog):
                 "shred", "wiggle", "warp", "wave"
             ]
         ] = "wave"
-    ) -> Union[discord.InteractionMessage, None]:
+    ) -> None | discord.InteractionMessage:
 
         start = perf_counter()
         await interaction.response.defer(thinking=True)
@@ -777,7 +785,7 @@ class Utility(commands.Cog):
     @app_commands.guilds(*APP_GUILDS_IDS)
     async def about_the_bot(self, interaction: discord.Interaction) -> None:
 
-        commits = self.gh_repo.get_commits()[:3]
+        commits = await self.get_commits()
         revision = (
             f"[`{commit.sha[:6]}`]({commit.html_url}) {commit.commit.message.splitlines()[0]} "
             f"({format_relative(commit.commit.author.date)})"
@@ -892,7 +900,7 @@ class Utility(commands.Cog):
         self, 
         ctx: commands.Context,
         *, 
-        username: Union[discord.Member, discord.User] = commands.Author
+        username: discord.Member | discord.User = commands.Author
     ) -> None:
         embed = membed()
 
@@ -906,8 +914,8 @@ class Utility(commands.Cog):
         self, 
         ctx: commands.Context, 
         *, 
-        username: Union[discord.Member, discord.User] = commands.Author
-    ) -> Union[None, discord.Message]:
+        username: discord.Member | discord.User = commands.Author
+    ) -> None | discord.Message:
         embed = membed()
 
         if username.bot:

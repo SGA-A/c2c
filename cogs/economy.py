@@ -20,8 +20,7 @@ from typing import (
     Coroutine, 
     Optional, 
     Literal, 
-    Any, 
-    Union, 
+    Any,
     List, 
     Callable
 )
@@ -30,7 +29,6 @@ import discord
 import aiofiles
 from pytz import timezone
 from pluralizer import Pluralizer
-from ImageCharts import ImageCharts
 from discord.ext import commands, tasks
 from discord import app_commands, SelectOption
 from asqlite import ProxiedConnection as asqlite_Connection
@@ -79,7 +77,7 @@ def selling_price_algo(base_price: int, multiplier: int) -> int:
 
 """ALL VARIABLES AND CONSTANTS FOR THE ECONOMY ENVIRONMENT"""
 
-USER_ENTRY = Union[discord.Member, discord.User]
+USER_ENTRY = discord.Member | discord.User
 MULTIPLIER_TYPES = Literal["xp", "luck", "robux"]
 BANK_TABLE_NAME = 'bank'
 SLAY_TABLE_NAME = "slay"
@@ -379,7 +377,7 @@ def generate_slot_combination() -> str:
     return slot_combination
 
 
-def find_slot_matches(*args) -> Union[None, int]:
+def find_slot_matches(*args) -> None | int:
     """
     Find any suitable matches in a slot outcome.
 
@@ -399,7 +397,7 @@ def find_slot_matches(*args) -> Union[None, int]:
     return None
 
 
-def generate_progress_bar(percentage: Union[float, int]) -> str:
+def generate_progress_bar(percentage: float | int) -> str:
     """
     Generate a visual representation of a progress bar based on the given percentage.
 
@@ -2739,7 +2737,7 @@ class Economy(commands.Cog):
     async def update_bank_new(
         user: USER_ENTRY, 
         conn_input: asqlite_Connection, 
-        amount: Union[float, int] = 0, 
+        amount: float | int = 0, 
         mode: str = "wallet"
     ) -> Optional[Any]:
         
@@ -2764,7 +2762,7 @@ class Economy(commands.Cog):
     async def change_bank_new(
         user: USER_ENTRY, 
         conn_input: asqlite_Connection, 
-        amount: Union[float, int, str] = 0, 
+        amount: float | int | str = 0, 
         mode: str = "wallet"
     ) -> Optional[Any]:
         """
@@ -2793,9 +2791,9 @@ class Economy(commands.Cog):
         user: USER_ENTRY, 
         conn_input: asqlite_Connection, 
         mode1: str, 
-        amount1: Union[float, int], 
+        amount1: float | int, 
         mode2: str, 
-        amount2: Union[float, int], 
+        amount2: float | int, 
         table_name: Optional[str] = "bank"
         ) -> Optional[Any]:
         """
@@ -2820,11 +2818,11 @@ class Economy(commands.Cog):
     async def update_bank_three_new(
         user: USER_ENTRY, conn_input: asqlite_Connection, 
         mode1: str, 
-        amount1: Union[float, int], 
+        amount1: float | int, 
         mode2: str, 
-        amount2: Union[float, int], 
+        amount2: float | int, 
         mode3: str, 
-        amount3: Union[float, int], 
+        amount3: float | int, 
         table_name: Optional[str] = "bank"
         ) -> Optional[Any]:
         """
@@ -2920,7 +2918,7 @@ class Economy(commands.Cog):
     @staticmethod
     async def update_inv_new(
         user: USER_ENTRY, 
-        amount: Union[float, int], 
+        amount: float | int, 
         item_name: str, 
         conn: asqlite_Connection
     ) -> Optional[Any]:
@@ -2963,7 +2961,7 @@ class Economy(commands.Cog):
     @staticmethod
     async def update_inv_by_id(
         user: USER_ENTRY, 
-        amount: Union[float, int], 
+        amount: float | int, 
         item_id: int, 
         conn: asqlite_Connection
     ) -> Optional[Any]:
@@ -3059,7 +3057,7 @@ class Economy(commands.Cog):
         cd_type: Optional[str] = None, 
         mode="t", 
         until = "N/A"
-    ) -> Union[bool, str]:
+    ) -> bool | str:
         """
         Check if a user has no cooldowns.
         
@@ -3350,7 +3348,7 @@ class Economy(commands.Cog):
     async def on_app_command_completion(
         self, 
         interaction: discord.Interaction, 
-        command: Union[app_commands.Command, app_commands.ContextMenu]
+        command: app_commands.Command | app_commands.ContextMenu
     ) -> None:
         
         """
@@ -3668,7 +3666,7 @@ class Economy(commands.Cog):
         user_checked: discord.Member,
         coin_qty_offered: int,
         actual_wallet_amt
-    ) -> Union[bool, None]:
+    ) -> bool | None:
         if actual_wallet_amt is None:
             await respond(interaction, embed=membed(f"{user_checked.mention} is not registered."))
         elif actual_wallet_amt[0] < coin_qty_offered:
@@ -3689,7 +3687,7 @@ class Economy(commands.Cog):
         user_to_check: discord.Member,
         item_data: tuple,
         item_qty_offered: int
-    ) -> Union[bool, None]:
+    ) -> bool | None:
         
         item_amt = await self.user_has_item_from_id(
             user_id=user_to_check.id,
@@ -3722,7 +3720,7 @@ class Economy(commands.Cog):
         coin_sender: discord.Member,
         coin_sender_qty: int,
         can_continue: Optional[bool] = True
-    ) -> Union[None, bool]:
+    ) -> None | bool:
         
         """
         Send a confirmation prompt to `item_sender`, asking to confirm whether 
@@ -3762,7 +3760,7 @@ class Economy(commands.Cog):
         item_sender_qty: int,
         item_sender_data: tuple,
         can_continue: Optional[bool] = True
-    ) -> Union[None, bool]:
+    ) -> None | bool:
         
         """
         Send a confirmation prompt to `coin_sender`, asking to confirm whether 
@@ -3803,7 +3801,7 @@ class Economy(commands.Cog):
         item_sender2_qty: int,
         item_sender2_data: tuple,
         can_continue: Optional[bool] = True
-    ) -> Union[None, bool]:
+    ) -> None | bool:
         
         """
         The person that is confirming has to send items, and they also get items in return.
@@ -3832,7 +3830,11 @@ class Economy(commands.Cog):
         )
         return can_continue
 
-    async def default_checks_passing(self, interaction: discord.Interaction, with_who: discord.Member) -> Union[bool, None]:
+    async def default_checks_passing(
+        self, 
+        interaction: discord.Interaction, 
+        with_who: discord.Member
+    ) -> bool | None:
         if with_who.id == interaction.user.id:
             return await interaction.response.send_message(
                 ephemeral=True, 
@@ -4260,7 +4262,7 @@ class Economy(commands.Cog):
         conn: asqlite_Connection, 
         user_id: int, 
         items_to_delete: Optional[set] = None 
-    ) -> Union[None, int]:
+    ) -> int | None:
         """
         Delete showcase items that a user no longer has. 
         
@@ -4742,7 +4744,7 @@ class Economy(commands.Cog):
         interaction: discord.Interaction, 
         item: str, 
         quantity: Optional[int] = 1
-    ) -> Union[discord.WebhookMessage, None]:
+    ) -> discord.WebhookMessage | None:
         """Use a currently owned item."""
         quantity = abs(quantity)
 
@@ -5064,12 +5066,9 @@ class Economy(commands.Cog):
                 except ZeroDivisionError:
                     winbl = 0
 
-                stats = discord.Embed(
-                    title=f"{user.name}'s gambling stats", 
-                    description="**Reminder:** Games that have resulted in a tie are not tracked.",
-                    colour=0x2B2D31
-                )
-                
+                stats = membed("**Reminder:** Games that have resulted in a tie are not tracked.")
+                stats.title = f"{user.name}'s gambling stats"
+
                 stats.add_field(
                     name=f"BET ({total_bets:,})",
                     value=(
@@ -5102,27 +5101,23 @@ class Economy(commands.Cog):
 
                 stats.set_footer(text="The number next to the name is how many matches are recorded")
 
-                piee = discord.Embed(title="Games played")  # piee - pie embed
-                piee.colour = 0x2B2D31
+                piee = membed()
+                piee.title = "Game's played"  # piee - pie embed
 
                 try:
-
                     its_sum = total_bets + total_slots + total_blackjacks
-                    pie = (
-                        ImageCharts().chd(
-                            f"t:{(total_bets / its_sum) * 100},"
-                            f"{(total_slots / its_sum) * 100},{(total_blackjacks / its_sum) * 100}"
-                        )
-                        .chco("EA469E|03A9F4|FFC00C")
-                        .chl(f"BET ({total_bets})|SLOTS ({total_slots})|BJ ({total_blackjacks})")
-                        .chdl("Total bet games|Total slot games|Total blackjack games")
-                        .chli(f"{its_sum}")
-                        .chs("600x480")
-                        .cht("pd")
-                        .chtt(f"{user.name}'s total games played")
+                    img_url = (
+                        "https://image-charts.com/chart?"
+                        f"cht=pd&chs=600x480&chd=t:{(total_bets / its_sum) * 100},"
+                        f"{(total_slots / its_sum) * 100},{(total_blackjacks / its_sum) * 100}"
+                        f"&chco=EA469E|03A9F4|FFC00C"
+                        f"&chl=BET ({total_bets})|SLOTS ({total_slots})|BJ ({total_blackjacks})"
+                        f"&chdl=Total bet games|Total slot games|Total blackjack games"
+                        f"&chli={its_sum}"
+                        f"&chtt={user.name}'s total games played"
                     )
 
-                    piee.set_image(url=pie.to_url())
+                    piee.set_image(url=img_url)
                 except ZeroDivisionError:
                     piee.description = f"{user.mention} has not got enough data yet to form a pie chart."
                 
@@ -6327,9 +6322,9 @@ class Economy(commands.Cog):
         self, 
         interaction: discord.Interaction,  
         wallet_amount: int, 
-        exponent_amount : Union[str, int],
+        exponent_amount : str | int,
         has_keycard: Optional[bool] = False
-    ) -> Union[int, None]:
+    ) -> int | None:
         """Reusable wallet checks that are common amongst most gambling commands."""
 
         expo = await determine_exponent(
