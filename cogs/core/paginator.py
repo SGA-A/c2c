@@ -402,19 +402,12 @@ class PaginationItem(discord.ui.View):
 
     @discord.ui.button(style=discord.ButtonStyle.grey, emoji=MOVE_LEFT_EMOJI, row=2)
     async def previous(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
-        
-        if self.index - 1 < 1:
-            self.index = self.total_pages
-        else:
-            self.index -= 1
+        self.index = (self.index - 2) % self.total_pages + 1
         await self.edit_page(interaction)
 
     @discord.ui.button(style=discord.ButtonStyle.grey, emoji=MOVE_RIGHT_EMOJI, row=2)
     async def next_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
-        if self.index + 1 > self.total_pages:
-            self.index = 1
-        else:
-            self.index += 1
+        self.index = (self.index % self.total_pages) + 1
         await self.edit_page(interaction)
 
     @staticmethod
