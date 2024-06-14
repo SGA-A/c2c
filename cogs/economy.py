@@ -6098,7 +6098,7 @@ class Economy(commands.Cog):
         if user.bot:
             return await interaction.response.send_message(embed=membed("You can't bankrob bots."))
         
-        return await interaction.response.send_message(embed=membed("This command is under construction."))
+        return await interaction.response.send_message(embed=membed("This feature is in development."))
 
     @app_commands.command(name='coinflip', description='Bet your robux on a coin flip', extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_IDS)
