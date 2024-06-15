@@ -566,7 +566,7 @@ class Utility(commands.Cog):
     async def waifu_random_fetch(self, interaction: discord.Interaction) -> None:
 
         if not interaction.channel.is_nsfw():
-            return await interaction.response.send_message(ephemeral=True, embed=membed("Must be used within an NSFW channel."))
+            return await interaction.response.send_message(embed=membed("Must be used within an NSFW channel."))
 
         embed = discord.Embed(colour=0xFF9D2C)
         async with self.bot.session.get(choice(ANIME_ENDPOINTS)) as resp:
