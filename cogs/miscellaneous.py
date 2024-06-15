@@ -565,7 +565,7 @@ class Utility(commands.Cog):
     @anime.command(name='random', description="Get a completely random waifu image")
     async def waifu_random_fetch(self, interaction: discord.Interaction) -> None:
 
-        if not interaction.channel.is_nsfw():
+        if not interaction.channel.nsfw:
             return await interaction.response.send_message(
                 ephemeral=True, 
                 embed=membed("Must be used within an NSFW channel.")
