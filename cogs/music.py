@@ -63,18 +63,6 @@ class Music(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot: commands.Bot = bot
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        role = interaction.guild.get_role(990900517301522432)
-        if (role is None) or (role in interaction.user.roles):
-            return True
-        
-        await interaction.response.send_message(
-            ephemeral=True, 
-            embed=membed(f"You need the {role.mention} role to use music commands.")
-        )
-
-        return False
-
     async def play_source(self, voice_client):
         source = discord.FFmpegPCMAudio("C:\\Users\\georg\\Documents\\c2c\\battlet.mp3")
         voice_client.play(source, after=lambda e: print('Player error: %s' % e) if e else self.bot.loop.create_task(self.play_source(voice_client)))
