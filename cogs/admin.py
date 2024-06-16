@@ -27,29 +27,25 @@ class InviteButton(discord.ui.View):
     def __init__(self) -> None:
         super().__init__()
 
-        perms = discord.Permissions.none()
-
-        perms.read_message_history = True
-        perms.read_messages = True
-        perms.send_messages_in_threads = True
-        perms.send_messages = True
-
-        perms.manage_channels = True
-        perms.manage_messages = True
-        perms.manage_roles = True
-        perms.manage_threads = True
-
-        perms.create_instant_invite = True
-        perms.external_emojis = True
-
-        perms.embed_links = True
-        perms.attach_files = True
-        perms.add_reactions = True
-
-        perms.connect = True
-        perms.speak = True
-        perms.move_members = True
-        perms.deafen_members = True
+        perms = discord.Permissions(
+            read_message_history=True,
+            read_messages=True,
+            send_messages_in_threads=True,
+            send_messages=True,
+            manage_channels=True,
+            manage_messages=True,
+            manage_roles=True,
+            manage_threads=True,
+            create_instant_invite=True,
+            external_emojis=True,
+            embed_links=True,
+            attach_files=True,
+            add_reactions=True,
+            connect=True,
+            speak=True,
+            move_members=True,
+            deafen_members=True
+        )
 
         self.add_item(
             discord.ui.Button(
