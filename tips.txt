@@ -37,3 +37,4 @@ You can place your footprint on the global tag system we've implemented! You can
 Temporary voice channels are designed to with you in mind. Every toggleable setting is included to make it your own. You can even block other users from joining your voice channel all together, or even make it hidden from public view! It's worth giving a short: just join the channel named "creator channel" to begin!
 High quality anime pics available at `/anime` subcommands, go check it out (if that's what you're interested in)!
 Remember that in `/blackjack`, I will always keep on hitting until I reach 17 if you stand early!
+You can work your way to financial success: `/work shift`!
