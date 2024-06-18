@@ -453,7 +453,7 @@ class Utility(commands.Cog):
             for tag_name in tags_xml if current.lower() in tag_name.lower()
         ]
 
-    @anime.command(name='kona', description='Retrieve NSFW posts from Konachan')
+    @anime.command(name='kona', description='Retrieve NSFW posts from Konachan', nsfw=True)
     @app_commands.rename(length="max_images")
     @app_commands.describe(
         tag1='A tag to base your search on.', 
@@ -562,14 +562,8 @@ class Utility(commands.Cog):
 
             await interaction.response.send_message(embed=embed, view=img_view)
 
-    @anime.command(name='random', description="Get a completely random waifu image")
+    @anime.command(name='random', description="Get a completely random waifu image", nsfw=True)
     async def waifu_random_fetch(self, interaction: discord.Interaction) -> None:
-
-        if not interaction.channel.nsfw:
-            return await interaction.response.send_message(
-                ephemeral=True, 
-                embed=membed("Must be used within an NSFW channel.")
-            )
 
         embed = discord.Embed(colour=0xFF9D2C)
         async with self.bot.session.get(choice(ANIME_ENDPOINTS)) as resp:
