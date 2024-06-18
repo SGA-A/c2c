@@ -526,7 +526,7 @@ class Utility(commands.Cog):
 
             for item_attrs in additional_notes[offset:offset + length]:
                 embed = membed()
-                embed.timestamp = datetime.datetime.fromtimestamp(int(item_attrs[-1]))
+                embed.timestamp = datetime.datetime.fromtimestamp(int(item_attrs[-1]), tz=datetime.timezone.utc)
                 embed.title = item_attrs[1]
                 embed.url = item_attrs[0]
 
@@ -826,7 +826,7 @@ class Utility(commands.Cog):
         cpu_usage = self.process.cpu_percent() / cpu_count()
         embed.timestamp = discord.utils.utcnow()
 
-        diff = datetime.datetime.now() - self.bot.time_launch
+        diff = embed.timestamp - self.bot.time_launch
         minutes, seconds = divmod(diff.total_seconds(), 60)
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
@@ -1072,7 +1072,7 @@ class Utility(commands.Cog):
     @commands.command(name="worldclock", description="See the world clock and the visual sunmap", aliases=('wc',))
     async def worldclock(self, ctx: commands.Context):
         async with ctx.typing():
-            now = datetime.datetime.now(tz=datetime.timezone.utc)
+            now = discord.utils.utcnow()
             clock = discord.Embed(colour=0x2AA198, timestamp=now)
 
             clock.title = "UTC"
