@@ -497,6 +497,7 @@ async def add_command_usage(user_id: int, command_name: str, conn: asqlite_Conne
     )
 
     return value[0]
+        
 
 
 async def total_commands_used_by_user(user_id: int, conn: asqlite_Connection) -> int:
@@ -3352,7 +3353,7 @@ class Economy(commands.Cog):
     ) -> None:
         
         """
-        Increment the total command ran by a user by 1 for each call. 
+        Track slash commands ran.
         
         Increase the interaction user's XP/Level if they are registered. 
         
@@ -3403,18 +3404,22 @@ class Economy(commands.Cog):
     @commands.Cog.listener()
     async def on_command_completion(self, ctx: commands.Context) -> None:
         """Track text commands ran."""
-
         cmd = ctx.command.parent or ctx.command
 
         async with self.bot.pool.acquire() as connection:
             connection: asqlite_Connection
-
-            await add_command_usage(
-                user_id=ctx.author.id, 
-                command_name=f">{cmd.name}", 
-                conn=connection
-            )
-            await connection.commit()
+            
+            try:
+                row = await connection.fetchone("SELECT 1 FROM bank WHERE userid = $0", ctx.author.id)
+                assert row is not None
+            except AssertionError:
+                return
+            else:
+                await add_command_usage(
+                    user_id=ctx.author.id, 
+                    command_name=f">{cmd.name}", 
+                    conn=connection
+                )
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
