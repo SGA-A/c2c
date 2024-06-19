@@ -428,7 +428,8 @@ class Utility(commands.Cog):
         name='anime', 
         description="Surf through anime images and posts.", 
         guild_only=True, 
-        guild_ids=APP_GUILDS_IDS
+        guild_ids=APP_GUILDS_IDS,
+        nsfw=True
     )
 
     async def tag_search_autocomplete(
@@ -453,7 +454,7 @@ class Utility(commands.Cog):
             for tag_name in tags_xml if current.lower() in tag_name.lower()
         ]
 
-    @anime.command(name='kona', description='Retrieve NSFW posts from Konachan', nsfw=True)
+    @anime.command(name='kona', description='Retrieve NSFW posts from Konachan')
     @app_commands.rename(length="max_images")
     @app_commands.describe(
         tag1='A tag to base your search on.', 
@@ -562,7 +563,7 @@ class Utility(commands.Cog):
 
             await interaction.response.send_message(embed=embed, view=img_view)
 
-    @anime.command(name='random', description="Get a completely random waifu image", nsfw=True)
+    @anime.command(name='random', description="Get a completely random waifu image")
     async def waifu_random_fetch(self, interaction: discord.Interaction) -> None:
 
         embed = discord.Embed(colour=0xFF9D2C)

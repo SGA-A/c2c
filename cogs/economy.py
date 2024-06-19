@@ -27,6 +27,7 @@ from typing import (
 
 import discord
 import aiofiles
+from discord.ui.item import Item
 from pytz import timezone
 from pluralizer import Pluralizer
 from discord.ext import commands, tasks
@@ -543,7 +544,7 @@ class DepositOrWithdraw(discord.ui.Modal):
         title: str, 
         default_val: int, 
         message: discord.InteractionMessage, 
-        view: discord.ui.View
+        view: "BalanceView"
     ) -> None:
         
         self.their_default = default_val
@@ -558,10 +559,6 @@ class DepositOrWithdraw(discord.ui.Modal):
         max_length=30, 
         placeholder="A constant number or an exponent (e.g., 1e6, 1234)"
     )
-
-    def checks(self, bank, wallet, any_bankspace_left) -> None:
-        self.view.children[0].disabled = (bank == 0)
-        self.view.children[1].disabled = (wallet == 0) or (any_bankspace_left == 0)
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         val = await determine_exponent(
@@ -604,7 +601,11 @@ class DepositOrWithdraw(discord.ui.Modal):
             embed.set_field_at(2, name="Bankspace", value=f"{CURRENCY} {data[2]:,} ({prcnt_full:.2f}% full)")
             embed.timestamp = discord.utils.utcnow()
 
-            self.checks(data[1], data[0], data[2]-data[1])
+            self.view.checks(
+                current_bank=data[1], 
+                current_wallet=data[0], 
+                current_bankspace_left=data[2]-data[1]
+            )
             return await interaction.response.edit_message(embed=embed, view=self.view)
         
         # ! Deposit Branch
@@ -640,7 +641,11 @@ class DepositOrWithdraw(discord.ui.Modal):
         embed.set_field_at(2, name="Bankspace", value=f"{CURRENCY} {updated[2]:,} ({prcnt_full:.2f}% full)")
         embed.timestamp = discord.utils.utcnow()
 
-        self.checks(updated[1], updated[0], updated[2]-updated[1])
+        self.view.checks(
+            current_bank=updated[1], 
+            current_wallet=updated[0], 
+            current_bankspace_left=updated[2]-updated[1]
+        )
         await interaction.response.edit_message(embed=embed, view=self.view)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
@@ -898,32 +903,76 @@ class RememberOrder(discord.ui.View):
 class BalanceView(discord.ui.View):
     """View for the balance command to mange and deposit/withdraw money."""
 
-    def __init__(
-        self, 
-        interaction: discord.Interaction, 
-        wallet: int, 
-        bank: int, 
-        bankspace: int, 
-        viewing: USER_ENTRY
-    ) -> None:
+    def __init__(self, interaction: discord.Interaction, viewing: USER_ENTRY) -> None:
 
         self.interaction = interaction
-        self.their_wallet = wallet
-        self.their_bank = bank
-        self.their_bankspace = bankspace
         self.viewing = viewing
         self.conn = None
         super().__init__(timeout=120.0)
+        self.children[2].default_values = [discord.Object(id=self.viewing.id)]
 
-        self.checks(self.their_bank, self.their_wallet, self.their_bankspace-self.their_bank)
+    async def release_conn(self):
+        await self.interaction.client.pool.release(self.conn)
+        self.conn = None
 
-    def checks(self, new_bank, new_wallet, any_new_bankspace_left) -> None:
+    async def fetch_balance(self, interaction: discord.Interaction) -> discord.Embed:
+        """
+        Fetch the user's balance, format it into an embed. 
+        
+        A connection needs to be supplied to the class instance in order for this to work.
+        """
+
+        balance = membed()
+        balance.url = "https://dis.gd/support"
+        balance.title = f"{self.viewing.display_name}'s Balances"
+        balance.timestamp = discord.utils.utcnow()
+
+        nd = await self.conn.fetchone(
+            """
+            SELECT wallet, bank, bankspace 
+            FROM `bank` 
+            WHERE userID = $0
+            """, self.viewing.id
+        )
+
+        if nd is None:
+            if interaction.user.id != self.viewing.id:
+                balance.description = f"{self.viewing.mention} is not registered."
+                self.children[0].disabled, self.children[1].disabled = True, True
+                return balance
+
+            await Economy.open_bank_new(self.viewing, self.conn)
+            balance.colour = discord.Colour.green()
+
+        bank = nd[0] + nd[1]
+        inv = await Economy.calculate_inventory_value(self.viewing, self.conn)
+        rank = await Economy.calculate_net_ranking_for(self.viewing, self.conn)
+        await self.release_conn()
+        space = (nd[1] / nd[2]) * 100
+
+        balance.add_field(name="Wallet", value=f"{CURRENCY} {nd[0]:,}")
+        balance.add_field(name="Bank", value=f"{CURRENCY} {nd[1]:,}")
+        balance.add_field(name="Bankspace", value=f"{CURRENCY} {nd[2]:,} ({space:.2f}% full)")
+        balance.add_field(name="Money Net", value=f"{CURRENCY} {bank:,}")
+        balance.add_field(name="Inventory Net", value=f"{CURRENCY} {inv:,}")
+        balance.add_field(name="Total Net", value=f"{CURRENCY} {inv + bank:,}")
+
+        balance.set_footer(text=f"Global Rank: #{rank}")
+        self.checks(
+            current_bank=nd[1], 
+            current_wallet=nd[0], 
+            current_bankspace_left=nd[2]-nd[1]
+        )
+        return balance
+
+    def checks(self, current_bank, current_wallet, current_bankspace_left) -> None:
         """Check if the buttons should be disabled or not."""
         if self.viewing.id != self.interaction.user.id:
-            return  # ! already initialized disabled logic
+            self.children[0].disabled, self.children[1].disabled = True, True
+            return
 
-        self.children[0].disabled = (new_bank == 0)
-        self.children[1].disabled = (new_wallet == 0) or (any_new_bankspace_left == 0)
+        self.children[0].disabled = (current_bank == 0)
+        self.children[1].disabled = (current_wallet == 0) or (current_bankspace_left == 0)
 
     async def send_failure(self, interaction: discord.Interaction) -> None:
         warning = discord.ui.View().add_item(
@@ -943,10 +992,6 @@ class BalanceView(discord.ui.View):
                 "commands before using this one."
             )
         )
-    
-    async def release_conn(self):
-        await self.interaction.client.pool.release(self.conn)
-        self.conn = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         #! Check it's the author of the original interaction running this
@@ -960,7 +1005,7 @@ class BalanceView(discord.ui.View):
 
         #! Check if they're already in a transaction
         #! Check if they exist in the database
-        #! Ensure connections are carried into item callbacks when meeting prerequisite
+        #! Ensure connections are carried into item callbacks when prerequisites are met
 
         try:
             await Economy.declare_transaction(self.conn, user_id=interaction.user.id)
@@ -980,7 +1025,7 @@ class BalanceView(discord.ui.View):
         except discord.NotFound:
             pass
 
-    @discord.ui.button(label="Withdraw", disabled=True)
+    @discord.ui.button(label="Withdraw", disabled=True, row=1)
     async def withdraw_money_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Withdraw money from the bank."""
 
@@ -1007,7 +1052,7 @@ class BalanceView(discord.ui.View):
             )
         )
 
-    @discord.ui.button(label="Deposit", disabled=True)
+    @discord.ui.button(label="Deposit", disabled=True, row=1)
     async def deposit_money_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Deposit money into the bank."""
 
@@ -1049,42 +1094,19 @@ class BalanceView(discord.ui.View):
             )
         )
     
-    @discord.ui.button(emoji="<:refreshicon:1205432056369389590>")
-    async def refresh_balance(self, interaction: discord.Interaction, button: discord.ui.Button):
-        """Refresh the current message to display the user's latest balance."""
-
-        nd = await self.conn.fetchone(
-            """
-            SELECT wallet, bank, bankspace 
-            FROM `bank` 
-            WHERE userID = $0
-            """, self.viewing.id
-        )
-
-        bank = nd[0] + nd[1]
-        inv = await Economy.calculate_inventory_value(self.viewing, self.conn)
-        rank = await Economy.calculate_net_ranking_for(self.viewing, self.conn)
-        await self.release_conn()
-
-        space = (nd[1] / nd[2]) * 100
-
-        balance = interaction.message.embeds[0]
-        balance.timestamp = discord.utils.utcnow()
-        balance.clear_fields()
-
-        balance.add_field(name="Wallet", value=f"{CURRENCY} {nd[0]:,}")
-        balance.add_field(name="Bank", value=f"{CURRENCY} {nd[1]:,}")
-        balance.add_field(name="Bankspace", value=f"{CURRENCY} {nd[2]:,} ({space:.2f}% full)")
-        balance.add_field(name="Money Net", value=f"{CURRENCY} {bank:,}")
-        balance.add_field(name="Inventory Net", value=f"{CURRENCY} {inv:,}")
-        balance.add_field(name="Total Net", value=f"{CURRENCY} {inv + bank:,}")
-
-        balance.set_footer(text=f"Global Rank: #{rank}")
-
-        self.checks(nd[1], nd[0], nd[2]-nd[1])
+    @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a user to view balance of", row=0)
+    async def select_user_balance(self, interaction: discord.Interaction, select: discord.ui.UserSelect):
+        self.viewing = select.values[0]
+        balance = await self.fetch_balance(interaction)
         await interaction.response.edit_message(embed=balance, view=self)
 
-    @discord.ui.button(emoji=discord.PartialEmoji.from_str("<:terminate:1205810058357907487>"))
+    @discord.ui.button(emoji="<:refreshicon:1205432056369389590>", row=1)
+    async def refresh_balance(self, interaction: discord.Interaction, _: discord.ui.Button):
+        """Refresh the current message to display the user's latest balance."""
+        balance = await self.fetch_balance(interaction)
+        await interaction.response.edit_message(embed=balance, view=self)
+
+    @discord.ui.button(emoji="<:terminate:1205810058357907487>", row=1)
     async def close_view(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Close the balance view."""
         await self.release_conn()
@@ -5603,57 +5625,13 @@ class Economy(commands.Cog):
         interaction: discord.Interaction, 
         user: Optional[USER_ENTRY]
     ) -> None:
-
         user = user or interaction.user
 
-        async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
-            not_registered = await self.can_call_out(user, conn)
+        balance_view = BalanceView(interaction, viewing=user)
+        balance_view.conn = await interaction.client.pool.acquire()
 
-            balance = membed()
-            if not_registered:
-                if interaction.user.id != user.id:
-                    balance.description = f"{user.mention} is not registered."
-                    return await interaction.response.send_message(ephemeral=True, embed=balance)
-
-                await self.open_bank_new(user, conn)
-                balance.colour = discord.Colour.green()
-
-            nd = await conn.fetchone(
-                """
-                SELECT wallet, bank, bankspace 
-                FROM `bank` 
-                WHERE userID = $0
-                """, user.id
-            )
-
-            bank = nd[0] + nd[1]
-            inv = await self.calculate_inventory_value(user, conn)
-            rank = await self.calculate_net_ranking_for(user, conn)
-            space = (nd[1] / nd[2]) * 100
-
-            balance.title = f"{user.display_name}'s Balances"
-            balance.url = "https://dis.gd/support"
-            balance.timestamp = discord.utils.utcnow()
-
-            balance.add_field(name="Wallet", value=f"{CURRENCY} {nd[0]:,}")
-            balance.add_field(name="Bank", value=f"{CURRENCY} {nd[1]:,}")
-            balance.add_field(name="Bankspace", value=f"{CURRENCY} {nd[2]:,} ({space:.2f}% full)")
-            balance.add_field(name="Money Net", value=f"{CURRENCY} {bank:,}")
-            balance.add_field(name="Inventory Net", value=f"{CURRENCY} {inv:,}")
-            balance.add_field(name="Total Net", value=f"{CURRENCY} {inv + bank:,}")
-
-            balance.set_footer(text=f"Global Rank: #{rank}")
-
-            view = BalanceView(
-                interaction, 
-                wallet=nd[0], 
-                bank=nd[1], 
-                bankspace=nd[2], 
-                viewing=user
-            )
-
-            await interaction.response.send_message(embed=balance, view=view)
+        balance = await balance_view.fetch_balance(interaction)
+        await interaction.response.send_message(embed=balance, view=balance_view)
 
     async def do_weekly_or_monthly(
         self, 
