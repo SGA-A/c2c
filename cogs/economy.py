@@ -72,7 +72,7 @@ def format_multiplier(multiplier):
 
 def selling_price_algo(base_price: int, multiplier: int) -> int:
     """Calculate the selling price of an item based on its rarity and base price."""
-    return int(round(base_price * (1+multiplier/100), ndigits=-5))
+    return round(int(base_price * (1+multiplier/100)), -2)
 
 
 """ALL VARIABLES AND CONSTANTS FOR THE ECONOMY ENVIRONMENT"""
