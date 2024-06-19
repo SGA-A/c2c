@@ -27,7 +27,6 @@ from typing import (
 
 import discord
 import aiofiles
-from discord.ui.item import Item
 from pytz import timezone
 from pluralizer import Pluralizer
 from discord.ext import commands, tasks
