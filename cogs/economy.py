@@ -6215,62 +6215,6 @@ class Economy(commands.Cog):
 
         # ------------ In the case where the user already won --------------
         player_sum = calculate_hand(player_hand)
-        dealer_sum = calculate_hand(dealer_hand)
-
-        if player_sum == 21:
-            new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
-            amount_after_multi = add_multi_to_original(multi=new_multi, original=namount)
-
-            new_bj_win, bj_lose, new_amount_balance = await conn.fetchone(
-                f"""
-                UPDATE `{BANK_TABLE_NAME}` 
-                SET 
-                    bjw = bjw + 1,
-                    wallet = wallet + $0 
-                WHERE userID = $1 
-                RETURNING bjw, bjl, wallet
-                """, amount_after_multi, interaction.user.id,
-            )
-
-            prctnw = (new_bj_win / (new_bj_win + bj_lose)) * 100
-            await conn.commit()
-
-            d_fver_p = display_user_friendly_deck_format(player_hand)
-            d_fver_d = display_user_friendly_deck_format(dealer_hand)
-
-            winner = discord.Embed(colour=discord.Colour.brand_green())
-            winner.description = (
-                f"**Blackjack! You've already won with a total of {player_sum}!**\n"
-                f"You won {CURRENCY} **{amount_after_multi:,}**. "
-                f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-                f"You won {prctnw:.2f}% of the games."
-            )
-            
-            winner.add_field(
-                name=f"{interaction.user.name} (Player)", 
-                value=(
-                    f"**Cards** - {d_fver_p}\n"
-                    f"**Total** - `{player_sum}`"
-                )
-            )
-            
-            winner.add_field(
-                name=f"{self.bot.user.name} (Dealer)", 
-                value=(
-                    f"**Cards** - {d_fver_d}\n"
-                    f"**Total** - `{dealer_sum}`"
-                )
-            )
-            
-            winner.set_author(
-                name=f"{interaction.user.name}'s winning blackjack game", 
-                icon_url=interaction.user.display_avatar.url
-            )
-
-            winner.set_footer(text=f"Multiplier: {new_multi:,}%")
-            
-            return await interaction.response.send_message(embed=winner)
-
 
         await self.declare_transaction(conn, user_id=interaction.user.id)
         shallow_pv = [display_user_friendly_card_format(number) for number in player_hand]
