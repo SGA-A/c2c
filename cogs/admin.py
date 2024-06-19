@@ -1,7 +1,6 @@
 """The administrative cog. Only for use by the bot owners."""
 from re import findall
 from textwrap import indent, dedent
-from datetime import datetime
 from traceback import format_exc
 from contextlib import redirect_stdout
 
