@@ -1083,7 +1083,6 @@ class BalanceView(discord.ui.View):
             )
 
         available_bankspace = min(data[0], available_bankspace)
-        
         await interaction.response.send_modal(
             DepositOrWithdraw(
                 title=button.label, 
@@ -1096,6 +1095,8 @@ class BalanceView(discord.ui.View):
     @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a user to view balance of", row=0)
     async def select_user_balance(self, interaction: discord.Interaction, select: discord.ui.UserSelect):
         self.viewing = select.values[0]
+        select.default_values = [discord.Object(id=self.viewing.id)]
+
         balance = await self.fetch_balance(interaction)
         await interaction.response.edit_message(embed=balance, view=self)
 
