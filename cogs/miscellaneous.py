@@ -214,7 +214,7 @@ class Utility(commands.Cog):
             buffer = BytesIO(await response.read())
             end = perf_counter()
             
-            await interaction.followup.send(content=f"Took ` {end-start:.2f}s `.", file=discord.File(buffer, 'clip.gif'))
+            await interaction.followup.send(content=f"Took `{end-start:.2f}s`.", file=discord.File(buffer, 'clip.gif'))
 
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name='serverinfo', description="Show information about the server and its members")
@@ -641,10 +641,11 @@ class Utility(commands.Cog):
     @app_commands.command(name='randomfact', description='Queries a random fact')
     @app_commands.guilds(*APP_GUILDS_IDS)
     async def random_fact(self, interaction: discord.Interaction) -> None:
-        api_url = 'https://api.api-ninjas.com/v1/facts'
-        parameters = {'X-Api-Key': self.bot.NINJAS_API_KEY}
         
-        async with self.bot.session.get(api_url, params=parameters) as resp:
+        async with self.bot.session.get(
+            url='https://api.api-ninjas.com/v1/facts', 
+            params={'X-Api-Key': self.bot.NINJAS_API_KEY}
+        ) as resp:
             if resp.status != 200:
                 return await interaction.response.send_message(embed=membed(API_EXCEPTION))
             

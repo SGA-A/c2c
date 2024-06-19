@@ -641,7 +641,7 @@ async def main():
     bot.WEBHOOK_URL = environ.get("WEBHOOK_URL")
     bot.GITHUB_TOKEN = environ.get("GITHUB_TOKEN")
     bot.JEYY_API_KEY = environ.get("JEYY_API_KEY")
-    bot.NINJAS_API_KEY = environ.get("API_KEY")
+    bot.NINJAS_API_KEY = environ.get("NINJAS_API_KEY")
     bot.GOOGLE_CUSTOM_SEARCH_API_KEY = environ.get("GOOGLE_CUSTOM_SEARCH_API_KEY")
     bot.GOOGLE_CUSTOM_SEARCH_ENGINE = environ.get("GOOGLE_CUSTOM_SEARCH_ENGINE")
 
