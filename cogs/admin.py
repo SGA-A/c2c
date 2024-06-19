@@ -89,7 +89,7 @@ class Owner(commands.Cog):
     @commands.command(name='uptime', description='Returns the time the bot has been active for')
     async def uptime(self, ctx: commands.Context):
         """Returns uptime in terms of days, hours, minutes and seconds"""
-        diff = datetime.now() - self.bot.time_launch
+        diff = discord.utils.utcnow() - self.bot.time_launch
         minutes, seconds = divmod(diff.total_seconds(), 60)
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)

@@ -5,7 +5,6 @@ from re import compile
 from asyncio import run
 from logging import INFO
 from pathlib import Path
-from datetime import datetime, timezone
 from sys import version, stderr
 from aiohttp import ClientSession, DummyCookieJar, TCPConnector
 from traceback import print_exception
@@ -30,6 +29,7 @@ from discord import (
     SelectOption,
     Status,
     ui,
+    utils
 )
 
 from dotenv import load_dotenv
@@ -211,7 +211,7 @@ class C2C(commands.Bot):
 
         self.pool = await create_pool("C:\\Users\\georg\\Documents\\c2c\\database\\economy.db")
 
-        self.time_launch = datetime.now(tz=timezone.utc)
+        self.time_launch = utils.utcnow()
         self.session = ClientSession(
             connector=TCPConnector(limit=30, loop=self.loop, limit_per_host=5), 
             cookie_jar=DummyCookieJar(loop=self.loop)
