@@ -463,8 +463,6 @@ class Owner(commands.Cog):
     async def quit_client(self, ctx):
         """Quits the bot gracefully."""
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
-        await self.bot.pool.close()
-        await self.bot.session.close()
         await self.bot.close()
 
     @commands.command(name='invite', description='Links the invite for c2c')
@@ -544,6 +542,8 @@ class Owner(commands.Cog):
 
     @commands.command(name='dispatch-webhook', aliases=('dw',), description="Dispatch customizable quarterly updates")
     async def dispatch_webhook(self, ctx: commands.Context):
+        a, b = None * 2
+        return await ctx.send(a)
 
         all_ems = [
             discord.Embed(

@@ -3,11 +3,11 @@ from __future__ import annotations
 from os import environ
 from re import compile
 from asyncio import run
-from logging import INFO
 from pathlib import Path
-from sys import version, stderr
+from sys import version
+from logging import INFO, FileHandler, error as log_error
+from traceback import format_exception
 from aiohttp import ClientSession, DummyCookieJar, TCPConnector
-from traceback import print_exception
 
 from typing import (
     Any,
@@ -187,6 +187,10 @@ class C2C(commands.Bot):
         self.fetched_tree = False
         self.time_launch = None
 
+    def log_exception(self, error):
+        formatted_traceback = ''.join(format_exception(type(error), error, error.__traceback__))
+        log_error(formatted_traceback)
+
     async def yield_app_commands(self, interaction: Interaction) -> None:
         """Fetch app commands via HTTP when they're not already in the tree."""
 
@@ -195,6 +199,11 @@ class C2C(commands.Bot):
 
         await self.tree.fetch_commands(guild=Object(id=interaction.guild.id))
         self.fetched_tree = True
+
+    async def close(self):
+        await self.pool.close()
+        await self.session.close()
+        await super().close()
 
     async def setup_hook(self):
         print("we're in.")
@@ -207,7 +216,8 @@ class C2C(commands.Bot):
             try:
                 await self.load_extension(f"{".".join(tree)}.{file.stem}")
             except Exception as e:
-                print_exception(type(e), e, e.__traceback__, file=stderr)
+                self.log_exception(e)
+                await self.close()
 
         self.pool = await create_pool("C:\\Users\\georg\\Documents\\c2c\\database\\economy.db")
 
@@ -634,7 +644,10 @@ async def do_guild_checks(interaction: Interaction) -> bool | None:
 
 async def main():
 
-    setup_logging(level=INFO)
+    setup_logging(
+        level=INFO,
+        handler=FileHandler(filename='discord.log', encoding='utf-8', mode='w'),
+    )
     load_dotenv()
     
     TOKEN = environ.get("BOT_TOKEN")

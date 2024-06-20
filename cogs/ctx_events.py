@@ -1,6 +1,7 @@
 from random import choice
 from datetime import timedelta
-from traceback import print_exception
+from logging import error as log_error
+from traceback import format_exception
 
 from discord import Embed
 from discord.ext import commands
@@ -30,48 +31,48 @@ class ContextCommandHandler(commands.Cog):
                 return await ctx.reply(embed=embed, view=self.view)
 
             embed.description = "That didn't work. Check your inputs are valid."
-            await ctx.reply(embed=embed, view=self.view)
+            return await ctx.reply(embed=embed, view=self.view)
 
-        elif isinstance(err, self.err.CheckFailure):
+        if isinstance(err, self.err.CheckFailure):
 
             if isinstance(err, self.err.NotOwner):
                 embed.description = "You do not own this bot."
-                await ctx.reply(embed=embed, view=self.view)
+                return await ctx.reply(embed=embed, view=self.view)
 
-            elif isinstance(err, self.err.MissingPermissions):
+            if isinstance(err, self.err.MissingPermissions):
                 embed.description = "You're missing permissions required to use this command."
                 embed.add_field(
                     name=f"Missing Permissions ({len(err.missing_permissions)})", 
                     value="\n".join(err.replace('_', ' ').title() for err in err.missing_permissions)
                 )
-                await ctx.reply(embed=embed, view=self.view)
+                return await ctx.reply(embed=embed, view=self.view)
 
-            elif isinstance(err, self.err.MissingRole):
+            if isinstance(err, self.err.MissingRole):
                 embed.description = "You're missing a role required to use this command."
                 embed.add_field(name="Missing Role", value=f"<@&{err.missing_role}>")
-                await ctx.reply(embed=embed, view=self.view)
+                return await ctx.reply(embed=embed, view=self.view)
 
-        elif isinstance(err, self.err.CommandOnCooldown):
+        if isinstance(err, self.err.CommandOnCooldown):
             embed.title = choice(COOLDOWN_PROMPTS)
             after_cd = format_dt(utcnow() + timedelta(seconds=err.retry_after), style="R")
             embed.description = f"You can run this command again {after_cd}."
-            await ctx.send(embed=embed, view=self.view)
+            return await ctx.send(embed=embed, view=self.view)
 
-        elif isinstance(err, self.err.CommandNotFound):
+        if isinstance(err, self.err.CommandNotFound):
             embed.description = "Could not find what you were looking for."
-            await ctx.reply(embed=embed, view=self.view)
+            return await ctx.reply(embed=embed, view=self.view)
 
         else:
-            print_exception(type(err), err, err.__traceback__)
-            
+            formatted_traceback = ''.join(format_exception(type(err), err, err.__traceback__))
+
             embed.title = "Something went wrong"
             embed.description = (
                 "Seems like the bot has stumbled upon an unexpected error. "
                 "Not to worry, these things happen from time to time. If this issue persists, "
                 "please let us know about it. We're always here to help!"
             )
-            
             await ctx.reply(embed=embed, view=self.view)
+            log_error(formatted_traceback)
 
 
 async def setup(bot: commands.Bot):

@@ -146,9 +146,6 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
             embed=membed("Your response has been submitted!")
         )
 
-    async def on_error(self, interaction: discord.Interaction, _):
-        return await interaction.response.send_message(embed=membed("Couldn't send your feedback."))
-
 
 class ImageSourceButton(discord.ui.Button):
     def __init__(self, url: Optional[str] = None) -> None:

@@ -5,7 +5,6 @@ from re import search
 from asyncio import sleep
 from textwrap import dedent
 from math import floor, ceil
-from traceback import print_exception
 from string import ascii_letters, digits
 
 from random import (
@@ -27,6 +26,7 @@ from typing import (
 
 import discord
 import aiofiles
+from discord.ui.item import Item
 from pytz import timezone
 from pluralizer import Pluralizer
 from discord.ext import commands, tasks
@@ -654,9 +654,9 @@ class DepositOrWithdraw(discord.ui.Modal):
                 ephemeral=True,
                 embed=membed(f"You need to provide a real amount to {self.title.lower()}.")
             )
-    
-        print_exception(type(error), error, error.__traceback__)
+
         await interaction.response.send_message(embed=membed("Something went wrong. Try again later."))
+        await super().on_error(interaction, error)
 
 
 class ConfirmResetData(discord.ui.View):
@@ -694,7 +694,7 @@ class ConfirmResetData(discord.ui.View):
             try:
                 await conn.execute("DELETE FROM bank WHERE userID = $0", self.removing_user.id)
             except Exception as e:
-                print_exception(type(e), e, e.__traceback__)
+                interaction.client.log_exception(e)
 
                 await tr.rollback()
 
@@ -745,7 +745,7 @@ class RememberPositionView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await economy_check(interaction, self.interaction.user)
-    
+
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
         
         self.base = int((25 / 100) * self.base)
@@ -1130,12 +1130,15 @@ class BlackjackUi(discord.ui.View):
         self, 
         interaction: discord.Interaction, 
         error: Exception, 
-        _: discord.ui.Item[Any], 
+        item: discord.ui.Item[Any], 
         /
     ) -> None:
-        print_exception(type(error), error, error.__traceback__)
-        await interaction.response.send_message(embed=membed("Something went wrong."))
-
+        await super().on_error(interaction, error, item)
+        try:
+            await self.interaction.edit_original_response(view=None)
+        except discord.NotFound:
+            pass
+            
     async def on_timeout(self) -> None:
         if not self.finished:
             del self.bot.games[self.interaction.user.id]
@@ -1941,10 +1944,6 @@ class ItemQuantityModal(discord.ui.Modal):
                 return
             
             await self.begin_purchase(interaction, true_quantity, conn, current_balance, new_price)
-
-    async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
-        print_exception(type(error), error, error.__traceback__)
-        await respond(interaction=interaction, embed=membed("Something went wrong. Try again later."))
 
 
 class ShopItem(discord.ui.Button):

@@ -186,21 +186,18 @@ class PrivacyView(discord.ui.View):
             )
         )
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.voice is not None:
-            return True
-        await interaction.response.edit_message(view=None, embed=membed("You disconnected."))
-        return False
-
     async def on_timeout(self):
         self.children[0].disabled = True
         try:
             await self.interaction.edit_original_response(view=self)
         except discord.NotFound:
             pass
-    
-    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item) -> None:
-        await interaction.response.edit_message(view=None, embed=membed("Something went wrong."))        
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        if interaction.user.voice:
+            return True
+        await interaction.response.edit_message(view=None, embed=membed("You disconnected."))
+        return False
 
 
 class TempVoice(commands.Cog):

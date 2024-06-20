@@ -1,8 +1,9 @@
 from traceback import print_exception
-from typing import Optional, Callable, Union
+from typing import Any, Optional, Callable, Union
 
 import discord
 from discord.ext import commands
+from discord.ui.item import Item
 
 from .helpers import membed, determine_exponent, economy_check
 
@@ -38,11 +39,6 @@ class PaginatorInput(discord.ui.Modal):
         self.interaction = interaction
         self.stop()
 
-    async def on_error(self, interaction: discord.Interaction, error):
-        self.stop()
-        await interaction.response.send_message(embed=membed("Something went wrong."))
-        print_exception(type(error), error, error.__traceback__)
-
 
 class ButtonOnCooldown(commands.CommandError):
   def __init__(self, retry_after: float):
@@ -70,7 +66,7 @@ class Pagination(discord.ui.View):
         await interaction.response.send_message(embed=NOT_YOUR_MENU, ephemeral=True)
         return False
 
-    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item):
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: Item[Any]) -> None:
         if isinstance(error, ButtonOnCooldown):
             seconds = int(error.retry_after)
             return await interaction.response.send_message(
@@ -79,7 +75,7 @@ class Pagination(discord.ui.View):
                 embed=membed(f"You're on cooldown for {seconds}s.\nThis message will be deleted when it ends.")
             )
 
-        # call the original on_error, which prints the traceback to stderr
+        self.stop()
         await super().on_error(interaction, error, item)
 
     async def on_timeout(self) -> None:
