@@ -1,4 +1,3 @@
-"""The virtual economy system of the bot."""
 import sqlite3
 import datetime
 from re import search
