@@ -2262,9 +2262,9 @@ class MultiplierSelect(discord.ui.Select):
             offset = (page - 1) * length
 
             embed.description = f"> {chosen_multiplier}: **{representation}**\n\n"
-            n = self.view.compute_total_pages(len(pages), length)
 
             if not total_multi[0]:
+                n = 1
                 embed.set_footer(text="Empty")
                 return embed, n
             
@@ -2273,6 +2273,7 @@ class MultiplierSelect(discord.ui.Select):
                 for multiplier in pages[offset:offset + length]
             )
 
+            n = self.view.compute_total_pages(len(pages), length)
             embed.set_footer(text=f"Page {page} of {n}")
             return embed, n
         
@@ -3503,9 +3504,8 @@ class Economy(commands.Cog):
             representation = MultiplierSelect.repr_multi(amount=total_multi[0], multi=lowered)
             embed.description = f"> {multiplier}: **{representation}**\n\n"
 
-            n = paginator.compute_total_pages(len(pages), length)
-
             if not total_multi[0]:
+                n = 1
                 embed.set_footer(text="Empty")
                 return embed, n
 
@@ -3514,6 +3514,7 @@ class Economy(commands.Cog):
                 for multi in pages[offset:offset + length]
             )
 
+            n = paginator.compute_total_pages(len(pages), length)
             embed.set_footer(text=f"Page {page} of {n}")
             return embed, n
         
