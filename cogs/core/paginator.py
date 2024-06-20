@@ -1,5 +1,4 @@
-from traceback import print_exception
-from typing import Any, Optional, Callable, Union
+from typing import Any, Callable
 
 import discord
 from discord.ext import commands
@@ -48,11 +47,11 @@ class ButtonOnCooldown(commands.CommandError):
 class Pagination(discord.ui.View):
     """Pagination menu with support for direct queries to a specific page."""
     
-    def __init__(self, interaction: discord.Interaction, get_page: Optional[Callable] = None) -> None:
+    def __init__(self, interaction: discord.Interaction, get_page: Callable | None = None) -> None:
         self.interaction = interaction
         self.get_page = get_page
         self.index = 1
-        self.total_pages: Optional[int] = None
+        self.total_pages: int | None = None
         self.cd = commands.CooldownMapping.from_cooldown(rate=1, per=3.0, type=lambda i: i.user)
         super().__init__(timeout=45.0)
 
@@ -183,12 +182,12 @@ class Pagination(discord.ui.View):
 class PaginationSimple(discord.ui.View):
     """A regular pagination menu with no extra features."""
 
-    def __init__(self, ctx, invoker_id: int, get_page: Optional[Callable] = None) -> None:
-        self.ctx: Union[commands.Context, discord.Interaction] = ctx
+    def __init__(self, ctx, invoker_id: int, get_page: Callable | None = None) -> None:
+        self.ctx: commands.Context | discord.Interaction = ctx
         self.invoker_id = invoker_id
         self.get_page = get_page
         self.index = 1
-        self.total_pages: Optional[int] = None
+        self.total_pages: int | None = None
         super().__init__(timeout=45.0)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -277,11 +276,11 @@ class PaginationSimple(discord.ui.View):
 
 class RefreshPagination(discord.ui.View):
     """Based on `PaginationSimple`, but with an option to refresh the data being paginated."""
-    def __init__(self, interaction: discord.Interaction, get_page: Optional[Callable] = None) -> None:
+    def __init__(self, interaction: discord.Interaction, get_page: Callable | None = None) -> None:
         self.interaction = interaction
         self.get_page = get_page
         self.index = 1
-        self.total_pages: Optional[int] = None
+        self.total_pages: int | None = None
         super().__init__(timeout=45.0)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -311,7 +310,7 @@ class RefreshPagination(discord.ui.View):
 
         await self.interaction.response.send_message(**kwargs)
 
-    async def edit_page(self, interaction: discord.Interaction, force_refresh: Optional[bool] = False) -> None:
+    async def edit_page(self, interaction: discord.Interaction, force_refresh: bool | None = False) -> None:
         """Update the page index in response to changes in the current page."""
         emb, self.total_pages = await self.get_page(self.index, force_refresh)
 
@@ -364,11 +363,11 @@ class PaginationItem(discord.ui.View):
     Disabling logic has been stripped away.
     """
     
-    def __init__(self, interaction: discord.Interaction, get_page: Optional[Callable] = None) -> None:
+    def __init__(self, interaction: discord.Interaction, get_page: Callable | None = None) -> None:
         self.interaction = interaction
         self.get_page = get_page
         self.index = 1
-        self.total_pages: Optional[int] = None
+        self.total_pages: int | None = None
         super().__init__(timeout=45.0)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
