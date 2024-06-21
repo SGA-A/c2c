@@ -405,59 +405,49 @@ class Owner(commands.Cog):
             title="Temporary Removal of the Economy System",
             colour=discord.Colour.from_rgb(102, 127, 163),
             description=(
-                "as the title states, we have removed the Economy System in c2c "
-                "(**for now**). <a:aaaaa:944505181150773288>\n\nthe reason being is "
+                "~~As the title states, we have removed the Economy System in c2c "
+                "(**for now**). <a:aaaaa:944505181150773288>\n\nThe reason being is "
                 "the vast amount of bugs and inefficiencies in the system which has "
                 "been eating on the limited resources we have available to keep the "
-                "bot running.\n\nnot to fret though! it will be back in a completley new"
-                " state! we have many exciting plans in store over the upcoming years for"
+                "bot running.\n\nNot to fret though, it will be back in a completeley new"
+                " state! We have many exciting plans in store over the upcoming years for"
                 " the bot, but right now <@992152414566232139> and <@546086191414509599>"
                 " (but mostly <@992152414566232139>) are working on patching all of the "
-                "major issues that are in the Economy System. we hope to bring back this"
+                "major issues that are in the economy system. we hope to bring back this"
                 " part of the system by **__late 2024__** but we cannot make any promises"
-                "!\n\nwe plan to modify every single command currently available under "
+                "!\n\nWe plan to modify every single command currently available under "
                 "this category and add more that are to come, hence this is a extensive "
                 "programme that will **require a lot of time**. This is made hindered by"
                 " the current academic situation both the developers are in at this time,"
                 " so please bear with us and we will not dissapoint (especially with"
-                " <@992152414566232139> <a:ehe:928612599132749834>)!"
-            )
-        )
-        
-        temporary.add_field(
-            name="Roadmap",
-            value=(
-                'to make it certain, here is an outline of what we will be doing over'
-                ' the next year.'
-                ' the arrows beneath these commitments will change '
-                'indicating the progress of each section.\n'
-                '<:redA:1166790106422722560> - **Not Started**\n'
-                '<:yelA:1166790134801379378> - **In Progress**\n'
-                '<:join:1163901334412611605> - **Completed**\n\n'
-                '<:join:1163901334412611605> **December 2023 (late)**: start of full rehaul of '
-                'every command that currently exists.\n<:yelA:1166790134801379378> **July 2024 '
-                '(early)**: new commands/essential functions to the Economy system added.\n<:red'
-                'A:1166790106422722560> **August 2024 (late)**: economy system '
-                'fully operational and ready for use.'
+                " <@992152414566232139> <a:ehe:928612599132749834>)!~~"
             )
         )
         
         temporary.add_field(
             name="Acknowledgement",
             value=(
-                "<a:e1_imhappy:1144654614046724117> <@992152414566232139> "
+                "<@992152414566232139> "
                 "(<@&1047576437177200770>) - contributing to **87.5**% of the "
                 "full programme,"
-                "making it possible in the first place (will write the code).\n"
-                "<a:catPat:1143936898449027082> <@546086191414509599> (<@&1124762696110309579>)"
-                " - contributing to **12.5**% of the full programme (will make ideas for new "
-                "commands)\n\nwe would not be able to recover the Economy System without "
-                "<@992152414566232139>, she is the literal backbone of its revival! thank her for"
+                "making it possible in the first place (writing the code).\n"
+                "<@546086191414509599> (<@&1124762696110309579>)"
+                " - contributing to **12.5**% of the full programme (making ideas for new "
+                "commands)\n\nWe would not be able to recover the system without "
+                "<@992152414566232139>, she is the literal backbone of its revival! Thank her for"
                 " making it possible!"
             )
         )
+        updated = membed(
+            "The economy is now back in a new fresh state, available for everyone.\n"
+            "Thanks for your patience. It will continue to receive improvements and maintenance as usual.\n"
+            "Remember, if you do spot any bugs, inform us asap, we will sort it! "
+            "You'll also get in-game compensation for the bugs you triage so feel free to do so."
+            "Thanks for your patience, we hope you like it 💖."
+        )
+        updated.title = "The project is now completed"
         
-        await original.edit(embed=temporary)
+        await original.edit(content="\U0001f389 THE ECONOMY SYSTEM IS BACK! \U0001f389", embed=temporary)
 
     @commands.command(name='quit', description='Quits the bot gracefully', aliases=('q',))
     async def quit_client(self, ctx):
