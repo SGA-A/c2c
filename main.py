@@ -217,7 +217,7 @@ class C2C(commands.Bot):
                 await self.load_extension(f"{".".join(tree)}.{file.stem}")
             except Exception as e:
                 self.log_exception(e)
-                await self.close()
+                await super().close()
 
         self.pool = await create_pool("C:\\Users\\georg\\Documents\\c2c\\database\\economy.db")
 

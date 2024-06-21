@@ -170,7 +170,7 @@ class Owner(commands.Cog):
 
             await interaction.response.send_message(embed=embed, ephemeral=is_private)
 
-    @commands.command(name='threader', description='Create a thread in a text channel', aliases=('cthr'))
+    @commands.command(name='threader', description='Create a thread in a text channel', aliases=('cthr',))
     async def create_thread(self, ctx: commands.Context, thread_name: str):
         """Create a forum channel quickly with only name of thread required as argument."""
         if not isinstance(ctx.channel, discord.TextChannel):
