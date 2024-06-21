@@ -85,7 +85,7 @@ class Owner(commands.Cog):
         # remove `foo`
         return content.strip('` \n')
 
-    @commands.command(name='uptime', description='Returns the time the bot has been active for')
+    @commands.command(name='uptime', description='Returns the time the bot has been active for', aliases=('u',))
     async def uptime(self, ctx: commands.Context):
         """Returns uptime in terms of days, hours, minutes and seconds"""
         diff = discord.utils.utcnow() - self.bot.time_launch
@@ -170,7 +170,7 @@ class Owner(commands.Cog):
 
             await interaction.response.send_message(embed=embed, ephemeral=is_private)
 
-    @commands.command(name='threader', aliases=('ct', 'cthr'), description='Create a thread in a text channel')
+    @commands.command(name='threader', description='Create a thread in a text channel', aliases=('cthr'))
     async def create_thread(self, ctx: commands.Context, thread_name: str):
         """Create a forum channel quickly with only name of thread required as argument."""
         if not isinstance(ctx.channel, discord.TextChannel):
@@ -381,7 +381,7 @@ class Owner(commands.Cog):
 
         await the_msg.edit(content=dedent(invite_content))
 
-    @commands.command(name='uinfo', description='Update the information channel for cc')
+    @commands.command(name='uinfo', description='Update the information channel for cc', aliases=('ui',))
     async def push_update2(self, ctx: commands.Context):
         """Push to update the welcome and info embed within its respective channel."""
         destination = self.bot.get_partial_messageable(
@@ -465,7 +465,7 @@ class Owner(commands.Cog):
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
         await self.bot.close()
 
-    @commands.command(name='invite', description='Links the invite for c2c')
+    @commands.command(name='invite', description='Links the invite for c2c', aliases=('i',))
     async def invite_bot(self, ctx: commands.Context) -> None:
         content = membed("Remember, only developers can invite the bot.")
         await ctx.send(embed=content, view=InviteButton())
@@ -540,7 +540,7 @@ class Owner(commands.Cog):
         
         await webhook.send(**kwargs)
 
-    @commands.command(name='dispatch-webhook', aliases=('dw',), description="Dispatch customizable quarterly updates")
+    @commands.command(name='dispatch-webhook', description="Dispatch customizable quarterly updates", aliases=('dw',))
     async def dispatch_webhook(self, ctx: commands.Context):
         a, b = None * 2
         return await ctx.send(a)

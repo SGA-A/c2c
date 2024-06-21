@@ -4264,7 +4264,7 @@ class Economy(commands.Cog):
             embed.set_footer(text="Thanks for your business.")
             await interaction.followup.send(embed=embed)
 
-    @commands.command(name="freemium", description="Get a free random item.")
+    @commands.command(name="freemium", description="Get a free random item.", aliases=('fr',))
     async def free_item(self, ctx: commands.Context) -> None:
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
@@ -4406,7 +4406,7 @@ class Economy(commands.Cog):
             all_embeds.append(membed(f"If **{ie} {item}** was in your showcase, it's now been removed."))
             await respond(interaction=interaction, embeds=all_embeds)
 
-    @commands.command(name="st", description="Test out your showcase before publishing")
+    @commands.command(name="showcase", description="Test out your showcase before publishing", aliases=('sc',))
     async def show_showcase_data(self, ctx: commands.Context):
         async with self.bot.pool.acquire() as conn:
             emb = await Economy.fetch_showdata(ctx.author, conn)
@@ -4649,7 +4649,7 @@ class Economy(commands.Cog):
             em.set_footer(text=f"{rarity} {item_type}")
             await respond(interaction=interaction, embed=em)
 
-    @commands.command(name='reasons', description='Identify causes of registration errors')
+    @commands.command(name='reasons', description='Identify causes of registration errors', aliases=('rs',))
     async def not_registered_why(self, ctx: commands.Context) -> None:
         """Display all the possible causes of a not registered check failure."""
 

@@ -538,7 +538,7 @@ async def help_command_category(interaction: Interaction, category: classnames) 
     await paginator.navigate(ephemeral=True)
 
 
-@bot.command(name='convert')
+@bot.command(name='convert', aliases=('cnv',))
 async def convert_time(ctx: commands.Context, time: TimeConverter) -> None:
     await ctx.send(embed=membed(f"Converted time: {time} seconds"))
 

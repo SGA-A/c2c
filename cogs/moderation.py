@@ -560,7 +560,7 @@ class Moderation(commands.Cog):
                 await conn.commit()
 
     @commands.has_permissions(manage_threads=True)
-    @commands.command(name="close", description="Close the invocation thread")
+    @commands.command(name="close", description="Close the invocation thread", aliases=('cl',))
     async def close_thread(self, ctx: commands.Context, channel_link: discord.Thread = commands.CurrentChannel):
 
         if not isinstance(channel_link, discord.Thread):

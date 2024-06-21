@@ -891,7 +891,7 @@ class Utility(commands.Cog):
         
         await interaction.response.send_message(embed=embed)
 
-    @commands.command(name='avatar', description="Display a user's enlarged avatar")
+    @commands.command(name='avatar', description="Display a user's enlarged avatar", aliases=('av',))
     async def avatar(
         self, 
         ctx: commands.Context,
@@ -905,7 +905,7 @@ class Utility(commands.Cog):
         embed.set_image(url=avatar)
         await ctx.send(embed=embed)
 
-    @commands.command(name='banner', description="Display a user's enlarged banner")
+    @commands.command(name='banner', description="Display a user's enlarged banner", aliases=('bnr',))
     async def banner(
         self, 
         ctx: commands.Context, 
