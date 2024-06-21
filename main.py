@@ -646,7 +646,7 @@ async def main():
 
     setup_logging(
         level=INFO,
-        handler=FileHandler(filename='discord.log', encoding='utf-8', mode='w'),
+        handler=FileHandler(filename='discord.log', encoding='utf-8', mode='w')
     )
     load_dotenv()
     

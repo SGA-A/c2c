@@ -450,7 +450,7 @@ class Owner(commands.Cog):
         await original.edit(content="\U0001f389 THE ECONOMY SYSTEM IS BACK! \U0001f389", embeds=[temporary, updated])
 
     @commands.command(name='quit', description='Quits the bot gracefully', aliases=('q',))
-    async def quit_client(self, ctx):
+    async def quit_client(self, ctx: commands.Context) -> None:
         """Quits the bot gracefully."""
         await ctx.message.add_reaction('<:successful:1183089889269530764>')
         await self.bot.close()
