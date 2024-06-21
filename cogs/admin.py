@@ -442,12 +442,12 @@ class Owner(commands.Cog):
             "The economy is now back in a new fresh state, available for everyone.\n"
             "Thanks for your patience. It will continue to receive improvements and maintenance as usual.\n"
             "Remember, if you do spot any bugs, inform us asap, we will sort it! "
-            "You'll also get in-game compensation for the bugs you triage so feel free to do so."
+            "You'll also get in-game compensation for the bugs you triage so feel free to do so. "
             "Thanks for your patience, we hope you like it 💖."
         )
         updated.title = "The project is now completed"
         
-        await original.edit(content="\U0001f389 THE ECONOMY SYSTEM IS BACK! \U0001f389", embed=temporary)
+        await original.edit(content="\U0001f389 THE ECONOMY SYSTEM IS BACK! \U0001f389", embeds=[temporary, updated])
 
     @commands.command(name='quit', description='Quits the bot gracefully', aliases=('q',))
     async def quit_client(self, ctx):
