@@ -3,7 +3,6 @@ from io import BytesIO
 from random import choice
 from unicodedata import name
 from time import perf_counter
-from re import compile as compile_it
 from xml.etree.ElementTree import fromstring
 from typing import Literal, Optional, List
 
