@@ -26,7 +26,6 @@ from typing import (
 import discord
 import aiofiles
 from pytz import timezone
-from pluralizer import Pluralizer
 from discord.ext import commands, tasks
 from discord import app_commands, SelectOption
 from asqlite import ProxiedConnection as asqlite_Connection
@@ -74,10 +73,8 @@ def selling_price_algo(base_price: int, multiplier: int) -> int:
 
 
 """ALL VARIABLES AND CONSTANTS FOR THE ECONOMY ENVIRONMENT"""
-
 USER_ENTRY = discord.Member | discord.User
 MULTIPLIER_TYPES = Literal["xp", "luck", "robux"]
-INV_TABLE_NAME = "inventory"
 MIN_BET_KEYCARD = 500_000
 MAX_BET_KEYCARD = 15_000_000
 MIN_BET_WITHOUT = 100_000
@@ -240,12 +237,6 @@ def calculate_hand(hand: list) -> int:
     return total
 
 
-def make_plural(word, count) -> str:
-    """Generate the plural form of a word based on the given count."""
-    mp = Pluralizer()
-    return mp.pluralize(word=word, count=count)
-
-
 def plural_for_own(count: int) -> str:
     """Only use this pluralizer if the term is 'own'. Nothing else."""
     if count == 1:
@@ -359,13 +350,9 @@ def reverse_format_number_short(formatted_number: str) -> int:
 def generate_slot_combination() -> str:
     """A slot machine that generates and returns one row of slots."""
 
-    weights = [
-        (800, 1000, 800, 100, 900, 800, 1000, 800, 800),
-        (800, 1000, 800, 100, 900, 800, 1000, 800, 800),
-        (800, 1000, 800, 100, 900, 800, 1000, 800, 800)
-    ]
+    weights = (800, 1000, 800, 100, 900, 800, 1000, 800, 800)
 
-    slot_combination = ''.join(choices(SLOTS, weights=w, k=1)[0] for w in weights)
+    slot_combination = ''.join(choices(SLOTS, weights=weights, k=3))
     return slot_combination
 
 
@@ -501,13 +488,13 @@ async def total_commands_used_by_user(user_id: int, conn: asqlite_Connection) ->
 
     total = await conn.fetchone(
         """
-        SELECT TOTAL(cmd_count) 
+        SELECT CAST(TOTAL(cmd_count) AS INTEGER) 
         FROM command_uses
         WHERE userID = $0
         """, user_id
     )
 
-    return int(total[0])
+    return total[0]
 
 
 async def find_fav_cmd_for(user_id, conn: asqlite_Connection) -> str:
@@ -522,11 +509,8 @@ async def find_fav_cmd_for(user_id, conn: asqlite_Connection) -> str:
         """, user_id
     )
     
-    if fav is None:
-        return "-"
-    
+    fav = fav or "-"
     return fav[0]
-
 
 
 class DepositOrWithdraw(discord.ui.Modal):

@@ -1,6 +1,7 @@
 from typing import Literal
 from os.path import basename
 from asyncio import get_event_loop
+from logging import info as log_info
 
 import discord
 import yt_dlp as youtube_dl
@@ -63,10 +64,6 @@ class Music(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot: commands.Bot = bot
 
-    async def play_source(self, voice_client):
-        source = discord.FFmpegPCMAudio("C:\\Users\\georg\\Documents\\c2c\\battlet.mp3")
-        voice_client.play(source, after=lambda e: print('Player error: %s' % e) if e else self.bot.loop.create_task(self.play_source(voice_client)))
-    
     async def do_join_checks(self, interaction: discord.Interaction):
         if (interaction.user.voice is None):
             await interaction.followup.send(embed=membed("Connect to a voice channel first."))
@@ -83,21 +80,6 @@ class Music(commands.Cog):
         voice = await interaction.user.voice.channel.connect()
         await interaction.guild.me.edit(deafen=True)
         return voice
-
-    @app_commands.guilds(*APP_GUILDS_IDS)
-    @app_commands.command(description='Quickly join and play some music')
-    async def preset(self, interaction: discord.Interaction):
-        await interaction.response.defer(ephemeral=True)
-
-        voice = await self.do_join_checks(interaction)
-        if not voice:
-            return
-        
-        if voice.is_playing():
-            voice.stop()
-
-        await self.bot.loop.create_task(self.play_source(voice))
-        await interaction.followup.send(embed=membed("Now playing: `Scaramouche Battle Theme.mp3`."))
 
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(description='Plays a file from the local filesystem')
@@ -120,12 +102,14 @@ class Music(commands.Cog):
         source = discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(pathn))
         file_name = basename(pathn)
         
-        voice.play(source, after=lambda e: print(f'Player error: {e}') if e else None)
+        voice.play(source, after=lambda e: log_info(f'Player error: {e}') if e else None)
         await interaction.followup.send(embed=membed(f'Now playing: ` {file_name} `.'))
 
     @app_commands.guilds(*APP_GUILDS_IDS)
-    @app_commands.describe(query="Could be a search term or a YouTube track link.")
-    @app_commands.command(description="Streams music via url from YouTube")
+    @app_commands.describe(
+        query="Could be a search term or a YouTube track link."
+    )
+    @app_commands.command(description="Streams music via url/search term from YouTube")
     async def stream(self, interaction: discord.Interaction, query: str):
         await interaction.response.defer(ephemeral=True)
 
@@ -137,7 +121,7 @@ class Music(commands.Cog):
             voice.stop()
 
         player = await YTDLSource.from_url(query, loop=self.bot.loop)
-        voice.play(player, after=lambda e: print(f'Player error: {e}') if e else None)
+        voice.play(player)
         await interaction.followup.send(embed=membed(f'Now playing: [{player.title}]({player.url}).'))
 
     @app_commands.guilds(*APP_GUILDS_IDS)
@@ -203,7 +187,7 @@ class Music(commands.Cog):
     async def leave(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
 
-        if interaction.guild.voice_client is None:
+        if interaction.guild.me.voice is None:
             return await interaction.followup.send(embed=membed("I'm not in a voice channel."))
         
         if interaction.user not in interaction.guild.me.voice.channel.members:

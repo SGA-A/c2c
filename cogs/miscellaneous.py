@@ -77,7 +77,6 @@ def format_dt(dt: datetime.datetime, style: Optional[str] = None) -> str:
     return f'<t:{int(dt.timestamp())}:{style}>'
 
 
-
 def format_relative(dt: datetime.datetime) -> str:
     return format_dt(dt, 'R')
 
@@ -87,32 +86,6 @@ def parse_xml(xml_content, mode: Literal["post", "tag"]):
 
     extracted_data = [extract_attributes(res, mode=mode) for res in result]
     return extracted_data
-
-
-def extract_domain(website):
-    dp = compile_it(r'https://(nekos\.pro|nekos\.best)')
-    match = dp.match(website)
-    return match.group(1)
-
-
-def return_random_color():
-    crayon_colours = (
-        discord.Color.from_rgb(255, 204, 204),
-        discord.Color.from_rgb(255, 232, 204),
-        discord.Color.from_rgb(242, 255, 204),
-        discord.Color.from_rgb(223, 255, 204),
-        discord.Color.from_rgb(204, 255, 251),
-        discord.Color.from_rgb(204, 204, 255),
-        discord.Color.from_rgb(204, 255, 224),
-        discord.Color.from_rgb(212, 190, 244),
-        discord.Color.from_rgb(190, 244, 206),
-        discord.Color.from_rgb(255, 203, 193),
-        discord.Color.from_rgb(175, 250, 216),
-        discord.Color.from_rgb(131, 227, 255),
-        discord.Color.from_rgb(191, 252, 198),
-        discord.Color.from_rgb(80, 85, 252)
-    )
-    return choice(crayon_colours)
 
 
 class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
@@ -148,8 +121,8 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
 
 
 class ImageSourceButton(discord.ui.Button):
-    def __init__(self, url: Optional[str] = None) -> None:
-        super().__init__(url=url or "https://www.google.com", label="Source", row=1)
+    def __init__(self, url: Optional[str] = "https://www.google.com") -> None:
+        super().__init__(url=url, label="Source", row=1)
 
 
 class Utility(commands.Cog):
@@ -179,6 +152,28 @@ class Utility(commands.Cog):
                 commits = await response.json()
                 return commits[:3]
             return []
+
+    async def tag_search_autocomplete(
+        self,
+        _: discord.Interaction,
+        current: str,
+    ) -> List[app_commands.Choice[str]]:
+        
+        tags_xml = await self.retrieve_via_kona(
+            name=current.lower(), 
+            mode="tag",
+            page=1,
+            order="count",
+            limit=25
+        )
+
+        if isinstance(tags_xml, int):  # http exception
+            return
+
+        return [
+            app_commands.Choice(name=tag_name, value=tag_name)
+            for tag_name in tags_xml if current.lower() in tag_name.lower()
+        ]
 
     async def cog_unload(self) -> None:
         self.bot.tree.remove_command(self.get_embed_cmd.name, type=self.get_embed_cmd.type)
@@ -428,28 +423,6 @@ class Utility(commands.Cog):
         guild_ids=APP_GUILDS_IDS,
         nsfw=True
     )
-
-    async def tag_search_autocomplete(
-        self,
-        _: discord.Interaction,
-        current: str,
-    ) -> List[app_commands.Choice[str]]:
-        
-        tags_xml = await self.retrieve_via_kona(
-            name=current.lower(), 
-            mode="tag",
-            page=1,
-            order="count",
-            limit=25
-        )
-
-        if isinstance(tags_xml, int):  # http exception
-            return
-
-        return [
-            app_commands.Choice(name=tag_name, value=tag_name)
-            for tag_name in tags_xml if current.lower() in tag_name.lower()
-        ]
 
     @anime.command(name='kona', description='Retrieve NSFW posts from Konachan')
     @app_commands.rename(length="max_images")
@@ -773,8 +746,7 @@ class Utility(commands.Cog):
     @app_commands.command(name='feedback', description='Send feedback to the c2c developers')
     @app_commands.guilds(*APP_GUILDS_IDS)
     async def feedback(self, interaction: discord.Interaction) -> None:
-        feedback_modal = FeedbackModal()
-        await interaction.response.send_modal(feedback_modal)
+        await interaction.response.send_modal(FeedbackModal())
 
     @app_commands.command(name='about', description='Learn more about the bot')
     @app_commands.guilds(*APP_GUILDS_IDS)
