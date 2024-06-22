@@ -420,7 +420,7 @@ class Utility(commands.Cog):
         description="Surf through anime images and posts.", 
         guild_only=True, 
         guild_ids=APP_GUILDS_IDS,
-        nsfw=True
+        nsfw=False
     )
 
     @anime.command(name='kona', description='Retrieve NSFW posts from Konachan')

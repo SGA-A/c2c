@@ -1,8 +1,7 @@
-from typing import Any, Callable
+from typing import Callable
 
 import discord
 from discord.ext import commands
-from discord.ui.item import Item
 
 from .helpers import membed, determine_exponent, economy_check
 
@@ -39,11 +38,6 @@ class PaginatorInput(discord.ui.Modal):
         self.stop()
 
 
-class ButtonOnCooldown(commands.CommandError):
-  def __init__(self, retry_after: float):
-    self.retry_after = retry_after
-
-
 class Pagination(discord.ui.View):
     """Pagination menu with support for direct queries to a specific page."""
     
@@ -52,30 +46,14 @@ class Pagination(discord.ui.View):
         self.get_page = get_page
         self.index = 1
         self.total_pages: int | None = None
-        self.cd = commands.CooldownMapping.from_cooldown(rate=1, per=3.0, type=lambda i: i.user)
         super().__init__(timeout=45.0)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Make sure only original user that invoked interaction can interact"""
         if interaction.user == self.interaction.user:
-            retry_after = self.cd.update_rate_limit(interaction)
-            if retry_after:
-                raise ButtonOnCooldown(retry_after)
             return True
         await interaction.response.send_message(embed=NOT_YOUR_MENU, ephemeral=True)
         return False
-
-    async def on_error(self, interaction: discord.Interaction, error: Exception, item: Item[Any]) -> None:
-        if isinstance(error, ButtonOnCooldown):
-            seconds = int(error.retry_after)
-            return await interaction.response.send_message(
-                ephemeral=True,
-                delete_after=error.retry_after,
-                embed=membed(f"You're on cooldown for {seconds}s.\nThis message will be deleted when it ends.")
-            )
-
-        self.stop()
-        await super().on_error(interaction, error, item)
 
     async def on_timeout(self) -> None:
 
