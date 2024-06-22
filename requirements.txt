@@ -10,7 +10,7 @@ cffi==1.16.0
 charset-normalizer==3.3.2
 click==8.1.7
 colorama==0.4.6
-discord.py @ git+https://github.com/Rapptz/discord.py.git@3a8063602919813e91d19101f9b5a0e9e7438d4b
+discord.py[speed, voice] @ git+https://github.com/Rapptz/discord.py.git@3a8063602919813e91d19101f9b5a0e9e7438d4b
 frozenlist==1.4.1
 idna==3.7
 multidict==6.0.5
