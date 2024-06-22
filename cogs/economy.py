@@ -77,10 +77,7 @@ def selling_price_algo(base_price: int, multiplier: int) -> int:
 
 USER_ENTRY = discord.Member | discord.User
 MULTIPLIER_TYPES = Literal["xp", "luck", "robux"]
-BANK_TABLE_NAME = 'bank'
-SLAY_TABLE_NAME = "slay"
 INV_TABLE_NAME = "inventory"
-COOLDOWN_TABLE_NAME = "cooldowns"
 MIN_BET_KEYCARD = 500_000
 MAX_BET_KEYCARD = 15_000_000
 MIN_BET_WITHOUT = 100_000
@@ -95,8 +92,6 @@ WARN_FOR_CONCURRENCY = (
 )
 ITEM_DESCRPTION = 'Select an item.'
 ROBUX_DESCRIPTION = 'Can be a constant number like "1234" or a shorthand (max, all, 1e6).'
-GENDER_COLOURS = {"Female": 0xF3AAE0, "Male": 0x737ECF}
-GENDOR_EMOJIS = {"Male": "<:male:1201993062885380097>", "Female": "<:female:1201992742574755891>"}
 UNIQUE_BADGES = {
     992152414566232139: "<:e1_stafff:1145039666916110356>",
     546086191414509599: "<:in_power:1153754243220647997>",
@@ -104,7 +99,8 @@ UNIQUE_BADGES = {
     1154092136115994687: "<:e1_bughunterGreen:1145052762351095998>",
     1047572530422108311: "<:cc:1146092310464049203>",
     1148206353647669298: "<:e1_stafff:1145039666916110356>",
-    10: " (MAX)"}
+    10: " (MAX)"
+}
 RARITY_COLOUR = {
     "Godly": 0xE2104B,
     "Legendary": 0xDA4B3D,
@@ -129,29 +125,27 @@ LEVEL_UP_PROMPTS = (
     "Outstanding",
     "You're doing great"
 )
-PREMIUM_CURRENCY = '<:robuxpremium:1174417815327998012>'
-DOWNM = membed("This is a work in progress!")
 NOT_REGISTERED = membed("This user is not registered, so you can't use this command on them.")
 SLOTS = ('🔥', '😳', '🌟', '💔', '🖕', '🤡', '🍕', '🍆', '🍑')
 BONUS_MULTIPLIERS = {
-    "🍕🍕": 55,
-    "🤡🤡": 56.5,
-    "💔💔": 66.6,
-    "🍑🍑": 66.69,
-    "🖕🖕": 196.6699,
-    "🍆🍆": 129.979,
-    "😳😳": 329.999,
-    "🌟🌟": 300.53,
-    "🔥🔥": 350.5,
-    "💔💔💔": 451.11,
-    "🖕🖕🖕": 533.761,
-    "🤡🤡🤡": 622.227,
-    "🍕🍕🍕": 654.555,
-    "🍆🍆🍆": 655.521,
-    "🍑🍑🍑": 766.667,
-    "😳😳😳": 669,
+    "🍕🍕": 10,
+    "🤡🤡": 20,
+    "💔💔": 30,
+    "🍑🍑": 40,
+    "🖕🖕": 50,
+    "🍆🍆": 60,
+    "😳😳": 70,
+    "🌟🌟": 80,
+    "🔥🔥": 90,
+    "💔💔💔": 150,
+    "🖕🖕🖕": 300,
+    "🤡🤡🤡": 350,
+    "🍕🍕🍕": 400,
+    "🍆🍆🍆": 450,
+    "🍑🍑🍑": 500,
+    "😳😳😳": 550,
     "🌟🌟🌟": 600,
-    "🔥🔥🔥": 850
+    "🔥🔥🔥": 900
 }
 
 JOB_KEYWORDS = {
@@ -581,7 +575,7 @@ class DepositOrWithdraw(discord.ui.Modal):
             async with interaction.client.pool.acquire() as conn:
                 data = await conn.fetchone(
                     """
-                    UPDATE bank 
+                    UPDATE accounts 
                     SET 
                         bank = bank - $0, 
                         wallet = wallet + $0 
@@ -621,7 +615,7 @@ class DepositOrWithdraw(discord.ui.Modal):
         async with interaction.client.pool.acquire() as conn:
             updated = await conn.fetchone(
                 """
-                UPDATE bank 
+                UPDATE accounts 
                 SET 
                     bank = bank + $0, 
                     wallet = wallet - $0 
@@ -690,7 +684,7 @@ class ConfirmResetData(discord.ui.View):
             await tr.start()
 
             try:
-                await conn.execute("DELETE FROM bank WHERE userID = $0", self.removing_user.id)
+                await conn.execute("DELETE FROM accounts WHERE userID = $0", self.removing_user.id)
             except Exception as e:
                 interaction.client.log_exception(e)
 
@@ -927,7 +921,7 @@ class BalanceView(discord.ui.View):
         nd = await self.conn.fetchone(
             """
             SELECT wallet, bank, bankspace 
-            FROM `bank` 
+            FROM accounts 
             WHERE userID = $0
             """, self.viewing.id
         )
@@ -1056,7 +1050,7 @@ class BalanceView(discord.ui.View):
         data = await self.conn.fetchone(
             """
             SELECT wallet, bank, bankspace 
-            FROM `bank` 
+            FROM accounts 
             WHERE userID = $0
             """, interaction.user.id
         )
@@ -1172,8 +1166,8 @@ class BlackjackUi(discord.ui.View):
 
             await Economy.end_transaction(conn, user_id=self.interaction.user.id)
             bj_lose, new_bj_win, new_amount_balance = await conn.fetchone(
-                f"""
-                UPDATE `{BANK_TABLE_NAME}`
+                """
+                UPDATE accounts
                 SET 
                     wallet = wallet + $0,
                     bjw = bjw + 1,
@@ -1197,8 +1191,8 @@ class BlackjackUi(discord.ui.View):
         async with self.interaction.client.pool.acquire() as conn:
             await Economy.end_transaction(conn, user_id=self.interaction.user.id)
             bj_win, new_bj_lose, new_amount_balance = await conn.fetchone(
-                f"""
-                UPDATE `{BANK_TABLE_NAME}`
+                """
+                UPDATE accounts
                 SET
                     wallet = wallet - $0,
                     bjla = bjla + $0,
@@ -2294,8 +2288,7 @@ class Economy(commands.Cog):
             "[`>reasons`](https://www.google.com/)."
         )
 
-    @staticmethod
-    async def fetch_showdata(user: USER_ENTRY, conn: asqlite_Connection) -> tuple:
+    async def fetch_showdata(self, user: USER_ENTRY, conn: asqlite_Connection) -> tuple:
 
         showdata = await conn.fetchall(
             """
@@ -2361,26 +2354,6 @@ class Economy(commands.Cog):
                 embed=membed(WARN_FOR_CONCURRENCY)
             )
             return False
-
-    @tasks.loop(hours=1)
-    async def batch_update(self):
-        async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            await conn.execute(
-                f"""
-                UPDATE `{SLAY_TABLE_NAME}` 
-                SET love = CASE WHEN love - $0 < 0 THEN 0 ELSE love - $0 END, 
-                hunger = CASE WHEN hunger - $1 < 0 THEN 0 ELSE hunger - $1 END,
-                energy = CASE WHEN energy + $2 > 100 THEN 0 ELSE energy + $2 END,
-                hygiene = CASE WHEN hygiene - $3 < 0 THEN 0 ELSE hygiene - $3 END
-                """, 5, 10, 15, 20
-            )
-            await conn.commit()
-
-    @batch_update.before_loop
-    async def before_update(self) -> None:
-        self.batch_update.stop()
 
     @staticmethod
     @tasks.loop()
@@ -2492,7 +2465,7 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection = conn
             
-            player_badges = {2: "\U0001f948", 3: "\U0001f949"}
+            podium_pos = {2: "\U0001f948", 3: "\U0001f949"}
 
             lb = discord.Embed(
                 title=f"Leaderboard: {chosen_choice}",
@@ -2505,10 +2478,12 @@ class Economy(commands.Cog):
             if chosen_choice == 'Money Net':
 
                 data = await conn.fetchall(
-                    f"""
-                    SELECT `userID`, SUM(`wallet` + `bank`) AS total_balance 
-                    FROM `{BANK_TABLE_NAME}` 
-                    GROUP BY `userID` 
+                    """
+                    SELECT 
+                        userID, 
+                        SUM(wallet + bank) AS total_balance 
+                    FROM accounts 
+                    GROUP BY userID 
                     ORDER BY total_balance DESC
                     """
                 )
@@ -2516,20 +2491,24 @@ class Economy(commands.Cog):
             elif chosen_choice == 'Wallet':
 
                 data = await conn.fetchall(
-                    f"""
-                    SELECT `userID`, `wallet` AS total_wallet 
-                    FROM `{BANK_TABLE_NAME}` 
-                    GROUP BY `userID` 
+                    """
+                    SELECT 
+                        userID, 
+                        wallet AS total_wallet 
+                    FROM accounts 
+                    GROUP BY userID 
                     ORDER BY total_wallet DESC
                     """
                 )
 
             elif chosen_choice == 'Bank':
                 data = await conn.fetchall(
-                    f"""
-                    SELECT `userID`, `bank` AS total_bank 
-                    FROM `{BANK_TABLE_NAME}` 
-                    GROUP BY `userID` 
+                    """
+                    SELECT 
+                        userID, 
+                        bank AS total_bank 
+                    FROM accounts 
+                    GROUP BY userID 
                     ORDER BY total_bank DESC
                     """
                 )
@@ -2538,9 +2517,12 @@ class Economy(commands.Cog):
 
                 data = await conn.fetchall(
                     """
-                    SELECT inventory.userID, SUM(shop.cost * inventory.qty) AS NetValue
+                    SELECT 
+                        inventory.userID, 
+                        SUM(shop.cost * inventory.qty) AS NetValue
                     FROM inventory
-                    INNER JOIN shop ON shop.itemID = inventory.itemID
+                    INNER JOIN shop 
+                        ON shop.itemID = inventory.itemID
                     GROUP BY inventory.userID
                     ORDER BY NetValue DESC
                     """
@@ -2549,10 +2531,12 @@ class Economy(commands.Cog):
             elif chosen_choice == 'Bounty':
 
                 data = await conn.fetchall(
-                    f"""
-                    SELECT `userID`, `bounty` AS total_bounty 
-                    FROM `{BANK_TABLE_NAME}` 
-                    GROUP BY `userID` 
+                    """
+                    SELECT 
+                        userID, 
+                        bounty AS total_bounty 
+                    FROM accounts 
+                    GROUP BY userID 
                     HAVING total_bounty > 0
                     ORDER BY total_bounty DESC
                     """
@@ -2562,7 +2546,9 @@ class Economy(commands.Cog):
 
                 data = await conn.fetchall(
                     """
-                    SELECT userID, SUM(cmd_count) AS total_commands
+                    SELECT 
+                        userID, 
+                        SUM(cmd_count) AS total_commands
                     FROM command_uses
                     GROUP BY userID
                     HAVING total_commands > 0
@@ -2573,12 +2559,12 @@ class Economy(commands.Cog):
             elif chosen_choice == 'Level':
 
                 data = await conn.fetchall(
-                    f"""
-                    SELECT `userID`, `level` AS lvl 
-                    FROM `{BANK_TABLE_NAME}` 
-                    GROUP BY `userID` 
-                    HAVING lvl > 0
-                    ORDER BY lvl DESC
+                    """
+                    SELECT userID, level 
+                    FROM accounts 
+                    GROUP BY userID 
+                    HAVING level > 0
+                    ORDER BY level DESC
                     """
                 )
 
@@ -2596,12 +2582,12 @@ class Economy(commands.Cog):
                     RIGHT JOIN 
                         (
                             SELECT 
-                                `userID`, 
-                                SUM(`wallet` + `bank`) AS total_balance 
+                                userID, 
+                                SUM(wallet + bank) AS total_balance 
                             FROM 
-                                `bank` 
+                                accounts 
                             GROUP BY 
-                                `userID`
+                                userID
                         ) AS money ON inventory.userID = money.userID
                     GROUP BY 
                         COALESCE(inventory.userID, money.userID)
@@ -2609,22 +2595,23 @@ class Economy(commands.Cog):
                         TotalNetWorth DESC
                     """
                 )
-            top_rankings = []
 
-            if data:
-                first_member = data[0]
-                member_name = self.bot.get_user(first_member[0])
+            if not data:
+                lb.description = 'No data.'
+                return lb
 
-                top_rankings.append(
-                    f"### \U0001f947 ` {first_member[1]:,} ` \U00002014 {member_name.name} {UNIQUE_BADGES.get(member_name.id, '')}\n"
-                )
+            first_player = self.bot.get_user(data[0][0])
 
+            top_rankings = [
+                f"### \U0001f947 ` {data[0][1]:,} ` \U00002014 {first_player.name} {UNIQUE_BADGES.get(first_player.id, '')}\n"
+            ]
+            
             top_rankings += [
-                f"{player_badges.get(i, "\U0001f539")} ` {member[1]:,} ` \U00002014 {member_name.name} {UNIQUE_BADGES.get(member_name.id, '')}" 
+                f"{podium_pos.get(i, "\U0001f539")} ` {member[1]:,} ` \U00002014 {member_name.name} {UNIQUE_BADGES.get(member_name.id, '')}" 
                 for i, member in enumerate(data[1:], start=2) if (member_name := self.bot.get_user(member[0]))
             ]
 
-            lb.description = '\n'.join(top_rankings) or 'No data.'
+            lb.description = '\n'.join(top_rankings)
             return lb
 
     # ------------------ BANK FUNCS ------------------ #
@@ -2650,12 +2637,12 @@ class Economy(commands.Cog):
                         LEFT JOIN 
                             (
                                 SELECT 
-                                    `userID`, 
-                                    SUM(`wallet` + `bank`) AS total_balance 
+                                    userID, 
+                                    SUM(wallet + bank) AS total_balance 
                                 FROM 
-                                    `bank` 
+                                    accounts 
                                 GROUP BY 
-                                    `userID`
+                                    userID
                             ) AS money ON inventory.userID = money.userID
                         GROUP BY 
                             inventory.userID
@@ -2672,35 +2659,28 @@ class Economy(commands.Cog):
                             INNER JOIN 
                                 (
                                     SELECT 
-                                        `userID`, 
-                                        SUM(`wallet` + `bank`) AS total_balance 
+                                        userID, 
+                                        SUM(wallet + bank) AS total_balance 
                                     FROM 
-                                        `bank` 
+                                        accounts 
                                     GROUP BY 
-                                        `userID`
+                                        userID
                                 ) AS money ON inventory.userID = money.userID 
                             WHERE 
                                 inventory.userID = $0
-                        ), 
-                        0
+                        ), 0
                     )
             ) AS Rank
         """, user.id
         )
-        val = val or ("Not listed",)
+        val = val or ("Unlisted",)
         return val[0]
 
     @staticmethod
     async def open_bank_new(user: USER_ENTRY, conn_input: asqlite_Connection) -> None:
-        """Register the user, if they don't exist. Only use in balance commands (reccommended.)"""
         ranumber = randint(10_000_000, 20_000_000)
-
-        await conn_input.execute(
-            f"""
-            INSERT INTO `{BANK_TABLE_NAME}` (userID, wallet) 
-            VALUES (?, ?)
-            """, (user.id, ranumber)
-        )
+        query = "INSERT INTO accounts (userID, wallet) VALUES ($0, $1)"
+        await conn_input.execute(query, user.id, ranumber)
 
     @staticmethod
     async def can_call_out(user: USER_ENTRY, conn_input: asqlite_Connection) -> bool:
@@ -2714,7 +2694,7 @@ class Economy(commands.Cog):
         This is what should be done all the time to check if a user IS NOT REGISTERED.
         """
         data = await conn_input.fetchone(
-            f"SELECT EXISTS (SELECT 1 FROM `{BANK_TABLE_NAME}` WHERE userID = $0)", 
+            "SELECT EXISTS (SELECT 1 FROM accounts WHERE userID = $0)", 
             user.id
         )
 
@@ -2733,9 +2713,9 @@ class Economy(commands.Cog):
         """
 
         data = await conn_input.fetchone(
-            f"""
+            """
             SELECT COUNT(*) 
-            FROM {BANK_TABLE_NAME} 
+            FROM accounts 
             WHERE userID IN (?, ?)
             """, (user1.id, user2.id)
         )
@@ -2745,13 +2725,13 @@ class Economy(commands.Cog):
     @staticmethod
     async def get_wallet_data_only(user: USER_ENTRY, conn_input: asqlite_Connection) -> int:
         """Retrieves the wallet amount only from a registered user's bank data."""
-        data = await conn_input.fetchone(f"SELECT wallet FROM `{BANK_TABLE_NAME}` WHERE userID = $0", user.id)
+        data = await conn_input.fetchone("SELECT wallet FROM accounts WHERE userID = $0", user.id)
         return data[0]
 
     @staticmethod
     async def get_spec_bank_data(user: USER_ENTRY, field_name: str, conn_input: asqlite_Connection) -> Any:
-        """Retrieves a specific field name only from the bank table."""
-        data = await conn_input.fetchone(f"SELECT {field_name} FROM `{BANK_TABLE_NAME}` WHERE userID = $0", user.id)
+        """Retrieves a specific field name only from the accounts table."""
+        data = await conn_input.fetchone(f"SELECT {field_name} FROM accounts WHERE userID = $0", user.id)
         return data[0]
 
     @staticmethod
@@ -2772,7 +2752,7 @@ class Economy(commands.Cog):
 
         data = await conn_input.fetchone(
             f"""
-            UPDATE {BANK_TABLE_NAME} 
+            UPDATE accounts 
             SET {mode} = {mode} + $0 
             WHERE userID = $1 RETURNING `{mode}`
             """, amount, user.id
@@ -2798,7 +2778,7 @@ class Economy(commands.Cog):
 
         data = await conn_input.fetchone(
             f"""
-            UPDATE {BANK_TABLE_NAME} 
+            UPDATE accounts 
             SET `{mode}` = ? 
             WHERE userID = ? 
             RETURNING `{mode}`
@@ -2815,7 +2795,7 @@ class Economy(commands.Cog):
         amount1: float | int, 
         mode2: str, 
         amount2: float | int, 
-        table_name: Optional[str] = "bank"
+        table_name: Optional[str] = "accounts"
         ) -> Optional[Any]:
         """
         Modifies any two fields at once by their respective amounts. Returning the values of both fields.
@@ -2844,7 +2824,7 @@ class Economy(commands.Cog):
         amount2: float | int, 
         mode3: str, 
         amount3: float | int, 
-        table_name: Optional[str] = "bank"
+        table_name: Optional[str] = "accounts"
         ) -> Optional[Any]:
         """
         Modifies any three fields at once by their respective amounts. Returning the values of both fields.
@@ -2879,7 +2859,7 @@ class Economy(commands.Cog):
 
         query = (
             """
-            UPDATE bank 
+            UPDATE accounts 
             SET wallet = wallet + ? 
             WHERE userID = ?
             """
@@ -3048,12 +3028,18 @@ class Economy(commands.Cog):
         """Define what it means to kill a user."""
 
         await conn_input.execute(
-            f"UPDATE `{BANK_TABLE_NAME}` SET wallet = 0, bank = 0, showcase = ?, job = ?, bounty = 0 WHERE userID = ?", 
-            ("0 0 0", "None", user.id))
+            """
+            UPDATE accounts 
+            SET 
+                wallet = 0, 
+                bank = 0, 
+                job = $0, 
+                bounty = 0 
+            WHERE userID = $1
+            """, "None", user.id
+        )
         
-        await conn_input.execute(f"DELETE FROM `{INV_TABLE_NAME}` WHERE userID = ?", (user.id,))
-        await conn_input.execute(f"INSERT INTO `{INV_TABLE_NAME}` (userID) VALUES(?)", (user.id,))        
-        await conn_input.execute(f"DELETE FROM `{SLAY_TABLE_NAME}` WHERE userID = ?", (user.id,))
+        await conn_input.execute("DELETE FROM inventory WHERE userID = $0", user.id)
 
     # ------------ JOB FUNCS ----------------
 
@@ -3062,8 +3048,8 @@ class Economy(commands.Cog):
         """Modifies a user's job, returning the new job after changes were made."""
 
         await conn_input.execute(
-            f"""
-            UPDATE `{BANK_TABLE_NAME}` 
+            """
+            UPDATE accounts 
             SET job = $0 
             WHERE userID = $1
             """, job_name, user.id
@@ -3314,7 +3300,7 @@ class Economy(commands.Cog):
 
         record = await connection.fetchone(
             """
-            UPDATE bank
+            UPDATE accounts
             SET exp = exp + $0
             WHERE userID = $1 
             RETURNING exp, level
@@ -3341,7 +3327,7 @@ class Economy(commands.Cog):
 
         await connection.execute(
             """
-            UPDATE `bank` 
+            UPDATE accounts 
             SET 
                 level = level + 1, 
                 exp = 0, 
@@ -3430,7 +3416,7 @@ class Economy(commands.Cog):
             connection: asqlite_Connection
             
             try:
-                row = await connection.fetchone("SELECT 1 FROM bank WHERE userid = $0", ctx.author.id)
+                row = await connection.fetchone("SELECT 1 FROM accounts WHERE userid = $0", ctx.author.id)
                 assert row is not None
             except AssertionError:
                 return
@@ -3908,7 +3894,7 @@ class Economy(commands.Cog):
             if item_details is None:
                 return
 
-            wallet_amt = await conn.fetchone("SELECT wallet FROM bank WHERE userID = $0", with_who.id)
+            wallet_amt = await conn.fetchone("SELECT wallet FROM accounts WHERE userID = $0", with_who.id)
             if isinstance(for_robux, str):
                 for_robux = wallet_amt[0] if wallet_amt else 0
 
@@ -4037,7 +4023,7 @@ class Economy(commands.Cog):
             if item_details is None:
                 return
 
-            wallet_amt = await conn.fetchone("SELECT wallet FROM bank WHERE userID = $0", interaction.user.id)
+            wallet_amt = await conn.fetchone("SELECT wallet FROM accounts WHERE userID = $0", interaction.user.id)
             if isinstance(robux_quantity, str):
                 robux_quantity = wallet_amt[0] if wallet_amt else 0
 
@@ -4685,7 +4671,7 @@ class Economy(commands.Cog):
         expansion *= quantity
         new_bankspace = await conn.fetchone(
             """
-            UPDATE bank 
+            UPDATE accounts 
             SET bankspace = bankspace + $0 
             WHERE userID = $1 
             RETURNING bankspace
@@ -4825,8 +4811,11 @@ class Economy(commands.Cog):
             
             data = await conn.fetchone(
                 """
-                SELECT prestige, level, wallet + bank AS total_robux 
-                FROM `bank` 
+                SELECT 
+                    prestige, 
+                    level, 
+                    (wallet + bank) AS total_robux 
+                FROM accounts 
                 WHERE userID = $0
                 """, interaction.user.id
             )
@@ -4876,8 +4865,8 @@ class Economy(commands.Cog):
 
                     await conn.execute("DELETE FROM inventory WHERE userID = ?", interaction.user.id)
                     await conn.execute(
-                        f"""
-                        UPDATE `{BANK_TABLE_NAME}` 
+                        """
+                        UPDATE accounts 
                         SET 
                             wallet = $0, 
                             bank = $0, 
@@ -4967,9 +4956,9 @@ class Economy(commands.Cog):
                 procfile = discord.Embed(colour=user.colour)
 
                 data = await conn.fetchone(
-                    f"""
+                    """
                     SELECT wallet, bank, showcase, title, bounty, prestige, level, exp 
-                    FROM `{BANK_TABLE_NAME}` 
+                    FROM accounts 
                     WHERE userID = $0
                     """, user.id
                 )
@@ -5060,12 +5049,12 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=procfile, ephemeral=ephemerality)
             else:
                 data = await conn.fetchone(
-                    f"""
+                    """
                     SELECT 
                         slotw, slotl, betw, betl, bjw, bjl, 
                         slotwa, slotla, betwa, betla, bjwa, bjla 
                     FROM 
-                        `{BANK_TABLE_NAME}` 
+                        accounts 
                     WHERE 
                         userID = $0
                     """, user.id
@@ -5160,7 +5149,7 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            wallet_amt = await conn.fetchone(f"SELECT wallet FROM `{BANK_TABLE_NAME}` WHERE userID = $0", interaction.user.id)
+            wallet_amt = await conn.fetchone("SELECT wallet FROM accounts WHERE userID = $0", interaction.user.id)
             if wallet_amt is None:
                 return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
             wallet_amt, = wallet_amt
@@ -5213,7 +5202,7 @@ class Economy(commands.Cog):
 
         # --------------- Checks before betting i.e. has keycard, meets bet constraints. -------------
         has_keycard = await self.user_has_item_from_id(interaction.user.id, item_id=1, conn=conn)
-        slot_stuff = await conn.fetchone("SELECT slotw, slotl, wallet FROM `bank` WHERE userID = $0", interaction.user.id)
+        slot_stuff = await conn.fetchone("SELECT slotw, slotl, wallet FROM accounts WHERE userID = $0", interaction.user.id)
         id_won_amount, id_lose_amount, wallet_amt = slot_stuff[0], slot_stuff[1], slot_stuff[-1]
 
         robux = await self.do_wallet_checks(
@@ -5438,11 +5427,11 @@ class Economy(commands.Cog):
             
             data = await conn.fetchone(
                 """
-                SELECT bank.job, COALESCE(cooldowns.until, 0.0)
-                FROM bank
+                SELECT accounts.job, COALESCE(cooldowns.until, 0.0)
+                FROM accounts
                 LEFT JOIN cooldowns
-                ON bank.userID = cooldowns.userID AND cooldowns.cooldown = $0
-                WHERE bank.userID = $1
+                ON accounts.userID = cooldowns.userID AND cooldowns.cooldown = $0
+                WHERE accounts.userID = $1
                 """, "working", interaction.user.id
             )
             
@@ -5500,11 +5489,11 @@ class Economy(commands.Cog):
 
             data = await conn.fetchone(
                 """
-                SELECT bank.job, COALESCE(cooldowns.until, 0.0)
-                FROM bank
+                SELECT accounts.job, COALESCE(cooldowns.until, 0.0)
+                FROM accounts
                 LEFT JOIN cooldowns
-                ON bank.userID = cooldowns.userID AND cooldowns.cooldown = $1
-                WHERE bank.userID = $0
+                ON accounts.userID = cooldowns.userID AND cooldowns.cooldown = $1
+                WHERE accounts.userID = $0
                 """, "job_change", interaction.user.id
             )
 
@@ -5560,11 +5549,11 @@ class Economy(commands.Cog):
 
             data = await conn.fetchone(
                 """
-                SELECT bank.job, COALESCE(cooldowns.until, 0.0)
-                FROM bank
+                SELECT accounts.job, COALESCE(cooldowns.until, 0.0)
+                FROM accounts
                 LEFT JOIN cooldowns
-                ON bank.userID = cooldowns.userID AND cooldowns.cooldown = $1
-                WHERE bank.userID = $0
+                ON accounts.userID = cooldowns.userID AND cooldowns.cooldown = $1
+                WHERE accounts.userID = $0
                 """, "job_change", interaction.user.id
             )
 
@@ -5759,26 +5748,19 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            bank_amt = await conn.fetchone(
-                """
-                SELECT bank
-                FROM bank
-                WHERE userID = $0
-                """, user.id
-            )
-
+            bank_amt = await conn.fetchone("SELECT bank FROM accounts WHERE userID = $0", user.id)
             if bank_amt is None:
                 return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
             bank_amt, = bank_amt
 
             query = (
-                f"""
-                UPDATE `{BANK_TABLE_NAME}`
+                """
+                UPDATE accounts
                 SET 
                     wallet = wallet + $0,
-                    `bank` = `bank` - $0
+                    bank = bank - $0
                 WHERE userID = $1
-                RETURNING wallet, `bank`
+                RETURNING wallet, bank
                 """
             )
 
@@ -5841,17 +5823,21 @@ class Economy(commands.Cog):
 
             details = await conn.fetchone(
                 """
-                SELECT wallet, bank, bankspace FROM `bank` WHERE userID = $0
+                SELECT 
+                    wallet, 
+                    bank, 
+                    bankspace 
+                FROM accounts 
+                WHERE userID = $0
                 """, interaction.user.id
             )
             if details is None:
                 return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
-            
             wallet_amt, bank, bankspace = details
 
             available_bankspace = bankspace - bank
             embed = membed()
-            
+
             if available_bankspace <= 0:
                 embed.description = (
                     f"You can only hold **{CURRENCY} {details[2]:,}** in your bank right now.\n"
@@ -5860,13 +5846,13 @@ class Economy(commands.Cog):
                 return await interaction.response.send_message(embed=embed, ephemeral=True)
             
             query = (
-                f"""
-                UPDATE `{BANK_TABLE_NAME}`
+                """
+                UPDATE accounts
                 SET 
                     wallet = wallet - $0,
-                    `bank` = `bank` + $0
+                    bank = bank + $0
                 WHERE userID = $1
-                RETURNING wallet, `bank`
+                RETURNING wallet, bank
                 """
             )
 
@@ -5960,27 +5946,27 @@ class Economy(commands.Cog):
                 prim_d = await conn.fetchone(
                     """
                     SELECT wallet, job, bounty, settings.value
-                    FROM `bank` 
+                    FROM accounts 
                     LEFT JOIN settings 
-                        ON bank.userID = settings.userID AND settings.setting = 'passive_mode'
-                    WHERE bank.userID = $0
+                        ON accounts.userID = settings.userID AND settings.setting = 'passive_mode'
+                    WHERE accounts.userID = $0
                     """, interaction.user.id
-                )
-
-                host_d = await conn.fetchone(
-                    """
-                    SELECT wallet, job, settings.value
-                    FROM `bank`
-                    LEFT JOIN settings 
-                        ON bank.userID = settings.userID AND settings.setting = 'passive_mode' 
-                    WHERE bank.userID = $0
-                    """, robbing.id
                 )
 
                 if prim_d[-1]:
                     embed.description = "You are in passive mode! If you want to rob, turn that off!"
                     return await interaction.response.send_message(embed=embed)
-                
+
+                host_d = await conn.fetchone(
+                    """
+                    SELECT wallet, job, settings.value
+                    FROM accounts
+                    LEFT JOIN settings 
+                        ON accounts.userID = settings.userID AND settings.setting = 'passive_mode' 
+                    WHERE accounts.userID = $0
+                    """, robbing.id
+                )
+
                 if host_d[-1]:
                     embed.description = f"{robbing.mention} is in passive mode, you can't rob them!"
                     return await interaction.response.send_message(embed=embed)
@@ -6094,7 +6080,7 @@ class Economy(commands.Cog):
             wallet_amt = await conn.fetchone(
                 """
                 SELECT wallet
-                FROM bank
+                FROM accounts
                 WHERE userID = $0
                 """, user.id
             )
@@ -6180,7 +6166,7 @@ class Economy(commands.Cog):
         wallet_amt = await conn.fetchone(
             """
             SELECT wallet
-            FROM bank
+            FROM accounts
             WHERE userID = $0
             """, interaction.user.id
         )
@@ -6307,9 +6293,9 @@ class Economy(commands.Cog):
             conn: asqlite_Connection
 
             data = await conn.fetchone(
-                f"""
+                """
                 SELECT wallet, betw, betl
-                FROM `{BANK_TABLE_NAME}` 
+                FROM accounts 
                 WHERE userID = $0
                 """, interaction.user.id
             )

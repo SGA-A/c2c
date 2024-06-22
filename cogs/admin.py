@@ -127,45 +127,46 @@ class Owner(commands.Cog):
         )
         if real_amount is None:
             return
+
         embed = membed()
-        
         if isinstance(real_amount, str):
-            embed.description = "Shortcuts are not supported here."
-            return await interaction.response.send_message(embed=embed)
+            embed.description = "Shorthands are not supported here."
+            return await interaction.response.send_message(ephemeral=True, embed=embed)
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
             if configuration.startswith("a"):
-                query = (
-                    f"""
-                    UPDATE `bank` 
-                    SET `{medium}` = `{medium}` + ?
-                    WHERE userID = ?
-                    """
-                )
-
                 embed.description = f"Added {CURRENCY} **{real_amount:,}** to {user.mention}!"
-            elif configuration.startswith("r"):
                 query = (
                     f"""
-                    UPDATE `bank` 
-                    SET `{medium}` = `{medium}` - ?
-                    WHERE userID = ?
+                    UPDATE accounts 
+                    SET {medium} = {medium} + $0
+                    WHERE userID = $1
                     """
                 )
-                embed.description = f"Deducted {CURRENCY} **{real_amount:,}** from {user.mention}!"
-            else:
-                query = (
-                    f"""
-                    UPDATE `bank` 
-                    SET `{medium}` = ?
-                    WHERE userID = ?
-                    """
-                )
-                embed.description = f"Set {CURRENCY} **{real_amount:,}** to {user.mention}!"
 
-            await conn.execute(query, (real_amount, user.id))
+            elif configuration.startswith("r"):
+                embed.description = f"Deducted {CURRENCY} **{real_amount:,}** from {user.mention}!"
+                query = (
+                    f"""
+                    UPDATE accounts 
+                    SET {medium} = {medium} - $0
+                    WHERE userID = $1
+                    """
+                )
+
+            else:
+                embed.description = f"Set {CURRENCY} **{real_amount:,}** to {user.mention}!"
+                query = (
+                    f"""
+                    UPDATE accounts 
+                    SET {medium} = $0
+                    WHERE userID = $1
+                    """
+                )
+
+            await conn.execute(query, real_amount, user.id)
             await conn.commit()
 
             await interaction.response.send_message(embed=embed, ephemeral=is_private)
