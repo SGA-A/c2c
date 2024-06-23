@@ -3366,7 +3366,6 @@ class Economy(commands.Cog):
                     return
 
                 total, multi = data
-
                 if not total % 15:
                     await self.send_tip_if_enabled(interaction, connection)
 
