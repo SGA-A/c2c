@@ -3284,14 +3284,15 @@ class Economy(commands.Cog):
         
         if xp < exp_needed:
             return
-        
+        level += 1
+
         await self.add_multiplier(
             connection,
             user_id=interaction.user.id,
-            multi_amount=2,
+            multi_amount=((level // 3) or 1),
             multi_type="xp",
             cause="level",
-            description=f"Level {level+1}"
+            description=f"Level {level}"
         )
 
         await connection.execute(
@@ -3302,7 +3303,7 @@ class Economy(commands.Cog):
                 exp = 0, 
                 bankspace = bankspace + $0 
             WHERE userID = $1
-            """, randint(300_000, 20_000_000), interaction.user.id
+            """, randint(50_000, 55_000*level), interaction.user.id
         )
         
         notifs_enabled = await self.is_setting_enabled(
@@ -3315,7 +3316,7 @@ class Economy(commands.Cog):
             rankup = discord.Embed(title="Level Up!", colour=0x55BEFF)
             rankup.description = (
                 f"{choice(LEVEL_UP_PROMPTS)}, {interaction.user.name}!\n"
-                f"You've leveled up from level **{level:,}** to level **{level+1:,}**."
+                f"You've leveled up from level **{level-1:,}** to level **{level:,}**."
             )
 
             await interaction.followup.send(embed=rankup)
