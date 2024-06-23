@@ -882,13 +882,8 @@ class BalanceView(discord.ui.View):
 
         self.interaction = interaction
         self.viewing = viewing
-        self.conn = None
         super().__init__(timeout=120.0)
         self.children[2].default_values = [discord.Object(id=self.viewing.id)]
-
-    async def release_conn(self):
-        await self.interaction.client.pool.release(self.conn)
-        self.conn = None
 
     async def fetch_balance(self, interaction: discord.Interaction) -> discord.Embed:
         """
@@ -902,35 +897,35 @@ class BalanceView(discord.ui.View):
         balance.title = f"{self.viewing.display_name}'s Balances"
         balance.timestamp = discord.utils.utcnow()
 
-        nd = await self.conn.fetchone(
-            """
-            SELECT wallet, bank, bankspace 
-            FROM accounts 
-            WHERE userID = $0
-            """, self.viewing.id
-        )
+        async with interaction.client.pool.acquire() as conn:
+            nd = await conn.fetchone(
+                """
+                SELECT wallet, bank, bankspace 
+                FROM accounts 
+                WHERE userID = $0
+                """, self.viewing.id
+            )
+            if nd is None:
+                if interaction.user.id != self.viewing.id:
+                    balance.description = f"{self.viewing.mention} is not registered."
+                    self.children[0].disabled, self.children[1].disabled = True, True
+                    return balance
 
-        if nd is None:
-            if interaction.user.id != self.viewing.id:
-                balance.description = f"{self.viewing.mention} is not registered."
-                self.children[0].disabled, self.children[1].disabled = True, True
-                return balance
+                await Economy.open_bank_new(self.viewing, conn)
+                balance.colour = discord.Colour.green()
 
-            await Economy.open_bank_new(self.viewing, self.conn)
-            balance.colour = discord.Colour.green()
+            inv = await Economy.calculate_inventory_value(self.viewing, conn)
+            rank = await Economy.calculate_net_ranking_for(self.viewing, conn)
 
-        bank = nd[0] + nd[1]
-        inv = await Economy.calculate_inventory_value(self.viewing, self.conn)
-        rank = await Economy.calculate_net_ranking_for(self.viewing, self.conn)
-        await self.release_conn()
         space = (nd[1] / nd[2]) * 100
+        money = nd[0] + nd[1]
 
         balance.add_field(name="Wallet", value=f"{CURRENCY} {nd[0]:,}")
         balance.add_field(name="Bank", value=f"{CURRENCY} {nd[1]:,}")
         balance.add_field(name="Bankspace", value=f"{CURRENCY} {nd[2]:,} ({space:.2f}% full)")
-        balance.add_field(name="Money Net", value=f"{CURRENCY} {bank:,}")
+        balance.add_field(name="Money Net", value=f"{CURRENCY} {money:,}")
         balance.add_field(name="Inventory Net", value=f"{CURRENCY} {inv:,}")
-        balance.add_field(name="Total Net", value=f"{CURRENCY} {inv + bank:,}")
+        balance.add_field(name="Total Net", value=f"{CURRENCY} {inv+money:,}")
 
         balance.set_footer(text=f"Global Rank: #{rank}")
         self.checks(
@@ -949,7 +944,8 @@ class BalanceView(discord.ui.View):
         self.children[0].disabled = (current_bank == 0)
         self.children[1].disabled = (current_wallet == 0) or (current_bankspace_left == 0)
 
-    async def send_failure(self, interaction: discord.Interaction) -> None:
+    @staticmethod
+    async def send_failure(interaction: discord.Interaction) -> None:
         warning = discord.ui.View().add_item(
             discord.ui.Button(
                 label="Explain This!", 
@@ -974,23 +970,19 @@ class BalanceView(discord.ui.View):
         value = await economy_check(interaction, self.interaction.user)
         if not value:
             return False
-
         del value
-        self.conn = await self.interaction.client.pool.acquire()
 
         #! Check if they're already in a transaction
         #! Check if they exist in the database
         #! Ensure connections are carried into item callbacks when prerequisites are met
 
-        try:
-            await Economy.declare_transaction(self.conn, user_id=interaction.user.id)
-        except sqlite3.IntegrityError:
-            await self.send_failure(interaction)
-            await self.release_conn()
-            return False
-        else:
-            await Economy.end_transaction(self.conn, user_id=interaction.user.id)
-            return True
+        async with interaction.client.pool.acquire() as conn:
+            in_tr = await conn.fetchone(
+                "SELECT EXISTS (SELECT 1 FROM transactions WHERE userID = $0)", interaction.user.id
+            )
+            if in_tr[0]:
+                await self.send_failure(interaction)
+            return not in_tr[0]
 
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
         for item in self.children:
@@ -1004,12 +996,12 @@ class BalanceView(discord.ui.View):
     async def withdraw_money_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Withdraw money from the bank."""
 
-        bank_amt = await Economy.get_spec_bank_data(
-            interaction.user, 
-            field_name="bank", 
-            conn_input=self.conn
-        )
-        await self.release_conn()
+        async with interaction.client.pool.acquire() as conn:
+            bank_amt = await Economy.get_spec_bank_data(
+                interaction.user, 
+                field_name="bank", 
+                conn_input=conn
+            )
 
         if not bank_amt:
             return await interaction.response.send_message(
@@ -1031,14 +1023,14 @@ class BalanceView(discord.ui.View):
     async def deposit_money_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Deposit money into the bank."""
 
-        data = await self.conn.fetchone(
-            """
-            SELECT wallet, bank, bankspace 
-            FROM accounts 
-            WHERE userID = $0
-            """, interaction.user.id
-        )
-        await self.release_conn()
+        async with interaction.client.pool.acquire() as conn:
+            data = await conn.fetchone(
+                """
+                SELECT wallet, bank, bankspace 
+                FROM accounts 
+                WHERE userID = $0
+                """, interaction.user.id
+            )
 
         if not data[0]:
             return await interaction.response.send_message(
@@ -1085,7 +1077,6 @@ class BalanceView(discord.ui.View):
     @discord.ui.button(emoji="<:terminate:1205810058357907487>", row=1)
     async def close_view(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Close the balance view."""
-        await self.release_conn()
         self.stop()
         for item in self.children:
             item.disabled = True
@@ -3549,13 +3540,12 @@ class Economy(commands.Cog):
                     prompt=f"Are you sure you want to share {CURRENCY} **{quantity:,}** with {recipient.mention}?"
                 )
                 await self.end_transaction(conn, user_id=sender.id)
+                await conn.commit()
                 
                 if not confirmed:
-                    return await conn.commit()
+                    return
             
             if await self.can_call_out(recipient, conn):
-                if confirmations_enabled:
-                    await conn.commit()
                 return await respond(interaction=interaction, embed=NOT_REGISTERED)
 
             await respond(
@@ -3629,13 +3619,12 @@ class Economy(commands.Cog):
                 )
 
                 await self.end_transaction(conn, user_id=sender.id)
+                await conn.commit()
 
-                if not confirmed:
-                    return await conn.commit()
+                if confirmed:
+                    return
 
             if await self.can_call_out(recipient, conn):
-                if confirmations_enabled:
-                    await conn.commit()
                 return await respond(interaction=interaction, embed=NOT_REGISTERED)
 
             await respond(
@@ -5598,9 +5587,8 @@ class Economy(commands.Cog):
         user = user or interaction.user
 
         balance_view = BalanceView(interaction, viewing=user)
-        balance_view.conn = await interaction.client.pool.acquire()
-
         balance = await balance_view.fetch_balance(interaction)
+
         await interaction.response.send_message(embed=balance, view=balance_view)
 
     async def do_weekly_or_monthly(
