@@ -187,13 +187,11 @@ class Owner(commands.Cog):
     async def sync_tree(self, ctx: commands.Context) -> None:
         """Sync the bot's tree to either the guild or globally, varies from time to time."""
 
+        # await self.bot.tree.sync(guild=None)
         for guild_id in APP_GUILDS_IDS:
-            synced = await self.bot.tree.sync(guild=discord.Object(id=guild_id))
-        
-        self.bot.command_count = len(synced) + len(self.bot.commands) + 1
-
-        await self.bot.tree.sync(guild=None)
-        await ctx.message.add_reaction('<:successful:1183089889269530764>')
+            await self.bot.tree.sync(guild=discord.Object(id=guild_id))
+        self.bot.fetched_tree = True
+        await ctx.send("\U00002705")
 
     @commands.command(name='eval', description='Evaluates arbitrary code')
     async def evaluate(self, ctx: commands.Context, *, script_body: str) -> None | discord.Message:
@@ -234,7 +232,7 @@ class Owner(commands.Cog):
         else:
             value = stdout.getvalue()
             try:
-                await ctx.message.add_reaction('<:successful:1183089889269530764>')
+                await ctx.message.add_reaction('\U00002705')
             except discord.HTTPException:
                 pass
 
@@ -453,7 +451,7 @@ class Owner(commands.Cog):
     @commands.command(name='quit', description='Quits the bot gracefully', aliases=('q',))
     async def quit_client(self, ctx: commands.Context) -> None:
         """Quits the bot gracefully."""
-        await ctx.message.add_reaction('<:successful:1183089889269530764>')
+        await ctx.send("\U00002705")
         await self.bot.close()
 
     @commands.command(name='invite', description='Links the invite for c2c', aliases=('i',))
@@ -533,9 +531,6 @@ class Owner(commands.Cog):
 
     @commands.command(name='dispatch-webhook', description="Dispatch customizable quarterly updates", aliases=('dw',))
     async def dispatch_webhook(self, ctx: commands.Context):
-        a, b = None * 2
-        return await ctx.send(a)
-
         all_ems = [
             discord.Embed(
                 colour=discord.Colour.from_rgb(3, 102, 214),
@@ -585,7 +580,7 @@ class Owner(commands.Cog):
         )
         kwargs = {"embeds": all_ems, "silent": True, "content": content}
         await self.do_via_webhook(kwargs, edit_message_id=1241137977225248873)
-        await ctx.message.add_reaction('<:successful:1183089889269530764>')
+        await ctx.message.add_reaction('\U00002705')
 
 
 async def setup(bot: commands.Bot):

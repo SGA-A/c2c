@@ -1,14 +1,13 @@
 from typing import Optional
-
 import discord
 
-from .helpers import economy_check, respond
+from .helpers import economy_check, respond, membed
 
 
 class Confirm(discord.ui.View):
     def __init__(self, controlling_user: discord.abc.User):
         self.controlling_user = controlling_user
-        super().__init__(timeout=40.0)
+        super().__init__(timeout=10.0)
         self.value = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -16,29 +15,35 @@ class Confirm(discord.ui.View):
 
     @discord.ui.button(label='Cancel', style=discord.ButtonStyle.danger)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = False
+        self.stop()
+
         self.children[1].style = discord.ButtonStyle.secondary
         button.style = discord.ButtonStyle.success
         
         for item in self.children:
             item.disabled = True
-
-        await interaction.response.edit_message(view=self)
         
-        self.value = False
-        self.stop()
+        embed = interaction.message.embeds[0]
+        embed.title = "Action Cancelled"
+        embed.colour = discord.Colour.brand_red()
+        await interaction.response.edit_message(embed=embed, view=self)
 
     @discord.ui.button(label='Confirm', style=discord.ButtonStyle.success)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.value = True
+        self.stop()
+
         self.children[0].style = discord.ButtonStyle.secondary
         button.style = discord.ButtonStyle.success
 
         for item in self.children:
             item.disabled = True
         
-        await interaction.response.edit_message(view=self)
-        
-        self.value = True
-        self.stop()
+        embed = interaction.message.embeds[0]
+        embed.title = "Action Confirmed"
+        embed.colour = discord.Colour.brand_green()
+        await interaction.response.edit_message(embed=embed, view=self)
 
 
 async def process_confirmation(
@@ -54,21 +59,18 @@ async def process_confirmation(
 
     This returns a boolean indicating whether the user confirmed the action or not, or None if the user timed out.
     """
-    view_owner = view_owner or interaction.user
 
-    view = Confirm(controlling_user=view_owner)
-    confirm = discord.Embed(
-        title="Pending Confirmation",
-        colour=0x2B2D31,
-        description=prompt
-    )
+    view = Confirm(controlling_user=view_owner or interaction.user)
+    confirm = membed(prompt)
+    confirm.title = "Pending Confirmation"
 
     resp = await respond(interaction, embed=confirm, view=view, **kwargs)
-    msg = resp or await interaction.original_response()
     await view.wait()
     
-    embed = msg.embeds[0]
     if view.value is None:
+        msg = resp or await interaction.original_response()
+        embed = msg.embeds[0]
+
         for item in view.children:
             item.disabled = True
 
@@ -76,17 +78,6 @@ async def process_confirmation(
         embed.description = f"~~{embed.description}~~"
         embed.colour = discord.Colour.brand_red()
         await msg.edit(embed=embed, view=view)
-        return view.value
-    
-    if view.value:
-        embed.title = "Action Confirmed"
-        embed.colour = discord.Colour.brand_green()
-        await msg.edit(embed=embed, view=view)
-        return view.value
-    
-    embed.title = "Action Cancelled"
-    embed.colour = discord.Colour.brand_red()
-    await msg.edit(embed=embed, view=view)
     return view.value
 
 

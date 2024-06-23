@@ -1610,6 +1610,7 @@ class HighLow(discord.ui.View):
         )
 
     async def send_win(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.make_clicked_blurple_only(button)
         async with interaction.client.pool.acquire() as conn:
             new_multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
             total = add_multi_to_original(multi=new_multi, original=self.their_bet)
@@ -1617,10 +1618,7 @@ class HighLow(discord.ui.View):
             await Economy.end_transaction(conn, user_id=self.interaction.user.id)
             await conn.commit()
 
-        await self.make_clicked_blurple_only(button)
-
         win = interaction.message.embeds[0]
-
         win.colour = discord.Colour.brand_green()
         win.description = (
             f'**You won {CURRENCY} {total:,}!**\n'
@@ -1628,26 +1626,22 @@ class HighLow(discord.ui.View):
             f'The hidden number was **{self.true_value}**.\n'
             f'Your new balance is {CURRENCY} **{new_balance[0]:,}**.'
         )
-
         win.set_author(
             name=f"{interaction.user.name}'s winning high-low game", 
             icon_url=interaction.user.display_avatar.url
         )
-
         win.set_footer(text=f"Multiplier: {new_multi:,}%")
 
         await interaction.response.edit_message(embed=win, view=self)
 
     async def send_loss(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await self.make_clicked_blurple_only(button)
         async with interaction.client.pool.acquire() as conn:
             new_amount = await Economy.update_bank_new(interaction.user, conn, -self.their_bet)
             await Economy.end_transaction(conn, user_id=self.interaction.user.id)
             await conn.commit()
 
-        await self.make_clicked_blurple_only(button)
-
         lose = interaction.message.embeds[0]
-
         lose.colour = discord.Colour.brand_red()
         lose.description = (
             f'**You lost {CURRENCY} {self.their_bet:,}!**\n'
@@ -1656,11 +1650,11 @@ class HighLow(discord.ui.View):
             f'Your new balance is {CURRENCY} **{new_amount[0]:,}**.'
         )
         lose.remove_footer()
-        
         lose.set_author(
             name=f"{interaction.user.name}'s losing high-low game", 
             icon_url=interaction.user.display_avatar.url
         )
+
         await interaction.response.edit_message(embed=lose, view=self)
 
     @discord.ui.button(label='Lower', style=discord.ButtonStyle.primary)
@@ -1690,8 +1684,8 @@ class HighLow(discord.ui.View):
 
 
 class DropdownLB(discord.ui.Select):
-    def __init__(self, bot: commands.Bot, their_choice: str):
-        self.economy = bot.get_cog("Economy")
+    def __init__(self, meth: Callable, their_choice: str):
+        self.meth = meth
 
         options = [
             SelectOption(label='Money Net', description='Sort by the sum of bank and wallet.'),
@@ -1716,16 +1710,16 @@ class DropdownLB(discord.ui.Select):
         for option in self.options:
             option.default = option.value == chosen_choice
 
-        lb = await self.economy.create_leaderboard_preset(chosen_choice=chosen_choice)
+        lb = await self.meth(chosen_choice=chosen_choice)
 
         await interaction.response.edit_message(embed=lb, view=self.view)
 
 
 class Leaderboard(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction, their_choice: str):
+    def __init__(self, interaction: discord.Interaction, their_choice: str, meth: Callable):
         self.interaction = interaction
         super().__init__(timeout=45.0)
-        self.add_item(DropdownLB(interaction.client, their_choice))
+        self.add_item(DropdownLB(meth, their_choice))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await economy_check(interaction, self.interaction.user)
@@ -1848,13 +1842,13 @@ class ItemQuantityModal(discord.ui.Modal):
     # --------------------------------------------------------------------------------------------
     
     async def confirm_purchase(
-            self, 
-            interaction: discord.Interaction, 
-            new_price: int, 
-            true_qty: int, 
-            conn: asqlite_Connection, 
-            current_balance: int
-        ) -> None:
+        self, 
+        interaction: discord.Interaction, 
+        new_price: int, 
+        true_qty: int, 
+        conn: asqlite_Connection, 
+        current_balance: int
+    ) -> None:
 
         await Economy.declare_transaction(conn, user_id=interaction.user.id)
         value = await process_confirmation(
@@ -2831,7 +2825,7 @@ class Economy(commands.Cog):
         return data
 
     @staticmethod
-    async def update_wallet_many(conn_input: asqlite_Connection, *params_users) -> None:
+    async def update_wallet_many(conn_input: asqlite_Connection, *params_users) -> list[sqlite3.Row]:
         """
         Update the bank of two users at once. Useful to transfer money between multiple users at once.
         
@@ -3514,53 +3508,67 @@ class Economy(commands.Cog):
 
         sender = interaction.user
 
-        async with interaction.client.pool.acquire() as conn:
+        async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            if not (await self.can_call_out_either(sender, recipient, conn)):
-                return await interaction.response.send_message(ephemeral=True, embed=NOT_REGISTERED)
-            else:
-                quantity = await determine_exponent(
-                    interaction=interaction, 
-                    rinput=quantity
+            quantity = await determine_exponent(
+                interaction=interaction, 
+                rinput=quantity
+            )
+            if quantity is None:
+                return
+
+            try:
+                actual_wallet, confirmations_enabled = await conn.fetchone(
+                    """
+                    SELECT accounts.wallet, COALESCE(settings.value, 0) 
+                    FROM accounts
+                    INNER JOIN settings 
+                        ON accounts.userID = settings.userID AND settings.setting = 'share_robux_confirmations'
+                    WHERE accounts.userID = $0
+                    """, sender.id
                 )
-                if quantity is None:
-                    return
+            except TypeError:
+                return await interaction.response.send_message(ephemeral=True, embed=self.not_registered)
 
-                wallet_amt_host = await Economy.get_wallet_data_only(sender, conn)
-
-                if isinstance(quantity, str):
-                    quantity = wallet_amt_host
-                
-                if quantity > wallet_amt_host:
-                    return await interaction.response.send_message(
-                        ephemeral=True,
-                        embed=membed("You don't have that much money to share.")
-                    )
-                
-                setting_enabled = await Economy.is_setting_enabled(conn, user_id=interaction.user.id, setting="share_robux_confirmations")
-                if setting_enabled:
-                    await self.declare_transaction(conn, user_id=interaction.user.id)
-                    value = await process_confirmation(
-                        interaction=interaction, 
-                        prompt=f"Are you sure you want to share {CURRENCY} **{quantity:,}** with {recipient.mention}?"
-                    )
-                    await self.end_transaction(conn, user_id=interaction.user.id)
-                    await conn.commit()
-                    if not value:
-                        return
-
-                await self.update_wallet_many(
-                    conn, 
-                    (-int(quantity), sender.id), 
-                    (int(quantity), recipient.id)
+            if isinstance(quantity, str):
+                quantity = actual_wallet
+            
+            if quantity > actual_wallet:
+                return await interaction.response.send_message(
+                    ephemeral=True,
+                    embed=membed("You don't have that much money to share.")
                 )
+        
+            if confirmations_enabled:
+                await self.declare_transaction(conn, user_id=sender.id)
                 await conn.commit()
 
-                return await respond(
-                    interaction=interaction,
-                    embed=membed(f"Shared {CURRENCY} **{quantity:,}** with {recipient.mention}!")
+                confirmed = await process_confirmation(
+                    interaction=interaction, 
+                    prompt=f"Are you sure you want to share {CURRENCY} **{quantity:,}** with {recipient.mention}?"
                 )
+                await self.end_transaction(conn, user_id=sender.id)
+                
+                if not confirmed:
+                    return await conn.commit()
+            
+            if await self.can_call_out(recipient, conn):
+                if confirmations_enabled:
+                    await conn.commit()
+                return await respond(interaction=interaction, embed=NOT_REGISTERED)
+
+            await respond(
+                interaction=interaction,
+                embed=membed(f"Shared {CURRENCY} **{quantity:,}** with {recipient.mention}!")
+            )
+
+            await self.update_wallet_many(
+                conn, 
+                (-int(quantity), sender.id), 
+                (int(quantity), recipient.id)
+            )
+            await conn.commit()
 
     @share.command(name='items', description='Share items with another user', extras={"exp_gained": 5})
     @app_commands.rename(recipient='user')
@@ -3581,9 +3589,6 @@ class Economy(commands.Cog):
         sender = interaction.user
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-            
-            if not (await self.can_call_out_either(sender, recipient, conn)):
-                return await interaction.response.send_message(ephemeral=True, embed=NOT_REGISTERED)
 
             item = await Economy.partial_match_for(interaction, item, conn)
             if item is None:
@@ -3599,54 +3604,57 @@ class Economy(commands.Cog):
                 WHERE inventory.userID = $0 AND inventory.itemID = $1
                 """, sender.id, item_id
             )
-
             if attrs is None:
                 return await respond(
                     interaction, 
                     ephemeral=True,
                     embed=membed(f"You don't own a single {ie} **{item_name}**.")
                 )
-            
-            else:
-                if attrs[0] < quantity:
-                    return await respond(
-                        interaction, 
-                        ephemeral=True,
-                        embed=membed(f"You don't have **{quantity}x {ie} {item_name}**.")
-                    )
-                
-                if attrs[-1]:
-                    await Economy.declare_transaction(conn, user_id=interaction.user.id)
-                    value = await process_confirmation(
-                        interaction=interaction, 
-                        prompt=f"Are you sure you want to share **{quantity}x {ie} {item_name}** with {recipient.mention}?"
-                    )
-                    await Economy.end_transaction(conn, user_id=interaction.user.id)
-                    await conn.commit()
 
-                    if not value:
-                        return
-
-                await self.update_inv_by_id(sender, -quantity, item_id, conn)
-                
-                await conn.execute(
-                    """
-                    INSERT INTO inventory (userID, itemID, qty) 
-                    VALUES ($0, $1, $2) 
-                    ON CONFLICT(userID, itemID) DO 
-                        UPDATE SET qty = qty + $2
-                    """, recipient.id, item_id, quantity
+            actual_inv_qty, item_rarity, confirmations_enabled = attrs
+            if actual_inv_qty < quantity:
+                return await respond(
+                    interaction, 
+                    ephemeral=True,
+                    embed=membed(f"You don't have **{quantity}x {ie} {item_name}**.")
                 )
-
+            
+            if confirmations_enabled:
+                await self.declare_transaction(conn, user_id=sender.id)
                 await conn.commit()
 
-                await respond(
-                    interaction,
-                    embed=discord.Embed(
-                        colour=RARITY_COLOUR.get(attrs[-1], 0x2B2D31),
-                        description=f"Shared **{quantity}x {ie} {item_name}** with {recipient.mention}!"
-                    )
+                confirmed = await process_confirmation(
+                    interaction=interaction, 
+                    prompt=f"Are you sure you want to share **{quantity}x {ie} {item_name}** with {recipient.mention}?"
                 )
+
+                await self.end_transaction(conn, user_id=sender.id)
+
+                if not confirmed:
+                    return await conn.commit()
+
+            if await self.can_call_out(recipient, conn):
+                if confirmations_enabled:
+                    await conn.commit()
+                return await respond(interaction=interaction, embed=NOT_REGISTERED)
+
+            await respond(
+                interaction,
+                embed=discord.Embed(
+                    colour=RARITY_COLOUR.get(item_rarity, 0x2B2D31),
+                    description=f"Shared **{quantity}x {ie} {item_name}** with {recipient.mention}!"
+                )
+            )
+
+            await self.update_inv_by_id(sender, -quantity, item_id, conn)
+            await conn.execute(
+                """
+                INSERT INTO inventory (userID, itemID, qty) 
+                VALUES ($0, $1, $2) 
+                ON CONFLICT(userID, itemID) DO UPDATE SET qty = qty + $2
+                """, recipient.id, item_id, quantity
+            )
+            await conn.commit()
 
     trade = app_commands.Group(
         name='trade', 
@@ -4454,14 +4462,12 @@ class Economy(commands.Cog):
         sell_quantity: Optional[app_commands.Range[int, 1]] = 1
     ) -> None:
         """Sell an item you already own."""
-        
-        sell_quantity = abs(sell_quantity)
-        
+        sender = interaction.user
+
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
             item_details = await Economy.partial_match_for(interaction, item, conn)
-
             if item_details is None:
                 return
             item_id, item_name, ie = item_details
@@ -4472,9 +4478,8 @@ class Economy(commands.Cog):
                 FROM shop
                 INNER JOIN inventory ON shop.itemID = inventory.itemID
                 WHERE shop.itemID = $0 AND inventory.userID = $1
-                """, item_id, interaction.user.id
+                """, item_id, sender.id
             )
-
             if item_attrs is None:
                 return await respond(
                     interaction=interaction, 
@@ -4483,7 +4488,6 @@ class Economy(commands.Cog):
                 )
 
             cost, qty, sellable = item_attrs
-
             if not sellable:
                 return await respond(
                     interaction=interaction, 
@@ -4498,12 +4502,11 @@ class Economy(commands.Cog):
                     embed=membed(f"You don't have {ie} **{sell_quantity:,}x** {item_name}, so uh no.")
                 )
 
-            multi = await Economy.get_multi_of(user_id=interaction.user.id, multi_type="robux", conn=conn)
+            multi = await Economy.get_multi_of(user_id=sender.id, multi_type="robux", conn=conn)
             cost = selling_price_algo((cost / 4) * sell_quantity, multi)
 
-            if await self.is_setting_enabled(conn, user_id=interaction.user.id, setting="selling_confirmations"):
-                await Economy.declare_transaction(conn, user_id=interaction.user.id)
-
+            if await self.is_setting_enabled(conn, user_id=sender.id, setting="selling_confirmations"):
+                await self.declare_transaction(conn, user_id=sender.id)
                 value = await process_confirmation(
                     interaction=interaction, 
                     prompt=(
@@ -4511,23 +4514,22 @@ class Economy(commands.Cog):
                         f"{ie} {item_name}** for **{CURRENCY} {cost:,}**?"
                     )
                 )
-                await Economy.end_transaction(conn, user_id=interaction.user.id)
+                await self.end_transaction(conn, user_id=sender.id)
                 await conn.commit()
-
                 if not value:
                     return
 
             embed = membed(
-                f"{interaction.user.mention} sold **{sell_quantity:,}x {ie} {item_name}** "
+                f"{sender.mention} sold **{sell_quantity:,}x {ie} {item_name}** "
                 f"and got paid {CURRENCY} **{cost:,}**."
             )
 
-            embed.title = f"{interaction.user.display_name}'s Sale Receipt"
+            embed.title = f"{sender.display_name}'s Sale Receipt"
             embed.set_footer(text="Thanks for your business.")
             await respond(interaction, embed=embed)
             
-            await self.update_inv_new(interaction.user, -qty, item_name, conn)
-            await self.update_bank_new(interaction.user, conn, +cost)
+            await self.update_inv_new(sender, -qty, item_name, conn)
+            await self.update_bank_new(sender, conn, +cost)
             await conn.commit()
 
     @app_commands.command(name='item', description='Get more details on a specific item')
@@ -4830,7 +4832,6 @@ class Economy(commands.Cog):
                     **Things you will lose**:
                     - All of your items/showcase
                     - All of your robux
-                    - Your drone(s)
                     - Your levels and XP
                     Anything not mentioned in this list will not be lost.
                     Are you sure you want to prestige?
@@ -4838,13 +4839,11 @@ class Economy(commands.Cog):
                 )
                 
                 await Economy.declare_transaction(conn, user_id=interaction.user.id)
-                await conn.commit()
                 value = await process_confirmation(
                     interaction=interaction, 
                     prompt=massive_prompt
                 )
-
-                await Economy.end_transaction(conn, user_id=interaction.user.id)
+                await conn.rollback()
                 if value:
 
                     await conn.execute("DELETE FROM inventory WHERE userID = ?", interaction.user.id)
@@ -5148,32 +5147,32 @@ class Economy(commands.Cog):
 
             if robux is None:
                 return
-
-            number = randint(1, 100)
-            hint = randint(1, 100)
-
-            query = membed()
-            query.description = (
-                "I just chose a secret number between 0 and 100.\n"
-                f"Is the secret number *higher* or *lower* than **{hint}**?"
-            )
-
-            query.set_author(
-                name=f"{interaction.user.name}'s high-low game", 
-                icon_url=interaction.user.display_avatar.url
-            )
-
-            query.set_footer(text="The jackpot button is if you think it is the same!")
-            
-            hl_view = HighLow(
-                interaction, 
-                hint_provided=hint, 
-                bet=robux, 
-                value=number
-            )
-
             await Economy.declare_transaction(conn, user_id=interaction.user.id)
-            await interaction.response.send_message(view=hl_view, embed=query)
+
+        number = randint(1, 100)
+        hint = randint(1, 100)
+
+        query = membed()
+        query.description = (
+            "I just chose a secret number between 0 and 100.\n"
+            f"Is the secret number *higher* or *lower* than **{hint}**?"
+        )
+
+        query.set_author(
+            name=f"{interaction.user.name}'s high-low game", 
+            icon_url=interaction.user.display_avatar.url
+        )
+
+        query.set_footer(text="The jackpot button is if you think it is the same!")
+        
+        hl_view = HighLow(
+            interaction, 
+            hint_provided=hint, 
+            bet=robux, 
+            value=number
+        )
+
+        await interaction.response.send_message(view=hl_view, embed=query)
 
     @app_commands.command(name='slots', description='Try your luck on a slot machine', extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_IDS)
@@ -5682,12 +5681,11 @@ class Economy(commands.Cog):
         
         member = member or interaction.user
 
-        if member.id != interaction.user.id:
-            if interaction.user.id not in self.bot.owner_ids:
-                return await interaction.response.send_message(
-                    ephemeral=True,
-                    embed=membed("You are not allowed to do this.")
-                )
+        if (member.id != interaction.user.id) and (interaction.user.id not in self.bot.owner_ids):
+            return await interaction.response.send_message(
+                ephemeral=True,
+                embed=membed("You are not allowed to do this.")
+            )
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
@@ -5698,21 +5696,22 @@ class Economy(commands.Cog):
                     embed=membed(f"{member.mention} isn't registered.")
                 )
             await self.declare_transaction(conn, user_id=member.id)
+            await conn.commit()
 
-            view = ConfirmResetData(
-                interaction=interaction, 
-                user_to_remove=member
-            )
+        view = ConfirmResetData(
+            interaction=interaction, 
+            user_to_remove=member
+        )
 
-            link = "https://www.youtube.com/shorts/vTrH4paRl90"            
-            await interaction.response.send_message(
-                view=view,
-                embed=membed(
-                    f"This command will reset **[EVERYTHING]({link})**.\n"
-                    "Are you **SURE** you want to do this?\n\n"
-                    "If you do, click `RESET MY DATA` **3** times."
-                )
+        link = "https://www.youtube.com/shorts/vTrH4paRl90"            
+        await interaction.response.send_message(
+            view=view,
+            embed=membed(
+                f"This command will reset **[EVERYTHING]({link})**.\n"
+                "Are you **SURE** you want to do this?\n\n"
+                "If you do, click `RESET MY DATA` **3** times."
             )
+        )
 
     @app_commands.command(name="withdraw", description="Withdraw robux from your bank account")
     @app_commands.guilds(*APP_GUILDS_IDS)
@@ -5900,8 +5899,9 @@ class Economy(commands.Cog):
     ) -> None:
         """View the leaderboard and filter the results based on different stats inputted."""
 
-        lb_view = Leaderboard(interaction, their_choice=stat)
-        lb = await self.create_leaderboard_preset(chosen_choice=stat)
+        meth = self.create_leaderboard_preset
+        lb_view = Leaderboard(interaction, their_choice=stat, meth=meth)
+        lb = await meth(chosen_choice=stat)
 
         await interaction.response.send_message(embed=lb, view=lb_view)
 
