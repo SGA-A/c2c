@@ -5264,12 +5264,6 @@ class Economy(commands.Cog):
         """View your inventory or another player's inventory."""
         member = member or interaction.user
 
-        if (member.bot) and (member.id != self.bot.user.id):
-            return await interaction.response.send_message(
-                ephemeral=True,
-                embed=membed("Bots do not have accounts.")
-            )
-
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
