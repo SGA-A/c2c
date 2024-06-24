@@ -59,17 +59,16 @@ class SlashExceptionHandler(commands.Cog):
             embed.description = "Another command with this name already exists."
             return await interaction.followup.send(embed=embed, view=self.view)
 
-        else:
-            embed.title = "Something went wrong"
-            embed.description = (
-                "Seems like the bot has stumbled upon an unexpected error. "
-                "Not to worry, these things happen from time to time. If this issue persists, "
-                "please let us know about it. We're always here to help!"
-            )
-            await interaction.followup.send(embed=embed, view=self.view)
+        embed.title = "Something went wrong"
+        embed.description = (
+            "Seems like the bot has stumbled upon an unexpected error. "
+            "Not to worry, these things happen from time to time. If this issue persists, "
+            "please let us know about it. We're always here to help!"
+        )
+        await interaction.followup.send(embed=embed, view=self.view)
 
-            formatted_traceback = ''.join(format_exception(type(app_cmd_error), app_cmd_error, app_cmd_error.__traceback__))
-            log_error(formatted_traceback)
+        formatted_traceback = ''.join(format_exception(type(app_cmd_error), app_cmd_error, app_cmd_error.__traceback__))
+        log_error(formatted_traceback)
 
 
 async def setup(bot: commands.Bot):
