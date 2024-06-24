@@ -602,7 +602,7 @@ class Owner(commands.Cog):
         )
         kwargs = {"embeds": all_ems, "silent": True, "content": content}
         await self.do_via_webhook(kwargs, edit_message_id=1241137977225248873)
-        await ctx.message.add_reaction('\U00002705')
+        await ctx.send("done")
 
 
 async def setup(bot: commands.Bot):
