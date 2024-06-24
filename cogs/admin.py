@@ -322,74 +322,97 @@ class Owner(commands.Cog):
 
         await original.edit(content=rule_content, suppress=True)
 
-    async def send_first_note(self, channel: discord.TextChannel):
-        the_msg = await channel.fetch_message(1245737782530281575)
-
-        info_content = (
-            "## Background\n"
-            "This is another hangout to theorize your day-to-day discussions. "
-            "cc was created on the **6th of April 2021** to provide "
-            "a space that fosters a chill and mature community that can talk "
-            "about anything and everything. The server is topicless, you initiate anything of your choosing. "
-            "Since we emphasise on this, we don't moderate our members at all, "
-            "but minute exceptions do apply for genuinely serious [rule violations.](https://discord.com/channels/829053898333225010/902138223571116052/1140258074297376859)\n\n"
-            "We hope you enjoy your stay, and we wish you a wonderful journey.\n"
-            "And don't forget; you're here forever."
-        )
-        
-        await the_msg.edit(content=info_content, suppress=True)
-
-    async def send_second_note(self, channel: discord.TextChannel):
-        the_msg = await channel.fetch_message(1245737784711446630)
-        role_content = (
+    async def send_role_guide(self):
+        channel = self.bot.get_partial_messageable(1254883155882672249)
+        role_content_pt1 = (
             """
-            ## Roles\n
+            ## The Role Guide
             Roles are similar to ranks or accessories that you can add to your profile.
-            There are a handful of self-assignable roles that you can pick up in <id:customize> by clicking on the buttons:
-            > - <@&1240739021366362143>: Assuming you're interested in developing on Discord, this role is for you. These give you access to monthly(ish) announcements on their API.
-            > - <@&1240739146272870422>: You can pick this role up and get access to Twitter announcements made by HoYoverse for Genshin Impact.
-            > - <@&1240738847856263371>: Want to see what 2021 \U00002014 2022 was like here? With this role, you'll get to see all of the archives.
+            There are a few self-assignable roles that you can pick up in <id:customize> by clicking on the buttons.
+            
+            There are also roles that are given out based on how active you are within the server on a weekly basis:
+            - <@&1190772029830471781>: Given to users that sent at least 50 messages in the last week.
+            - <@&1190772182591209492>: Given to users that sent at least 150 messages in the last week.
 
-            There are also roles that are given out based on how active you are within the server on a weekly basis.
-            > - <@&1190772029830471781>: Given to users that sent at least 50 messages in the last week.
-            > - <@&1190772182591209492>: Given to users that sent at least 150 messages in the last week.
-
-            We have a leveling system that gives you roles. These are based on how many messages you send in the server excluding slash commands[**\U000000b9**](https://discord.com/channels/829053898333225010/1121094935802822768/1166397053329477642), provided by <@437808476106784770>.
-            > - Check your rank by calling this command in any bot command channel: </rank:873658940360126466>.
-            > - For every minute that you send a message in a text channel, you get a random amount of XP.
-            > - The XP required to reach the next level increases significantly as you level up.
-            > - At every 20 levels, you get a role that grants a set of unique perks and permissions.
-
-            The diagram below provides an illustration of all the perks attainable.
+            We have a leveling system that gives you roles. These are based on how many messages you send in the server excluding slash commands[**\U000000b9**](<https://discord.com/channels/829053898333225010/1121094935802822768/1166397053329477642>), provided by <@437808476106784770>.
+            Check your rank by calling </rank:873658940360126466> in any bot command channel. At every 20 levels, you get a role that grants a set of unique perks and permissions. If you reached a previous milestone role, it will be replaced with your new one.
+            - <@&923931646783287337>: Granted ability to make public and private threads, also able to become a DJ.
+            - <@&923931729016795266>: Granted ability to use the soundboard, these sounds can be external if you are a Nitro member.
+            - <@&923931772020985866>: Granted access to the audit log, and a 1.2x XP boost.
+            - <@&923931819571810305>: Granted ability to send polls anywhere on the server.
+            - <@&923931862001414284>: Granted either admin permissions, a high value reward in our economy, or a developer voicenote.
+            """
+        )
+        role_content_pt2 = (
+            """
+            Other miscellaneous roles for your knowledge:
+            - <@&893550756953735278>: The people who manage the server.
+            - <@&1148209142465581098>: The role for a backup account, granted all server permissions.
+            - <@&912057500914843680>: A possible role to obtain when you reach level 100.
+            - <@&1121405863194787851>: Given out to those who abuse the XP system, via spam or other methods.
+            - <@&914565377961369632>: The role only the verified crew have upon joining the server.
+            - <@&1140197893261758505>: Given to people who had their message on the legacy starboard.
+            - <@&1121426143598354452>: Given on a per-user basis, granting certain privileges.
+            - <@&990900517301522432>: Grants access to music commands, unlocked at level 20.
+            - <@&1121405585712234506>: A role obtainable when reaching level 60.
+            - <@&1150848144440053780>: Bots that only need read access to bot command channels.
+            - <@&1150848206008238151>: Bots that require full read access throughout the server.
             """
         )
         
-        await the_msg.edit(content=dedent(role_content), suppress=True)
+        await channel.send(content=dedent(role_content_pt1))
+        await channel.send(content=dedent(role_content_pt2))
 
-    async def send_final_note(self, channel: discord.TextChannel):
-        the_msg = await channel.fetch_message(1245737791904813119)
-        invite_content = (
+    async def send_channel_guide(self):
+        channel = self.bot.get_partial_messageable(1254882974327898192)
+        channel_content_pt1 = (
             """
-            ## Invite Link\n
-            Want to invite your friends to the server?
-            Send them this permanent invite link: https://discord.gg/W3DKAbpJ5E
-            As always, thanks for sticking around!
+            ## The Channel Guide
+            We made this because there are some channels that might be confusing to you.
+            To start, all of the channels that contain the word "theory" in them can be read as a "general" channel:
+            > <#1119991877010202744> is equivalent to general
+            > <#1145008097300066336> is equivalent to general-2
+            > <#1160547937420582942> is equivalent to general-nsfw
+            And so on. The theme of the server is "theorized", which is why channels follow this naming convention.
+
+            Apart from these three, most of the channels should be straightforward to understand.
+            If you're still lost, let a <@&893550756953735278> know!
             """
         )
 
-        await the_msg.edit(content=dedent(invite_content))
+        await channel.send(content=dedent(channel_content_pt1))
+    
+    async def send_bot_guide(self):
+        channel = self.bot.get_partial_messageable(1254883337386852503)
+        channel_content_pt1 = (
+            f"""
+            ## About {self.bot.user.mention}
+            {self.bot.user.mention} is a private custom bot, exclusive to this server.
+            Since it's got no other public server, we've decided to drop all internal cooldowns for commands. So while every other popular bots cool down, you just get hotter.
+
+            We want to give it some recognition, so here are just some of the many things it can do:
+            - A vast economy system to make money (similar in nature to <@270904126974590976>)
+              - There is also a tonne of room for personalizing the economy to make it truly your own world
+            - Useful utility functions like a world clock (`>wc`) and searching images across the internet
+            - Temporary voice channel management, slide into <#1220483928666935396> and manage it with the `/voice` subcommands
+            - Fun comamnds like image manipulation on any user, or even ship yourself with another potential partner
+            - Anime related commands and useful developer tools
+            - Streaming ability for any track from YouTube
+            - A global tag system to tag text important to you for later retrieval
+
+            We're always finding new things to add to our bot, to make it better for every single one of you. 
+            It's a bespoke bot, tailored to your needs. Anyone in this server can request a feature for the bot and it will get implemented if there's a genuine desire and valid reason behind it.
+            You can submit feature requests or other feedback through the </feedback:1240258901958463570> command or just message a director. Your bot, your rules.
+            """
+        )
+
+        await channel.send(content=dedent(channel_content_pt1))
 
     @commands.command(name='uinfo', description='Update the information channel for cc', aliases=('ui',))
-    async def push_update2(self, ctx: commands.Context):
+    async def push_update2(self, _: commands.Context):
         """Push to update the welcome and info embed within its respective channel."""
-        destination = self.bot.get_partial_messageable(
-            id=1121445944576188517, 
-            guild_id=829053898333225010, 
-            type=discord.ChannelType.text
-        )
 
-        await self.send_second_note(channel=destination)
-        await self.send_final_note(channel=destination)
+        await self.send_channel_guide()
 
     @commands.command(name='utracker', description='Update the economy system tracker', aliases=('ut',))
     async def override_economy(self, ctx: commands.Context):
