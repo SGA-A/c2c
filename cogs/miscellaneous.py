@@ -901,7 +901,7 @@ class Utility(commands.Cog):
         embed.set_image(url=username.banner.with_static_format('png'))
         await ctx.send(embed=embed)
 
-    @app_commands.checks.cooldown(1, 15, key=lambda i: i.guild.id)
+    @app_commands.checks.cooldown(1, 7, key=lambda i: i.guild.id)
     @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name="imagesearch", description="Browse images from the web")
     @app_commands.describe(
