@@ -5,8 +5,8 @@ from re import compile
 from asyncio import run
 from pathlib import Path
 from sys import version
-from logging import INFO, FileHandler, error as log_error
 from traceback import format_exception
+from logging import INFO, FileHandler, error as log_error
 from aiohttp import ClientSession, DummyCookieJar, TCPConnector
 
 from typing import (

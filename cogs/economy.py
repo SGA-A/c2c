@@ -7,20 +7,20 @@ from math import floor, ceil
 from string import ascii_letters, digits
 
 from random import (
-    randint, 
-    choices, 
     choice, 
+    choices, 
+    randint, 
     sample, 
     shuffle
 )
 
 from typing import (
+    Any,
+    Callable,
     Coroutine, 
     Optional, 
     Literal, 
-    Any,
-    List, 
-    Callable
+    List
 )
 
 import discord
@@ -32,15 +32,19 @@ from asqlite import ProxiedConnection as asqlite_Connection
 
 from .core.helpers import (
     determine_exponent, 
+    economy_check,
     membed,
-    respond,
-    economy_check
+    respond
+)
+
+from .core.paginator import (
+    PaginationItem, 
+    RefreshPagination, 
+    RefreshSelectPaginationExtended
 )
 
 from .core.views import process_confirmation
 from .core.constants import CURRENCY, APP_GUILDS_IDS
-from .core.paginator import PaginationItem, RefreshPagination, RefreshSelectPaginationExtended
-
 
 def swap_elements(x, index1, index2) -> None:
     """Swap two elements in place given their indices, return None.

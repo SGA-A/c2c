@@ -1,16 +1,16 @@
 """The administrative cog. Only for use by the bot owners."""
 from re import findall
-from textwrap import indent, dedent
+from io import StringIO
 from traceback import format_exc
+from textwrap import indent, dedent
 from contextlib import redirect_stdout
 
 from typing import (
-    Optional, 
     Any, 
-    Literal
+    Literal,
+    Optional 
 )
 
-import io
 import asyncio
 import discord
 
@@ -206,14 +206,13 @@ class Owner(commands.Cog):
             'message': ctx.message,
             '_': self._last_result,
             'discord': discord,
-            'io': io,
             'asyncio': asyncio
         }
 
         env.update(globals())
 
         script_body = self.cleanup_code(script_body)
-        stdout = io.StringIO()
+        stdout = StringIO()
 
         to_compile = f'async def func():\n{indent(script_body, "  ")}'
 
