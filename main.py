@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from os import environ
-from re import compile
 from asyncio import run
 from pathlib import Path
 from sys import version
@@ -339,23 +338,6 @@ def get_cog_name(*, shorthand: str) -> str:
     return None
 
 
-class TimeConverter(commands.Converter):
-    time_regex = compile(r"(\d{1,5}(?:[.,]?\d{1,5})?)([smhd])")
-    time_dict = {"h": 3600, "s": 1, "m": 60, "d": 86400}
-
-    async def convert(self, _, argument):
-        matches = self.time_regex.findall(argument.lower())
-        time = 0
-        for v, k in matches:
-            try:
-                time += self.time_dict[k]*float(v)
-            except KeyError:
-                raise commands.BadArgument(f"{k} is an invalid time-key! h/m/s/d are valid!")
-            except ValueError:
-                raise commands.BadArgument(f"{v} is not a number!")
-        return time
-
-
 class HelpDropdown(ui.Select):
 
     colour_mapping = {
@@ -536,11 +518,6 @@ async def help_command_category(interaction: Interaction, category: classnames) 
     )
 
     await paginator.navigate(ephemeral=True)
-
-
-@bot.command(name='convert', aliases=('cnv',))
-async def convert_time(ctx: commands.Context, time: TimeConverter) -> None:
-    await ctx.send(embed=membed(f"Converted time: {time} seconds"))
 
 
 @bot.command(name="test")
