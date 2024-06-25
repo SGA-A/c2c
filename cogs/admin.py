@@ -93,12 +93,11 @@ class Owner(commands.Cog):
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
         
-        uptime_embed = membed(
+        uptime = (
             f"{int(days)} days, {int(hours)} hours, "
             f"{int(minutes)} minutes and {int(seconds)} seconds."
         )
-        uptime_embed.title = "Uptime"
-        await ctx.send(embed=uptime_embed)
+        await ctx.reply(content=uptime)
 
     @app_commands.command(name="config", description="Adjust a user's robux directly")
     @app_commands.guilds(*APP_GUILDS_IDS)
@@ -170,18 +169,6 @@ class Owner(commands.Cog):
             await conn.commit()
 
             await interaction.response.send_message(embed=embed, ephemeral=is_private)
-
-    @commands.command(name='threader', description='Create a thread in a text channel', aliases=('cthr',))
-    async def create_thread(self, ctx: commands.Context, thread_name: str):
-        """Create a forum channel quickly with only name of thread required as argument."""
-        if not isinstance(ctx.channel, discord.TextChannel):
-            await ctx.send(delete_after=5.0, embed=membed("You need to be in a text channel to use this."))
-
-        await ctx.channel.create(
-            name=thread_name, 
-            auto_archive_duration=10080, 
-            message=discord.Object(ctx.message.id)
-        )
 
     @commands.command(name='sync', description='Sync the bot tree for changes', aliases=("sy",))
     async def sync_tree(self, ctx: commands.Context) -> None:
@@ -414,62 +401,6 @@ class Owner(commands.Cog):
 
         await self.send_channel_guide()
 
-    @commands.command(name='utracker', description='Update the economy system tracker', aliases=('ut',))
-    async def override_economy(self, ctx: commands.Context):
-        """Update the progress tracker on the Economy system."""
-        
-        await ctx.message.delete()
-        channel = self.bot.get_partial_messageable(1124782048041762867)
-        original = channel.get_partial_message(1166793975466831894)
-        
-        temporary = discord.Embed(
-            title="Temporary Removal of the Economy System",
-            colour=discord.Colour.from_rgb(102, 127, 163),
-            description=(
-                "~~As the title states, we have removed the Economy System in c2c "
-                "(**for now**). <a:aaaaa:944505181150773288>\n\nThe reason being is "
-                "the vast amount of bugs and inefficiencies in the system which has "
-                "been eating on the limited resources we have available to keep the "
-                "bot running.\n\nNot to fret though, it will be back in a completeley new"
-                " state! We have many exciting plans in store over the upcoming years for"
-                " the bot, but right now <@992152414566232139> and <@546086191414509599>"
-                " (but mostly <@992152414566232139>) are working on patching all of the "
-                "major issues that are in the economy system. we hope to bring back this"
-                " part of the system by **__late 2024__** but we cannot make any promises"
-                "!\n\nWe plan to modify every single command currently available under "
-                "this category and add more that are to come, hence this is a extensive "
-                "programme that will **require a lot of time**. This is made hindered by"
-                " the current academic situation both the developers are in at this time,"
-                " so please bear with us and we will not dissapoint (especially with"
-                " <@992152414566232139> <a:ehe:928612599132749834>)!~~"
-            )
-        )
-        
-        temporary.add_field(
-            name="Acknowledgement",
-            value=(
-                "<@992152414566232139> "
-                "(<@&1047576437177200770>) - contributing to **87.5**% of the "
-                "full programme,"
-                "making it possible in the first place (writing the code).\n"
-                "<@546086191414509599> (<@&1124762696110309579>)"
-                " - contributing to **12.5**% of the full programme (making ideas for new "
-                "commands)\n\nWe would not be able to recover the system without "
-                "<@992152414566232139>, she is the literal backbone of its revival! Thank her for"
-                " making it possible!"
-            )
-        )
-        updated = membed(
-            "The economy is now back in a new fresh state, available for everyone.\n"
-            "Thanks for your patience. It will continue to receive improvements and maintenance as usual.\n"
-            "Remember, if you do spot any bugs, inform us asap, we will sort it! "
-            "You'll also get in-game compensation for the bugs you triage so feel free to do so. "
-            "Thanks for your patience, we hope you like it 💖."
-        )
-        updated.title = "The project is now completed"
-        
-        await original.edit(content="\U0001f389 THE ECONOMY SYSTEM IS BACK! \U0001f389", embeds=[temporary, updated])
-
     @commands.command(name='quit', description='Quits the bot gracefully', aliases=('q',))
     async def quit_client(self, ctx: commands.Context) -> None:
         """Quits the bot gracefully."""
@@ -572,8 +503,10 @@ class Owner(commands.Cog):
                     "- Kicked more bots off the server\n"
                     "- Renamed some channels for consistency\n"
                     "- Disabled some custom AutoMod rules\n"
+                    "- Added some new chatbots\n"
                     "- Improve the onboarding question selection\n"
-                    "- Change how channel opt in works[**\U000000b9**](https://discord.com/channels/829053898333225010/1124782048041762867)"
+                    "- Change how channel opt in works[**\U000000b9**](https://discord.com/channels/829053898333225010/1124782048041762867)\n"
+                    "- Removed the developer channel opt in, and deleted its respective channel"
                 )
             )
         ]
@@ -593,16 +526,12 @@ class Owner(commands.Cog):
 
         second_em.set_footer(
             icon_url=ctx.guild.icon.url, 
-            text="More to come in Q2.."
+            text="End of Q2. Next quarterly update due: 30th September 2024"
         )
         all_ems.append(second_em)
 
-        content = (
-            "Changes are cumulative, any new changes are added as edits."
-        )
-        kwargs = {"embeds": all_ems, "silent": True, "content": content}
+        kwargs = {"embeds": all_ems, "silent": True, "content": None}
         await self.do_via_webhook(kwargs, edit_message_id=1241137977225248873)
-        await ctx.send("done")
 
 
 async def setup(bot: commands.Bot):
