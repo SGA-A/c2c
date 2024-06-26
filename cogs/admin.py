@@ -304,10 +304,10 @@ class Owner(commands.Cog):
             "boundaries of <#1160547937420582942>, sanctions will be upheld for such cases.\n"
             "5. <:discordthinking:1173681144718446703> **Adhere to the Terms of Service.** "
             "Abide by Discord\'s [terms of service](<https://discord.com/terms>) and [community guidelines](<https://discord.com/guidelines/>) at all times.\n\n"
-            "**That's all.** You can go have fun now! <a:anime_salute:1170379416845692928>"
+            "**That's all.** Thanks for reading, now go have fun! <a:anime_salute:1170379416845692928>"
         )
 
-        await original.edit(content=rule_content, suppress=True)
+        await original.edit(content=rule_content)
 
     async def send_role_guide(self):
         channel = self.bot.get_partial_messageable(1254883155882672249)

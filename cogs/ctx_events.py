@@ -22,16 +22,16 @@ class ContextCommandHandler(commands.Cog):
 
         if isinstance(err, self.err.CommandNotFound):
             embed.description = "Could not find what you were looking for."
-            return await ctx.reply(embed=embed, view=self.view)
+            return await ctx.send(embed=embed, view=self.view)
 
         if isinstance(err, self.err.UserInputError):
 
             if isinstance(err, self.err.MissingRequiredArgument):
                 embed.description = "Some required arguments are missing."
-                return await ctx.reply(embed=embed, view=self.view)
+                return await ctx.send(embed=embed, view=self.view)
 
             embed.description = "That didn't work. Check your inputs are valid."
-            return await ctx.reply(embed=embed, view=self.view)
+            return await ctx.send(embed=embed, view=self.view)
 
         if isinstance(err, self.err.CheckFailure):
             if isinstance(err, self.err.MissingPermissions):
@@ -40,12 +40,12 @@ class ContextCommandHandler(commands.Cog):
                     name=f"Missing Permissions ({len(err.missing_permissions)})", 
                     value="\n".join(err.replace('_', ' ').title() for err in err.missing_permissions)
                 )
-                return await ctx.reply(embed=embed, view=self.view)
+                return await ctx.send(embed=embed, view=self.view)
 
             if isinstance(err, self.err.MissingRole):
                 embed.description = "You're missing a role required to use this command."
                 embed.add_field(name="Missing Role", value=f"<@&{err.missing_role}>")
-                return await ctx.reply(embed=embed, view=self.view)
+                return await ctx.send(embed=embed, view=self.view)
             return
 
         embed.title = "Something went wrong"
@@ -54,7 +54,7 @@ class ContextCommandHandler(commands.Cog):
             "Not to worry, these things happen from time to time. If this issue persists, "
             "please let us know about it. We're always here to help!"
         )
-        await ctx.reply(embed=embed, view=self.view)
+        await ctx.send(embed=embed, view=self.view)
 
         formatted_traceback = ''.join(format_exception(type(err), err, err.__traceback__))
         log_error(formatted_traceback)
