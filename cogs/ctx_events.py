@@ -11,7 +11,6 @@ class ContextCommandHandler(commands.Cog):
     """The error handler for text-based commands that are called."""
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.err = commands.errors
         self.view = MessageDevelopers()
 
     @commands.Cog.listener()
@@ -19,22 +18,23 @@ class ContextCommandHandler(commands.Cog):
         """The function that handles all the errors passed into the bot via text-based commands."""
 
         embed = Embed(colour=0x2B2D31)
+        err = getattr(err, "original", err)
 
-        if isinstance(err, self.err.CommandNotFound):
+        if isinstance(err, commands.CommandNotFound):
             embed.description = "Could not find what you were looking for."
             return await ctx.send(embed=embed, view=self.view)
 
-        if isinstance(err, self.err.UserInputError):
+        if isinstance(err, commands.UserInputError):
 
-            if isinstance(err, self.err.MissingRequiredArgument):
+            if isinstance(err, commands.MissingRequiredArgument):
                 embed.description = "Some required arguments are missing."
                 return await ctx.send(embed=embed, view=self.view)
 
             embed.description = "That didn't work. Check your inputs are valid."
             return await ctx.send(embed=embed, view=self.view)
 
-        if isinstance(err, self.err.CheckFailure):
-            if isinstance(err, self.err.MissingPermissions):
+        if isinstance(err, commands.CheckFailure):
+            if isinstance(err, commands.MissingPermissions):
                 embed.description = "You're missing permissions required to use this command."
                 embed.add_field(
                     name=f"Missing Permissions ({len(err.missing_permissions)})", 
@@ -42,7 +42,7 @@ class ContextCommandHandler(commands.Cog):
                 )
                 return await ctx.send(embed=embed, view=self.view)
 
-            if isinstance(err, self.err.MissingRole):
+            if isinstance(err, commands.MissingRole):
                 embed.description = "You're missing a role required to use this command."
                 embed.add_field(name="Missing Role", value=f"<@&{err.missing_role}>")
                 return await ctx.send(embed=embed, view=self.view)
