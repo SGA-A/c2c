@@ -15,12 +15,16 @@ def return_default_user_voice_settings(name: str) -> tuple:
 
 
 class MemberSelect(discord.ui.UserSelect):
-    def __init__(self, bot: commands.Bot, mode: Literal["Block", "Trust"], user: discord.Member):
-        self.bot = bot
+    def __init__(
+        self, 
+        tempvoice_instance: "TempVoice", 
+        mode: Literal["Block", "Trust"], 
+        user: discord.Member
+    ) -> None:
         self.mode = mode
-        self.tempvoice = bot.get_cog("TempVoice")
+        self.tempvoice_instance = tempvoice_instance
         self.verb = f"{self.mode.lower()}ed"
-        self.user_data: set[str] = self.tempvoice.active_voice_channels[user.id][self.verb]
+        self.user_data: set[str] = tempvoice_instance.active_voice_channels[user.id][self.verb]
 
         super().__init__(
             placeholder=f"Select members to {mode.lower()}", 
@@ -35,53 +39,45 @@ class MemberSelect(discord.ui.UserSelect):
         return not(selected.guild_permissions.administrator or (selected in {interaction.user, interaction.guild.me}))
 
     async def callback(self, interaction: discord.Interaction):
-        await interaction.response.defer()
         self.view.stop()
-
-        user = interaction.user
-        owner_data = self.tempvoice.active_voice_channels[user.id]
-
+        
         selected_without_admin = {str(selected.id) for selected in self.values if self.can_allow(interaction, selected)}
-
         oppo_verb = "blocked" if self.verb == "trusted" else "trusted"
         
+        owner_data = self.tempvoice.active_voice_channels[interaction.user.id]
         trusted_and_blocked = owner_data[oppo_verb].intersection(selected_without_admin)
         if trusted_and_blocked:
-            return await interaction.edit_original_response(
+            return await interaction.response.edit_message(
                 view=None, 
                 embed=membed(f"Some of the members selected are {oppo_verb}!")
             )
 
         selected_without_admin = self.user_data.union(selected_without_admin)
-
         if selected_without_admin == self.user_data:
-            return await interaction.edit_original_response(
+            return await interaction.response.edit_message(
                 view=None,
                 embed=membed(
                     f"No changes were made to {self.verb} users. Ensure that:\n"
                     f"- You did not select admins.\n"
-                    f"- You did not select {self.bot.user.mention}.\n"
+                    f"- You did not select {interaction.client.user.mention}.\n"
                     f"- You did not select yourself."
                 )
             )
 
         overwrites_to_add = selected_without_admin - self.user_data
-        overwrites = {**user.voice.channel.overwrites}        
+        overwrites = {**interaction.user.voice.channel.overwrites}        
+        
         trust_or_block = discord.PermissionOverwrite()
-
         is_granted = self.mode == "Trust"
-        trust_or_block.update(
-            connect=is_granted, 
-            read_messages=is_granted
-        )
+        trust_or_block.update(connect=is_granted, read_messages=is_granted)
 
         for overwrite_entry in overwrites_to_add:
             overwrites.update({interaction.guild.get_member(int(overwrite_entry)): trust_or_block})
 
-        await user.voice.channel.edit(overwrites=overwrites)
-        self.tempvoice.active_voice_channels[interaction.user.id].update({self.verb: selected_without_admin})
+        await interaction.user.voice.channel.edit(overwrites=overwrites)
+        self.tempvoice_instance.active_voice_channels[interaction.user.id].update({self.verb: selected_without_admin})
 
-        await interaction.edit_original_response(
+        await interaction.response.edit_message(
             embed=membed(f"{self.mode}ed **{len(selected_without_admin)}** users."), 
             view=None
         )
@@ -89,16 +85,14 @@ class MemberSelect(discord.ui.UserSelect):
 
 class PrivacyOptions(discord.ui.Select):
     def __init__(
-            self, 
-            bot: commands.Bot, 
-            voice_channel: discord.VoiceChannel, 
-            privacy_setting: list
-        ) -> None:
-        
+        self, 
+        tempvoice_instance: "TempVoice", 
+        voice_channel: discord.VoiceChannel, 
+        privacy_setting: list
+    ) -> None:
         self.privacy_setting = privacy_setting  #  [Can_connect, Can_view, Can_send_messages] either 0 or 1
         self.voice_channel = voice_channel
-        self.tempvoice = bot.get_cog("TempVoice")
-        self.bot = bot
+        self.tempvoice_instance = tempvoice_instance
         
         options = [
             discord.SelectOption(label="Lock", description="Only trusted users will be able to join"),
@@ -133,20 +127,26 @@ class PrivacyOptions(discord.ui.Select):
             overwrites.connect = check
 
         self.privacy_setting[colIndex] = str(int(check))
-        self.tempvoice.active_voice_channels[interaction.user.id].update({"privacy": " ".join(self.privacy_setting)})
+        combination = " ".join(self.privacy_setting)
+        self.tempvoice_instance.active_voice_channels[interaction.user.id].update({"privacy": combination})
 
         await self.voice_channel.set_permissions(interaction.guild.default_role, overwrite=overwrites)
         await interaction.response.edit_message(embed=membed(content), view=None)
 
 
 class TrustOrBlock(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction, bot: commands.Bot, mode: Literal["Block", "Trust"]):
+    def __init__(
+        self, 
+        interaction: discord.Interaction, 
+        tempvoice: "TempVoice", 
+        mode: Literal["Block", "Trust"]
+    ) -> None:
         self.interaction = interaction
         super().__init__(timeout=60.0)
 
         self.add_item(
             MemberSelect(
-                bot=bot, 
+                tempvoice_instance=tempvoice, 
                 mode=mode, 
                 user=interaction.user
             )
@@ -168,19 +168,19 @@ class TrustOrBlock(discord.ui.View):
 
 class PrivacyView(discord.ui.View):
     def __init__(
-            self, 
-            voice_channel: discord.VoiceChannel, 
-            bot: commands.Bot, 
-            privacy_setting: list, 
-            interaction: discord.Interaction
-        ) -> None:
-        
+        self, 
+        voice_channel: discord.VoiceChannel, 
+        tempvoice: "TempVoice", 
+        privacy_setting: list, 
+        interaction: discord.Interaction
+    ) -> None:
+
         self.interaction = interaction
         super().__init__(timeout=60.0)
         
         self.add_item(
             PrivacyOptions(
-                bot=bot, 
+                tempvoice_instance=tempvoice,
                 voice_channel=voice_channel, 
                 privacy_setting=privacy_setting
             )
@@ -201,11 +201,11 @@ class PrivacyView(discord.ui.View):
 
 
 class TempVoice(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: commands.Bot) -> None:
         self.bot: commands.Bot = bot
         self.active_voice_channels = {}
 
-    async def store_data_locally(self, *, member: discord.Member, conn: asqlite_Connection):
+    async def store_data_locally(self, *, member: discord.Member, conn: asqlite_Connection) -> None:
         vdata = await conn.fetchone(
             "SELECT name, `limit`, bitrate, blocked, trusted, privacy, status FROM userVoiceSettings WHERE ownerID = ?", member.id)
         if vdata:
@@ -312,20 +312,23 @@ class TempVoice(commands.Cog):
             )
             del self.active_voice_channels[owner.id]
     
-    async def handle_mutual_removals(self, interaction: discord.Interaction, member: discord.Member, verb: Literal["trusted", "blocked"]):
-        user = interaction.user
-        
-        data_searched = self.active_voice_channels[user.id][verb]
-        
+    async def handle_mutual_removals(
+        self, 
+        interaction: discord.Interaction, 
+        member: discord.Member, 
+        verb: Literal["trusted", "blocked"]
+    ) -> None:
+
+        data_searched = self.active_voice_channels[interaction.user.id][verb]
         if str(member.id) not in data_searched:
             return await interaction.response.send_message(
                 embed=membed(f"{member.mention} is not a {verb} user."), 
                 ephemeral=True
             )
         
-        await user.voice.channel.set_permissions(member, overwrite=None)
+        await interaction.user.voice.channel.set_permissions(member, overwrite=None)
         data_searched.remove(str(member.id))
-        self.active_voice_channels[user.id].update({verb: data_searched})
+        self.active_voice_channels[interaction.user.id].update({verb: data_searched})
         
         await interaction.response.send_message(
             embed=membed(f"{member.mention} is **no longer {verb}**."), 
@@ -343,12 +346,12 @@ class TempVoice(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            creatorChannelId = await conn.fetchone(
-                "SELECT voiceID FROM guildVoiceSettings WHERE guildID = $0", member.guild.id)
+            query = "SELECT voiceID FROM guildVoiceSettings WHERE guildID = $0"
+            creatorChannelID = await conn.fetchone(query, member.guild.id)
             
-            if creatorChannelId is None:
+            if creatorChannelID is None:
                 return
-            creatorChannelId = creatorChannelId[0]
+            creatorChannelId = creatorChannelID[0]
 
             if after.channel is None:
                 old_channel_data = self.active_voice_channels.get(member.id)
@@ -365,7 +368,9 @@ class TempVoice(commands.Cog):
                 old_channel_data.update(
                     {
                         "blocked": " ".join(old_channel_data["blocked"]), 
-                        "trusted":" ".join(old_channel_data["trusted"])})
+                        "trusted":" ".join(old_channel_data["trusted"])
+                    }
+                )
                 
                 async with conn.transaction():
                     await conn.execute(
@@ -441,12 +446,11 @@ class TempVoice(commands.Cog):
     @app_commands.checks.cooldown(2, 600.0)
     @app_commands.describe(channel_name="The new name of the temporary voice channel. Leave blank to reset.")
     async def rename_voice(self, interaction: discord.Interaction, channel_name: Optional[str]):
-        user = interaction.user
 
-        channel_name = channel_name or f"{user.name}'s Channel"
-        self.active_voice_channels[user.id].update({"name": channel_name})
+        channel_name = channel_name or f"{interaction.user.name}'s Channel"
+        self.active_voice_channels[interaction.user.id].update({"name": channel_name})
 
-        await user.voice.channel.edit(name=channel_name)
+        await interaction.user.voice.channel.edit(name=channel_name)
         await interaction.response.send_message(embed=membed(f"Renamed the channel to **{channel_name}**"))
 
     @voice.command(name="status", description="Set the status of your temporary voice channel")
@@ -464,44 +468,37 @@ class TempVoice(commands.Cog):
     @app_commands.checks.cooldown(1, 15)
     @app_commands.describe(bitrate="The bitrate to set the channel to.")
     async def bitrate_voice(self, interaction: discord.Interaction, bitrate: app_commands.Range[int, 8, 96]):
-        user = interaction.user
-        voice = user.voice
 
         bitrate_limit = interaction.guild.bitrate_limit
         if (bitrate * 1000) > bitrate_limit:
             return await interaction.response.send_message(
                 embed=membed(f"Bitrate must be less than {bitrate_limit / 1000} kbps."))
 
-        self.active_voice_channels[user.id].update({"bitrate": bitrate*1000})
-        await voice.channel.edit(bitrate=(bitrate*1000))
+        self.active_voice_channels[interaction.user.id].update({"bitrate": bitrate*1000})
+        await interaction.user.voice.channel.edit(bitrate=(bitrate*1000))
 
         await interaction.response.send_message(
-            embed=membed(f"Changed the bitrate of {voice.channel.mention} to **{bitrate}** kbps.")
+            embed=membed(f"Bitrate of {interaction.user.voice.channel.mention} set to **{bitrate}** kbps.")
         )
 
     @voice.command(name="limit", description="Change the user limit of your temporary voice channel")
     @app_commands.checks.cooldown(1, 15)
     @app_commands.describe(limit="The user limit to set the channel to. 0 for no limit.")
     async def limit_voice(self, interaction: discord.Interaction, limit: app_commands.Range[int, 0, 99]):
-        user = interaction.user
-        voice = user.voice
 
-        self.active_voice_channels[user.id].update({"limit": limit})
+        self.active_voice_channels[interaction.user.id].update({"limit": limit})
 
-        await voice.channel.edit(user_limit=limit)
+        await interaction.user.voice.channel.edit(user_limit=limit)
         await interaction.response.send_message(
-            embed=membed(f"Changed the limit of {voice.channel.mention} to **{limit}** users"))
+            embed=membed(f"User limit of {interaction.user.voice.channel.mention} set to **{limit}**."))
 
     @voice.command(name="privacy", description="Lock or hide your temporary voice channel")
     async def modify_voice_privacy(self, interaction: discord.Interaction):
-        user = interaction.user
-        
-        setting = self.active_voice_channels[user.id]["privacy"].split()
         
         privacy_view = PrivacyView(
-            voice_channel=user.voice.channel, 
-            bot=self.bot, 
-            privacy_setting=setting, 
+            voice_channel=interaction.user.voice.channel,
+            tempvoice=self, 
+            privacy_setting=self.active_voice_channels[interaction.user.id]["privacy"].split(), 
             interaction=interaction
         )
 
@@ -529,12 +526,12 @@ class TempVoice(commands.Cog):
 
     @voice.command(name="trust", description="Trust users with permanent access to your temporary voice channel")
     async def change_trusted_users(self, interaction: discord.Interaction):
-        trust_view = TrustOrBlock(interaction, self.bot, mode="Trust")
+        trust_view = TrustOrBlock(interaction, tempvoice=self, mode="Trust")
         await interaction.response.send_message(view=trust_view, ephemeral=True)
     
     @voice.command(name="block", description="Block users from accessing your temporary voice channel")
     async def block_users(self, interaction: discord.Interaction):
-        block_view = TrustOrBlock(interaction, self.bot, mode="Block")
+        block_view = TrustOrBlock(interaction, tempvoice=self, mode="Block")
         await interaction.response.send_message(view=block_view, ephemeral=True)    
     
     @voice.command(name="untrust", description="Remove trusted users access to your temporary channel")

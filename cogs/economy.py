@@ -1094,7 +1094,6 @@ class BlackjackUi(discord.ui.View):
 
     def __init__(self, interaction: discord.Interaction):
         self.interaction = interaction
-        self.bot: commands.Bot = interaction.client
         self.finished = False
         super().__init__(timeout=30)
 
@@ -1113,9 +1112,9 @@ class BlackjackUi(discord.ui.View):
             
     async def on_timeout(self) -> None:
         if not self.finished:
-            del self.bot.games[self.interaction.user.id]
+            del self.interaction.client.games[self.interaction.user.id]
             
-            async with self.bot.pool.acquire() as conn:
+            async with self.interaction.client.pool.acquire() as conn:
                 await Economy.end_transaction(conn, user_id=self.interaction.user.id)
                 await conn.commit()
 
@@ -1192,12 +1191,10 @@ class BlackjackUi(discord.ui.View):
     @discord.ui.button(label='Hit', style=discord.ButtonStyle.primary)
     async def hit_bj(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Button in the interface to hit within blackjack."""
-        namount = self.bot.games[interaction.user.id][-1]
-        deck = self.bot.games[interaction.user.id][0]
-        player_hand = self.bot.games[interaction.user.id][1]
+        deck, player_hand, dealer_hand, d_fver_d, d_fver_p, namount = interaction.client.games[interaction.user.id]
 
         player_hand.append(deck.pop())
-        self.bot.games[interaction.user.id][-2].append(display_user_friendly_card_format(player_hand[-1]))
+        d_fver_p.append(display_user_friendly_card_format(player_hand[-1]))
         player_sum = calculate_hand(player_hand)
 
         embed = interaction.message.embeds[0]
@@ -1206,10 +1203,7 @@ class BlackjackUi(discord.ui.View):
 
             self.stop()
             self.finished = True
-            dealer_hand = self.bot.games[interaction.user.id][2]
-            d_fver_p = [num for num in self.bot.games[interaction.user.id][-2]]
-            d_fver_d = [num for num in self.bot.games[interaction.user.id][-3]]
-            del self.bot.games[interaction.user.id]
+            del interaction.client.games[interaction.user.id]
 
             new_amount_balance, prnctl = await self.update_losing_data(bet_amount=namount)
 
@@ -1250,12 +1244,7 @@ class BlackjackUi(discord.ui.View):
         elif player_sum == 21:
             self.stop()
             self.finished = True
-
-            dealer_hand = self.bot.games[interaction.user.id][2]
-            d_fver_p = [num for num in self.bot.games[interaction.user.id][-2]]
-            d_fver_d = [num for num in self.bot.games[interaction.user.id][-3]]
-
-            del self.bot.games[interaction.user.id]
+            del interaction.client.games[interaction.user.id]
 
             (   amount_after_multi, 
                 new_amount_balance, 
@@ -1296,10 +1285,7 @@ class BlackjackUi(discord.ui.View):
             embed.set_footer(text=f"Multiplier: {new_multi:,}%")
             await interaction.response.edit_message(embed=embed, view=None)
         else:
-
-            d_fver_p = [number for number in self.bot.games[interaction.user.id][-2]]
-            necessary_show = self.bot.games[interaction.user.id][-3][0]
-
+            necessary_show = d_fver_d[0]
             embed.description = f"**Your move. Your hand is now {player_sum}**."
 
             embed.set_field_at(
@@ -1328,27 +1314,16 @@ class BlackjackUi(discord.ui.View):
         self.stop()
         self.finished = True
 
-        deck = self.bot.games[interaction.user.id][0]
-        player_hand = self.bot.games[interaction.user.id][1]
-        dealer_hand = self.bot.games[interaction.user.id][2]
-        namount = self.bot.games[interaction.user.id][-1]
-
+        deck, player_hand, dealer_hand, d_fver_d, d_fver_p, namount = interaction.client.games[interaction.user.id]
         dealer_total = calculate_hand(dealer_hand)
         player_sum = calculate_hand(player_hand)
 
         while dealer_total < 17:
-            popped = deck.pop()
+            dealer_hand.append(deck.pop())
 
-            dealer_hand.append(popped)
-
-            self.bot.games[interaction.user.id][-3].append(display_user_friendly_card_format(popped))
+            d_fver_d.append(display_user_friendly_card_format(dealer_hand[-1]))
 
             dealer_total = calculate_hand(dealer_hand)
-
-        d_fver_p = self.bot.games[interaction.user.id][-2]
-        d_fver_d = self.bot.games[interaction.user.id][-3]
-
-        del self.bot.games[interaction.user.id]
 
         embed = interaction.message.embeds[0]
         if dealer_total > 21:
@@ -1367,31 +1342,11 @@ class BlackjackUi(discord.ui.View):
                 f"You won {prctnw:.1f}% of the games."
             )
 
-            embed.set_field_at(
-                index=0,
-                name=f"{interaction.user.name} (Player)", 
-                value=(
-                    f"**Cards** - {' '.join(d_fver_p)}\n"
-                    f"**Total** - `{player_sum}`"
-                )
-            )
-
-            embed.set_field_at(
-                index=1,
-                name=f"{interaction.client.user.name} (Dealer)", 
-                value=(
-                    f"**Cards** - {' '.join(d_fver_d)}\n"
-                    f"**Total** - `{dealer_total}`"
-                )
-            )
-
             embed.set_author(
                 icon_url=interaction.user.display_avatar.url, 
                 name=f"{interaction.user.name}'s winning blackjack game"
             )
             embed.set_footer(text=f"Multiplier: {new_multi:,}%")
-
-            await interaction.response.edit_message(embed=embed, view=None)
 
         elif dealer_total > player_sum:
             new_amount_balance, prnctl = await self.update_losing_data(bet_amount=namount)
@@ -1402,32 +1357,12 @@ class BlackjackUi(discord.ui.View):
                 f"You lost {CURRENCY} **{namount:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
                 f"You lost {prnctl:.1f}% of the games."
             )
-            
-            embed.set_field_at(
-                index=0,
-                name=f"{interaction.user.name} (Player)", 
-                value=(
-                    f"**Cards** - {' '.join(d_fver_p)}\n"
-                    f"**Total** - `{player_sum}`"
-                )
-            )
-
-            embed.set_field_at(
-                index=1,
-                name=f"{interaction.client.user.name} (Dealer)", 
-                value=(
-                    f"**Cards** - {' '.join(d_fver_d)}\n"
-                    f"**Total** - `{dealer_total}`"
-                )
-            )
 
             embed.set_author(
                 icon_url=interaction.user.display_avatar.url,
                 name=f"{interaction.user.name}'s losing blackjack game"
             )
             embed.remove_footer()
-            
-            await interaction.response.edit_message(embed=embed, view=None)
 
         elif dealer_total < player_sum:
             
@@ -1444,24 +1379,6 @@ class BlackjackUi(discord.ui.View):
                 f"You won {prctnw:.1f}% of the games."
             )
 
-            embed.set_field_at(
-                index=0,
-                name=f"{interaction.user.name} (Player)", 
-                value=(
-                    f"**Cards** - {' '.join(d_fver_p)}\n"
-                    f"**Total** - `{player_sum}`"
-                )
-            )
-
-            embed.set_field_at(
-                index=1,
-                name=f"{interaction.client.user.name} (Dealer)", 
-                value=(
-                    f"**Cards** - {' '.join(d_fver_d)}\n"
-                    f"**Total** - `{dealer_total}`"
-                )
-            )
-
             embed.set_author(
                 icon_url=interaction.user.display_avatar.url,
                 name=f"{interaction.user.name}'s winning blackjack game"
@@ -1469,9 +1386,8 @@ class BlackjackUi(discord.ui.View):
 
             embed.set_footer(text=f"Multiplier: {new_multi:,}%")
 
-            await interaction.response.edit_message(embed=embed, view=None)
         else:
-            async with self.bot.pool.acquire() as conn:
+            async with interaction.client.pool.acquire() as conn:
                 conn: asqlite_Connection
 
                 await Economy.end_transaction(conn, user_id=interaction.user.id)
@@ -1484,49 +1400,44 @@ class BlackjackUi(discord.ui.View):
                 f"**Tie! You tied with the dealer.**\n"
                 f"Your wallet hasn't changed! You have {CURRENCY} **{wallet_amt:,}** still."
             )
-
-            embed.set_field_at(
-                index=0,
-                name=f"{interaction.user.name} (Player)", 
-                value=(
-                    f"**Cards** - {' '.join(d_fver_p)}\n"
-                    f"**Total** - `{player_sum}`"
-                )
-            )
-
-            embed.set_field_at(
-                index=1,
-                name=f"{interaction.client.user.name} (Dealer)", 
-                value=(
-                    f"**Cards** - {' '.join(d_fver_d)}\n"
-                    f"**Total** - `{dealer_total}`"
-                )
-            )
-
             embed.remove_footer()
 
-            await interaction.response.edit_message(embed=embed, view=None)
+        embed.set_field_at(
+            index=0,
+            name=f"{interaction.user.name} (Player)", 
+            value=(
+                f"**Cards** - {' '.join(d_fver_p)}\n"
+                f"**Total** - `{player_sum}`"
+            )
+        )
+
+        embed.set_field_at(
+            index=1,
+            name=f"{interaction.client.user.name} (Dealer)", 
+            value=(
+                f"**Cards** - {' '.join(d_fver_d)}\n"
+                f"**Total** - `{dealer_total}`"
+            )
+        )
+
+        await interaction.response.edit_message(embed=embed, view=None)
 
     @discord.ui.button(label='Forfeit', style=discord.ButtonStyle.primary)
     async def forfeit_bj(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Button for the blackjack interface to forfeit the current match."""
-
         self.stop()
         self.finished = True
 
-        namount = self.bot.games[interaction.user.id][-1]
+        _, player_hand, dealer_hand, d_fver_d, d_fver_p, namount = interaction.client.games[interaction.user.id]
         namount //= 2
 
-        dealer_total = calculate_hand(self.bot.games[interaction.user.id][2])
-        player_sum = calculate_hand(self.bot.games[interaction.user.id][1])
-        d_fver_p = self.bot.games[interaction.user.id][-2]
-        d_fver_d = self.bot.games[interaction.user.id][-3]
-
-        del self.bot.games[interaction.user.id]
-        embed = interaction.message.embeds[0]
+        dealer_total = calculate_hand(dealer_hand)
+        player_sum = calculate_hand(player_hand)
+        del interaction.client.games[interaction.user.id]
 
         new_amount_balance, prcntl = await self.update_losing_data(bet_amount=namount)
 
+        embed = interaction.message.embeds[0]
         embed.colour = discord.Colour.brand_red()
         embed.description = (
             f"**You forfeit. The dealer took half of your bet for surrendering.**\n"
@@ -1565,29 +1476,35 @@ class BlackjackUi(discord.ui.View):
 class HighLow(discord.ui.View):
     """View for the Highlow command and its associated functions."""
 
-    def __init__(
-        self, 
-        interaction: discord.Interaction, 
-        hint_provided: int, 
-        bet: int, 
-        value: int
-    ) -> None:
-
+    def __init__(self, interaction: discord.Interaction, bet: int) -> None:
         self.interaction = interaction
-        self.true_value = value
-        self.hint_provided = hint_provided
         self.their_bet = bet
+        self.true_value = randint(1, 100)
+        self.hint_provided = randint(1, 100)
         super().__init__(timeout=30)
+
+    async def start(self):
+        query = membed(
+            "I just chose a secret number between 0 and 100.\n"
+            f"Is the secret number *higher* or *lower* than **{self.hint_provided}**?"
+        )
+        query.set_footer(text="The jackpot button is if you think it is the same!")
+
+        query.set_author(
+            name=f"{self.interaction.user.name}'s high-low game", 
+            icon_url=self.interaction.user.display_avatar.url
+        )
+        await self.interaction.response.send_message(embed=query, view=self)
 
     async def make_clicked_blurple_only(self, clicked_button: discord.ui.Button):
         """Disable all buttons in the interaction menu except the clicked one, setting its style to blurple."""
+        self.stop()
         for item in self.children:
             item.disabled = True
             if item == clicked_button:
                 item.style = discord.ButtonStyle.primary
                 continue
             item.style = discord.ButtonStyle.secondary
-        self.stop()
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await economy_check(interaction, self.interaction.user)
@@ -2252,7 +2169,7 @@ class MultiplierSelect(discord.ui.Select):
 class Economy(commands.Cog):
 
     def __init__(self, bot: commands.Bot) -> None:
-        self.bot: commands.Bot = bot
+        self.bot = bot
 
         self.not_registered = membed(
             "## <:noacc:1183086855181324490> You are not registered.\n"
@@ -5138,35 +5055,11 @@ class Economy(commands.Cog):
                 exponent_amount=robux,
                 has_keycard=has_keycard
             )
-
             if robux is None:
                 return
             await Economy.declare_transaction(conn, user_id=interaction.user.id)
-
-        number = randint(1, 100)
-        hint = randint(1, 100)
-
-        query = membed()
-        query.description = (
-            "I just chose a secret number between 0 and 100.\n"
-            f"Is the secret number *higher* or *lower* than **{hint}**?"
-        )
-
-        query.set_author(
-            name=f"{interaction.user.name}'s high-low game", 
-            icon_url=interaction.user.display_avatar.url
-        )
-
-        query.set_footer(text="The jackpot button is if you think it is the same!")
         
-        hl_view = HighLow(
-            interaction, 
-            hint_provided=hint, 
-            bet=robux, 
-            value=number
-        )
-
-        await interaction.response.send_message(view=hl_view, embed=query)
+        await HighLow(interaction, bet=robux).start()
 
     @app_commands.command(name='slots', description='Try your luck on a slot machine', extras={"exp_gained": 3})
     @app_commands.guilds(*APP_GUILDS_IDS)
