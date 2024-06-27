@@ -230,7 +230,6 @@ class C2C(commands.Bot):
 intents = Intents(
     members=True,
     guild_messages=True,
-    message_content=True,
     emojis_and_stickers=True,
     guilds=True,
     voice_states=True
@@ -240,7 +239,7 @@ intents = Intents(
 bot = C2C(
     allowed_mentions=AllowedMentions.none(),
     case_insensitive=True,
-    command_prefix=">",
+    command_prefix=commands.when_mentioned,
     help_command=None,
     intents=intents,
     max_messages=None,
@@ -309,11 +308,10 @@ def generic_loop_with_subcommand(all_cmds: dict, cmd_formatter: list, guild_id) 
     for (cmd, cmd_details) in all_cmds.items():
 
         if cmd_details[-1] == 'txt':
-            cmd_formatter.append(f"- [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) \U00002014 {cmd_details[0]}")
+            cmd_formatter.append(f"- [`{HelpDropdown.prefix}{cmd}`](https://youtu.be/dQw4w9WgXcQ) \U00002014 {cmd_details[0]}")
             continue
         
         command_manage = bot.tree.get_app_command(cmd, guild=Object(id=guild_id))
-
         if not isinstance(command_manage, app_commands.AppCommand):
             continue
 
@@ -339,7 +337,7 @@ def get_cog_name(*, shorthand: str) -> str:
 
 
 class HelpDropdown(ui.Select):
-
+    prefix = "@me "
     colour_mapping = {
         "Owner": (0x5BAAEF, "https://cdn.discordapp.com/icons/592654230112698378/1a4fed4eca3d81da620a662a8b383c5b.png?size=512"),
         "Moderation": (0xF70E73, "https://emoji.discadia.com/emojis/74e65408-2adb-46dc-86a7-363f3096b6b2.PNG"),
@@ -411,7 +409,7 @@ class HelpDropdown(ui.Select):
             for (cmd, cmd_details) in all_cmds.items():
 
                 if cmd_details[-1] == 'txt':
-                    pages.append(f"- [`>{cmd}`](https://youtu.be/dQw4w9WgXcQ) \U00002014 {cmd_details[0]}")
+                    pages.append(f"- [`{HelpDropdown.prefix}{cmd}`](https://youtu.be/dQw4w9WgXcQ) \U00002014 {cmd_details[0]}")
                     continue
 
                 command_manage = bot.tree.get_app_command(cmd, guild=Object(id=guild_id))
@@ -428,7 +426,7 @@ class HelpDropdown(ui.Select):
 
             all_cmds = bot.get_cog(chosen_help_category).get_commands()[0]
             for i, cmd in enumerate(all_cmds.commands, start=1):
-                pages.append(f"- [`>{cmd.qualified_name}`](https://youtu.be/dQw4w9WgXcQ) \U00002014 {cmd.description}")
+                pages.append(f"- [`{HelpDropdown.prefix}{cmd}`](https://youtu.be/dQw4w9WgXcQ) \U00002014 {cmd.description}")
 
         elif chosen_help_category in {"Utility", "TempVoice"}:
 
