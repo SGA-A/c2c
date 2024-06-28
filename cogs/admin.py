@@ -174,10 +174,6 @@ class Owner(commands.Cog):
     @commands.command(name='sync', description='Sync the bot tree for changes', aliases=("sy",))
     async def sync_tree(self, ctx: commands.Context) -> None:
         """Sync the bot's tree to either the guild or globally, varies from time to time."""
-
-        cc = discord.Object(id=829053898333225010)
-        self.bot.tree.clear_commands(guild=cc)
-        await self.bot.tree.sync(guild=cc)
         await self.bot.tree.sync(guild=None)
 
         self.bot.fetched_tree = True
