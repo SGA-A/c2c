@@ -499,22 +499,23 @@ class Moderation(commands.Cog):
 
         self.purge_from_here_cmd = app_commands.ContextMenu(
             name='Purge Up To Here',
-            callback=self.purge_from_here
+            callback=self.purge_from_here,
+            allowed_contexts=app_commands.AppCommandContext(guild=True, dm_channel=True, private_channel=True),
+            allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
         )
         
         roles = RoleManagement(
             name="role", 
             description="Role management commands",
-            guild_ids=APP_GUILDS_IDS,  
-            guild_only=True, 
-            default_permissions=discord.Permissions(manage_roles=True)
+            default_permissions=discord.Permissions(manage_roles=True),
+            allowed_contexts=app_commands.AppCommandContext(guild=True, dm_channel=False, private_channel=False),
+            allowed_installs=app_commands.AppInstallationType(guild=True, user=False)
         )
         
         self.bot.tree.add_command(self.purge_from_here_cmd)
         self.bot.tree.add_command(roles)
 
     @app_commands.default_permissions(manage_messages=True)
-    @app_commands.guilds(*APP_GUILDS_IDS)
     async def purge_from_here(self, interaction: discord.Interaction, message: discord.Message):
 
         await interaction.response.defer(ephemeral=True)
@@ -601,9 +602,9 @@ class Moderation(commands.Cog):
     temprole = app_commands.Group(
         name="temprole", 
         description="Set roles that expire after a certain time.", 
-        guild_only=True, 
-        guild_ids=APP_GUILDS_IDS, 
-        default_permissions=discord.Permissions(manage_roles=True)
+        default_permissions=discord.Permissions(manage_roles=True),
+        allowed_contexts=app_commands.AppCommandContext(guild=True, dm_channel=False, private_channel=False),
+        allowed_installs=app_commands.AppInstallationType(guild=True, user=False)
     )
 
     @temprole.command(name="add", description="Adds a temporary role")

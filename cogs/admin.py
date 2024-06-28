@@ -19,7 +19,7 @@ from discord.ext import commands
 from asqlite import Connection as asqlite_Connection
 
 from .core.helpers import membed, determine_exponent
-from .core.constants import CURRENCY, APP_GUILDS_IDS
+from .core.constants import CURRENCY, LIMITED_CONTEXTS, LIMITED_INSTALLS
 
 
 class InviteButton(discord.ui.View):
@@ -100,7 +100,6 @@ class Owner(commands.Cog):
         await ctx.reply(content=uptime)
 
     @app_commands.command(name="config", description="Adjust a user's robux directly")
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(
         configuration='Whether to add, remove, or specify robux.',
         amount='The amount of robux to modify. Supports Shortcuts (exponents only).',
@@ -108,6 +107,8 @@ class Owner(commands.Cog):
         is_private='Whether or not the response is only visible to you. Defaults to False.',
         medium='The type of balance to modify. Defaults to the wallet.'
     )
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def config(
         self, 
         interaction: discord.Interaction,
@@ -174,9 +175,11 @@ class Owner(commands.Cog):
     async def sync_tree(self, ctx: commands.Context) -> None:
         """Sync the bot's tree to either the guild or globally, varies from time to time."""
 
-        # await self.bot.tree.sync(guild=None)
-        for guild_id in APP_GUILDS_IDS:
-            await self.bot.tree.sync(guild=discord.Object(id=guild_id))
+        cc = discord.Object(id=829053898333225010)
+        self.bot.tree.clear_commands(guild=cc)
+        await self.bot.tree.sync(guild=cc)
+        await self.bot.tree.sync(guild=None)
+
         self.bot.fetched_tree = True
         await ctx.send("\U00002705")
 
@@ -413,7 +416,8 @@ class Owner(commands.Cog):
         await ctx.send(embed=content, view=InviteButton())
 
     @commands.hybrid_command(name='repeat', description='Repeat what you typed', aliases=('say',))
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.describe(
         message='What you want me to say.', 
         channel='What channel i should send in.'

@@ -7,7 +7,6 @@ from discord.ext import commands
 from asqlite import Connection as asqlite_Connection
 
 from .core.helpers import membed
-from .core.constants import APP_GUILDS_IDS
 
 
 def return_default_user_voice_settings(name: str) -> tuple:
@@ -394,8 +393,8 @@ class TempVoice(commands.Cog):
     voice = app_commands.Group(
         name="voice", 
         description="Manage your own temporary voice channel.", 
-        guild_ids=APP_GUILDS_IDS, 
-        guild_only=True
+        allowed_contexts=app_commands.AppCommandContext(guild=True, dm_channel=False, private_channel=False),
+        allowed_installs=app_commands.AppInstallationType(guild=True, user=False)
     )
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -407,9 +406,10 @@ class TempVoice(commands.Cog):
         )
         return False
     
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name="setup", description="Setup a creator channel for temporary voice channels")
     @app_commands.describe(creator_channel="The channel to use for making temporary voice channels.")
+    @app_commands.guild_install()
+    @app_commands.allowed_contexts(guilds=True)
     async def setup_voice(self, interaction: discord.Interaction, creator_channel: discord.VoiceChannel):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(
@@ -582,15 +582,16 @@ class TempVoice(commands.Cog):
         )
         await interaction.response.send_message(embed=embed)
 
-    @voice.command(name="reset", description="Reset your temporary voice channel")
+    @voice.command(name="reset", description="Reset and disconnect from your temporary voice channel")
     async def reset_voice(self, interaction: discord.Interaction):
-        user = interaction.user
 
-        self.active_voice_channels[user.id] = return_default_user_voice_settings(user.name)
+        self.active_voice_channels[interaction.user.id] = return_default_user_voice_settings(interaction.user.name)
+        for member in interaction.user.voice.channel.members:
+            await member.move_to(None)
 
         await interaction.response.send_message(
             embed=membed(
-                f"Reset {user.voice.channel.mention}.\nChanges are applied upon reconnecting."
+                f"Reset {interaction.user.voice.channel.mention}."
             )
         )
 

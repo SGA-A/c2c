@@ -12,38 +12,17 @@ from discord.ext import commands
 from discord import app_commands
 from psutil import Process, cpu_count
 
-from cogs.economy import (
-    APP_GUILDS_IDS, 
-    total_commands_used_by_user,
-    USER_ENTRY
-)
+from cogs.economy import total_commands_used_by_user, USER_ENTRY
 from .core.helpers import membed, number_to_ordinal
 from .core.paginator import Pagination, PaginationSimple
-
+from .core.constants import LIMITED_CONTEXTS, LIMITED_INSTALLS
 
 ARROW = "<:arrowe:1180428600625877054>"
 API_EXCEPTION = "The API fucked up, try again later."
-FORUM_ID = 1147176894903627888
 UPLOAD_FILE_DESCRIPTION = "A file to upload alongside the thread."
 ANIME_ENDPOINTS = (
     "https://purrbot.site/api/img/nsfw/neko/img",
 )
-FORUM_TAG_IDS = {
-    'game': 1147178989329322024, 
-    'political': 1147179277343793282, 
-    'meme': 1147179514825297960, 
-    'anime/manga': 1147179594869387364, 
-    'reposts': 1147179787949969449, 
-    'career': 1147180119887192134, 
-    'rant': 1147180329057140797, 
-    'information': 1147180466210873364, 
-    'criticism': 1147180700022345859, 
-    'health': 1147180978356363274, 
-    'advice': 1147181072065515641, 
-    'showcase': 1147181147370049576, 
-    'coding': 1147182042744901703, 
-    'general discussion': 1147182171140923392
-}
 EMBED_TIMEZONES = {
     'Pacific': 'US/Pacific',
     'Mountain': 'US/Mountain',
@@ -99,12 +78,11 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
     message = discord.ui.TextInput(
         style=discord.TextStyle.long,
         label='Description',
-        required=True,
-        placeholder="Put anything you want to share about the bot here.."
+        placeholder="Any concerns, feature requests or bug reports for the bot."
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        channel = interaction.guild.get_channel(1122902104802070572)
+        channel = interaction.client.get_partial_messageable(1122902104802070572)
         embed = membed(self.message.value)
         embed.title = f'New Feedback: {self.fb_title.value or "Untitled"}'
         embed.set_author(
@@ -129,19 +107,40 @@ class Utility(commands.Cog):
         self.bot = bot
         self.process = Process()
 
-        self.image_src = app_commands.ContextMenu(
-            name='Extract Image Source',
-            callback=self.extract_source
-        )
+        self.cog_context_menus = {
+            app_commands.ContextMenu(
+                name='Extract Image Source',
+                callback=self.extract_source,
+                allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=True),
+                allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
+            ),
+            app_commands.ContextMenu(
+                name='Extract Embed Colour',
+                callback=self.embed_colour,
+                allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=True),
+                allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
+            ),
+            app_commands.ContextMenu(
+                name="View User Avatar",
+                callback=self.view_avatar,
+                allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=True),
+                allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
+            ),
+            app_commands.ContextMenu(
+                name="View User Banner",
+                callback=self.view_banner,
+                allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=True),
+                allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
+            )
+        }
         
-        self.get_embed_cmd = app_commands.ContextMenu(
-            name='Extract Embed Colour',
-            callback=self.embed_colour
-        )
+        for context_menu in self.cog_context_menus:
+            self.bot.tree.add_command(context_menu)
 
-        self.bot.tree.add_command(self.image_src)
-        self.bot.tree.add_command(self.get_embed_cmd)
-
+    async def cog_unload(self) -> None:
+        for context_menu in self.cog_context_menus:
+            self.bot.tree.remove_command(context_menu)
+    
     async def get_commits(self):
         async with self.bot.session.get(
             url="https://api.github.com/repos/SGA-A/c2c/commits",
@@ -174,9 +173,6 @@ class Utility(commands.Cog):
             for tag_name in tags_xml if current.lower() in tag_name.lower()
         ]
 
-    async def cog_unload(self) -> None:
-        self.bot.tree.remove_command(self.get_embed_cmd.name, type=self.get_embed_cmd.type)
-        self.bot.tree.remove_command(self.image_src.name, type=self.image_src.type)
 
     async def retrieve_via_kona(self, **params) -> int | str:
         """Returns a list of dictionaries for you to iterate through and fetch their attributes"""
@@ -207,8 +203,9 @@ class Utility(commands.Cog):
             
             await interaction.followup.send(content=f"Took `{end-start:.2f}s`.", file=discord.File(buffer, 'clip.gif'))
 
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name='serverinfo', description="Show information about the server and its members")
+    @app_commands.guild_install()
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def display_server_info(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(thinking=True)
 
@@ -276,9 +273,10 @@ class Utility(commands.Cog):
 
         await interaction.followup.send(embed=serverinfo)
 
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(user="Whose command usage to display. Defaults to you.")
     @app_commands.command(name="usage", description="See your total command usage")
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def view_user_usage(self, interaction: discord.Interaction, user: Optional[USER_ENTRY]):
         user = user or interaction.user
 
@@ -325,9 +323,10 @@ class Utility(commands.Cog):
 
         await paginator.navigate()
 
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name='calc', description='Calculate an expression')
     @app_commands.describe(expression='The expression to evaluate.')
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def calculator(self, interaction: discord.Interaction, expression: str) -> None:
         try:
             interpretable = expression.replace('^', '**').replace(',', '_')
@@ -358,7 +357,6 @@ class Utility(commands.Cog):
         msg_content += f" `{self.bot.latency * 1000:.0f}ms`"
         await msg.edit(content=msg_content)
 
-    @app_commands.guilds(*APP_GUILDS_IDS)
     async def extract_source(
         self, 
         interaction: discord.Interaction, 
@@ -370,13 +368,12 @@ class Utility(commands.Cog):
 
         if message.embeds:
             for embed in message.embeds:
-                if not embed.image:
-                    continue
-                counter += 1
-                images.add(f"**{counter}**. [`{embed.image.height}x{embed.image.width}`]({embed.image.url})")
+                for asset in (embed.image, embed.thumbnail):
+                    if not asset:
+                        continue
+                    images.add(f"**{counter}**. [`{embed.image.height}x{embed.image.width}`]({embed.image.url})")
         
         for attr in message.attachments:
-            counter += 1
             images.add(f"**{counter}**. [`{attr.height}x{attr.width}`]({attr.url})")
 
         embed = membed()
@@ -388,27 +385,23 @@ class Utility(commands.Cog):
         embed.description="\n".join(images)
         embed.set_thumbnail(url=message.author.display_avatar.url)
         
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(ephemeral=True, embed=embed)
 
-    @app_commands.guilds(*APP_GUILDS_IDS)
     async def embed_colour(
         self, 
         interaction: discord.Interaction, 
         message: discord.Message
     ) -> None:
 
-        all_embeds = list()
-        counter = 0
+        all_embeds = [
+            discord.Embed(
+                colour=embed.colour, 
+                description=f"{embed.colour} - [`{embed.colour.value}`](https:/www.google.com)"
+            ) for embed in message.embeds
+        ]
 
-        if message.embeds:
-            for embed in message.embeds:
-                counter += 1
-                nembed = discord.Embed(colour=embed.colour)
-                nembed.description = f"{embed.colour} - [`{embed.colour.value}`](https:/www.google.com)"
-                all_embeds.append(nembed)
-
-        if counter:
-            return await interaction.response.send_message(embeds=all_embeds)
+        if all_embeds:
+            return await interaction.response.send_message(ephemeral=True, embeds=all_embeds)
 
         await interaction.response.send_message(
             ephemeral=True, 
@@ -418,9 +411,9 @@ class Utility(commands.Cog):
     anime = app_commands.Group(
         name='anime', 
         description="Surf through anime images and posts.", 
-        guild_only=True, 
-        guild_ids=APP_GUILDS_IDS,
-        nsfw=False
+        nsfw=False,
+        allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=True),
+        allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
     )
 
     @anime.command(name='kona', description='Retrieve NSFW posts from Konachan')
@@ -523,14 +516,14 @@ class Utility(commands.Cog):
             data = await resp.json()
             data = data['results'][0]
 
-            embed = discord.Embed(colour=0xFF9D2C)
-            embed.set_author(name=f"{data['artist_name']}")
-            embed.set_image(url=data['url'])
+        embed = discord.Embed(colour=0xFF9D2C)
+        embed.set_author(name=f"{data['artist_name']}")
+        embed.set_image(url=data['url'])
 
-            img_view = discord.ui.View()
-            img_view.add_item(ImageSourceButton(url=data["url"]))
+        img_view = discord.ui.View()
+        img_view.add_item(ImageSourceButton(url=data["url"]))
 
-            await interaction.response.send_message(embed=embed, view=img_view)
+        await interaction.response.send_message(embed=embed, view=img_view)
 
     @anime.command(name='random', description="Get a completely random waifu image")
     async def waifu_random_fetch(self, interaction: discord.Interaction) -> None:
@@ -548,7 +541,8 @@ class Utility(commands.Cog):
         return await interaction.response.send_message(embed=embed, view=img_view, ephemeral=True)
 
     @app_commands.command(name='emojis', description='Fetch all the emojis c2c can access')
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_installs(guilds=True, users=True)
     async def emojis_paginator(self, interaction: discord.Interaction) -> None:
         length = 8
         all_emojis = [f"{i} (**{i.name}**) \U00002014 `{i}`" for i in self.bot.emojis]
@@ -565,20 +559,19 @@ class Utility(commands.Cog):
         await Pagination(interaction, get_page=get_page_part).navigate()
 
     @app_commands.command(name='inviter', description='Creates a server invite link')
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.default_permissions(create_instant_invite=True)
     @app_commands.describe(
         invite_lifespan='A non-zero duration in days for which the invite should last for.', 
         maximum_uses='The maximum number of uses for the created invite.'
     )
+    @app_commands.guild_install()
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def gen_new_invite(
         self, 
         interaction: discord.Interaction, 
         invite_lifespan: app_commands.Range[int, 1], 
-        maximum_uses: int
+        maximum_uses: app_commands.Range[int, 1]
     ) -> None:
-
-        maximum_uses = abs(maximum_uses)
         invite_lifespan *= 86400
 
         generated_invite = await interaction.channel.create_invite(
@@ -608,7 +601,8 @@ class Utility(commands.Cog):
         await interaction.response.send_message(embed=success)
 
     @app_commands.command(name='randomfact', description='Queries a random fact')
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def random_fact(self, interaction: discord.Interaction) -> None:
         
         async with self.bot.session.get(
@@ -626,7 +620,8 @@ class Utility(commands.Cog):
         user="The user to apply the manipulation to.", 
         endpoint="What kind of manipulation sorcery to use."
     )
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def image_manip(
         self, 
         interaction: discord.Interaction, 
@@ -661,7 +656,8 @@ class Utility(commands.Cog):
         user="The user to apply the manipulation to.",
         endpoint="What kind of manipulation sorcery to use."
     )
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def image2_manip(
         self, 
         interaction: discord.Interaction,
@@ -692,7 +688,8 @@ class Utility(commands.Cog):
 
     @app_commands.command(name="locket", description="Insert people into a heart-shaped locket")
     @app_commands.describe(user="The user to add to the locket.", user2="The second user to add to the locket.")
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def locket_manip(
         self, 
         interaction: discord.Interaction, 
@@ -717,7 +714,8 @@ class Utility(commands.Cog):
         )
 
     @app_commands.command(name='charinfo', description='Show information about characters')
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.describe(characters='Any written letters or symbols.')
     async def charinfo(self, interaction: discord.Interaction, *, characters: str) -> None:
         """
@@ -743,12 +741,14 @@ class Utility(commands.Cog):
         await interaction.response.send_message(msg, suppress_embeds=True)
 
     @app_commands.command(name='feedback', description='Send feedback to the c2c developers')
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def feedback(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(FeedbackModal())
 
     @app_commands.command(name='about', description='Learn more about the bot')
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def about_the_bot(self, interaction: discord.Interaction) -> None:
 
         commits = await self.get_commits()
@@ -862,27 +862,23 @@ class Utility(commands.Cog):
         
         await interaction.response.send_message(embed=embed)
 
-    @commands.command(name='avatar', description="Display a user's enlarged avatar", aliases=('av',))
-    async def avatar(
+    async def view_avatar(
         self, 
-        ctx: commands.Context,
-        *, 
-        username: discord.Member | discord.User = commands.Author
+        interaction: discord.Interaction,
+        username: discord.User
     ) -> None:
         embed = membed()
 
         avatar = username.display_avatar.with_static_format('png')
-        embed.set_author(name=username.display_name, url=username.display_avatar.url)
-        embed.set_image(url=avatar)
-        await ctx.send(embed=embed)
+        embed.set_author(name=username.display_name, url=avatar.url)
+        embed.set_image(url=avatar.url)
+        await interaction.response.send_message(embed=embed)
 
-    @commands.command(name='banner', description="Display a user's enlarged banner", aliases=('bnr',))
-    async def banner(
+    async def view_banner(
         self, 
-        ctx: commands.Context, 
-        *, 
-        username: discord.Member | discord.User = commands.Author
-    ) -> None | discord.Message:
+        interaction: discord.Interaction, 
+        username: discord.User
+    ) -> None:
         embed = membed()
 
         if username.bot:
@@ -896,13 +892,12 @@ class Utility(commands.Cog):
 
         if not username.banner:
             embed.description = "This user does not have a banner."
-            return await ctx.send(embed=embed)
+            return await interaction.response.send_message(embed=embed)
 
         embed.set_image(url=username.banner.with_static_format('png'))
-        await ctx.send(embed=embed)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.checks.cooldown(1, 7, key=lambda i: i.guild.id)
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name="imagesearch", description="Browse images from the web")
     @app_commands.describe(
         query="The search query to use for the image search.",
@@ -912,6 +907,8 @@ class Utility(commands.Cog):
         from_only="[Limited to Bot Owner] Search from this website only.",
         image_size="The size of the image. Defaults to medium."
     )
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def image_search(
         self, 
         interaction: discord.Interaction, 
@@ -984,11 +981,13 @@ class Utility(commands.Cog):
         await paginator.navigate()
 
     @app_commands.command(name='post', description='Upload a new forum thread')
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.guild_install()
+    @app_commands.allowed_contexts(guilds=True)
     @app_commands.describe(
         name="The name of the thread.",
+        forum="What forum this thread should be in.",
         description="The content of the message to send with the thread.",
-        tags="The tags to apply to the thread, seperated by spaces.",
+        tags="The tags to apply to the thread, seperated by speech marks.",
         file=UPLOAD_FILE_DESCRIPTION,
         file2=UPLOAD_FILE_DESCRIPTION,
         file3=UPLOAD_FILE_DESCRIPTION
@@ -997,6 +996,7 @@ class Utility(commands.Cog):
     async def create_new_thread(
         self, 
         interaction: discord.Interaction, 
+        forum: discord.ForumChannel,
         name: str, 
         description: Optional[str], 
         tags: str, 
@@ -1006,12 +1006,7 @@ class Utility(commands.Cog):
     ) -> None:
 
         await interaction.response.defer(thinking=True)
-
-        if interaction.guild.id != 829053898333225010:
-            return await interaction.followup.send(embed=membed("This command can't be used here."))
-
-        forum: discord.ForumChannel = self.bot.get_channel(FORUM_ID)
-        tags = tags.lower().split()
+        tags = tags.lower().split('""')
 
         files = [
             await param_value.to_file() 
@@ -1019,7 +1014,12 @@ class Utility(commands.Cog):
             if param_name.startswith("f") and param_value
         ]
 
-        applicable_tags = [forum.get_tag(tag_id) for tagname in tags if (tag_id := FORUM_TAG_IDS.get(tagname)) is not None]
+        applicable_tags = []
+        for tag in tags:
+            tag = forum.get_tag(tag)
+            if not tag:
+                continue
+            applicable_tags.append(tag)
 
         thread, _ = await forum.create_thread(
             name=name,

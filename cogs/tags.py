@@ -14,7 +14,7 @@ from asqlite import ProxiedConnection as asqlite_Connection
 
 from .core.views import Confirm
 from .core.helpers import membed
-from .core.constants import APP_GUILDS_IDS
+from .core.constants import LIMITED_INSTALLS
 from .core.paginator import PaginationSimple
 
 
@@ -380,11 +380,12 @@ class Tags(commands.Cog):
 
     def remove_in_progress_tag(self, name: str) -> None:
         self._reserved_tags_being_made.discard(name.lower())
-            
+
     @commands.hybrid_group(description="Tag text for later retrieval", fallback='get')
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(name='The tag to retrieve.')
     @app_commands.autocomplete(name=non_aliased_tag_autocomplete)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def tag(self, ctx: commands.Context, *, name: str):
         async with self.bot.pool.acquire() as conn:
             
@@ -406,8 +407,9 @@ class Tags(commands.Cog):
             await conn.execute("UPDATE tags SET uses = uses + 1 WHERE name = $0", name)
     
     @tag.command(description="Create a new tag owned by you", aliases=('add',))
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(name='The tag name.', content='The tag content.')
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def create(
         self, 
         ctx: commands.Context, 
@@ -426,7 +428,8 @@ class Tags(commands.Cog):
             await self.create_tag(ctx, name, content, conn=conn)
     
     @tag.command(description="Interactively make your own tag", ignore_extra=True)
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def make(self, ctx: commands.Context):
 
         async with self.bot.pool.acquire() as conn:
@@ -510,12 +513,13 @@ class Tags(commands.Cog):
                 self.remove_in_progress_tag(name)
 
     @tag.command(description="Modifiy an existing tag that you own")
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(
         name='The tag to edit.',
         content='The new content of the tag, if not given then a modal is opened.',
     )
     @app_commands.autocomplete(name=owned_non_aliased_tag_autocomplete)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def edit(
         self,
         ctx: commands.Context,
@@ -581,9 +585,10 @@ class Tags(commands.Cog):
             await ctx.send(embed=membed(f'Successfully edited tag named {name!r}.'))
 
     @tag.command(description="Remove a tag that you own", aliases=('delete',))
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(name='The tag to remove')
     @app_commands.autocomplete(name=owned_non_aliased_tag_autocomplete)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def remove(self, ctx: commands.Context, *, name: Annotated[str, TagName]):
 
         async with self.bot.pool.acquire() as conn:
@@ -612,9 +617,10 @@ class Tags(commands.Cog):
             await ctx.send(embed=membed(f'Tag named {deleted_info[1]!r} (ID {deleted_info[0]}) successfully deleted.'))
 
     @tag.command(description="Remove a tag that you own by its ID", aliases=('delete_id',))
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(tag_id='The internal tag ID to delete.')
     @app_commands.rename(tag_id='id')
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def remove_id(self, ctx: commands.Context, tag_id: int):
 
         bypass_owner_check = ctx.author.id in self.bot.owner_ids
@@ -680,9 +686,10 @@ class Tags(commands.Cog):
         await ctx.send(embed=embed)
 
     @tag.command(description="Retrieve info about a tag", aliases=('owner',))
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(name='The tag to retrieve information for.')
     @app_commands.autocomplete(name=non_aliased_tag_autocomplete)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def info(self, ctx: commands.Context, *, name: Annotated[str, TagName]):
         
         async with self.bot.pool.acquire() as conn:
@@ -705,12 +712,13 @@ class Tags(commands.Cog):
             await self._send_tag_info(ctx, conn, tag_name=name, row=record)
 
     @tag.command(description="Remove all tags made by a user")
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(user='The user to remove all tags of. Defaults to your own.')
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def purge(self, ctx: commands.Context, user: Optional[discord.Member] = commands.Author):
 
         if (ctx.author.id != user.id) and (ctx.author.id not in self.bot.owner_ids):
-            return await ctx.send(embed=membed("Only bot developers can do this."))
+            return await ctx.send(embed=membed("You can only delete tags made by you."))
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
@@ -756,8 +764,9 @@ class Tags(commands.Cog):
         await paginator.navigate()
 
     @tag.command(description="Search for a tag")
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(query='The tag name to search for.')
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def search(self, ctx: commands.Context, *, query: Annotated[str, commands.clean_content]):
 
         async with self.bot.pool.acquire() as conn:
@@ -783,9 +792,10 @@ class Tags(commands.Cog):
         )
 
     @tag.command(description="Transfer a tag to another member")
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(member='The member to transfer the tag to.', tag="The tag to transfer.")
     @app_commands.autocomplete(tag=owned_non_aliased_tag_autocomplete)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def transfer(self, ctx: commands.Context, member: discord.Member, *, tag: Annotated[str, TagName]):
 
         if member.bot:
@@ -809,7 +819,8 @@ class Tags(commands.Cog):
             await ctx.send(embed=membed(f'Successfully transferred tag ownership to {member.mention}.'))
 
     @tag.command(name="all", description="List all tags ever made")
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def all_tags(self, ctx: commands.Context):
 
         async with self.bot.pool.acquire() as conn:
@@ -834,9 +845,12 @@ class Tags(commands.Cog):
     
     @tag.command(name="list", description="Display all tags you made")
     @app_commands.describe(member='The member to list tags of. Defaults to show yours.')
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def _list(self, ctx: commands.Context, *, member: discord.User = commands.Author):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
+
             query = (
                 """
                 SELECT name, rowid
@@ -845,7 +859,6 @@ class Tags(commands.Cog):
                 ORDER BY name
                 """
             )
-
             rows = await conn.fetchall(query, member.id)
             if not rows:
                 return await ctx.send(embed=membed(f"{member.mention} has no tags."))
@@ -859,14 +872,16 @@ class Tags(commands.Cog):
             )
 
     @commands.hybrid_command()
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(member='The member to list the tags of. Defaults to your own.')
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def tags(self, ctx: commands.Context, *, member: discord.User = commands.Author):
         """An alias for tag list command."""
         await ctx.invoke(self._list, member=member)
 
     @tag.command(description="Display a random tag")
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def random(self, ctx: commands.Context):
         async with self.bot.pool.acquire() as conn:
 

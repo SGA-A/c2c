@@ -1,10 +1,12 @@
 __all__ = (
     "APP_GUILDS_IDS",
     "CURRENCY",
-    "COOLDOWN_PROMPTS"
+    "COOLDOWN_PROMPTS",
+    "LIMITED_CONTEXTS",
+    "LIMITED_INSTALLS"
 )
 
-APP_GUILDS_IDS = [829053898333225010, 780397076273954886]
+APP_GUILDS_IDS = [829053898333225010]
 CURRENCY = '\U000023e3'
 COOLDOWN_PROMPTS = (
     "Too spicy, take a breather..", 
@@ -22,3 +24,5 @@ COOLDOWN_PROMPTS = (
     "Cool your jets, space cadet",
     "Easy does it, turbo"
 )
+LIMITED_CONTEXTS = {"guilds": True, "private_channels": True}
+LIMITED_INSTALLS = {"guilds": True, "users": True}

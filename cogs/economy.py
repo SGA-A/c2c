@@ -44,7 +44,7 @@ from .core.paginator import (
 )
 
 from .core.views import process_confirmation
-from .core.constants import CURRENCY, APP_GUILDS_IDS
+from .core.constants import CURRENCY
 
 def swap_elements(x, index1, index2) -> None:
     """Swap two elements in place given their indices, return None.
@@ -77,6 +77,7 @@ def selling_price_algo(base_price: int, multiplier: int) -> int:
 
 
 """ALL VARIABLES AND CONSTANTS FOR THE ECONOMY ENVIRONMENT"""
+CONTEXT_AND_INSTALL = {"guilds": True}
 USER_ENTRY = discord.Member | discord.User
 MULTIPLIER_TYPES = Literal["xp", "luck", "robux"]
 MIN_BET_KEYCARD = 500_000
@@ -3320,9 +3321,10 @@ class Economy(commands.Cog):
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name="settings", description="Adjust user-specific settings")
     @app_commands.describe(setting="The specific setting you want to adjust. Defaults to view.")
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def view_user_settings(self, interaction: discord.Interaction, setting: Optional[str]) -> None:
         """View or adjust user-specific settings."""
         async with self.bot.pool.acquire() as conn:
@@ -3335,12 +3337,13 @@ class Economy(commands.Cog):
             em = await Economy.get_setting_embed(interaction, view=view, conn=conn)
             await interaction.response.send_message(embed=em, view=view)
 
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.command(name="multipliers", description="View all of your multipliers within the bot")
     @app_commands.describe(
         user="The user whose multipliers you want to see. Defaults to your own.",
         multiplier="The type of multiplier you want to see. Defaults to robux."
     )
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def my_multi(
         self, 
         interaction: discord.Interaction, 
@@ -3401,8 +3404,8 @@ class Economy(commands.Cog):
     share = app_commands.Group(
         name='share', 
         description='Share different assets with others.', 
-        guild_only=True, 
-        guild_ids=APP_GUILDS_IDS
+        allowed_contexts=app_commands.AppCommandContext(guild=True),
+        allowed_installs=app_commands.AppInstallationType(guild=True)
     )
 
     @share.command(name="robux", description="Share robux with another user", extras={"exp_gained": 5})
@@ -3570,8 +3573,8 @@ class Economy(commands.Cog):
     trade = app_commands.Group(
         name='trade', 
         description='Exchange different assets with others.', 
-        guild_only=True, 
-        guild_ids=APP_GUILDS_IDS
+        allowed_contexts=app_commands.AppCommandContext(guild=True),
+        allowed_installs=app_commands.AppInstallationType(guild=True)
     )
     
     async def coin_checks_passing(
@@ -4167,8 +4170,8 @@ class Economy(commands.Cog):
     showcase = app_commands.Group(
         name="showcase", 
         description="Manage your own item showcase.", 
-        guild_ids=APP_GUILDS_IDS,
-        guild_only=True
+        allowed_contexts=app_commands.AppCommandContext(guild=True),
+        allowed_installs=app_commands.AppInstallationType(guild=True)
     )
 
     async def delete_missing_showcase_items(
@@ -4304,8 +4307,8 @@ class Economy(commands.Cog):
     shop = app_commands.Group(
         name='shop', 
         description='View items available for purchase.', 
-        guild_only=True, 
-        guild_ids=APP_GUILDS_IDS
+        allowed_contexts=app_commands.AppCommandContext(guild=True),
+        allowed_installs=app_commands.AppInstallationType(guild=True)
     )
 
     @shop.command(name='view', description='View all the shop items')
@@ -4446,7 +4449,8 @@ class Economy(commands.Cog):
     @app_commands.command(name='item', description='Get more details on a specific item')
     @app_commands.describe(item_name=ITEM_DESCRPTION)
     @app_commands.rename(item_name="name")
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def item(self, interaction: discord.Interaction, item_name: str) -> None:
         """This is a subcommand. Look up a particular item within the shop to get more information about it."""
 
@@ -4645,16 +4649,16 @@ class Economy(commands.Cog):
         Economy.start_check_for_expiry(interaction)
 
     @app_commands.command(name="use", description="Use an item you own from your inventory", extras={"exp_gained": 3})
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(item=ITEM_DESCRPTION, quantity='Amount of items to use, when possible.')
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def use_item(
         self, 
         interaction: discord.Interaction, 
         item: str, 
-        quantity: Optional[int] = 1
+        quantity: Optional[app_commands.Range[int, 1]] = 1
     ) -> discord.WebhookMessage | None:
         """Use a currently owned item."""
-        quantity = abs(quantity)
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
@@ -4699,7 +4703,8 @@ class Economy(commands.Cog):
             await handler(interaction, quantity, conn)
 
     @app_commands.command(name="prestige", description="Sacrifice currency stats in exchange for incremental perks")
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def prestige(self, interaction: discord.Interaction) -> None:
         """Sacrifice a portion of your currency stats in exchange for incremental perks."""
 
@@ -4810,11 +4815,12 @@ class Economy(commands.Cog):
                 await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='profile', description='View user information and other stats')
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(
         user='The user whose profile you want to see.', 
         category='What type of data you want to view.'
     )
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def find_profile(
         self, 
         interaction: discord.Interaction, 
@@ -5032,8 +5038,9 @@ class Economy(commands.Cog):
                 await interaction.response.send_message(embeds=[stats, piee], ephemeral=ephemerality)
 
     @app_commands.command(name='highlow', description='Guess the number. Jackpot wins big!', extras={"exp_gained": 3})
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(robux=ROBUX_DESCRIPTION)
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def highlow(self, interaction: discord.Interaction, robux: str) -> None:
         """
         Guess the number. The user must guess if the clue the bot gives is higher,
@@ -5062,8 +5069,9 @@ class Economy(commands.Cog):
         await HighLow(interaction, bet=robux).start()
 
     @app_commands.command(name='slots', description='Try your luck on a slot machine', extras={"exp_gained": 3})
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(robux=ROBUX_DESCRIPTION)
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def slots(self, interaction: discord.Interaction, robux: str) -> None:
         """Play a round of slots. At least one matching combination is required to win."""
 
@@ -5152,8 +5160,9 @@ class Economy(commands.Cog):
         await interaction.response.send_message(embed=slot_machine)
     
     @app_commands.command(name='inventory', description='View your currently owned items')
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(member='The user whose inventory you want to see.')
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def inventory(
         self, 
         interaction: discord.Interaction, 
@@ -5280,8 +5289,8 @@ class Economy(commands.Cog):
     work = app_commands.Group(
         name="work", 
         description="Work management commands.", 
-        guild_only=True, 
-        guild_ids=APP_GUILDS_IDS
+        allowed_contexts=app_commands.AppCommandContext(guild=True),
+        allowed_installs=app_commands.AppInstallationType(guild=True)
     )
 
     @work.command(name="shift", description="Fulfill a shift at your current job", extras={"exp_gained": 3})
@@ -5470,7 +5479,8 @@ class Economy(commands.Cog):
     
     @app_commands.command(name="balance", description="Get someone's balance. Wallet, bank, and net worth.")
     @app_commands.describe(user='The user to find the balance of.')
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def find_balance(
         self, 
         interaction: discord.Interaction, 
@@ -5539,23 +5549,27 @@ class Economy(commands.Cog):
             await interaction.response.send_message(embed=success)
 
     @app_commands.command(name="weekly", description="Get a weekly injection of robux")
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def weekly(self, interaction: discord.Interaction) -> None:
         await self.do_weekly_or_monthly(interaction, "weekly", weeks_away=1)
     
     @app_commands.command(description="Get a monthly injection of robux")
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def monthly(self, interaction: discord.Interaction) -> None:
         await self.do_weekly_or_monthly(interaction, "monthly", weeks_away=4)
     
     @app_commands.command(description="Get a yearly injection of robux")
-    @app_commands.guilds(*APP_GUILDS_IDS)
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def yearly(self, interaction: discord.Interaction) -> None:
         await self.do_weekly_or_monthly(interaction, "yearly", weeks_away=52)
 
     @app_commands.command(name="resetmydata", description="Opt out of the virtual economy, deleting all of your data")
-    @app_commands.guilds(*APP_GUILDS_IDS)
-    @app_commands.describe(member='The player to remove all of the data of. Defaults to the user calling the command.')
+    @app_commands.describe(member='The player to remove all of the data of. Defaults to you.')
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def discontinue_bot(self, interaction: discord.Interaction, member: Optional[USER_ENTRY]) -> None:
         """Opt out of the virtual economy and delete all of the user data associated."""
         
@@ -5594,8 +5608,9 @@ class Economy(commands.Cog):
         )
 
     @app_commands.command(name="withdraw", description="Withdraw robux from your bank account")
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(robux=ROBUX_DESCRIPTION)
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def withdraw(self, interaction: discord.Interaction, robux: str) -> None:
         """Withdraw a given amount of robux from your bank."""
 
@@ -5668,8 +5683,9 @@ class Economy(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='deposit', description="Deposit robux into your bank account")
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(robux=ROBUX_DESCRIPTION)
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def deposit(self, interaction: discord.Interaction, robux: str) -> None:
         """Deposit an amount of robux into your bank."""
 
@@ -5761,8 +5777,9 @@ class Economy(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='leaderboard', description='Rank users based on various stats')
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(stat="The stat you want to see.")
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def get_leaderboard(
         self, 
         interaction: discord.Interaction, 
@@ -5785,26 +5802,26 @@ class Economy(commands.Cog):
 
         await interaction.response.send_message(embed=lb, view=lb_view)
 
-    @app_commands.command(name='rob', description="Attempt to steal from someone's pocket", extras={"exp_gained": 4})
-    @app_commands.guilds(*APP_GUILDS_IDS)
-    @app_commands.rename(robbing="user")
-    @app_commands.describe(robbing='The user you want to rob money from.')
-    async def rob_the_user(self, interaction: discord.Interaction, robbing: discord.Member) -> None:
+    @app_commands.command(description="Attempt to steal from someone's pocket", extras={"exp_gained": 4})
+    @app_commands.describe(user='The user you want to rob money from.')
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
+    async def rob(self, interaction: discord.Interaction, user: discord.Member) -> None:
         """Rob someone else."""
 
         embed = membed()
-        if interaction.user.id == robbing.id:
+        if interaction.user.id == user.id:
             embed.description = 'Seems pretty foolish to steal from yourself'
             return await interaction.response.send_message(embed=embed)
-        elif robbing.bot:
+        elif user.bot:
             embed.description = 'You are not allowed to steal from bots, back off my kind'
             return await interaction.response.send_message(embed=embed)
         else:
             async with self.bot.pool.acquire() as conn:
                 conn: asqlite_Connection
 
-                if not (await self.can_call_out_either(interaction.user, robbing, conn)):
-                    embed.description = f'Either you or {robbing.mention} are not registered.'
+                if not (await self.can_call_out_either(interaction.user, user, conn)):
+                    embed.description = f'Either you or {user.mention} are not registered.'
                     return await interaction.response.send_message(embed=embed, ephemeral=True)
 
                 prim_d = await conn.fetchone(
@@ -5828,15 +5845,15 @@ class Economy(commands.Cog):
                     LEFT JOIN settings 
                         ON accounts.userID = settings.userID AND settings.setting = 'passive_mode' 
                     WHERE accounts.userID = $0
-                    """, robbing.id
+                    """, user.id
                 )
 
                 if host_d[-1]:
-                    embed.description = f"{robbing.mention} is in passive mode, you can't rob them!"
+                    embed.description = f"{user.mention} is in passive mode, you can't rob them!"
                     return await interaction.response.send_message(embed=embed)
 
                 if host_d[0] < 1_000_000:
-                    embed.description = f"{robbing.mention} doesn't even have {CURRENCY} **1,000,000**, not worth it."
+                    embed.description = f"{user.mention} doesn't even have {CURRENCY} **1,000,000**, not worth it."
                     return await interaction.response.send_message(embed=embed)
                 
                 if prim_d[0] < 10_000_000:
@@ -5858,7 +5875,7 @@ class Economy(commands.Cog):
                     fine = randint(1, prim_d[0])
                     embed.description = (
                         f'You were caught lol {emote}\n'
-                        f'You paid {robbing.mention} {CURRENCY} **{fine:,}**.'
+                        f'You paid {user.mention} {CURRENCY} **{fine:,}**.'
                     )
 
                     b = prim_d[-1]
@@ -5866,12 +5883,12 @@ class Economy(commands.Cog):
                         fine += b
                         embed.description += (
                             "\n\n**Bounty Status:**\n"
-                            f"{robbing.mention} was also given your bounty of **{CURRENCY} {b:,}**."
+                            f"{user.mention} was also given your bounty of **{CURRENCY} {b:,}**."
                         )
 
                     await self.update_wallet_many(
                         conn, 
-                        (fine, robbing.id), 
+                        (fine, user.id), 
                         (-fine, interaction.user.id)
                     )
                     await conn.commit()
@@ -5885,7 +5902,7 @@ class Economy(commands.Cog):
                 
                 await self.update_wallet_many(
                     conn, 
-                    (-amt_stolen, robbing.id), 
+                    (-amt_stolen, user.id), 
                     (total, interaction.user.id)
                 )
                 await conn.commit()
@@ -5912,8 +5929,9 @@ class Economy(commands.Cog):
                 await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='bankrob', description="Gather people to rob someone's bank")
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(user='The user to attempt to bankrob.')
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def bankrob_the_user(self, interaction: discord.Interaction, user: discord.Member) -> None:
         """Rob someone else's bank."""
         starter_id = interaction.user.id
@@ -5927,11 +5945,9 @@ class Economy(commands.Cog):
         return await interaction.response.send_message(embed=membed("This feature is in development."))
 
     @app_commands.command(name='coinflip', description='Bet your robux on a coin flip', extras={"exp_gained": 3})
-    @app_commands.guilds(*APP_GUILDS_IDS)
-    @app_commands.describe(
-        side='The side of the coin you bet it will flip on.', 
-        robux=ROBUX_DESCRIPTION
-    )
+    @app_commands.describe(side='The side of the coin you bet it will flip on.', robux=ROBUX_DESCRIPTION)
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def coinflip(self, interaction: discord.Interaction, side: str, robux: str) -> None:
         """Flip a coin and make a bet on what side of the coin it flips to."""
 
@@ -6017,8 +6033,9 @@ class Economy(commands.Cog):
             await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="blackjack", description="Test your skills at blackjack", extras={"exp_gained": 3})
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(robux=ROBUX_DESCRIPTION)
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def play_blackjack(self, interaction: discord.Interaction, robux: str) -> None:
         """Play a round of blackjack with the bot. Win by reaching 21 or a score higher than the bot without busting."""
 
@@ -6147,8 +6164,9 @@ class Economy(commands.Cog):
         return amount
 
     @app_commands.command(name="bet", description="Bet your robux on a dice roll", extras={"exp_gained": 3})
-    @app_commands.guilds(*APP_GUILDS_IDS)
     @app_commands.describe(robux=ROBUX_DESCRIPTION)
+    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
+    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def bet(self, interaction: discord.Interaction, robux: str) -> None:
         """Bet your robux on a gamble to win or lose robux."""
 
