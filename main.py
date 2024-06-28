@@ -189,13 +189,13 @@ class C2C(commands.Bot):
         formatted_traceback = ''.join(format_exception(type(error), error, error.__traceback__))
         log_error(formatted_traceback)
 
-    async def yield_app_commands(self, interaction: Interaction) -> None:
+    async def yield_app_commands(self) -> None:
         """Fetch app commands via HTTP when they're not already in the tree."""
 
         if self.fetched_tree:
             return
 
-        await self.tree.fetch_commands(guild=Object(id=interaction.guild.id))
+        await self.tree.fetch_commands(guild=None)
         self.fetched_tree = True
 
     async def close(self):
@@ -487,7 +487,7 @@ async def help_command_category(interaction: Interaction, category: classnames) 
     if not value:
         return
 
-    await bot.yield_app_commands(interaction)
+    await bot.yield_app_commands()
 
     pages = HelpDropdown.format_pages(
         chosen_help_category=category, 
