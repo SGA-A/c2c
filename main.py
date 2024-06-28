@@ -37,7 +37,6 @@ from discord.ext import commands
 from discord.utils import setup_logging
 
 from cogs.core.helpers import membed
-from cogs.core.constants import APP_GUILDS_IDS
 from cogs.core.paginator import RefreshSelectPagination
 
 
@@ -481,10 +480,12 @@ class HelpDropdown(ui.Select):
 
 
 @app_commands.describe(category="The category you want help on.")
+@app_commands.allowed_contexts(guilds=True, dms=True, private_channels=True)
+@app_commands.allowed_installs(guilds=True, users=True)
 @bot.tree.command(name="help", description="Shows help for different categories")
 async def help_command_category(interaction: Interaction, category: classnames) -> None:
     value = await do_guild_checks(interaction)
-    if value is None:
+    if not value:
         return
 
     await bot.yield_app_commands(interaction)
@@ -597,24 +598,16 @@ async def load_cog(ctx: commands.Context, cog_input: str) -> None:
 
 
 async def do_guild_checks(interaction: Interaction) -> bool | None:
-    app_commands_not_supported = True
-    if interaction.guild:
-        gid = interaction.guild.id
-        app_commands_not_supported = gid not in APP_GUILDS_IDS
-
-    if app_commands_not_supported:
-        supported_guilds = "\n".join(f" - {bot.get_guild(sgid).name}" for sgid in APP_GUILDS_IDS)
-
+    if interaction.guild is None:
         second = membed(
-            "Commands are **not** available here:\n"
-            "- Slash commands are only supported in these servers:\n"
-            f"{supported_guilds}\n"
-            "- Text commands are supported everywhere except DMs.\n\n"
-            "This was done to prevent hidden abuse.\n"
-            "You may contact the developers to request another guild to be added."
+            "Some commands aren't available here.\n"
+            "Since you're not using this in a guild, you won't be able to use core functionality of the bot.\n"
+            "This includes the economy system, (temporary) role and voice management.\n"
+            "It is recommended to use this bot in a guild.\n"
+            "Some slash commands are available here, but no text (aka prefix) commands."
         )
         return await interaction.response.send_message(embed=second, ephemeral=True)
-    return app_commands_not_supported
+    return True
 
 
 async def main():

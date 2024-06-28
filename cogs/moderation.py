@@ -8,7 +8,6 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 from .core.helpers import membed, respond
-from .core.constants import APP_GUILDS_IDS
 from .core.paginator import PaginationItem
 from .core.views import process_confirmation
 

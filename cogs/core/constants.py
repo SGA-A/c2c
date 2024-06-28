@@ -1,12 +1,10 @@
 __all__ = (
-    "APP_GUILDS_IDS",
     "CURRENCY",
     "COOLDOWN_PROMPTS",
     "LIMITED_CONTEXTS",
     "LIMITED_INSTALLS"
 )
 
-APP_GUILDS_IDS = [829053898333225010]
 CURRENCY = '\U000023e3'
 COOLDOWN_PROMPTS = (
     "Too spicy, take a breather..", 
