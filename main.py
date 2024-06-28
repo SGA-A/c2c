@@ -438,11 +438,10 @@ class HelpDropdown(ui.Select):
             pages = generic_loop_with_subcommand(all_cmds, pages, guild_id)
 
         else:
-            all_cmds = return_interaction_cmds_last({}, chosen_help_category)
+            all_cmds = return_txt_cmds_first({}, chosen_help_category)
 
-            for cmd in all_cmds:
-                command_manage = bot.tree.get_app_command(cmd, guild=Object(id=guild_id))
-                pages.append(f"- {command_manage.mention} \U00002014 {command_manage.description}")
+            for (cmd, cmd_details) in all_cmds.items():
+                pages.append(f"- [`{HelpDropdown.prefix}{cmd}`](https://youtu.be/dQw4w9WgXcQ) \U00002014 {cmd_details[0]}")        
         
         return pages
 
