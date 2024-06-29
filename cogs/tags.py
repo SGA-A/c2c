@@ -1,4 +1,3 @@
-import asyncio
 import sqlite3
 import datetime
 from typing import (
@@ -72,8 +71,7 @@ class TagEditModal(discord.ui.Modal, title='Edit Tag'):
 
 class TagMakeModal(discord.ui.Modal, title='Create New Tag'):
     name = discord.ui.TextInput(
-        label='Name', 
-        required=True, 
+        label='Name',  
         max_length=100, 
         min_length=1, 
         placeholder="The name of this tag."
@@ -81,24 +79,16 @@ class TagMakeModal(discord.ui.Modal, title='Create New Tag'):
     
     content = discord.ui.TextInput(
         label='Content', 
-        required=True, 
         style=discord.TextStyle.long, 
         min_length=1, 
         max_length=2000,
         placeholder="The content of this tag."
     )
 
-    def __init__(
-        self, 
-        cog, 
-        ctx: commands.Context, 
-        conn: asqlite_Connection
-    ) -> None:
-
+    def __init__(self, cog: "Tags", ctx: commands.Context) -> None:
         super().__init__()
-        self.cog: Tags = cog
+        self.cog = cog
         self.ctx = ctx
-        self.conn = conn
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         name = str(self.name)
@@ -121,7 +111,24 @@ class TagMakeModal(discord.ui.Modal, title='Create New Tag'):
                 ephemeral=True
             )
         
-        await self.cog.create_tag(self.ctx, name, content, conn=self.conn)
+        async with interaction.client.pool.acquire() as conn:
+            await self.cog.create_tag(self.ctx, name, content, conn=conn)
+
+
+class TagMakeView(discord.ui.View):
+    def __init__(self, cog: "Tags", ctx: commands.Context):
+        self.cog = cog
+        self.ctx = ctx
+        super().__init__(timeout=30)
+
+    async def on_timeout(self) -> None:
+        await self.message.delete()
+
+    @discord.ui.button(style=discord.ButtonStyle.primary, label="Create Tag")
+    async def create_tag_button(self, interaction: discord.Interaction, _: discord.ui.Button):
+        await interaction.message.delete()
+        await interaction.response.send_modal(TagMakeModal(self.cog, ctx=self.ctx))
+        self.stop()
 
 
 async def send_boilerplate_confirm(ctx: commands.Context, custom_description: str) -> bool:
@@ -338,12 +345,12 @@ class Tags(commands.Cog):
         return res[0]
 
     async def create_tag(
-            self, 
-            ctx: commands.Context, 
-            name: str, 
-            content: str, 
-            conn: asqlite_Connection
-        ) -> None:
+        self, 
+        ctx: commands.Context | discord.Interaction, 
+        name: str, 
+        content: str, 
+        conn: asqlite_Connection
+    ) -> None:
 
         query = (
             """
@@ -432,85 +439,11 @@ class Tags(commands.Cog):
     @app_commands.allowed_contexts(guilds=True, private_channels=True)
     async def make(self, ctx: commands.Context):
 
-        async with self.bot.pool.acquire() as conn:
-
-            if ctx.interaction is not None:
-                modal = TagMakeModal(self, ctx, conn=conn)
-                return await ctx.interaction.response.send_modal(modal)
-
-            await ctx.send(embed=membed("Hello. What would you like the tag's name to be?"))
-
-            converter = TagName()
-            original = ctx.message
-
-            def check(msg):
-                return msg.author == ctx.author and ctx.channel == msg.channel
-
-            try:
-                name = await self.bot.wait_for('message', timeout=25.0, check=check)
-            except asyncio.TimeoutError:
-                return await ctx.send(embed=membed('You took too long.'))
-
-            try:
-                ctx.message = name
-                name = await converter.convert(ctx, name.content)
-            except commands.BadArgument as e:
-                return await ctx.send(embed=membed(f'{e}'))            
-            finally:
-                ctx.message = original
-
-            if self.is_tag_being_made(name):
-                return await ctx.send(embed=membed("This tag is currently being made by someone."))
-
-            # it's technically kind of expensive to do two queries like this
-            # i.e. one to check if it exists and then another that does the insert
-            # while also checking if it exists due to the constraints,
-            # however for UX reasons I might as well do it.
-
-            row = await conn.fetchone("SELECT 1 FROM tags WHERE LOWER(name)=$0", name.lower())
-
-            if row is not None:
-                return await ctx.send(
-                    embed=membed(
-                        "A tag with that name already exists.\n"
-                        f"Redo the command `{ctx.prefix}tag make` to retry."
-                    )
-                )
-
-            self.add_in_progress_tag(name)
-            await ctx.send(
-                embed=membed(
-                    "What about the tag's content?\n"
-                    "You can type `abort` to abort this process."
-                )
-            )
-
-            try:
-                msg = await self.bot.wait_for('message', check=check, timeout=120.0)
-            except asyncio.TimeoutError:
-                self.remove_in_progress_tag(name)
-                return await ctx.reply(embed=membed('You took too long.'))
-
-            if msg.content == 'abort':
-                self.remove_in_progress_tag(name)
-                return await msg.reply(embed=membed('Aborted.'))
-            elif msg.content:
-                clean_content = await commands.clean_content().convert(ctx, msg.content)
-            else:
-                # fast path I guess?
-                clean_content = msg.content
-
-            if msg.attachments:
-                clean_content = f'{clean_content}\n{msg.attachments[0].url}'
-
-            if len(clean_content) > 2000:
-                self.remove_in_progress_tag(name)
-                return await msg.reply(embed=membed('Tag content is a maximum of 2000 characters.'))
-
-            try:
-                await self.create_tag(ctx, name, clean_content, conn=conn)
-            finally:
-                self.remove_in_progress_tag(name)
+        if ctx.interaction is not None:
+            return await ctx.interaction.response.send_modal(TagMakeModal(self, ctx))
+        
+        tag_view = TagMakeView(self, ctx)
+        tag_view.message = await ctx.send(view=tag_view, embed=membed("Click the button below to begin."))
 
     @tag.command(description="Modifiy an existing tag that you own")
     @app_commands.describe(

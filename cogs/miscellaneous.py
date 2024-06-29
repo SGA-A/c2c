@@ -1040,7 +1040,7 @@ class Utility(commands.Cog):
             clock = discord.Embed(colour=0x2AA198, timestamp=now)
 
             clock.title = "UTC"
-            clock.description = f"```prolog\n{now:%H:%M %p, %A} {number_to_ordinal(int(f"{now:%d}"))} {now:%Y}```"
+            clock.description = f"```prolog\n{now:%I:%M %p, %A} {number_to_ordinal(int(f"{now:%d}"))} {now:%Y}```"
             clock.set_author(
                 icon_url="https://i.imgur.com/CIl9Dyp.png",
                 name="All formats given in 12h notation"
@@ -1048,7 +1048,7 @@ class Utility(commands.Cog):
 
             for location, tz in EMBED_TIMEZONES.items():
                 time_there = datetime.datetime.now(tz=timezone(tz))
-                clock.add_field(name=location, value=f"```prolog\n{time_there:%H:%M %p}```")
+                clock.add_field(name=location, value=f"```prolog\n{time_there:%I:%M %p}```")
 
             clock.add_field(
                 name="Legend",
