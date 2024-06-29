@@ -227,10 +227,10 @@ class C2C(commands.Bot):
 
 
 intents = Intents(
-    members=True,
-    guild_messages=True,
     emojis_and_stickers=True,
+    guild_messages=True,
     guilds=True,
+    members=True,
     voice_states=True
 )
 
