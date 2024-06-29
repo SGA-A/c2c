@@ -518,10 +518,15 @@ class Moderation(commands.Cog):
     async def purge_from_here(self, interaction: discord.Interaction, message: discord.Message):
 
         await interaction.response.defer(ephemeral=True)
-        
-        count = await interaction.channel.purge(after=discord.Object(id=message.id))
-        msg: discord.WebhookMessage = await interaction.followup.send(embed=membed(f"Deleted **{len(count)}** messages."))
-        await msg.delete(delay=3.0)
+        try:
+            count = await interaction.channel.purge(after=discord.Object(id=message.id))
+            msg: discord.WebhookMessage = await interaction.followup.send(embed=membed(f"Deleted **{len(count)}** messages."))
+        except Exception:
+            msg: discord.WebhookMessage = await interaction.followup.send(
+                embed=membed("Could not purge this channel, this may be a DM or I'm missing permissions.")
+            )
+        finally:
+            await msg.delete(delay=3.0)
 
     @tasks.loop()
     async def check_for_role(self):
