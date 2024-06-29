@@ -245,6 +245,7 @@ bot = C2C(
     max_ratelimit_timeout=30.0,
     owner_ids={992152414566232139, 546086191414509599},
     status=Status.idle,
+    strip_after_prefix=True,
     tree_cls=MyCommandTree,
 )
 print(version)
