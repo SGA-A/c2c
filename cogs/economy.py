@@ -43,7 +43,7 @@ from .core.paginator import (
     RefreshSelectPaginationExtended
 )
 
-from .core.views import process_confirmation, BaseInteractionView
+from .core.views import process_confirmation
 from .core.constants import CURRENCY
 
 def swap_elements(x, index1, index2) -> None:
