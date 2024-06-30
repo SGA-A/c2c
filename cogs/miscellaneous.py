@@ -82,7 +82,7 @@ class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
     )
 
     async def on_submit(self, interaction: discord.Interaction):
-        channel = interaction.client.get_partial_messageable(1122902104802070572)
+        channel = interaction.client.get_partial_messageable(1124090797613142087)
         embed = membed(self.message.value)
         embed.title = f'New Feedback: {self.fb_title.value or "Untitled"}'
         embed.set_author(
