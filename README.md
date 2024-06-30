@@ -1,4 +1,7 @@
-<h2 align="center">c2c</h2>
+<h2 align="center">
+  <img src=".github/c2c-avatar.png" alt="c2c Logo" style="max-width:100%;">
+  c2c
+</h2>
 
 <p align="center">
 WIP multi-purpose discord bot written using discord.py.
@@ -10,7 +13,6 @@ WIP multi-purpose discord bot written using discord.py.
   <a href="https://www.python.org/downloads/release">
     <img alt="Python Compatible Versions" src="https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue"></a>
 </p>
-<div align="center">
 
 ## Installation
 Not supported currently because of the evolving database schema. This will be made when the schema is made final, ie., all the incomplete issues in the `Projects` tab in this repo are implemented (roughly around 2030).
@@ -23,9 +25,6 @@ We are not responsible for any errors that may occur when running this bot on yo
 - ⚔️ Advanced role management
 - 🔉 Temporary voice channel management to reduce eyestrain
 - 🏷️ Tagging text by storing it for later retrieval
-
-> [!NOTE]
-> The future of this project is uncertain. Given my limited free time, I may not be able to update the code after breaking changes to the library/API take place. This will only dwindle in the future, until 2029 when I return from university.
 
 ## Credits
 - [Help forum for discord.py](https://discord.gg/r3sSKJJ)
