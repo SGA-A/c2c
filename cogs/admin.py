@@ -114,7 +114,7 @@ class Owner(commands.Cog):
         interaction: discord.Interaction,
         configuration: Literal["add", "remove", "make"], 
         amount: str,
-        user: Optional[discord.Member],
+        user: Optional[discord.User],
         is_private: Optional[bool] = False,
         medium: Optional[Literal["wallet", "bank"]] = "wallet"
     ) -> None:

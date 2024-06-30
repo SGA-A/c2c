@@ -120,7 +120,7 @@ async def determine_exponent(interaction: discord.Interaction, rinput: str) -> s
 
 async def economy_check(interaction: discord.Interaction, original: Union[discord.Member, discord.User]) -> bool:
     """Shared interaction check common amongst most interactions."""
-    if original == interaction.user:
+    if original.id == interaction.user.id:
         return True
     await interaction.response.send_message(
         ephemeral=True,

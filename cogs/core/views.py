@@ -1,55 +1,87 @@
-from typing import Optional
 import discord
 
 from .helpers import economy_check, respond, membed
 
 
-class Confirm(discord.ui.View):
-    def __init__(self, controlling_user: discord.abc.User):
-        self.controlling_user = controlling_user
-        super().__init__(timeout=10.0)
-        self.value = None
+def format_timeout(embed: discord.Embed, children: list):
+    embed.colour = discord.Colour.brand_red()
+    embed.description = f"~~{embed.description}~~"
+    embed.title = "Timed Out"
+    
+    for item in children:
+        item.disabled = True
+
+
+class BaseInteractionView(discord.ui.View):
+    """
+    A view that ensures that only the interaction creator can make use of this view.
+    
+    This view also deletes itself when timing out.
+    
+    This view has no items, you'll need to add them in manually.
+    """
+    def __init__(
+        self, 
+        interaction: discord.Interaction, 
+        controlling_user: discord.User | None = None, 
+        timeout: float | None = 60.0
+    ) -> None:
+        self.interaction = interaction
+        self.controlling_user = controlling_user or interaction.user
+        super().__init__(timeout=timeout)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, self.controlling_user)
+        return await economy_check(interaction, original=self.controlling_user)
 
-    @discord.ui.button(label='Cancel', style=discord.ButtonStyle.danger)
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.value = False
-        self.stop()
 
-        self.children[1].style = discord.ButtonStyle.secondary
-        button.style = discord.ButtonStyle.success
-        
-        for item in self.children:
-            item.disabled = True
-        
+class BaseContextView(discord.ui.View):
+    """
+    A view that ensures that only the command author can make use of this view.
+    
+    This view should delete itself when timing out. `View.wait()` should be used to do this yourself.
+    
+    This view has no items, you'll need to add them in manually.
+    """
+    def __init__(
+        self,
+        ctx, 
+        controlling_user: discord.User | None = None, 
+        timeout: float | None = 60.0
+    ) -> None:
+        self.ctx = ctx
+        self.controlling_user = controlling_user or ctx.author
+        super().__init__(timeout=timeout)
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return await economy_check(interaction, original=self.controlling_user)
+
+
+class ConfirmationButton(discord.ui.Button):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+    
+    async def callback(self, interaction: discord.Interaction) -> None:
+        self.view.value = self.style == discord.ButtonStyle.success
+        self.view.stop()
+
         embed = interaction.message.embeds[0]
-        embed.title = "Action Cancelled"
-        embed.colour = discord.Colour.brand_red()
-        await interaction.response.edit_message(embed=embed, view=self)
+        embed.title = f"Action {self.custom_id}"
+        embed.colour = discord.Colour.brand_green() if self.view.value else discord.Colour.brand_red()
 
-    @discord.ui.button(label='Confirm', style=discord.ButtonStyle.success)
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.value = True
-        self.stop()
-
-        self.children[0].style = discord.ButtonStyle.secondary
-        button.style = discord.ButtonStyle.success
-
-        for item in self.children:
+        for item in self.view.children:
             item.disabled = True
-        
-        embed = interaction.message.embeds[0]
-        embed.title = "Action Confirmed"
-        embed.colour = discord.Colour.brand_green()
-        await interaction.response.edit_message(embed=embed, view=self)
+            if item.label == self.label:
+                item.style = discord.ButtonStyle.success
+                continue
+            item.style = discord.ButtonStyle.secondary
+
+        await interaction.response.edit_message(embed=embed, view=self.view)
 
 
 async def process_confirmation(
     interaction: discord.Interaction, 
     prompt: str, 
-    view_owner: Optional[discord.Member] = None, 
+    view_owner: discord.Member | None = None, 
     **kwargs
 ) -> bool:
     """
@@ -60,25 +92,51 @@ async def process_confirmation(
     This returns a boolean indicating whether the user confirmed the action or not, or None if the user timed out.
     """
 
-    view = Confirm(controlling_user=view_owner or interaction.user)
-    confirm = membed(prompt)
-    confirm.title = "Pending Confirmation"
+    confirm_view = (
+        BaseInteractionView(interaction=interaction, controlling_user=view_owner, timeout=30.0)
+        .add_item(ConfirmationButton(label="Cancel", style=discord.ButtonStyle.danger, custom_id="Cancelled"))
+        .add_item(ConfirmationButton(label="Confirm", style=discord.ButtonStyle.success, custom_id="Confirmed"))
+    )
+    confirm_view.value = None
+    confirm_embed = membed(prompt)
+    confirm_embed.title = "Pending Confirmation"
 
-    resp = await respond(interaction, embed=confirm, view=view, **kwargs)
-    await view.wait()
+    msg = await respond(interaction, embed=confirm_embed, view=confirm_view, **kwargs)
+    await confirm_view.wait()
+    if confirm_view.value is None:
+        confirm_view.value = False
+        format_timeout(embed=confirm_embed, children=confirm_view.children)
+        try:
+            if msg:
+                await msg.edit(embed=confirm_embed, view=confirm_view)
+            else:
+                await confirm_view.interaction.edit_original_response(embed=confirm_embed, view=confirm_view)
+        except discord.HTTPException:
+            pass
+    return confirm_view.value
+
+
+async def send_boilerplate_confirm(ctx, prompt: str) -> bool:
+    confirm_view = (
+        BaseContextView(ctx, timeout=30.0)
+        .add_item(ConfirmationButton(label="Cancel", style=discord.ButtonStyle.danger, custom_id="Cancelled"))
+        .add_item(ConfirmationButton(label="Confirm", style=discord.ButtonStyle.success, custom_id="Confirmed"))
+    )
+    confirm_view.value = None
+    confirm_embed = membed(prompt)
+    confirm_embed.title = "Pending Confirmation"
+
+    msg: discord.Message = await ctx.send(embed=confirm_embed, view=confirm_view)
     
-    if view.value is None:
-        msg = resp or await interaction.original_response()
-        embed = msg.embeds[0]
-
-        for item in view.children:
-            item.disabled = True
-
-        embed.title = "Timed Out"
-        embed.description = f"~~{embed.description}~~"
-        embed.colour = discord.Colour.brand_red()
-        await msg.edit(embed=embed, view=view)
-    return view.value
+    await confirm_view.wait()
+    if confirm_view.value is None:
+        confirm_view.value = False
+        format_timeout(embed=confirm_embed, children=confirm_view.children)
+        try:
+            await msg.edit(embed=confirm_embed, view=confirm_view)
+        except discord.HTTPException:
+            pass
+    return confirm_view.value
 
 
 class MessageDevelopers(discord.ui.View):

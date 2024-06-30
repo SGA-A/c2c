@@ -43,7 +43,7 @@ from .core.paginator import (
     RefreshSelectPaginationExtended
 )
 
-from .core.views import process_confirmation
+from .core.views import process_confirmation, BaseInteractionView
 from .core.constants import CURRENCY
 
 def swap_elements(x, index1, index2) -> None:
@@ -654,7 +654,7 @@ class ConfirmResetData(discord.ui.View):
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
         try:
             await self.interaction.delete_original_response()
-        except discord.NotFound:
+        except discord.HTTPException:
             pass
 
     @discord.ui.button(label='RESET MY DATA', style=discord.ButtonStyle.danger, emoji=discord.PartialEmoji.from_str("<a:rooFireAhh:1208545466132860990>"))
@@ -740,7 +740,7 @@ class RememberPositionView(discord.ui.View):
 
         try:
             await self.interaction.edit_original_response(embed=embed, view=None)
-        except discord.NotFound:
+        except discord.HTTPException:
             pass
 
     async def determine_outcome(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
@@ -824,7 +824,7 @@ class RememberOrder(discord.ui.View):
 
         try:
             await self.interaction.edit_original_response(embed=embed, view=None)
-        except discord.NotFound:
+        except discord.HTTPException:
             pass
 
     async def disable_if_correct(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -995,7 +995,7 @@ class BalanceView(discord.ui.View):
             item.disabled = True
         try:
             await self.interaction.edit_original_response(view=self)  
-        except discord.NotFound:
+        except discord.HTTPException:
             pass
 
     @discord.ui.button(label="Withdraw", disabled=True, row=1)
@@ -1108,7 +1108,7 @@ class BlackjackUi(discord.ui.View):
         await super().on_error(interaction, error, item)
         try:
             await self.interaction.edit_original_response(view=None)
-        except discord.NotFound:
+        except discord.HTTPException:
             pass
             
     async def on_timeout(self) -> None:
@@ -1124,7 +1124,7 @@ class BlackjackUi(discord.ui.View):
                     view=None, 
                     embed=membed("You backed off so the game ended.")
                 )
-            except discord.NotFound:
+            except discord.HTTPException:
                 pass
 
     async def update_winning_data(self, *, bet_amount: int) -> tuple:
@@ -1643,7 +1643,7 @@ class Leaderboard(discord.ui.View):
             item.disabled = True
         try:
             await self.interaction.edit_original_response(view=self)
-        except discord.NotFound:
+        except discord.HTTPException:
             pass
 
 
@@ -1701,7 +1701,8 @@ class ItemQuantityModal(discord.ui.Modal):
         await respond(interaction, embed=success)
 
     async def calculate_discounted_price_if_any(
-        self, user: USER_ENTRY, 
+        self, 
+        user: USER_ENTRY, 
         conn: asqlite_Connection, 
         interaction: discord.Interaction, 
         current_price: int
@@ -2020,7 +2021,7 @@ class UserSettings(discord.ui.View):
             item.disabled = True
         try:
             await self.interaction.edit_original_response(view=self)
-        except discord.NotFound:
+        except discord.HTTPException:
             pass
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -2035,7 +2036,7 @@ class MultiplierSelect(discord.ui.Select):
         "luck": (0x65D654, "https://i.imgur.com/9xZIFOg.png")
     }
 
-    def __init__(self, selected_option: str, viewing: discord.Member) -> None:
+    def __init__(self, selected_option: str, viewing: USER_ENTRY) -> None:
 
         defined_options = [
             SelectOption(
@@ -3455,23 +3456,28 @@ class Economy(commands.Cog):
                     ephemeral=True,
                     embed=membed("You don't have that much money to share.")
                 )
-        
+
+            confirmed = None
             if confirmations_enabled:
                 await self.declare_transaction(conn, user_id=sender.id)
                 await conn.commit()
 
-                confirmed = await process_confirmation(
-                    interaction=interaction, 
-                    prompt=f"Are you sure you want to share {CURRENCY} **{quantity:,}** with {recipient.mention}?"
-                )
-                await self.end_transaction(conn, user_id=sender.id)
-                await conn.commit()
-                
-                if not confirmed:
-                    return
-            
+        if confirmations_enabled:
+            confirmed = await process_confirmation(
+                interaction, 
+                f"Are you sure you want to share {CURRENCY} **{quantity:,}** with {recipient.mention}?"
+            )
+
+        async with self.bot.pool.acquire() as conn:
+            await self.end_transaction(conn, user_id=sender.id)
+            if confirmed is False:
+                return await conn.commit()
+        
             if await self.can_call_out(recipient, conn):
-                return await respond(interaction=interaction, embed=NOT_REGISTERED)
+                await respond(interaction=interaction, embed=NOT_REGISTERED)
+                if confirmed is True:
+                    await conn.commit()
+                return
 
             await respond(
                 interaction=interaction,
@@ -3534,23 +3540,27 @@ class Economy(commands.Cog):
                     embed=membed(f"You don't have **{quantity}x {ie} {item_name}**.")
                 )
             
+            confirmed = None
             if confirmations_enabled:
                 await self.declare_transaction(conn, user_id=sender.id)
                 await conn.commit()
 
-                confirmed = await process_confirmation(
-                    interaction=interaction, 
-                    prompt=f"Are you sure you want to share **{quantity}x {ie} {item_name}** with {recipient.mention}?"
-                )
+        if confirmations_enabled:
+            confirmed = await process_confirmation(
+                interaction, 
+                f"Are you sure you want to share **{quantity}x {ie} {item_name}** with {recipient.mention}?"
+            )
 
-                await self.end_transaction(conn, user_id=sender.id)
-                await conn.commit()
-
-                if confirmed:
-                    return
+        async with self.bot.pool.acquire() as conn:
+            await self.end_transaction(conn, user_id=sender.id)
+            if confirmed is False:
+                return await conn.commit()
 
             if await self.can_call_out(recipient, conn):
-                return await respond(interaction=interaction, embed=NOT_REGISTERED)
+                await respond(interaction=interaction, embed=NOT_REGISTERED)
+                if confirmed is True:
+                    await conn.commit()
+                return
 
             await respond(
                 interaction,
@@ -4419,19 +4429,24 @@ class Economy(commands.Cog):
             multi = await Economy.get_multi_of(user_id=sender.id, multi_type="robux", conn=conn)
             cost = selling_price_algo((cost / 4) * sell_quantity, multi)
 
-            if await self.is_setting_enabled(conn, user_id=sender.id, setting="selling_confirmations"):
+            confirmations_enabled = await self.is_setting_enabled(conn, user_id=sender.id, setting="selling_confirmations")
+            confirmed = None
+            if confirmations_enabled:
                 await self.declare_transaction(conn, user_id=sender.id)
-                value = await process_confirmation(
-                    interaction=interaction, 
-                    prompt=(
-                        f"Are you sure you want to sell **{sell_quantity:,}x "
-                        f"{ie} {item_name}** for **{CURRENCY} {cost:,}**?"
-                    )
+
+        if confirmations_enabled:
+            confirmed = await process_confirmation(
+                interaction=interaction, 
+                prompt=(
+                    f"Are you sure you want to sell **{sell_quantity:,}x "
+                    f"{ie} {item_name}** for **{CURRENCY} {cost:,}**?"
                 )
-                await self.end_transaction(conn, user_id=sender.id)
-                await conn.commit()
-                if not value:
-                    return
+            )
+        
+        async with self.bot.pool.acquire() as conn:
+            await self.end_transaction(conn, user_id=sender.id)
+            if confirmed is False:
+                return await conn.commit()
 
             embed = membed(
                 f"{sender.mention} sold **{sell_quantity:,}x {ie} {item_name}** "
@@ -4702,6 +4717,50 @@ class Economy(commands.Cog):
             
             await handler(interaction, quantity, conn)
 
+    async def start_prestige(self, interaction: discord.Interaction, prestige: int) -> None:
+        massive_prompt = dedent(
+            """
+            Prestiging means losing nearly everything you've ever earned in the currency 
+            system in exchange for increasing your 'Prestige Level' 
+            and upgrading your status.
+            **Things you will lose**:
+            - All of your items/showcase
+            - All of your robux
+            - Your levels and XP
+            Anything not mentioned in this list will not be lost.
+            Are you sure you want to prestige?
+            """
+        )
+        value = await process_confirmation(interaction=interaction, prompt=massive_prompt)
+
+        async with self.bot.pool.acquire() as conn:
+            await self.end_transaction(conn, user_id=interaction.user.id)
+            if value:
+                await conn.execute("DELETE FROM inventory WHERE userID = ?", interaction.user.id)
+                await conn.execute(
+                    """
+                    UPDATE accounts 
+                    SET 
+                        wallet = $0, 
+                        bank = $0, 
+                        level = $1, 
+                        exp = $0, 
+                        prestige = prestige + 1, 
+                        bankspace = bankspace + $2 
+                    WHERE userID = $3
+                    """, 0, 1, randint(100_000_000, 500_000_000), interaction.user.id
+                )
+                
+                await self.add_multiplier(
+                    conn,
+                    user_id=interaction.user.id,
+                    multi_amount=10,
+                    multi_type="robux",
+                    cause="prestige",
+                    description=f"Prestige {prestige+1}"
+                )
+            await conn.commit()
+
     @app_commands.command(name="prestige", description="Sacrifice currency stats in exchange for incremental perks")
     @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
     @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
@@ -4738,81 +4797,39 @@ class Economy(commands.Cog):
 
             req_robux = (prestige + 1) * 24_000_000
             req_level = (prestige + 1) * 35
+            met_check = (actual_robux >= req_robux) and (actual_level >= req_level)
 
-            if (actual_robux >= req_robux) and (actual_level >= req_level):
-                massive_prompt = dedent(
-                    """
-                    Prestiging means losing nearly everything you've ever earned in the currency 
-                    system in exchange for increasing your 'Prestige Level' 
-                    and upgrading your status.
-                    **Things you will lose**:
-                    - All of your items/showcase
-                    - All of your robux
-                    - Your levels and XP
-                    Anything not mentioned in this list will not be lost.
-                    Are you sure you want to prestige?
-                    """
-                )
-                
-                await Economy.declare_transaction(conn, user_id=interaction.user.id)
-                value = await process_confirmation(
-                    interaction=interaction, 
-                    prompt=massive_prompt
-                )
-                await conn.rollback()
-                if value:
+            if met_check:
+                await self.declare_transaction(conn, user_id=interaction.user.id)
+        
+        if met_check:
+            return await self.start_prestige(interaction, prestige)
 
-                    await conn.execute("DELETE FROM inventory WHERE userID = ?", interaction.user.id)
-                    await conn.execute(
-                        """
-                        UPDATE accounts 
-                        SET 
-                            wallet = $0, 
-                            bank = $0, 
-                            level = $1, 
-                            exp = $0, 
-                            prestige = prestige + 1, 
-                            bankspace = bankspace + $2 
-                        WHERE userID = $3
-                        """, 0, 1, randint(100_000_000, 500_000_000), interaction.user.id
-                    )
-                    
-                    await self.add_multiplier(
-                        conn,
-                        user_id=interaction.user.id,
-                        multi_amount=10,
-                        multi_type="robux",
-                        cause="prestige",
-                        description=f"Prestige {prestige+1}"
-                    )
+        emoji = PRESTIGE_EMOTES.get(prestige + 1)
+        emoji = search(r':(\d+)>', emoji)
+        emoji = self.bot.get_emoji(int(emoji.group(1)))
 
-                await conn.commit()
-            else:
-                emoji = PRESTIGE_EMOTES.get(prestige + 1)
-                emoji = search(r':(\d+)>', emoji)
-                emoji = self.bot.get_emoji(int(emoji.group(1)))
+        actual_robux_progress = (actual_robux / req_robux) * 100
+        actual_level_progress = (actual_level / req_level) * 100
 
-                actual_robux_progress = (actual_robux / req_robux) * 100
-                actual_level_progress = (actual_level / req_level) * 100
-
-                embed = discord.Embed(
-                    title=f"Prestige {prestige + 1} Requirements",
-                    colour=0x2B2D31,
-                    description=(
-                        f"**Total Balance**\n"
-                        f"<:replyconti:1199688910649954335> {CURRENCY} {actual_robux:,}/{req_robux:,}\n"
-                        f"<:replyi:1199688912646455416> {generate_progress_bar(actual_robux_progress)} "
-                        f"` {int(actual_robux_progress):,}% `\n"
-                        f"\n"
-                        f"**Level Required**\n"
-                        f"<:replyconti:1199688910649954335> {actual_level:,}/{req_level:,}\n"
-                        f"<:replyi:1199688912646455416> {generate_progress_bar(actual_level_progress)} "
-                        f"` {int(actual_level_progress):,}% `"
-                    )
-                )
-                embed.set_thumbnail(url=emoji.url)
-                embed.set_footer(text="Imagine thinking you can prestige already.")
-                await interaction.response.send_message(embed=embed)
+        embed = discord.Embed(
+            title=f"Prestige {prestige + 1} Requirements",
+            colour=0x2B2D31,
+            description=(
+                f"**Total Balance**\n"
+                f"<:replyconti:1199688910649954335> {CURRENCY} {actual_robux:,}/{req_robux:,}\n"
+                f"<:replyi:1199688912646455416> {generate_progress_bar(actual_robux_progress)} "
+                f"` {int(actual_robux_progress):,}% `\n"
+                f"\n"
+                f"**Level Required**\n"
+                f"<:replyconti:1199688910649954335> {actual_level:,}/{req_level:,}\n"
+                f"<:replyi:1199688912646455416> {generate_progress_bar(actual_level_progress)} "
+                f"` {int(actual_level_progress):,}% `"
+            )
+        )
+        embed.set_thumbnail(url=emoji.url)
+        embed.set_footer(text="Imagine thinking you can prestige already.")
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='profile', description='View user information and other stats')
     @app_commands.describe(

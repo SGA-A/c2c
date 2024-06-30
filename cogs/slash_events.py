@@ -19,43 +19,48 @@ from .core.constants import COOLDOWN_PROMPTS
 class SlashExceptionHandler(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        bot.tree.error(coro=self.get_app_command_error)
         self.view = MessageDevelopers()
 
-    async def get_app_command_error(
+    def cog_load(self):
+        tree = self.bot.tree
+        self._old_tree_error, tree.on_error = tree.on_error, self.on_app_command_error
+
+    def cog_unload(self):
+        self.bot.tree.on_error = self._old_tree_error
+
+    async def on_app_command_error(
         self, 
         interaction: Interaction, 
-        app_cmd_error: app_commands.AppCommandError
+        error: app_commands.AppCommandError
     ) -> None:
 
         if not interaction.response.is_done():
             await interaction.response.defer(thinking=True)
         
         embed = Embed(colour=0x2B2D31)
+        error = getattr(error, "original", error)
 
-        if isinstance(app_cmd_error, app_commands.CheckFailure):
+        if isinstance(error, app_commands.errors.TransformerError):
+            if error.type.value == AppCommandOptionType.user.value:
+                embed.description = f"{error.value} is not a member of this server."
+            else:
+                embed.description = "An error occurred while processing your input."
+            return await interaction.followup.send(embed=embed, view=self.view)
 
-            if not isinstance(app_cmd_error, app_commands.CommandOnCooldown):
+        if isinstance(error, app_commands.errors.CheckFailure):
+            if not isinstance(error, app_commands.errors.CommandOnCooldown):
                 return  # we already respond
             
             embed.title = choice(COOLDOWN_PROMPTS)
-            after_cd = format_dt(utcnow() + timedelta(seconds=app_cmd_error.retry_after), style="R")
+            after_cd = format_dt(utcnow() + timedelta(seconds=error.retry_after), style="R")
             embed.description = f"You can run this command again {after_cd}."
             return await interaction.followup.send(embed=embed, view=self.view)
 
-        if isinstance(app_cmd_error, app_commands.TransformerError):
-
-            if app_cmd_error.type.value == AppCommandOptionType.user.value:
-                embed.description = f"{app_cmd_error.value} is not a member of this server."
-            else:
-                embed.description = "An app_cmd_error occurred while processing your input."
-            return await interaction.followup.send(embed=embed, view=self.view)
-
-        if isinstance(app_cmd_error, app_commands.CommandNotFound):
+        if isinstance(error, app_commands.errors.CommandNotFound):
             embed.description = "This command no longer exists!"
             return await interaction.followup.send(embed=embed, view=self.view)
 
-        if isinstance(app_cmd_error, app_commands.CommandAlreadyRegistered):
+        if isinstance(error, app_commands.errors.CommandAlreadyRegistered):
             embed.description = "Another command with this name already exists."
             return await interaction.followup.send(embed=embed, view=self.view)
 
@@ -67,7 +72,7 @@ class SlashExceptionHandler(commands.Cog):
         )
         await interaction.followup.send(embed=embed, view=self.view)
 
-        formatted_traceback = ''.join(format_exception(type(app_cmd_error), app_cmd_error, app_cmd_error.__traceback__))
+        formatted_traceback = ''.join(format_exception(type(error), error, error.__traceback__))
         log_error(formatted_traceback)
 
 

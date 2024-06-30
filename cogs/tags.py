@@ -11,7 +11,7 @@ from discord import app_commands
 from discord.ext import commands
 from asqlite import ProxiedConnection as asqlite_Connection
 
-from .core.views import Confirm
+from .core.views import BaseContextView, send_boilerplate_confirm
 from .core.helpers import membed
 from .core.constants import LIMITED_INSTALLS
 from .core.paginator import PaginationSimple
@@ -115,11 +115,10 @@ class TagMakeModal(discord.ui.Modal, title='Create New Tag'):
             await self.cog.create_tag(self.ctx, name, content, conn=conn)
 
 
-class TagMakeView(discord.ui.View):
+class TagMakeView(BaseContextView):
     def __init__(self, cog: "Tags", ctx: commands.Context):
+        super().__init__(ctx=ctx)  # default controlling_user to ctx.author
         self.cog = cog
-        self.ctx = ctx
-        super().__init__(timeout=30)
 
     async def on_timeout(self) -> None:
         await self.message.delete()
@@ -129,26 +128,6 @@ class TagMakeView(discord.ui.View):
         await interaction.message.delete()
         await interaction.response.send_modal(TagMakeModal(self.cog, ctx=self.ctx))
         self.stop()
-
-
-async def send_boilerplate_confirm(ctx: commands.Context, custom_description: str) -> bool:
-    confirm = Confirm(controlling_user=ctx.author.id)
-
-    confirmation = membed(custom_description)
-    confirmation.title = "Pending Confirmation"
-    msg = await ctx.send(embed=confirmation, view=confirm)
-    
-    await confirm.wait()
-    if confirm.value is None:
-        for item in confirm.children:
-            item.disabled = True
-
-        confirmation.title = "Timed out"
-        confirmation.description = f"~~{confirmation.description}~~"
-        confirmation.colour = discord.Colour.brand_red()
-    
-    await msg.edit(embed=confirmation, view=confirm)
-    return confirm.value
 
 
 class MatchWord(discord.ui.Button):
@@ -648,7 +627,7 @@ class Tags(commands.Cog):
     @app_commands.describe(user='The user to remove all tags of. Defaults to your own.')
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(guilds=True, private_channels=True)
-    async def purge(self, ctx: commands.Context, user: Optional[discord.Member] = commands.Author):
+    async def purge(self, ctx: commands.Context, user: Optional[discord.User] = commands.Author):
 
         if (ctx.author.id != user.id) and (ctx.author.id not in self.bot.owner_ids):
             return await ctx.send(embed=membed("You can only delete tags made by you."))
@@ -662,17 +641,15 @@ class Tags(commands.Cog):
             if not count:
                 return await ctx.send(embed=membed(f"{user.mention} has no tags."))
 
-            val = await send_boilerplate_confirm(
-                ctx, 
-                custom_description=f"Upon approval, **{count}** tags by {user.mention} will be deleted."
-            )
- 
-            if val:
+        val = await send_boilerplate_confirm(ctx, f"Upon approval, **{count}** tags by {user.mention} will be deleted.")
+
+        if val:
+            async with self.bot.pool.acquire() as conn:
                 query = "DELETE FROM tags WHERE ownerID=$0"
                 await conn.execute(query, user.id)
                 await conn.commit()
 
-                await ctx.send(embed=membed(f"Removed all tags by {user.mention}."))
+            await ctx.send(embed=membed(f"Removed all tags by {user.mention}."))
 
     async def reusable_paginator_via(self, ctx, *, results: tuple, length: Optional[int] = 12, em: discord.Embed):
         """Only use this when you have a tuple containing the tag name and rowid in this order."""
@@ -729,7 +706,7 @@ class Tags(commands.Cog):
     @app_commands.autocomplete(tag=owned_non_aliased_tag_autocomplete)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(guilds=True, private_channels=True)
-    async def transfer(self, ctx: commands.Context, member: discord.Member, *, tag: Annotated[str, TagName]):
+    async def transfer(self, ctx: commands.Context, member: discord.User, *, tag: Annotated[str, TagName]):
 
         if member.bot:
             return await ctx.send(embed=membed('You cannot transfer tags to bots.'))
