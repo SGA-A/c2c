@@ -1,12 +1,13 @@
 <h2 align="center">
   <div align="center">
-    <img src=".github/c2c-avatar.png" alt="c2c Logo" style="max-width:35%; max-height:50%;">
+    <img src=".github/c2c-avatar.png" alt="c2c Logo" style="width:150px; height:auto;">
   </div>
   c2c
 </h2>
 
 <p align="center">
-WIP multi-purpose discord bot written using discord.py.
+  WIP multi-purpose discord bot written using discord.py.
+</p>
 <p align="center">
   <a href="https://github.com/astral-sh/ruff">
     <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff" style="max-width:100%;"></a>
