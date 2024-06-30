@@ -641,7 +641,7 @@ class Tags(commands.Cog):
             if not count:
                 return await ctx.send(embed=membed(f"{user.mention} has no tags."))
 
-        val = await send_boilerplate_confirm(ctx, f"Upon approval, **{count}** tags by {user.mention} will be deleted.")
+        val = await send_boilerplate_confirm(ctx, f"Upon approval, **{count}** tag(s) by {user.mention} will be deleted.")
 
         if val:
             async with self.bot.pool.acquire() as conn:
@@ -649,7 +649,7 @@ class Tags(commands.Cog):
                 await conn.execute(query, user.id)
                 await conn.commit()
 
-            await ctx.send(embed=membed(f"Removed all tags by {user.mention}."))
+            await ctx.reply(embed=membed(f"Removed all tags by {user.mention}."))
 
     async def reusable_paginator_via(self, ctx, *, results: tuple, length: Optional[int] = 12, em: discord.Embed):
         """Only use this when you have a tuple containing the tag name and rowid in this order."""
