@@ -17,13 +17,11 @@ class ContextCommandHandler(commands.Cog):
     async def on_command_error(self, ctx: commands.Context, err: Exception):
         """The function that handles all the errors passed into the bot via text-based commands."""
 
-        embed = Embed(colour=0x2B2D31)
         err = getattr(err, "original", err)
-
         if isinstance(err, commands.CommandNotFound):
-            embed.description = "Could not find what you were looking for."
-            return await ctx.send(embed=embed, view=self.view)
-
+            return
+        
+        embed = Embed(colour=0x2B2D31)
         if isinstance(err, commands.UserInputError):
 
             if isinstance(err, commands.MissingRequiredArgument):
