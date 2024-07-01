@@ -253,7 +253,6 @@ bot = C2C(
     strip_after_prefix=True,
     tree_cls=MyCommandTree,
 )
-log_info(version)
 
 
 cogs = {
@@ -621,6 +620,7 @@ async def main():
         level=INFO,
         handler=FileHandler(filename='discord.log', encoding='utf-8', mode='w')
     )
+    log_info(version)
     load_dotenv()
     
     TOKEN = environ.get("BOT_TOKEN")
