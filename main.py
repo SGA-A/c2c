@@ -5,8 +5,14 @@ from asyncio import run
 from pathlib import Path
 from sys import version
 from traceback import format_exception
-from logging import INFO, FileHandler, error as log_error
 from aiohttp import ClientSession, DummyCookieJar, TCPConnector
+
+from logging import (
+    INFO, 
+    FileHandler, 
+    error as log_error, 
+    info as log_info
+)
 
 from typing import (
     Any,
@@ -247,7 +253,7 @@ bot = C2C(
     strip_after_prefix=True,
     tree_cls=MyCommandTree,
 )
-print(version)
+log_info(version)
 
 
 cogs = {

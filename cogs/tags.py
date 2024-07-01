@@ -351,7 +351,7 @@ class Tags(commands.Cog):
             await tr.rollback()
             await ctx.send(embed=membed(f"A tag named {name!r} already exists."))
         except Exception as e:
-            print(e)
+            self.bot.log_exception(e)
             await tr.rollback()
             await ctx.send(embed=membed("Could not create tag."))
         else:
