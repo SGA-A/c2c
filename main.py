@@ -204,7 +204,6 @@ class C2C(commands.Bot):
         await super().close()
 
     async def setup_hook(self):
-        print("we're in.")
 
         for file in Path("cogs").glob("**/*.py"):
             if "core" in file.parts:
@@ -550,8 +549,8 @@ async def reload_cog(ctx: commands.Context, cog_input: str) -> None:
     except commands.NoEntryPointError:
         embed.description = "The extension does not have a setup function."
     except commands.ExtensionFailed as e:
-        print(e)
-        embed.description = "The extension failed to load. See the console for traceback."
+        bot.log_exception(e)
+        embed.description = "The extension failed to load. See the logs for traceback."
     finally:
         await ctx.reply(embed=embed)
 
@@ -591,8 +590,8 @@ async def load_cog(ctx: commands.Context, cog_input: str) -> None:
     except commands.NoEntryPointError:
         embed.description = "The extension does not have a setup function."
     except commands.ExtensionFailed as e:
-        print(e)
-        embed.description = "The extension failed to load. See the console for traceback."
+        bot.log_exception(e)
+        embed.description = "The extension failed to load. See the logs for traceback."
 
     await ctx.reply(embed=embed)
 
