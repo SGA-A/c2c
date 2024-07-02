@@ -881,8 +881,7 @@ class Utility(commands.Cog):
     ) -> None:
         embed = membed()
 
-        if username.bot:
-            username = await self.bot.fetch_user(username.id)
+        username = await self.bot.fetch_user(username.id)
         
         embed.set_author(
             name=username.display_name, 
