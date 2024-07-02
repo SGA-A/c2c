@@ -2074,7 +2074,7 @@ class MultiplierSelect(discord.ui.Select):
         unit = "x" if multi == "xp" else "%"
         amount = amount if multi != "xp" else (1 + (amount / 100))
 
-        return f"{amount}{unit}"
+        return f"{amount:.2f}{unit}"
 
     @staticmethod
     async def format_pages(
