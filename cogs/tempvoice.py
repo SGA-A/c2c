@@ -393,8 +393,8 @@ class TempVoice(commands.Cog):
     voice = app_commands.Group(
         name="voice", 
         description="Manage your own temporary voice channel.", 
-        allowed_contexts=app_commands.AppCommandContext(guild=True, dm_channel=False, private_channel=False),
-        allowed_installs=app_commands.AppInstallationType(guild=True, user=False)
+        allowed_contexts=app_commands.AppCommandContext(guild=True),
+        allowed_installs=app_commands.AppInstallationType(guild=True)
     )
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:

@@ -276,7 +276,7 @@ class Utility(commands.Cog):
     @app_commands.describe(user="Whose command usage to display. Defaults to you.")
     @app_commands.command(name="usage", description="See your total command usage")
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
-    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def view_user_usage(self, interaction: discord.Interaction, user: Optional[USER_ENTRY]):
         user = user or interaction.user
 
@@ -326,7 +326,7 @@ class Utility(commands.Cog):
     @app_commands.command(name='calc', description='Calculate an expression')
     @app_commands.describe(expression='The expression to evaluate.')
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
-    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def calculator(self, interaction: discord.Interaction, expression: str) -> None:
         try:
             interpretable = expression.replace('^', '**').replace(',', '_')
@@ -541,8 +541,8 @@ class Utility(commands.Cog):
         return await interaction.response.send_message(embed=embed, view=img_view, ephemeral=True)
 
     @app_commands.command(name='emojis', description='Fetch all the emojis c2c can access')
-    @app_commands.allowed_contexts(guilds=True, private_channels=True)
-    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def emojis_paginator(self, interaction: discord.Interaction) -> None:
         length = 8
         all_emojis = [f"{i} (**{i.name}**) \U00002014 `{i}`" for i in self.bot.emojis]
@@ -601,7 +601,7 @@ class Utility(commands.Cog):
         await interaction.response.send_message(embed=success)
 
     @app_commands.command(name='randomfact', description='Queries a random fact')
-    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def random_fact(self, interaction: discord.Interaction) -> None:
         
@@ -620,7 +620,7 @@ class Utility(commands.Cog):
         user="The user to apply the manipulation to.", 
         endpoint="What kind of manipulation sorcery to use."
     )
-    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def image_manip(
         self, 
@@ -656,7 +656,7 @@ class Utility(commands.Cog):
         user="The user to apply the manipulation to.",
         endpoint="What kind of manipulation sorcery to use."
     )
-    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def image2_manip(
         self, 
@@ -688,7 +688,7 @@ class Utility(commands.Cog):
 
     @app_commands.command(name="locket", description="Insert people into a heart-shaped locket")
     @app_commands.describe(user="The user to add to the locket.", user2="The second user to add to the locket.")
-    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def locket_manip(
         self, 
@@ -714,7 +714,7 @@ class Utility(commands.Cog):
         )
 
     @app_commands.command(name='charinfo', description='Show information about characters')
-    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.describe(characters='Any written letters or symbols.')
     async def charinfo(self, interaction: discord.Interaction, *, characters: str) -> None:
@@ -741,13 +741,13 @@ class Utility(commands.Cog):
         await interaction.response.send_message(msg, suppress_embeds=True)
 
     @app_commands.command(name='feedback', description='Send feedback to the c2c developers')
-    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def feedback(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(FeedbackModal())
 
     @app_commands.command(name='about', description='Learn more about the bot')
-    @app_commands.allowed_contexts(guilds=True, private_channels=True)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def about_the_bot(self, interaction: discord.Interaction) -> None:
 
@@ -906,8 +906,8 @@ class Utility(commands.Cog):
         from_only="[Limited to Bot Owner] Search from this website only.",
         image_size="The size of the image. Defaults to medium."
     )
-    @app_commands.allowed_contexts(guilds=True, private_channels=True)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def image_search(
         self, 
         interaction: discord.Interaction, 

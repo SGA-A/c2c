@@ -495,20 +495,21 @@ class RoleManagement(app_commands.Group):
 class Moderation(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-
+        mod_context = app_commands.AppCommandContext(guild=True)
+        mod_install = app_commands.AppInstallationType(guild=True)
         self.purge_from_here_cmd = app_commands.ContextMenu(
             name='Purge Up To Here',
             callback=self.purge_from_here,
-            allowed_contexts=app_commands.AppCommandContext(guild=True, dm_channel=True, private_channel=True),
-            allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
+            allowed_contexts=mod_context,
+            allowed_installs=mod_install
         )
         
         roles = RoleManagement(
             name="role", 
             description="Role management commands",
             default_permissions=discord.Permissions(manage_roles=True),
-            allowed_contexts=app_commands.AppCommandContext(guild=True, dm_channel=False, private_channel=False),
-            allowed_installs=app_commands.AppInstallationType(guild=True, user=False)
+            allowed_contexts=mod_context,
+            allowed_installs=mod_install
         )
         
         self.bot.tree.add_command(self.purge_from_here_cmd)
