@@ -95,13 +95,12 @@ WARN_FOR_CONCURRENCY = (
 ITEM_DESCRPTION = 'Select an item.'
 ROBUX_DESCRIPTION = 'Can be a constant number like "1234" or a shorthand (max, all, 1e6).'
 UNIQUE_BADGES = {
-    992152414566232139: "<:e1_stafff:1145039666916110356>",
-    546086191414509599: "<:in_power:1153754243220647997>",
-    1134123734421217412: "<:e1_bughunterGold:1145053225414832199>",
-    1154092136115994687: "<:e1_bughunterGreen:1145052762351095998>",
-    1047572530422108311: "<:cc:1146092310464049203>",
-    1148206353647669298: "<:e1_stafff:1145039666916110356>",
-    1241002704202104852: "<:4alice:1254541632079134742>",
+    992152414566232139: " <:e1_stafff:1145039666916110356>",
+    546086191414509599: " <:in_power:1153754243220647997>",
+    1134123734421217412: " <:e1_bughunterGold:1145053225414832199>",
+    1154092136115994687: " <:e1_bughunterGreen:1145052762351095998>",
+    1047572530422108311: " <:c2c:1258332572396818482>",
+    1148206353647669298: " <:e1_stafff:1145039666916110356>",
     10: " (MAX)"
 }
 RARITY_COLOUR = {
@@ -681,7 +680,6 @@ class ConfirmResetData(discord.ui.View):
                 await tr.rollback()
 
                 return await interaction.response.send_message(
-                    content=interaction.user.mention,
                     embed=membed(
                         f"Failed to wipe {self.removing_user.mention}'s data.\n"
                         "Report this to the developers so they can get it fixed."
@@ -694,7 +692,6 @@ class ConfirmResetData(discord.ui.View):
         end_note = " Thanks for using the bot." if whose == "your" else ""
 
         await interaction.response.send_message(
-            content=interaction.user.mention, 
             embed=membed(f"All of {whose} data has been wiped.{end_note}")
         )
 
@@ -2358,7 +2355,7 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection = conn
             
-            podium_pos = {2: "\U0001f948", 3: "\U0001f949"}
+            podium_pos = {1: "### \U0001f947", 2: "\U0001f948", 3: "\U0001f949"}
 
             lb = discord.Embed(
                 title=f"Leaderboard: {chosen_choice}",
@@ -2493,16 +2490,11 @@ class Economy(commands.Cog):
                 lb.description = 'No data.'
                 return lb
 
-            first_player = self.bot.get_user(data[0][0])
-
-            top_rankings = [
-                f"### \U0001f947 ` {data[0][1]:,} ` \U00002014 {first_player.name} {UNIQUE_BADGES.get(first_player.id, '')}\n"
-            ]
-            
-            top_rankings += [
-                f"{podium_pos.get(i, "\U0001f539")} ` {member[1]:,} ` \U00002014 {member_name.name} {UNIQUE_BADGES.get(member_name.id, '')}" 
-                for i, member in enumerate(data[1:], start=2) if (member_name := self.bot.get_user(member[0]))
-            ]
+            top_rankings = []
+            for i, mdata in enumerate(data, start=1):
+                user_id, data = mdata
+                memobj = self.bot.get_user(user_id) or await self.bot.fetch_user(user_id)
+                top_rankings.append(f"{podium_pos.get(i, "\U0001f539")} ` {data:,} ` \U00002014 {memobj.name}{UNIQUE_BADGES.get(memobj.id, '')}")
 
             lb.description = '\n'.join(top_rankings)
             return lb
