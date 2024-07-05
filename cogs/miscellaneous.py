@@ -558,48 +558,6 @@ class Utility(commands.Cog):
 
         await Pagination(interaction, get_page=get_page_part).navigate()
 
-    @app_commands.command(name='inviter', description='Creates a server invite link')
-    @app_commands.default_permissions(create_instant_invite=True)
-    @app_commands.describe(
-        invite_lifespan='A non-zero duration in days for which the invite should last for.', 
-        maximum_uses='The maximum number of uses for the created invite.'
-    )
-    @app_commands.guild_install()
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    async def gen_new_invite(
-        self, 
-        interaction: discord.Interaction, 
-        invite_lifespan: app_commands.Range[int, 1], 
-        maximum_uses: app_commands.Range[int, 1]
-    ) -> None:
-        invite_lifespan *= 86400
-
-        generated_invite = await interaction.channel.create_invite(
-            reason=f'Invite creation requested by {interaction.user.name}',
-            max_age=invite_lifespan, 
-            max_uses=maximum_uses
-        )
-
-        maxim_usage = f"Max usages set to {generated_invite.max_uses}" if maximum_uses else "No limit to maximum usage"
-        formatted_expiry = discord.utils.format_dt(generated_invite.expires_at, 'R')
-        success = discord.Embed(
-            title='Successfully generated new invite link', 
-            colour=0x2B2D31,
-            description=(
-                f'**A new invite link was created.**\n'
-                f'- Invite channel set to {generated_invite.channel}\n'
-                f'- {maxim_usage}\n'
-                f'- Expires {formatted_expiry}\n'
-                f'- Invite Link is: {generated_invite.url}'
-            )
-        )
-        success.set_author(
-            name=interaction.user.name, 
-            icon_url=interaction.user.display_avatar.url
-        )
-
-        await interaction.response.send_message(embed=success)
-
     @app_commands.command(name='randomfact', description='Queries a random fact')
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
@@ -919,7 +877,6 @@ class Utility(commands.Cog):
         image_size: Optional[Literal["huge", "icon", "large", "medium", "small", "xlarge", "xxlarge"]] = "medium"
     ) -> None:
         
-        user = interaction.user
 
         params = {
             'key': self.bot.GOOGLE_CUSTOM_SEARCH_API_KEY,
@@ -933,7 +890,7 @@ class Utility(commands.Cog):
         }
 
         if from_only:
-            if user.id not in self.bot.owner_ids:
+            if interaction.user.id not in self.bot.owner_ids:
                 return await interaction.response.send_message(
                     ephemeral=True, 
                     embed=membed("You can't use this feature.")
@@ -958,8 +915,11 @@ class Utility(commands.Cog):
             ]
 
         em = membed()
-        em.set_author(name=f"{results_count} results ({search_time}ms)", icon_url=user.display_avatar.url)
-        paginator = PaginationSimple(interaction, invoker_id=user.id)
+        em.set_author(
+            name=f"{results_count} results ({search_time}ms)", 
+            icon_url=interaction.user.display_avatar.url
+        )
+        paginator = PaginationSimple(interaction, invoker_id=interaction.user.id)
         length = 1
 
         async def get_page_part(page: int):
