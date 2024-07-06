@@ -596,8 +596,7 @@ class Utility(commands.Cog):
         start = perf_counter()
         await interaction.response.defer(thinking=True)
         
-        user = user or interaction.user
-        params = {'image_url': user.display_avatar.url}
+        params = {'image_url': (user or interaction.user).display_avatar.url}
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
@@ -631,8 +630,7 @@ class Utility(commands.Cog):
         start = perf_counter()
         await interaction.response.defer(thinking=True)
 
-        user = user or interaction.user
-        params = {'image_url': user.display_avatar.url}
+        params = {'image_url': (user or interaction.user).display_avatar.url}
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
@@ -658,8 +656,7 @@ class Utility(commands.Cog):
         start = perf_counter()
         await interaction.response.defer(thinking=True)
 
-        user = user or interaction.user
-        params = {'image_url': user.display_avatar.url, 'image_url_2': user2.display_avatar.url}
+        params = {'image_url': (user or interaction.user).display_avatar.url, 'image_url_2': user2.display_avatar.url}
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = "https://api.jeyy.xyz/v2/image/heart_locket"
 
