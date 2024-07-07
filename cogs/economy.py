@@ -3308,7 +3308,7 @@ class Economy(commands.Cog):
             else:
                 await add_command_usage(
                     user_id=ctx.author.id, 
-                    command_name=f">{cmd.name}", 
+                    command_name=f"@me {cmd.name}", 
                     conn=connection
                 )
 

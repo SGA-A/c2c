@@ -812,6 +812,174 @@ class Tags(commands.Cog):
             await ctx.send(f"Random tag found: {name}")
             await ctx.send(content=content)
 
+    async def global_stats(self, ctx: commands.Context):
+        
+        async with self.bot.pool.acquire() as conn:
+            conn: asqlite_Connection
+
+            top_tags = await conn.fetchall(
+                """
+                SELECT 
+                    name, 
+                    uses, 
+                    COUNT(*) OVER () AS "Count",
+                    SUM(uses) OVER () AS "Total Uses" 
+                FROM tags
+                ORDER BY uses DESC
+                LIMIT 3
+                """
+            )
+
+            top_data = await conn.fetchall(
+                """
+                WITH top_users AS (
+                    SELECT 
+                        'user' AS source,
+                        userID AS identifier,
+                        SUM(cmd_count) AS metric
+                    FROM command_uses
+                    WHERE cmd_name LIKE '%tag%'
+                    GROUP BY userID
+                    ORDER BY cmd_count DESC
+                    LIMIT 3
+                ),
+                top_creators AS (
+                    SELECT 
+                        'creator' AS source,
+                        ownerID AS identifier,
+                        COUNT(*) AS metric
+                    FROM tags
+                    GROUP BY ownerID
+                    ORDER BY COUNT(*) DESC
+                    LIMIT 3
+                )
+                SELECT source, identifier, metric FROM top_users
+                UNION ALL
+                SELECT source, identifier, metric FROM top_creators
+                """
+            )
+
+        top_users = [row[1:] for row in top_data if row[0] == 'user']
+        top_creators = [row[1:] for row in top_data if row[0] == 'creator']
+
+        em = discord.Embed(title="Tag Stats", colour=discord.Colour.blurple())
+        if not top_tags:
+            em.description = "No tag stats to share."
+        else:
+            data = top_tags[0]
+            em.description = f"{data[-2]:,} tags, {data[-1]:,} uses"
+
+        if len(top_tags) < 3:
+            top_tags.extend((None, None, None, None) for _ in range(0, 3 - len(top_tags)))
+        if len(top_users) < 3:
+            top_users.extend((None, None) for _ in range(0, 3 - len(top_users)))
+        if len(top_creators) < 3:
+            top_creators.extend((None, None) for _ in range(0, 3 - len(top_creators)))
+
+        def emojize(seq):
+            emoji = 129351  # ord(':first_place:')
+            for index, value in enumerate(seq):
+                yield chr(emoji + index), value
+
+        em.add_field(
+            name='Top Tags', 
+            inline=False,
+            value='\n'.join(
+                f'{emoji}: {name} ({uses} uses)' if name else f'{emoji}: Nothing!'
+                for (emoji, (name, uses, _, _)) in emojize(top_tags)
+            )
+        )
+
+        em.add_field(
+            name='Top Tag Users', 
+            inline=False,
+            value='\n'.join(
+                f'{emoji}: <@{author_id}> ({uses} times)' if author_id else f'{emoji}: No one!'
+                for (emoji, (author_id, uses)) in emojize(top_users)
+            )
+        )
+
+        em.add_field(
+            name='Top Tag Creators', 
+            inline=False,
+            value='\n'.join(
+                f'{emoji}: <@{owner_id}> ({count} tags)' if owner_id else f'{emoji}: No one!'
+                for (emoji, (owner_id, count)) in emojize(top_creators)
+            )
+        )
+        em.set_footer(text="These stats are global.")
+        await ctx.send(embed=em)
+        del top_data, top_users, top_creators, top_tags
+
+    async def member_stats(self, ctx: commands.Context, user: discord.abc.User):
+        e = discord.Embed(colour=discord.Colour.blurple())
+        e.set_author(name=str(user), icon_url=user.display_avatar.url)
+        e.set_footer(text='These statistics are server-specific.')
+
+        query = (
+            """
+            SELECT COUNT(*)
+            FROM command_uses
+            WHERE userID = $0 AND cmd_name LIKE '%tag%'
+            """
+        )
+
+        async with self.bot.pool.acquire() as conn:
+            count: tuple[int] = await conn.fetchone(query, user.id) 
+
+            # top 3 commands and total tags/uses
+            query = (
+                """
+                SELECT
+                    name,
+                    uses,
+                    COUNT(*) OVER() AS "Count",
+                    SUM(uses) OVER () AS "Uses"
+                FROM tags
+                WHERE ownerID = $0
+                ORDER BY uses DESC
+                LIMIT 3
+                """
+            )
+
+            records = await conn.fetchall(query, user.id)
+
+        if len(records) > 1:
+            owned = records[0][-2]
+            uses = records[0][-1]
+        else:
+            owned = 'None'
+            uses = 0
+
+        e.add_field(name='Owned Tags', value=owned)
+        e.add_field(name='Owned Tag Uses', value=uses)
+        e.add_field(name='Tag Command Uses', value=count[0])
+
+        # fill with data to ensure that we have a minimum of 3
+        if len(records) < 3:
+            records.extend((None, None, None, None) for i in range(0, 3 - len(records)))
+
+        emoji = 129351  # ord(':first_place:')
+
+        for (offset, (name, uses, _, _)) in enumerate(records):
+            if name:
+                value = f'{name} ({uses} uses)'
+            else:
+                value = 'Nothing!'
+
+            e.add_field(name=f'{chr(emoji + offset)} Owned Tag', value=value)
+
+        await ctx.send(embed=e)
+
+    @tag.command(description="Show tag statistics globally or for a member")
+    @app_commands.describe(member="The member to get stats about, defaults to displaying global stats.")
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
+    async def stats(self, ctx: commands.Context, member: Optional[discord.User] = None):
+        if member:
+            return await self.member_stats(ctx, member)
+        await self.global_stats(ctx)
+
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Tags(bot))
