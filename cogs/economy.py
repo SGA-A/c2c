@@ -1062,7 +1062,7 @@ class BalanceView(discord.ui.View):
             )
         )
     
-    @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a user to view balance of", row=0)
+    @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a registered user", row=0)
     async def select_user_balance(self, interaction: discord.Interaction, select: discord.ui.UserSelect):
         self.viewing = select.values[0]
         select.default_values = [discord.Object(id=self.viewing.id)]
@@ -1774,7 +1774,7 @@ class Leaderboard(discord.ui.View):
 
         self.lb.description = '\n'.join(top_rankings)
 
-    @discord.ui.select(options=options)
+    @discord.ui.select(options=options, placeholder="Select a leaderboard filter")
     async def lb_stat_select(self, interaction: discord.Interaction, select: discord.ui.Select):
         self.chosen_stat = select.values[0]
 
@@ -2254,7 +2254,7 @@ class MultiplierView(RefreshPagination):
 
         await self.interaction.response.send_message(embed=emb, view=self)
 
-    @discord.ui.select(options=multipliers, row=0)
+    @discord.ui.select(options=multipliers, row=0, placeholder="Select a multiplier to view")
     async def callback(self, interaction: discord.Interaction, select: discord.ui.Select):
 
         self.chosen_multiplier: str = select.values[0]

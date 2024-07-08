@@ -3,7 +3,7 @@ from io import BytesIO
 from random import choice
 from unicodedata import name
 from time import perf_counter
-from typing import Literal, Optional, List
+from typing import Callable, Literal, Optional, List
 from xml.etree.ElementTree import fromstring
 
 import discord
@@ -101,6 +101,71 @@ class ImageSourceButton(discord.ui.Button):
     def __init__(self, url: Optional[str] = "https://www.google.com") -> None:
         super().__init__(url=url, label="Source", row=1)
 
+
+class CommandUsage(PaginationSimple):
+    def __init__(
+        self, 
+        interaction: discord.Interaction, 
+        invoker_id: int, 
+        viewing: discord.Member | discord.User,
+        get_page: Callable | None = None,
+    ) -> None:
+        super().__init__(interaction, invoker_id, get_page)
+        self.viewing = viewing
+        self.usage_embed = discord.Embed(title=f"{self.viewing.display_name}'s Command Usage", colour=0x2B2D31)
+        self.usage_data = []
+        self.total: int = 0
+        self.children[-1].default_values = [discord.Object(id=self.viewing.id)]
+
+    async def fetch_data(self):
+        async with self.ctx.client.pool.acquire() as conn:
+            self.usage_data = await conn.fetchall(
+                """
+                SELECT cmd_name, cmd_count
+                FROM command_uses
+                WHERE userID = $0
+                ORDER BY cmd_count DESC
+                """, self.viewing.id
+            )
+            if not self.usage_data:
+                self.usage_embed.description = (
+                    "This user has never used any bot commands before.\n"
+                    "Or, they have not used the bot since the rewrite (<t:1712935339:R>)."
+                )
+                self.total = 0
+                return
+
+            self.total = await total_commands_used_by_user(self.viewing.id, conn)
+
+    @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a registered user", row=0)
+    async def user_select(self, interaction: discord.Interaction, select: discord.ui.UserSelect):
+        self.viewing = select.values[0]
+        self.index = 1
+        select.default_values = [discord.Object(id=self.viewing.id)]
+
+        await self.fetch_data()
+        self.usage_embed.title = f"{self.viewing.display_name}'s Command Usage"
+
+        async def get_page_part(page: int, length: Optional[int] = 12):
+
+            if not self.usage_data:
+                n = 1
+                self.usage_embed.set_footer(text="Empty")
+                return self.usage_embed, n
+
+            offset = (page - 1) * length
+            self.usage_embed.description = f"> Total: {self.total:,}\n\n"
+            self.usage_embed.description += "\n".join(
+                f"` {item[1]:,} ` \U00002014 {item[0]}"
+                for item in self.usage_data[offset:offset + length]
+            )
+
+            n = self.compute_total_pages(len(self.usage_data), length)
+            self.usage_embed.set_footer(text=f"Page {page} of {n}")
+            return self.usage_embed, n
+        self.get_page = get_page_part
+
+        await self.edit_page(interaction)
 
 class Utility(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
@@ -280,48 +345,31 @@ class Utility(commands.Cog):
     async def view_user_usage(self, interaction: discord.Interaction, user: Optional[USER_ENTRY]):
         user = user or interaction.user
 
-        async with self.bot.pool.acquire() as conn:
+        paginator = CommandUsage(
+            interaction, 
+            invoker_id=interaction.user.id,
+            viewing=user
+        )
+        await paginator.fetch_data()
 
-            total_cmd_count = await total_commands_used_by_user(user.id, conn)
+        async def get_page_part(page: int, length: Optional[int] = 12):
 
-            command_usage = await conn.fetchall(
-                """
-                SELECT cmd_name, cmd_count
-                FROM command_uses
-                WHERE userID = $0
-                ORDER BY cmd_count DESC
-                """, user.id
+            if not paginator.usage_data:
+                n = 1
+                paginator.usage_embed.set_footer(text="Empty")
+                return paginator.usage_embed, n
+
+            offset = (page - 1) * length
+            paginator.usage_embed.description = f"> Total: {paginator.total:,}\n\n"
+            paginator.usage_embed.description += "\n".join(
+                f"` {cmd_data[1]:,} ` \U00002014 {cmd_data[0]}"
+                for cmd_data in paginator.usage_data[offset:offset + length]
             )
 
-            if not command_usage:
-                return await interaction.response.send_message(
-                    embed=membed(
-                        f"{user.mention} has never used any bot commands before.\n"
-                        "Or, they have not used the bot since the rewrite (<t:1712935339:R>)."
-                    )
-                )
-
-            em = membed()
-            em.title = f"{user.display_name}'s Command Usage"
-            paginator = PaginationSimple(
-                interaction, 
-                invoker_id=interaction.user.id
-            )
-
-            async def get_page_part(page: int, length: Optional[int] = 12):
-
-                offset = (page - 1) * length
-                em.description = f"> Total: {total_cmd_count:,}\n\n"
-
-                em.description += "\n".join(
-                    f"` {item[1]:,} ` \U00002014 {item[0]}"
-                    for item in command_usage[offset:offset + length]
-                )
-
-                n = paginator.compute_total_pages(len(command_usage), length)
-                em.set_footer(text=f"Page {page} of {n}")
-                return em, n
-            paginator.get_page = get_page_part
+            n = paginator.compute_total_pages(len(paginator.usage_data), length)
+            paginator.usage_embed.set_footer(text=f"Page {page} of {n}")
+            return paginator.usage_embed, n
+        paginator.get_page = get_page_part
 
         await paginator.navigate()
 
@@ -469,8 +517,7 @@ class Utility(commands.Cog):
                 " - Accessing some posts under the `copyright` tag.\n"
                 " - There are no posts found under this tag.\n"
                 " - The page requested exceeds the max length.\n"
-                "- You can find a tag by using /tagsearch "
-                "or [the website.](https://konachan.net/tag)"
+                "- You can find a tag by using [the website.](https://konachan.net/tag)"
             )
             embed.title = "No posts found."
             return await interaction.response.send_message(ephemeral=True, embed=embed)
