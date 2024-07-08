@@ -987,8 +987,10 @@ class BalanceView(discord.ui.View):
             return not in_tr[0]
 
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
+        for item in self.children:
+            item.disabled = True
         try:
-            await self.interaction.edit_original_response(view=None)
+            await self.interaction.edit_original_response(view=self)
         except discord.HTTPException:
             pass
 
