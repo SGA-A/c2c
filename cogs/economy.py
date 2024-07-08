@@ -909,7 +909,7 @@ class BalanceView(discord.ui.View):
             )
             if nd is None:
                 if interaction.user.id != self.viewing.id:
-                    balance.description = f"{self.viewing.mention} is not registered."
+                    balance.description = "This user is not registered."
                     self.children[0].disabled, self.children[1].disabled = True, True
                     return balance
 
@@ -987,10 +987,8 @@ class BalanceView(discord.ui.View):
             return not in_tr[0]
 
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
-        for item in self.children:
-            item.disabled = True
         try:
-            await self.interaction.edit_original_response(view=self)  
+            await self.interaction.edit_original_response(view=None)
         except discord.HTTPException:
             pass
 
@@ -3558,7 +3556,7 @@ class Economy(commands.Cog):
         allowed_contexts=app_commands.AppCommandContext(guild=True),
         allowed_installs=app_commands.AppInstallationType(guild=True)
     )
-    
+
     async def coin_checks_passing(
         self,
         interaction: discord.Interaction,
@@ -3578,7 +3576,7 @@ class Economy(commands.Cog):
             )
         else:
             return True
-    
+
     async def item_checks_passing(
         self,
         interaction: discord.Interaction,

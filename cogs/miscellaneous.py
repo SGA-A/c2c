@@ -117,6 +117,20 @@ class CommandUsage(PaginationSimple):
         self.total: int = 0
         self.children[-1].default_values = [discord.Object(id=self.viewing.id)]
 
+    async def navigate(self) -> None:
+        """Get through the paginator properly."""
+        emb, self.total_pages = await self.get_page(self.index)
+        self.update_buttons()
+        await self.ctx.response.send_message(embed=emb, view=self)
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+        try:
+            await self.ctx.edit_original_response(view=self)
+        except discord.HTTPException:
+            pass
+
     async def fetch_data(self):
         async with self.ctx.client.pool.acquire() as conn:
             self.usage_data = await conn.fetchall(
