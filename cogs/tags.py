@@ -3,6 +3,7 @@ import datetime
 from typing import (
     Annotated, 
     Callable,
+    Literal,
     Optional 
 )
 
@@ -117,7 +118,7 @@ class TagMakeModal(discord.ui.Modal, title='Create New Tag'):
 
 class TagMakeView(BaseContextView):
     def __init__(self, cog: "Tags", ctx: commands.Context):
-        super().__init__(ctx=ctx)  # default controlling_user to ctx.author
+        super().__init__(ctx)  # default controlling_user to ctx.author
         self.cog = cog
 
     async def on_timeout(self) -> None:
@@ -125,10 +126,123 @@ class TagMakeView(BaseContextView):
 
     @discord.ui.button(style=discord.ButtonStyle.primary, label="Create Tag")
     async def create_tag_button(self, interaction: discord.Interaction, _: discord.ui.Button):
-        await interaction.message.delete()
         await interaction.response.send_modal(TagMakeModal(self.cog, ctx=self.ctx))
+        await interaction.message.delete()
         self.stop()
 
+
+class TagLeaderboard(PaginationSimple):
+    length = 6
+    options = [
+        discord.SelectOption(label="Tag Usage", description="How much a tag has been used."),
+        discord.SelectOption(label="Tags Created", description="Who creates the most tags."),
+        discord.SelectOption(label="Tags Used", description="Who uses the most tags.")
+    ]
+    podium_pos = {1: "### \U0001f947", 2: "\U0001f948", 3: "\U0001f949"}
+
+    def __init__(self, ctx: commands.Context, chosen_stat: str):
+        super().__init__(ctx, invoker_id=ctx.author.id, get_page=self.get_page_part)
+        self.chosen_stat = chosen_stat
+
+        self.lb = discord.Embed(title=f"Leaderboard: {chosen_stat}", colour=discord.Colour.blurple())
+        self.lb.timestamp = discord.utils.utcnow()
+
+        self.data = []
+
+        for option in self.children[-1].options:
+            option.default = option.value == chosen_stat
+
+    async def get_page_part(self, page: int):
+        offset = (page - 1) * self.length
+        self.lb.description = "\n".join(self.data[offset:offset + self.length])
+
+        n = self.compute_total_pages(len(self.data), self.length)
+        self.lb.set_footer(text=f"Page {page} of {n}")
+        return self.lb, n
+
+    async def create_lb(self):
+        if self.chosen_stat == "Tag Usage":
+            async with self.ctx.bot.pool.acquire() as conn:
+                data = await conn.fetchall(
+                    """
+                    SELECT 
+                        name AS identifier,
+                        uses AS metric
+                    FROM tags
+                    ORDER BY uses DESC
+                    """
+                )
+
+            if not data:
+                self.data = []
+                return
+
+            self.data = [
+                f"{self.podium_pos.get(i, '\U0001f539')} ` {tag_usage:,} ` \U00002014 {tag_name}" 
+                for i, (tag_name, tag_usage) in enumerate(data, start=1)
+            ]
+            return
+
+        elif self.chosen_stat == "Tags Created":
+
+            data = (
+                """
+                SELECT 
+                    ownerID AS identifier,
+                    COUNT(*) AS metric
+                FROM tags
+                GROUP BY ownerID
+                ORDER BY COUNT(*) DESC
+                """
+            )
+
+        else:  # Tags Used
+
+            data = (
+                """
+                SELECT 
+                    userID AS identifier,
+                    SUM(cmd_count) AS metric
+                FROM command_uses
+                WHERE cmd_name LIKE '%tag%'
+                GROUP BY userID
+                ORDER BY cmd_count DESC
+                """
+            )
+
+        async with self.ctx.bot.pool.acquire() as conn:
+            conn: asqlite_Connection
+            data = await conn.fetchall(data)
+
+        if not data:
+            self.data = []
+
+        self.data = []
+        for i, mdata in enumerate(data, start=1):
+            tag_owner, tag_count = mdata
+            memobj = self.ctx.bot.get_user(tag_owner) or await self.ctx.bot.fetch_user(tag_owner)
+            self.data.append(f"{self.podium_pos.get(i, "\U0001f539")} ` {tag_count:,} ` \U00002014 {memobj.name}")
+
+    @discord.ui.select(row=0, options=options)
+    async def tag_lb_select(self, interaction: discord.Interaction, select: discord.ui.Select):
+        self.chosen_stat = select.values[0]
+
+        for option in select.options:
+            option.default = option.value == self.chosen_stat
+
+        await self.create_lb()
+        self.index = 1
+
+        async def get_page_part(page: int):
+            offset = (page - 1) * self.length
+            self.lb.description = "\n".join(self.data[offset:offset + self.length])
+
+            n = self.compute_total_pages(len(self.data), self.length)
+            self.lb.set_footer(text=f"Page {page} of {n}")
+            return self.lb, n
+        self.get_page = get_page_part
+
+        await self.edit_page(interaction)
 
 class MatchWord(discord.ui.Button):
     """
@@ -136,7 +250,7 @@ class MatchWord(discord.ui.Button):
 
     It is a generic button that, upon clicked, returns the word pressed for later use.
     """
-    
+
     def __init__(self, word: str) -> None:
         super().__init__(label=word)
 
@@ -914,27 +1028,34 @@ class Tags(commands.Cog):
     async def member_stats(self, ctx: commands.Context, user: discord.abc.User):
         e = discord.Embed(colour=discord.Colour.blurple())
         e.set_author(name=str(user), icon_url=user.display_avatar.url)
-        e.set_footer(text='These statistics are server-specific.')
+        e.set_footer(text='These stats are user-specific.')
 
         query = (
             """
-            SELECT COUNT(*)
+            WITH aggregate AS (
+                SELECT
+                    COUNT(*) AS owned_tags,
+                    COALESCE(SUM(uses), 0) AS owned_tag_uses
+                FROM tags
+                WHERE ownerID = $0
+            )
+
+            SELECT 
+                CAST(TOTAL(cmd_count) AS INTEGER) AS total_cmd_count, 
+                aggregate.owned_tags, 
+                COALESCE(aggregate.owned_tag_uses, 0)
             FROM command_uses
+            CROSS JOIN aggregate
             WHERE userID = $0 AND cmd_name LIKE '%tag%'
             """
         )
 
         async with self.bot.pool.acquire() as conn:
-            count: tuple[int] = await conn.fetchone(query, user.id) 
+            count, owned_tags, owned_uses = await conn.fetchone(query, user.id) 
 
-            # top 3 commands and total tags/uses
             query = (
                 """
-                SELECT
-                    name,
-                    uses,
-                    COUNT(*) OVER() AS "Count",
-                    SUM(uses) OVER () AS "Uses"
+                SELECT name, uses
                 FROM tags
                 WHERE ownerID = $0
                 ORDER BY uses DESC
@@ -944,24 +1065,16 @@ class Tags(commands.Cog):
 
             records = await conn.fetchall(query, user.id)
 
-        if len(records) > 1:
-            owned = records[0][-2]
-            uses = records[0][-1]
-        else:
-            owned = 'None'
-            uses = 0
-
-        e.add_field(name='Owned Tags', value=owned)
-        e.add_field(name='Owned Tag Uses', value=uses)
-        e.add_field(name='Tag Command Uses', value=count[0])
+        e.add_field(name='Owned Tags', value=owned_tags)
+        e.add_field(name='Owned Tag Uses', value=owned_uses)
+        e.add_field(name='Tag Command Uses', value=f"{count:,}")
 
         # fill with data to ensure that we have a minimum of 3
         if len(records) < 3:
-            records.extend((None, None, None, None) for i in range(0, 3 - len(records)))
+            records.extend((None,)*2 for i in range(0, 3 - len(records)))
 
-        emoji = 129351  # ord(':first_place:')
-
-        for (offset, (name, uses, _, _)) in enumerate(records):
+        emoji = 129351
+        for offset, (name, uses) in enumerate(records):
             if name:
                 value = f'{name} ({uses} uses)'
             else:
@@ -979,6 +1092,16 @@ class Tags(commands.Cog):
         if member:
             return await self.member_stats(ctx, member)
         await self.global_stats(ctx)
+
+    @tag.command(description="Rank tags based on various stats", aliases=('lb',))
+    @app_commands.describe(stat="The stat you want to see.")
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
+    async def leaderboard(self, ctx: commands.Context, stat: Literal["Tag Usage", "Tags Created", "Tags Used"]):
+        lb_view = TagLeaderboard(ctx, chosen_stat=stat)
+
+        await lb_view.create_lb()
+        await lb_view.navigate()
 
 
 async def setup(bot: commands.Bot):

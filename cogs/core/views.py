@@ -34,12 +34,11 @@ class BaseInteractionView(discord.ui.View):
         return await economy_check(interaction, original=self.controlling_user)
 
 
+
 class BaseContextView(discord.ui.View):
     """
     A view that ensures that only the command author can make use of this view.
-    
-    This view should delete itself when timing out. `View.wait()` should be used to do this yourself.
-    
+
     This view has no items, you'll need to add them in manually.
     """
     def __init__(
@@ -59,7 +58,7 @@ class BaseContextView(discord.ui.View):
 class ConfirmationButton(discord.ui.Button):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-    
+
     async def callback(self, interaction: discord.Interaction) -> None:
         self.view.value = self.style == discord.ButtonStyle.success
         self.view.stop()

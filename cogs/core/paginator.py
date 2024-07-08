@@ -227,22 +227,22 @@ class PaginationSimple(discord.ui.View):
         self.children[2].disabled = is_last_item_check
         self.children[3].disabled = is_last_item_check
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_FIRST_PAGE_EMOJI, row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_FIRST_PAGE_EMOJI, row=1)
     async def first(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index = 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_LEFT_EMOJI, row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_LEFT_EMOJI, row=1)
     async def previous(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index -= 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_RIGHT_EMOJI, row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_RIGHT_EMOJI, row=1)
     async def next_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index += 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_LAST_PAGE_EMOJI, row=0)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_LAST_PAGE_EMOJI, row=1)
     async def last_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index = self.total_pages
         await self.edit_page(interaction)
@@ -414,7 +414,7 @@ class RefreshSelectPagination(PaginationItem):
 class RefreshSelectPaginationExtended(RefreshPagination):
     """
     Similar to `RefreshSelectPagination`, but with a refresh button as well.
-    
+
     The conditions for it apply to this one as well.
 
     Inherits from the `RefreshPagination` class.

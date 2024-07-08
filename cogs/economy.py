@@ -1594,43 +1594,34 @@ class HighLow(discord.ui.View):
         await self.send_loss(interaction, button)
 
 
-class DropdownLB(discord.ui.Select):
-    def __init__(self, meth: Callable, their_choice: str):
-        self.meth = meth
-
-        options = [
-            SelectOption(label='Money Net', description='Sort by the sum of bank and wallet.'),
-            SelectOption(label='Wallet', description='Sort by the wallet amount only.'),
-            SelectOption(label='Bank', description='Sort by the bank amount only.'),
-            SelectOption(label='Inventory Net', description='Sort by the net value of your inventory.'),
-            SelectOption(label='Bounty', description="Sort by the sum paid for capturing a player."),
-            SelectOption(label='Commands', description="Sort by total commands ran."),
-            SelectOption(label='Level', description="Sort by player level."),
-            SelectOption(label='Net Worth', description="Sort by the sum of bank, wallet, and inventory value.")
-        ]
-
-        super().__init__(options=options)
-
-        for option in self.options:
-            option.default = option.value == their_choice
-
-    async def callback(self, interaction: discord.Interaction):
-
-        chosen_choice = self.values[0]
-
-        for option in self.options:
-            option.default = option.value == chosen_choice
-
-        lb = await self.meth(chosen_choice=chosen_choice)
-
-        await interaction.response.edit_message(embed=lb, view=self.view)
-
-
 class Leaderboard(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction, their_choice: str, meth: Callable):
+    options = [
+        SelectOption(label='Money Net', description='The sum of wallet and bank.'),
+        SelectOption(label='Wallet', description='The wallet amount only.'),
+        SelectOption(label='Bank', description='The bank amount only.'),
+        SelectOption(label='Inventory Net', description='The net value of your inventory.'),
+        SelectOption(label='Bounty', description="The sum paid for capturing a player."),
+        SelectOption(label='Commands', description="The total commands ran."),
+        SelectOption(label='Level', description="The player level."),
+        SelectOption(label='Net Worth', description="The sum of wallet, bank and inventory value.")
+    ]
+    podium_pos = {1: "### \U0001f947", 2: "\U0001f948", 3: "\U0001f949"}
+
+    def __init__(self, interaction: discord.Interaction, chosen_stat: str):
         self.interaction = interaction
+        self.chosen_stat = chosen_stat
+
+        self.lb = discord.Embed(
+            title=f"Leaderboard: {chosen_stat}",
+            color=0x2B2D31,
+            timestamp=discord.utils.utcnow()
+        )
+        self.lb.set_footer(text="Ranked globally")
+
         super().__init__(timeout=45.0)
-        self.add_item(DropdownLB(meth, their_choice))
+
+        for option in self.children[0].options:
+            option.default = option.value == chosen_stat
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await economy_check(interaction, self.interaction.user)
@@ -1642,6 +1633,158 @@ class Leaderboard(discord.ui.View):
             await self.interaction.edit_original_response(view=self)
         except discord.HTTPException:
             pass
+
+    async def create_lb(self) -> discord.Embed:
+
+        self.lb.title = f"Leaderboard: {self.chosen_stat}"
+        self.lb.timestamp = discord.utils.utcnow()
+
+        if self.chosen_stat == 'Money Net':
+
+            data = (
+                """
+                SELECT 
+                    userID, 
+                    SUM(wallet + bank) AS total_balance 
+                FROM accounts 
+                GROUP BY userID 
+                ORDER BY total_balance DESC
+                """
+            )
+
+        elif self.chosen_stat == 'Wallet':
+
+            data = (
+                """
+                SELECT 
+                    userID, 
+                    wallet AS total_wallet 
+                FROM accounts 
+                GROUP BY userID 
+                ORDER BY total_wallet DESC
+                """
+            )
+
+        elif self.chosen_stat == 'Bank':
+            data = (
+                """
+                SELECT 
+                    userID, 
+                    bank AS total_bank 
+                FROM accounts 
+                GROUP BY userID 
+                ORDER BY total_bank DESC
+                """
+            )
+
+        elif self.chosen_stat == 'Inventory Net':
+
+            data = (
+                """
+                SELECT 
+                    inventory.userID, 
+                    SUM(shop.cost * inventory.qty) AS NetValue
+                FROM inventory
+                INNER JOIN shop 
+                    ON shop.itemID = inventory.itemID
+                GROUP BY inventory.userID
+                ORDER BY NetValue DESC
+                """
+            )
+
+        elif self.chosen_stat == 'Bounty':
+
+            data = (
+                """
+                SELECT 
+                    userID, 
+                    bounty AS total_bounty 
+                FROM accounts 
+                GROUP BY userID 
+                HAVING total_bounty > 0
+                ORDER BY total_bounty DESC
+                """
+            )
+
+        elif self.chosen_stat == 'Commands':
+
+            data = (
+                """
+                SELECT 
+                    userID, 
+                    SUM(cmd_count) AS total_commands
+                FROM command_uses
+                GROUP BY userID
+                HAVING total_commands > 0
+                ORDER BY total_commands DESC
+                """
+            )
+
+        elif self.chosen_stat == 'Level':
+
+            data = (
+                """
+                SELECT userID, level 
+                FROM accounts 
+                GROUP BY userID 
+                HAVING level > 0
+                ORDER BY level DESC
+                """
+            )
+
+        else:
+
+            data = (
+                """
+                SELECT 
+                    COALESCE(inventory.userID, money.userID) AS userID, 
+                    (COALESCE(SUM(shop.cost * inventory.qty), 0) + COALESCE(money.total_balance, 0)) AS TotalNetWorth
+                FROM 
+                    inventory
+                LEFT JOIN 
+                    shop ON shop.itemID = inventory.itemID
+                RIGHT JOIN 
+                    (
+                        SELECT 
+                            userID, 
+                            SUM(wallet + bank) AS total_balance 
+                        FROM 
+                            accounts 
+                        GROUP BY 
+                            userID
+                    ) AS money ON inventory.userID = money.userID
+                GROUP BY 
+                    COALESCE(inventory.userID, money.userID)
+                ORDER BY 
+                    TotalNetWorth DESC
+                """
+            )
+
+        async with self.interaction.client.pool.acquire() as conn:
+            data = await conn.fetchall(data)
+
+        if not data:
+            self.lb.description = 'No data.'
+            return
+
+        top_rankings = []
+        for i, mdata in enumerate(data, start=1):
+            user_id, data = mdata
+            memobj = self.interaction.client.get_user(user_id) or await self.interaction.client.fetch_user(user_id)
+            top_rankings.append(f"{self.podium_pos.get(i, "\U0001f539")} ` {data:,} ` \U00002014 {memobj.name}{UNIQUE_BADGES.get(memobj.id, '')}")
+
+        self.lb.description = '\n'.join(top_rankings)
+
+    @discord.ui.select(options=options)
+    async def lb_stat_select(self, interaction: discord.Interaction, select: discord.ui.Select):
+        self.chosen_stat = select.values[0]
+
+        for option in select.options:
+            option.default = option.value == self.chosen_stat
+
+        await self.create_lb()
+
+        await interaction.response.edit_message(embed=self.lb, view=self)
 
 
 class ItemQuantityModal(discord.ui.Modal):
@@ -2349,155 +2492,6 @@ class Economy(commands.Cog):
         )
 
         return res[0]
-
-    async def create_leaderboard_preset(self, chosen_choice: str) -> discord.Embed:
-        """A single reused function used to map the chosen leaderboard made by the user to the associated query."""
-        async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection = conn
-            
-            podium_pos = {1: "### \U0001f947", 2: "\U0001f948", 3: "\U0001f949"}
-
-            lb = discord.Embed(
-                title=f"Leaderboard: {chosen_choice}",
-                color=0x2B2D31,
-                timestamp=discord.utils.utcnow()
-            )
-
-            lb.set_footer(text="Ranked globally")
-
-            if chosen_choice == 'Money Net':
-
-                data = await conn.fetchall(
-                    """
-                    SELECT 
-                        userID, 
-                        SUM(wallet + bank) AS total_balance 
-                    FROM accounts 
-                    GROUP BY userID 
-                    ORDER BY total_balance DESC
-                    """
-                )
-
-            elif chosen_choice == 'Wallet':
-
-                data = await conn.fetchall(
-                    """
-                    SELECT 
-                        userID, 
-                        wallet AS total_wallet 
-                    FROM accounts 
-                    GROUP BY userID 
-                    ORDER BY total_wallet DESC
-                    """
-                )
-
-            elif chosen_choice == 'Bank':
-                data = await conn.fetchall(
-                    """
-                    SELECT 
-                        userID, 
-                        bank AS total_bank 
-                    FROM accounts 
-                    GROUP BY userID 
-                    ORDER BY total_bank DESC
-                    """
-                )
-
-            elif chosen_choice == 'Inventory Net':
-
-                data = await conn.fetchall(
-                    """
-                    SELECT 
-                        inventory.userID, 
-                        SUM(shop.cost * inventory.qty) AS NetValue
-                    FROM inventory
-                    INNER JOIN shop 
-                        ON shop.itemID = inventory.itemID
-                    GROUP BY inventory.userID
-                    ORDER BY NetValue DESC
-                    """
-                )
-
-            elif chosen_choice == 'Bounty':
-
-                data = await conn.fetchall(
-                    """
-                    SELECT 
-                        userID, 
-                        bounty AS total_bounty 
-                    FROM accounts 
-                    GROUP BY userID 
-                    HAVING total_bounty > 0
-                    ORDER BY total_bounty DESC
-                    """
-                )
-
-            elif chosen_choice == 'Commands':
-
-                data = await conn.fetchall(
-                    """
-                    SELECT 
-                        userID, 
-                        SUM(cmd_count) AS total_commands
-                    FROM command_uses
-                    GROUP BY userID
-                    HAVING total_commands > 0
-                    ORDER BY total_commands DESC
-                    """
-                )
-
-            elif chosen_choice == 'Level':
-
-                data = await conn.fetchall(
-                    """
-                    SELECT userID, level 
-                    FROM accounts 
-                    GROUP BY userID 
-                    HAVING level > 0
-                    ORDER BY level DESC
-                    """
-                )
-
-            else:
-
-                data = await conn.fetchall(
-                    """
-                    SELECT 
-                        COALESCE(inventory.userID, money.userID) AS userID, 
-                        (COALESCE(SUM(shop.cost * inventory.qty), 0) + COALESCE(money.total_balance, 0)) AS TotalNetWorth
-                    FROM 
-                        inventory
-                    LEFT JOIN 
-                        shop ON shop.itemID = inventory.itemID
-                    RIGHT JOIN 
-                        (
-                            SELECT 
-                                userID, 
-                                SUM(wallet + bank) AS total_balance 
-                            FROM 
-                                accounts 
-                            GROUP BY 
-                                userID
-                        ) AS money ON inventory.userID = money.userID
-                    GROUP BY 
-                        COALESCE(inventory.userID, money.userID)
-                    ORDER BY 
-                        TotalNetWorth DESC
-                    """
-                )
-
-            if not data:
-                lb.description = 'No data.'
-                return lb
-
-            top_rankings = []
-            for i, mdata in enumerate(data, start=1):
-                user_id, data = mdata
-                memobj = self.bot.get_user(user_id) or await self.bot.fetch_user(user_id)
-                top_rankings.append(f"{podium_pos.get(i, "\U0001f539")} ` {data:,} ` \U00002014 {memobj.name}{UNIQUE_BADGES.get(memobj.id, '')}")
-
-            lb.description = '\n'.join(top_rankings)
-            return lb
 
     # ------------------ BANK FUNCS ------------------ #
 
@@ -5805,11 +5799,10 @@ class Economy(commands.Cog):
     ) -> None:
         """View the leaderboard and filter the results based on different stats inputted."""
 
-        meth = self.create_leaderboard_preset
-        lb_view = Leaderboard(interaction, their_choice=stat, meth=meth)
-        lb = await meth(chosen_choice=stat)
+        lb_view = Leaderboard(interaction, chosen_stat=stat)
+        await lb_view.create_lb()
 
-        await interaction.response.send_message(embed=lb, view=lb_view)
+        await interaction.response.send_message(embed=lb_view.lb, view=lb_view)
 
     @app_commands.command(description="Attempt to steal from someone's pocket", extras={"exp_gained": 4})
     @app_commands.describe(user='The user you want to rob money from.')
