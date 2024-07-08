@@ -654,6 +654,9 @@ class ConfirmResetData(discord.ui.View):
             await self.interaction.delete_original_response()
         except discord.HTTPException:
             pass
+        finally:
+            async with self.interaction.client.pool.acquire() as conn:
+                await Economy.end_transaction(conn, user_id=self.interaction.user.id)
 
     @discord.ui.button(label='RESET MY DATA', style=discord.ButtonStyle.danger, emoji=discord.PartialEmoji.from_str("<a:rooFireAhh:1208545466132860990>"))
     async def confirm_button_reset(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -680,7 +683,7 @@ class ConfirmResetData(discord.ui.View):
 
                 return await interaction.response.send_message(
                     embed=membed(
-                        f"Failed to wipe {self.removing_user.mention}'s data.\n"
+                        "Failed to wipe user data.\n"
                         "Report this to the developers so they can get it fixed."
                     )
                 )
