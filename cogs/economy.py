@@ -27,7 +27,7 @@ import discord
 import aiofiles
 from pytz import timezone
 from discord.ext import commands, tasks
-from discord import app_commands, SelectOption
+from discord import app_commands
 from asqlite import ProxiedConnection as asqlite_Connection
 
 from .core.helpers import (
@@ -39,8 +39,7 @@ from .core.helpers import (
 
 from .core.paginator import (
     PaginationItem, 
-    RefreshPagination, 
-    RefreshSelectPaginationExtended
+    RefreshPagination
 )
 
 from .core.views import process_confirmation
@@ -1596,14 +1595,14 @@ class HighLow(discord.ui.View):
 
 class Leaderboard(discord.ui.View):
     options = [
-        SelectOption(label='Money Net', description='The sum of wallet and bank.'),
-        SelectOption(label='Wallet', description='The wallet amount only.'),
-        SelectOption(label='Bank', description='The bank amount only.'),
-        SelectOption(label='Inventory Net', description='The net value of your inventory.'),
-        SelectOption(label='Bounty', description="The sum paid for capturing a player."),
-        SelectOption(label='Commands', description="The total commands ran."),
-        SelectOption(label='Level', description="The player level."),
-        SelectOption(label='Net Worth', description="The sum of wallet, bank and inventory value.")
+        discord.SelectOption(label='Money Net', description='The sum of wallet and bank.'),
+        discord.SelectOption(label='Wallet', description='The wallet amount only.'),
+        discord.SelectOption(label='Bank', description='The bank amount only.'),
+        discord.SelectOption(label='Inventory Net', description='The net value of your inventory.'),
+        discord.SelectOption(label='Bounty', description="The sum paid for capturing a player."),
+        discord.SelectOption(label='Commands', description="The total commands ran."),
+        discord.SelectOption(label='Level', description="The player level."),
+        discord.SelectOption(label='Net Worth', description="The sum of wallet, bank and inventory value.")
     ]
     podium_pos = {1: "### \U0001f947", 2: "\U0001f948", 3: "\U0001f949"}
 
@@ -2059,7 +2058,7 @@ class SettingsDropdown(discord.ui.Select):
     def __init__(self, data: tuple, default_setting: str) -> None:
         """data is a list of tuples containing the settings and their brief descriptions."""
         options = [
-            discord.SelectOption(label=" ".join(setting.split("_")).title(), description=brief, default=setting == default_setting, value=setting)
+            discord.discord.SelectOption(label=" ".join(setting.split("_")).title(), description=brief, default=setting == default_setting, value=setting)
             for setting, brief in data
         ]
         self.current_setting = default_setting
@@ -2168,38 +2167,43 @@ class UserSettings(discord.ui.View):
         return await economy_check(interaction, self.interaction.user)
 
 
-class MultiplierSelect(discord.ui.Select):
+class MultiplierView(RefreshPagination):
 
     colour_mapping = {
-        "robux": (0x59DDB3, "https://i.imgur.com/raX1Am0.png"),
-        "xp": (0xCDC700, "https://i.imgur.com/7hJ0oiO.png"),
-        "luck": (0x65D654, "https://i.imgur.com/9xZIFOg.png")
+        "Robux": (0x59DDB3, "https://i.imgur.com/raX1Am0.png"),
+        "XP": (0xCDC700, "https://i.imgur.com/7hJ0oiO.png"),
+        "Luck": (0x65D654, "https://i.imgur.com/9xZIFOg.png")
     }
 
-    def __init__(self, selected_option: str, viewing: USER_ENTRY) -> None:
+    multipliers = [
+        discord.SelectOption(
+            label='Robux',
+            emoji="<:robuxMulti:1247992187006750803>"
+        ),
+        discord.SelectOption(
+            label='XP',
+            emoji='<:xpMulti:1247992334910623764>'
+        ),
+        discord.SelectOption(
+            label='Luck', 
+            emoji='<:luckMulti:1247992217272844290>'
+        )
+    ]
 
-        defined_options = [
-            SelectOption(
-                label='Robux',
-                emoji="<:robuxMulti:1247992187006750803>"
-            ),
-            SelectOption(
-                label='XP',
-                emoji='<:xpMulti:1247992334910623764>'
-            ),
-            SelectOption(
-                label='Luck', 
-                emoji='<:luckMulti:1247992217272844290>'
-            )
-        ]
+    def __init__(
+        self, 
+        interaction: discord.Interaction, 
+        chosen_multiplier: str, 
+        viewing: USER_ENTRY, 
+        get_page: Optional[Callable] = None
+    ) -> None:
 
-        for option in defined_options:
-            if option.value.lower() == selected_option.lower():
-                option.default = True
-                break
-        
         self.viewing = viewing
-        super().__init__(options=defined_options, row=0)
+        self.chosen_multiplier = chosen_multiplier
+        super().__init__(interaction, get_page=get_page)
+
+        for option in self.children[-1].options:
+            option.default = option.value == chosen_multiplier
 
     @staticmethod
     def repr_multi(*, amount, multi: MULTIPLIER_TYPES):
@@ -2211,20 +2215,15 @@ class MultiplierSelect(discord.ui.Select):
         The units are also converted as necessary based on the type we're looking at.
         """
 
-        unit = "x" if multi == "xp" else "%"
-        amount = amount if multi != "xp" else (1 + (amount / 100))
+        unit = "x" if multi == "XP" else "%"
+        amount = amount if multi != "XP" else (1 + (amount / 100))
 
         return f"{amount:.2f}{unit}"
 
-    @staticmethod
-    async def format_pages(
-        interaction: discord.Interaction,
-        chosen_multiplier: MULTIPLIER_TYPES, 
-        viewing: discord.Member
-    ) -> tuple[int, list]:
+    async def format_pages(self) -> tuple[int, list]:
 
-        lowered = chosen_multiplier.lower()
-        async with interaction.client.pool.acquire() as conn:
+        lowered = self.chosen_multiplier.lower()
+        async with self.interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
 
             count = await conn.fetchone(
@@ -2233,7 +2232,7 @@ class MultiplierSelect(discord.ui.Select):
                 FROM multipliers
                 WHERE (userID IS NULL OR userID = $0)
                 AND multi_type = $1
-                """, viewing.id, lowered
+                """, self.viewing.id, lowered
             )
 
             pages = await conn.fetchall(
@@ -2243,69 +2242,64 @@ class MultiplierSelect(discord.ui.Select):
                 WHERE (userID IS NULL OR userID = $0)
                 AND multi_type = $1
                 ORDER BY amount DESC
-                """, viewing.id, lowered
+                """, self.viewing.id, lowered
             )
 
         return count, pages
 
-    async def callback(self, interaction: discord.Interaction):
+    async def navigate(self) -> None:
+        """Get through the paginator properly."""
+        emb, self.total_pages = await self.get_page(self.index)
+        self.update_buttons()
 
-        chosen_multiplier: str = self.values[0]
+        await self.interaction.response.send_message(embed=emb, view=self)
 
-        for option in self.options:
-            option.default = option.value == chosen_multiplier
-        
-        lowered = chosen_multiplier.lower()
+    @discord.ui.select(options=multipliers, row=0)
+    async def callback(self, interaction: discord.Interaction, select: discord.ui.Select):
 
-        self.view: RefreshSelectPaginationExtended
-        viewing = self.viewing
-        
-        total_multi, pages = await MultiplierSelect.format_pages(
-            interaction, 
-            chosen_multiplier=lowered, 
-            viewing=viewing
-        )
+        self.chosen_multiplier: str = select.values[0]
 
-        embed = discord.Embed(title=f"{viewing.display_name}'s Multipliers")
-        embed.colour, thumb_url = MultiplierSelect.colour_mapping[lowered]
+        for option in select.options:
+            option.default = option.value == self.chosen_multiplier
+
+        total_multi, pages = await self.format_pages()
+
+        embed = discord.Embed(title=f"{self.viewing.display_name}'s Multipliers")
+        embed.colour, thumb_url = self.colour_mapping[self.chosen_multiplier]
         embed.set_thumbnail(url=thumb_url)
 
-        representation = MultiplierSelect.repr_multi(amount=total_multi[0], multi=lowered)
-        self.view.index = 1
+        representation = self.repr_multi(amount=total_multi[0], multi=self.chosen_multiplier)
+        self.index = 1
 
         async def get_page_part(page: int, force_refresh: Optional[bool] = False):
 
             if force_refresh:
                 nonlocal pages, total_multi, representation
 
-                total_multi, pages = await MultiplierSelect.format_pages(
-                    interaction, 
-                    chosen_multiplier=lowered, 
-                    viewing=viewing
-                )
-                representation = MultiplierSelect.repr_multi(amount=total_multi[0], multi=lowered)
+                total_multi, pages = await self.format_pages()
+                representation = self.repr_multi(amount=total_multi[0], multi=self.chosen_multiplier)
 
             length = 6
             offset = (page - 1) * length
 
-            embed.description = f"> {chosen_multiplier}: **{representation}**\n\n"
+            embed.description = f"> {self.chose}: **{representation}**\n\n"
 
             if not total_multi[0]:
                 n = 1
                 embed.set_footer(text="Empty")
                 return embed, n
-            
+
             embed.description += "\n".join(
                 format_multiplier(multiplier)
                 for multiplier in pages[offset:offset + length]
             )
 
-            n = self.view.compute_total_pages(len(pages), length)
+            n = self.compute_total_pages(len(pages), length)
             embed.set_footer(text=f"Page {page} of {n}")
             return embed, n
-        
-        self.view.get_page = get_page_part
-        await self.view.edit_page(interaction)
+
+        self.get_page = get_page_part
+        await self.edit_page(interaction)
 
 
 class Economy(commands.Cog):
@@ -3339,36 +3333,28 @@ class Economy(commands.Cog):
     ) -> None:
 
         user = user or interaction.user
-        lowered = multiplier.lower()
-
-        total_multi, pages = await MultiplierSelect.format_pages(
-            interaction, 
-            chosen_multiplier=lowered, 
-            viewing=user
-        )
 
         embed = discord.Embed(title=f"{user.display_name}'s Multipliers")
-        embed.colour, thumb_url = MultiplierSelect.colour_mapping[lowered]
+        embed.colour, thumb_url = MultiplierView.colour_mapping[multiplier]
         embed.set_thumbnail(url=thumb_url)
 
-        select_menu = MultiplierSelect(selected_option=lowered, viewing=user)
-        paginator = RefreshSelectPaginationExtended(interaction, select=select_menu)
-
+        paginator = MultiplierView(
+            interaction, 
+            chosen_multiplier=multiplier,
+            viewing=user
+        )
+        total_multi, pages = await paginator.format_pages()
         async def get_page_part(page: int, force_refresh: Optional[bool] = False):
 
             if force_refresh:
                 nonlocal pages, total_multi
 
-                total_multi, pages = await MultiplierSelect.format_pages(
-                    interaction, 
-                    chosen_multiplier=lowered, 
-                    viewing=user
-                )
+                total_multi, pages = await paginator.format_pages()
 
             length = 6
             offset = ((page - 1) * length)
 
-            representation = MultiplierSelect.repr_multi(amount=total_multi[0], multi=lowered)
+            representation = paginator.repr_multi(amount=total_multi[0], multi=multiplier)
             embed.description = f"> {multiplier}: **{representation}**\n\n"
 
             if not total_multi[0]:
@@ -4324,7 +4310,7 @@ class Economy(commands.Cog):
                 """
             )
 
-            additional_notes = [
+            shop_metadata = [
                 (
                     f"{item[1]} {item[0]} \U00002500 [{CURRENCY} **{item[2]:,}**](https://youtu.be/dQw4w9WgXcQ)", 
                     ShopItem(item[0], item[2], item[1], row=i % 2)
@@ -4334,26 +4320,30 @@ class Economy(commands.Cog):
 
             emb = membed()
             emb.title = "Shop"
+            length = 6
 
             async def get_page_part(page: int):
-                wallet = await self.get_wallet_data_only(interaction.user, conn)
-                wallet = wallet or 0
-
+                wallet = await self.get_wallet_data_only(interaction.user, conn) or 0
                 emb.description = f"> You have {CURRENCY} **{wallet:,}**.\n\n"
 
-                length = 6
                 offset = (page - 1) * length
 
-                for item in paginator.children:
-                    if item.style == discord.ButtonStyle.blurple:
-                        paginator.remove_item(item)
+                if len(paginator.children) > 2:
+                    backward_btn, forward_btn = paginator.children[:2]
+                    paginator.clear_items()
+                    paginator.add_item(backward_btn)
+                    paginator.add_item(forward_btn)
 
-                for item_attrs in additional_notes[offset:offset + length]:
-                    emb.description += f"{item_attrs[0]}\n"
-                    item_attrs[1].disabled = wallet < item_attrs[1].cost
-                    paginator.add_item(item_attrs[1])
+                emb.description += "\n".join(
+                    item_metadata[0] 
+                    for item_metadata in shop_metadata[offset:offset + length]
+                )
+ 
+                for _, item_btn in shop_metadata[offset:offset + length]:
+                    item_btn.disabled = wallet < item_btn.cost
+                    paginator.add_item(item_btn)
 
-                n = paginator.compute_total_pages(len(additional_notes), length)
+                n = paginator.compute_total_pages(len(shop_metadata), length)
                 emb.set_footer(text=f"Page {page} of {n}")
                 return emb, n
 

@@ -312,9 +312,11 @@ class Utility(commands.Cog):
 
                 offset = (page - 1) * length
                 em.description = f"> Total: {total_cmd_count:,}\n\n"
-                
-                for item in command_usage[offset:offset + length]:
-                    em.description += f"` {item[1]:,} ` \U00002014 {item[0]}\n"
+
+                em.description += "\n".join(
+                    f"` {item[1]:,} ` \U00002014 {item[0]}"
+                    for item in command_usage[offset:offset + length]
+                )
 
                 n = paginator.compute_total_pages(len(command_usage), length)
                 em.set_footer(text=f"Page {page} of {n}")

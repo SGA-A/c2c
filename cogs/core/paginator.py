@@ -410,31 +410,3 @@ class RefreshSelectPagination(PaginationItem):
         super().__init__(interaction, get_page=get_page)
         self.add_item(select)
 
-
-class RefreshSelectPaginationExtended(RefreshPagination):
-    """
-    Similar to `RefreshSelectPagination`, but with a refresh button as well.
-
-    The conditions for it apply to this one as well.
-
-    Inherits from the `RefreshPagination` class.
-    """
-
-    def __init__(
-        self, 
-        interaction: discord.Interaction,
-        select: discord.ui.Select, 
-        get_page: Callable | None = None
-    ) -> None:
-        
-        super().__init__(interaction, get_page=get_page)
-        self.add_item(select)
-
-    async def navigate(self) -> None:
-        """Get through the paginator properly."""
-        emb, self.total_pages = await self.get_page(self.index)
-        self.update_buttons()
-
-        await self.interaction.response.send_message(embed=emb, view=self)
-    
-
