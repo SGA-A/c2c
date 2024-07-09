@@ -2317,6 +2317,51 @@ class Economy(commands.Cog):
             "[`>reasons`](https://www.google.com/)."
         )
 
+    @staticmethod
+    async def handle_confirm_outcome(
+        interaction: discord.Interaction, 
+        confirmation_prompt: str,
+        confirmation_type: str | None = None
+    ) -> None | bool:
+        """
+        Handle a confirmation outcome correctly, accounting for whether or not a specific confirmation is enabled.
+
+        The `confirmation_type` passed in should be lowercased, since all toggleable confirmation settings are lowercased.
+
+        ## Returns
+        `None` to indicate that the user doesn't have the specified confirmation enabled. 
+        It's only returned when you specify a specific confirmation setting to check but that user doesn't have it enabled.
+
+        `None` will only be returned if a specific confirmation was passed in and the user has it disabled.
+
+        `True` to indicate the user has confirmed, either by confirming on a specific confirmation you passed in to check 
+        if it is enabled, or through a generic confirmation that the user confirmed on.
+
+        `False` to indicate that the user has not confirmed (the confirmation timed out or they explicitly denied), which 
+        again can be called by the default confirmation or a specific confirmation you passed in to check for.
+        """
+
+        can_proceed = None
+        conn = None
+        try:
+            if not confirmation_type:
+                can_proceed = await process_confirmation(interaction, prompt=confirmation_prompt)
+            else:
+                # Acquire and release the connection as soon as the query is done
+                # Set conn to None to avoid re-releasing it in finally clause
+                conn = await interaction.client.pool.acquire()
+                is_enabled = await Economy.is_setting_enabled(conn, user_id=interaction.user.id, setting=confirmation_type)
+                await Economy.declare_transaction(conn, user_id=interaction.user.id)
+                await interaction.client.pool.release(conn)
+                conn = None
+
+                if is_enabled:
+                    can_proceed = await process_confirmation(interaction, prompt=confirmation_prompt)
+        finally:
+            if conn:
+                await interaction.client.pool.release(conn)
+        return can_proceed
+
     async def fetch_showdata(self, user: USER_ENTRY, conn: asqlite_Connection) -> tuple:
 
         showdata = await conn.fetchall(
@@ -3399,8 +3444,19 @@ class Economy(commands.Cog):
 
         sender = interaction.user
 
+        can_proceed = await self.handle_confirm_outcome(
+            interaction, 
+            confirmation_prompt=f"Are you sure you want to share {CURRENCY} **{quantity:,}** with {recipient.mention}?",
+            confirmation_type="share_robux_confirmations"
+        )
+
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
+
+            if can_proceed is not None:
+                await self.end_transaction(conn, user_id=interaction.user.id)
+                if can_proceed is False:
+                    return
 
             quantity = await determine_exponent(
                 interaction=interaction, 
@@ -3410,15 +3466,7 @@ class Economy(commands.Cog):
                 return
 
             try:
-                actual_wallet, confirmations_enabled = await conn.fetchone(
-                    """
-                    SELECT accounts.wallet, COALESCE(settings.value, 0) 
-                    FROM accounts
-                    INNER JOIN settings 
-                        ON accounts.userID = settings.userID AND settings.setting = 'share_robux_confirmations'
-                    WHERE accounts.userID = $0
-                    """, sender.id
-                )
+                actual_wallet = await Economy.get_wallet_data_only(interaction.user, conn)
             except TypeError:
                 return await interaction.response.send_message(ephemeral=True, embed=self.not_registered)
 
@@ -3431,27 +3479,8 @@ class Economy(commands.Cog):
                     embed=membed("You don't have that much money to share.")
                 )
 
-            confirmed = None
-            if confirmations_enabled:
-                await self.declare_transaction(conn, user_id=sender.id)
-                await conn.commit()
-
-        if confirmations_enabled:
-            confirmed = await process_confirmation(
-                interaction, 
-                f"Are you sure you want to share {CURRENCY} **{quantity:,}** with {recipient.mention}?"
-            )
-
-        async with self.bot.pool.acquire() as conn:
-            await self.end_transaction(conn, user_id=sender.id)
-            if confirmed is False:
-                return await conn.commit()
-
             if await self.can_call_out(recipient, conn):
-                await respond(interaction=interaction, embed=NOT_REGISTERED)
-                if confirmed is True:
-                    await conn.commit()
-                return
+                return await respond(interaction=interaction, embed=NOT_REGISTERED)
 
             await respond(
                 interaction=interaction,
@@ -6091,7 +6120,7 @@ class Economy(commands.Cog):
 
         await interaction.response.send_message(
             embed=initial, 
-            view=BlackjackUi(interaction=interaction)
+            view=BlackjackUi(interaction)
         )
 
     async def do_wallet_checks(
