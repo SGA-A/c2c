@@ -3497,7 +3497,8 @@ class Economy(commands.Cog):
                     return
 
             if quantity > actual_wallet:
-                return await interaction.response.send_message(
+                return await respond(
+                    interaction,
                     ephemeral=True,
                     embed=membed("You don't have that much money to share.")
                 )
