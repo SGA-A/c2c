@@ -4482,7 +4482,7 @@ class Economy(commands.Cog):
             embed.set_footer(text="Thanks for your business.")
             await respond(interaction, embed=embed)
 
-            await self.update_inv_new(seller, -qty, item_name, conn)
+            await self.update_inv_new(seller, -sell_quantity, item_name, conn)
             await self.update_bank_new(seller, conn, +cost)
             await conn.commit()
 
