@@ -3606,7 +3606,7 @@ class Economy(commands.Cog):
         coin_qty_offered: int,
         actual_wallet_amt
     ) -> bool | None:
-        if actual_wallet_amt[0] < coin_qty_offered:
+        if actual_wallet_amt < coin_qty_offered:
             await respond(
                 interaction, 
                 embed=membed(
@@ -3876,9 +3876,8 @@ class Economy(commands.Cog):
                 if not can_proceed:
                     return
 
-                await self.update_inv_by_id(interaction.user, -quantity, item_details[0], conn)
-                query = "UPDATE inventory SET qty = qty + $0 WHERE userID = $1 AND itemID = $2"
-                await conn.execute(query, quantity, with_who.id, item_details[0])
+                await self.update_inv_by_id(interaction.user, -quantity, item_id=item_details[0], conn=conn)
+                await self.update_inv_by_id(with_who, +quantity, item_id=item_details[0], conn=conn)
                 await self.update_wallet_many(
                     conn, 
                     (-for_robux, with_who.id), 
@@ -3989,9 +3988,8 @@ class Economy(commands.Cog):
                 if not can_proceed:
                     return
 
-                await self.update_inv_by_id(with_who, -item_quantity, item_details[0], conn)
-                query = "UPDATE inventory SET qty = qty + $0 WHERE userID = $1 AND itemID = $2"
-                await conn.execute(query, item_quantity, interaction.user.id, item_details[0])
+                await self.update_inv_by_id(with_who, -item_quantity, item_id=item_details[0], conn=conn)
+                await self.update_inv_by_id(interaction.user, item_quantity, item_id=item_details[0], conn=conn)
                 await self.update_wallet_many(
                     conn, 
                     (-robux_quantity, interaction.user.id), 
