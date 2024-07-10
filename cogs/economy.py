@@ -2337,42 +2337,34 @@ class Economy(commands.Cog):
 
         ## Notes
 
-        Do not pass in a connection if you aren't passing in a specific confirmation to ensure enabled.
-        It is released immediatley and no transactions will be started, for now.
+        Transactions will now always be created, meaning you should only use this function in the economy system
+        on a user who is registered, since foreign key constraints require you to pass in a valid row of the accounts table.
 
         All connections acquired, whether it be passed into the function or created in the function will also be released 
         in this exact function. Do not handle it yourself outside of the function.
         """
 
         can_proceed = None
+        view_owner = view_owner or interaction.user
 
+        conn = conn or await interaction.client.pool.acquire()  # always hold a connection
         try:
-            if not confirmation_type:
-                if conn:
-                    await interaction.client.pool.release(conn)
-                    conn = None
 
-                can_proceed = await process_confirmation(
-                    interaction, 
-                    prompt=confirmation_prompt, 
-                    view_owner=view_owner,
-                    **kwargs
-                )
-            else:
-                conn = conn or await interaction.client.pool.acquire()  # always hold a connection
-                is_enabled = await Economy.is_setting_enabled(conn, user_id=interaction.user.id, setting=confirmation_type)
-                await Economy.declare_transaction(conn, user_id=interaction.user.id)
-                await conn.commit()
-                await interaction.client.pool.release(conn)
-                conn = None
+            enabled = Economy.is_setting_enabled
+            if confirmation_type and not(await enabled(conn, user_id=view_owner.id, setting=confirmation_type)):
+                return
 
-                if is_enabled:
-                    can_proceed = await process_confirmation(
-                        interaction, 
-                        prompt=confirmation_prompt, 
-                        view_owner=view_owner,
-                        **kwargs
-                    )
+            await Economy.declare_transaction(conn, user_id=view_owner.id)
+            await conn.commit()
+            await interaction.client.pool.release(conn)
+            conn = None
+
+            can_proceed = await process_confirmation(
+                interaction, 
+                prompt=confirmation_prompt, 
+                view_owner=view_owner,
+                **kwargs
+            )
         finally:
             if conn:
                 await interaction.client.pool.release(conn)
@@ -3475,7 +3467,7 @@ class Economy(commands.Cog):
         try:
             actual_wallet = await Economy.get_wallet_data_only(sender, conn)
         except TypeError:
-            return await interaction.response.send_message(ephemeral=True, embed=self.not_registered)
+            return await interaction.response.send_message(embed=self.not_registered)
 
         if isinstance(quantity, str):
             quantity = actual_wallet
@@ -3499,7 +3491,6 @@ class Economy(commands.Cog):
             if quantity > actual_wallet:
                 return await respond(
                     interaction,
-                    ephemeral=True,
                     embed=membed("You don't have that much money to share.")
                 )
 
@@ -3572,8 +3563,7 @@ class Economy(commands.Cog):
             )
             if attrs is None:
                 return await respond(
-                    interaction, 
-                    ephemeral=True,
+                    interaction,
                     embed=membed(f"You don't own a single {ie} **{item_name}**.")
                 )
 
@@ -3581,7 +3571,6 @@ class Economy(commands.Cog):
             if actual_inv_qty < quantity:
                 return await respond(
                     interaction, 
-                    ephemeral=True,
                     embed=membed(f"You don't have **{quantity}x {ie} {item_name}**.")
                 )
 
@@ -3617,9 +3606,7 @@ class Economy(commands.Cog):
         coin_qty_offered: int,
         actual_wallet_amt
     ) -> bool | None:
-        if actual_wallet_amt is None:
-            await respond(interaction, embed=membed(f"{user_checked.mention} is not registered."))
-        elif actual_wallet_amt[0] < coin_qty_offered:
+        if actual_wallet_amt[0] < coin_qty_offered:
             await respond(
                 interaction, 
                 embed=membed(
@@ -3627,8 +3614,8 @@ class Economy(commands.Cog):
                     f"Not the requested {CURRENCY} **{coin_qty_offered:,}**."
                 )
             )
-        else:
-            return True
+            return
+        return True
 
     async def item_checks_passing(
         self,
@@ -3813,11 +3800,7 @@ class Economy(commands.Cog):
         if not default_check_passing:
             return
 
-        for_robux = await determine_exponent(
-            interaction=interaction, 
-            rinput=for_robux
-        )
-
+        for_robux = await determine_exponent(interaction, rinput=for_robux)
         if for_robux is None:
             return
 
@@ -3835,9 +3818,6 @@ class Economy(commands.Cog):
             if isinstance(for_robux, str):
                 for_robux = wallet_amt
 
-            await self.declare_transaction(conn, user_id=interaction.user.id)
-            await conn.commit()
-
             # ! For the person sending items
             item_check_passing = await self.item_checks_passing(
                 interaction, 
@@ -3848,10 +3828,9 @@ class Economy(commands.Cog):
             )
 
             if not item_check_passing:
-                await self.end_transaction(conn, user_id=interaction.user.id)
-                await conn.commit()
                 return
 
+        # Transaction created inside the function for interaction.user
         can_proceed = await self.prompt_for_coins(
             interaction,
             item_sender=interaction.user,
@@ -3869,9 +3848,6 @@ class Economy(commands.Cog):
 
             # ! For the other person sending coins
 
-            await self.declare_transaction(conn, user_id=with_who.id)
-            await conn.commit()
-
             coin_check_passing = await self.coin_checks_passing(
                 interaction,
                 user_checked=with_who,
@@ -3879,12 +3855,7 @@ class Economy(commands.Cog):
                 actual_wallet_amt=wallet_amt
             )
             if not coin_check_passing:
-                await conn.execute(
-                    """
-                    DELETE FROM transactions 
-                    WHERE userID IN ($0, $1)
-                    """, interaction.user.id, with_who.id
-                )
+                await self.end_transaction(conn, user_id=interaction.user.id)
                 await conn.commit()
                 return
 
@@ -3898,34 +3869,31 @@ class Economy(commands.Cog):
             can_continue=can_proceed
         )
 
+        query = "DELETE FROM transactions WHERE userID IN ($0, $1)"
         async with self.bot.pool.acquire() as conn:
             async with conn.transaction():
-                await conn.execute(
-                    """
-                    DELETE FROM transactions 
-                    WHERE userID IN ($0, $1)
-                    """, interaction.user.id, with_who.id
-                )
+                await conn.execute(query, interaction.user.id, with_who.id)
                 if not can_proceed:
                     return
 
                 await self.update_inv_by_id(interaction.user, -quantity, item_details[0], conn)
-                await conn.execute("UPDATE inventory SET qty = qty + $0 WHERE userID = $1 AND itemID = $2", quantity, with_who.id, item_details[0])
+                query = "UPDATE inventory SET qty = qty + $0 WHERE userID = $1 AND itemID = $2"
+                await conn.execute(query, quantity, with_who.id, item_details[0])
                 await self.update_wallet_many(
                     conn, 
                     (-for_robux, with_who.id), 
                     (+for_robux, interaction.user.id)
                 )
 
-            embed = discord.Embed(colour=0xFFFFFF)
-            embed.title = "Your Trade Receipt"
-            embed.description = (
-                f"- {interaction.user.mention} gave {with_who.mention} **{quantity}x {item_details[-1]} {item_details[1]}**.\n"
-                f"- {interaction.user.mention} received {CURRENCY} **{for_robux:,}** in return."
-            )
-            embed.set_footer(text="Thanks for your business.")
+        embed = discord.Embed(colour=0xFFFFFF)
+        embed.title = "Your Trade Receipt"
+        embed.description = (
+            f"- {interaction.user.mention} gave {with_who.mention} **{quantity}x {item_details[-1]} {item_details[1]}**.\n"
+            f"- {interaction.user.mention} received {CURRENCY} **{for_robux:,}** in return."
+        )
+        embed.set_footer(text="Thanks for your business.")
 
-            await interaction.followup.send(embed=embed)
+        await interaction.followup.send(embed=embed)
 
     @trade.command(name="coins_for_items", description="Exchange your coins for items in return")
     @app_commands.rename(with_who="with")
@@ -3948,17 +3916,13 @@ class Economy(commands.Cog):
         if not default_check_passing:
             return
 
-        robux_quantity = await determine_exponent(
-            interaction=interaction, 
-            rinput=robux_quantity
-        )
-
+        robux_quantity = await determine_exponent(interaction, rinput=robux_quantity)
         if robux_quantity is None:
             return
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-            item_details = await Economy.partial_match_for(interaction, for_item, conn)
+            item_details = await self.partial_match_for(interaction, for_item, conn)
 
             if item_details is None:
                 return
@@ -3970,9 +3934,6 @@ class Economy(commands.Cog):
 
             # ! For the person sending coins
 
-            await self.declare_transaction(conn, user_id=interaction.user.id)
-            await conn.commit()
-
             coin_check_passing = await self.coin_checks_passing(
                 interaction,
                 user_checked=interaction.user,
@@ -3981,8 +3942,6 @@ class Economy(commands.Cog):
             )
 
             if not coin_check_passing:
-                await self.end_transaction(conn, user_id=interaction.user.id)
-                await conn.commit()
                 return
 
         can_proceed = await self.prompt_coins_for_items(
@@ -4010,12 +3969,7 @@ class Economy(commands.Cog):
             )
 
             if not item_check_passing:
-                await conn.execute(
-                    """
-                    DELETE FROM transactions 
-                    WHERE userID IN ($0, $1)
-                    """, interaction.user.id, with_who.id
-                )
+                await self.end_transaction(conn, user_id=interaction.user.id)
                 await conn.commit()
                 return
 
@@ -4028,40 +3982,31 @@ class Economy(commands.Cog):
             coin_sender_qty=robux_quantity
         )
 
+        query = "DELETE FROM transactions WHERE userID IN ($0, $1)"
         async with self.bot.pool.acquire() as conn:
             async with conn.transaction():
-                await conn.execute(
-                    """
-                    DELETE FROM transactions 
-                    WHERE userID IN ($0, $1)
-                    """, interaction.user.id, with_who.id
-                )
-
+                await conn.execute(query, interaction.user.id, with_who.id)
                 if not can_proceed:
                     return
 
                 await self.update_inv_by_id(with_who, -item_quantity, item_details[0], conn)
-                await conn.execute(
-                    """
-                    UPDATE inventory 
-                        SET qty = qty + $0 
-                    WHERE userID = $1 AND itemID = $2
-                    """, item_quantity, interaction.user.id, item_details[0]
-                )
+                query = "UPDATE inventory SET qty = qty + $0 WHERE userID = $1 AND itemID = $2"
+                await conn.execute(query, item_quantity, interaction.user.id, item_details[0])
                 await self.update_wallet_many(
                     conn, 
                     (-robux_quantity, interaction.user.id), 
                     (+robux_quantity, with_who.id)
                 )
 
-            embed = discord.Embed(colour=0xFFFFFF)
-            embed.title = "Your Trade Receipt"
-            embed.description = (
-                f"- {interaction.user.mention} gave {with_who.mention} {CURRENCY} **{robux_quantity:,}**.\n"
-                f"- {interaction.user.mention} received **{item_quantity}x** {item_details[-1]} {item_details[1]} in return."
-            )
-            embed.set_footer(text="Thanks for your business.")
-            await interaction.followup.send(embed=embed)
+        embed = discord.Embed(colour=0xFFFFFF)
+        embed.title = "Your Trade Receipt"
+        embed.description = (
+            f"- {interaction.user.mention} gave {with_who.mention} {CURRENCY} **{robux_quantity:,}**.\n"
+            f"- {interaction.user.mention} received **{item_quantity}x** {item_details[-1]} {item_details[1]} in return."
+        )
+        embed.set_footer(text="Thanks for your business.")
+
+        await interaction.followup.send(embed=embed)
 
     @trade.command(name="items_for_items", description="Exchange your items for other items")
     @app_commands.rename(with_who="with")
@@ -4088,24 +4033,23 @@ class Economy(commands.Cog):
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-            item_details = await Economy.partial_match_for(interaction, item, conn)
-            item2_details = await Economy.partial_match_for(interaction, for_item, conn)
+            item_details = await self.partial_match_for(interaction, item, conn)
+            item2_details = await self.partial_match_for(interaction, for_item, conn)
 
-            if item_details is None or item2_details is None:
-                await interaction.followup.send(embed=membed("You did not specify valid items to trade on."))
-                return
+            if (item_details is None) or (item2_details is None):
+                return await respond(
+                    interaction, 
+                    embed=membed("You did not specify valid items to trade on.")
+                )
 
             if item_details[0] == item2_details[0]:
-                return await interaction.response.send_message(
-                    ephemeral=True, 
+                return await respond(
+                    interaction, 
                     embed=membed(f"You can't trade {item_details[-1]} {item_details[1]}(s) on both sides.")
                 )
 
             # ! For the person sending items
-            await self.declare_transaction(conn, user_id=interaction.user.id)
-            await conn.commit()
-
-            can_continue = await self.item_checks_passing(
+            can_proceed = await self.item_checks_passing(
                 interaction, 
                 conn,
                 user_to_check=interaction.user,
@@ -4113,12 +4057,10 @@ class Economy(commands.Cog):
                 item_qty_offered=quantity
             )
 
-            if not can_continue:
-                await self.end_transaction(conn, user_id=interaction.user.id)
-                await conn.commit()
+            if not can_proceed:
                 return
 
-        can_continue = await self.prompt_items_for_items(
+        can_proceed = await self.prompt_items_for_items(
             interaction,
             item_sender=interaction.user,
             item_sender_qty=quantity,
@@ -4129,13 +4071,13 @@ class Economy(commands.Cog):
         )
 
         async with self.bot.pool.acquire() as conn:
-            if not can_continue:
+            if not can_proceed:
                 await self.end_transaction(conn, user_id=interaction.user.id)
                 await conn.commit()
                 return
 
             # ! For the other person sending items
-            can_continue = await self.item_checks_passing(
+            can_proceed = await self.item_checks_passing(
                 interaction, 
                 conn,
                 user_to_check=with_who,
@@ -4143,17 +4085,12 @@ class Economy(commands.Cog):
                 item_qty_offered=for_quantity
             )
 
-            if not can_continue:
-                await conn.execute(
-                    """
-                    DELETE FROM transactions 
-                    WHERE userID IN ($0, $1)
-                    """, interaction.user.id, with_who.id
-                )
+            if not can_proceed:
+                await self.end_transaction(conn, user_id=interaction.user.id)
                 await conn.commit()
                 return
 
-        can_continue = await self.prompt_items_for_items(
+        can_proceed = await self.prompt_items_for_items(
             interaction,
             item_sender=with_who,
             item_sender_qty=for_quantity,
@@ -4163,37 +4100,31 @@ class Economy(commands.Cog):
             item_sender2_data=item_details
         )
 
+        query = "DELETE FROM transactions WHERE userID IN ($0, $1)"
         async with self.bot.pool.acquire() as conn:
             async with conn.transaction():
-                await conn.execute(
-                    """
-                    DELETE FROM transactions 
-                    WHERE userID IN ($0, $1)
-                    """, interaction.user.id, with_who.id
-                )
-
-                if not can_continue:
+                await conn.execute(query, interaction.user.id, with_who.id)
+                if not can_proceed:
                     return
 
                 await self.update_inv_by_id(interaction.user, -quantity, item_details[0], conn)
                 await self.update_inv_by_id(with_who, -for_quantity, item2_details[0], conn)
-
                 await conn.executemany(
-                    "UPDATE inventory SET qty = qty + $0 WHERE userID = $1 AND itemID = $2",
-                    [
+                    sql="UPDATE inventory SET qty = qty + $0 WHERE userID = $1 AND itemID = $2",
+                    seq_of_parameters=[
                         (for_quantity, interaction.user.id, item2_details[0]), 
                         (quantity, with_who.id, item_details[0])
                     ]
                 )
 
-            embed = discord.Embed(colour=0xFFFFFF)
-            embed.title = "Your Trade Receipt"
-            embed.description = (
-                f"- {interaction.user.mention} gave {with_who.mention} **{quantity}x {item_details[-1]} {item_details[1]}**.\n"
-                f"- {interaction.user.mention} received **{for_quantity}x {item2_details[-1]} {item2_details[1]}** in return."
-            )
-            embed.set_footer(text="Thanks for your business.")
-            await interaction.followup.send(embed=embed)
+        embed = discord.Embed(colour=0xFFFFFF)
+        embed.title = "Your Trade Receipt"
+        embed.description = (
+            f"- {interaction.user.mention} gave {with_who.mention} **{quantity}x {item_details[-1]} {item_details[1]}**.\n"
+            f"- {interaction.user.mention} received **{for_quantity}x {item2_details[-1]} {item2_details[1]}** in return."
+        )
+        embed.set_footer(text="Thanks for your business.")
+        await interaction.followup.send(embed=embed)
 
     @commands.command(name="freemium", description="Get a free random item.", aliases=('fr',))
     async def free_item(self, ctx: commands.Context) -> None:
@@ -4204,7 +4135,7 @@ class Economy(commands.Cog):
             item, emoji = await self.update_user_inventory_with_random_item(ctx.author.id, conn, rQty)
             await conn.commit()
 
-            await ctx.send(embed=membed(f"Success! You just got **{rQty}x** {emoji} {item}!"))
+        await ctx.send(embed=membed(f"Success! You just got **{rQty}x** {emoji} {item}!"))
 
     showcase = app_commands.Group(
         name="showcase", 
