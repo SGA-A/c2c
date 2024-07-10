@@ -4456,6 +4456,8 @@ class Economy(commands.Cog):
                 embed=membed(f"You don't have {ie} **{sell_quantity:,}x** {item_name}, so uh no.")
             )
 
+        multi = await Economy.get_multi_of(user_id=seller.id, multi_type="robux", conn=conn)
+        cost = selling_price_algo((cost / 4) * sell_quantity, multi)
         can_proceed = await self.handle_confirm_outcome(
             interaction,
             confirmation_prompt=f"Are you sure you want to sell **{sell_quantity:,}x {ie} {item_name}** for **{CURRENCY} {cost:,}**?",
@@ -4469,9 +4471,6 @@ class Economy(commands.Cog):
                 await conn.commit()
                 if can_proceed is False:
                     return
-
-            multi = await Economy.get_multi_of(user_id=seller.id, multi_type="robux", conn=conn)
-            cost = selling_price_algo((cost / 4) * sell_quantity, multi)
 
             embed = membed(
                 f"{seller.mention} sold **{sell_quantity:,}x {ie} {item_name}** "
