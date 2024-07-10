@@ -772,9 +772,10 @@ class Tags(commands.Cog):
             """Helper function to determine what page of the paginator we're on."""
 
             offset = (page - 1) * length
-            em.description = ""
-            for index, tag in enumerate(results[offset:offset+length], start=offset+1):
-                em.description += f'{index}. {tag[0]} (ID: {tag[1]})\n'
+            em.description = "\n".join(
+                f'{index}. {tag[0]} (ID: {tag[1]})'
+                for index, tag in enumerate(results[offset:offset+length], start=offset+1)
+            )
 
             n = paginator.compute_total_pages(len(results), length)
             em.set_footer(text=f"Page {page} of {n}")

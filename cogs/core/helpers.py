@@ -82,7 +82,7 @@ def membed(custom_description: Optional[str] = None) -> discord.Embed:
     return membedder
 
 
-async def determine_exponent(interaction: discord.Interaction, rinput: str) -> str | int:
+async def determine_exponent(interaction: discord.Interaction, rinput: str) -> str | int | None:
     """
     Finds out what the exponential value entered is equivalent to in numerical form. (e.g, 1e6)
 
@@ -104,18 +104,16 @@ async def determine_exponent(interaction: discord.Interaction, rinput: str) -> s
         else:
             rinput = rinput.translate(str.maketrans('', '', ','))
             actual_value = abs(int(rinput))
-        
         if not actual_value:
-            raise ValueError
-        return actual_value
-
+            actual_value = None
     except (ValueError, TypeError):
         await respond(
             interaction=interaction,
             ephemeral=True,
             embed=membed("You need to provide a real positive number.")
         )
-        return
+        actual_value = None
+    return actual_value
 
 
 async def economy_check(interaction: discord.Interaction, original: Union[discord.Member, discord.User]) -> bool:

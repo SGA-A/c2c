@@ -297,17 +297,18 @@ class RoleManagement(app_commands.Group):
     async def all_roles(self, interaction: discord.Interaction):
 
         guild_roles = sorted(interaction.guild.roles[1:], reverse=True)
-        guild_roles = [(role.mention, role.id) for role in guild_roles] + [("@everyone", 829053898333225010)]
-        
+        guild_roles = [
+            f"{role.mention} \U00002014 {role.id}" 
+            for role in guild_roles
+        ] + [f"@everyone \U00002014 {interaction.guild.id}"]
+
         emb = membed()
+        length = 12
 
         async def get_page_part(page: int):
-            length = 12
             offset = (page - 1) * length
-            emb.description = ""
+            emb.description = "\n".join(guild_roles[offset:offset + length])
 
-            for role_attr in guild_roles[offset:offset + length]:
-                emb.description += f"{role_attr[0]} {role_attr[1]}\n"
             n = PaginationItem.compute_total_pages(len(guild_roles), length)
             emb.set_footer(text=f"Page {page} of {n}")
             return emb, n
