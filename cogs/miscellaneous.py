@@ -66,37 +66,6 @@ def parse_xml(xml_content, mode: Literal["post", "tag"]):
     return extracted_data
 
 
-class FeedbackModal(discord.ui.Modal, title='Submit feedback'):
-
-    fb_title = discord.ui.TextInput(
-        style=discord.TextStyle.short,
-        label="Title",
-        required=False,
-        placeholder="Give your feedback a title.."
-    )
-
-    message = discord.ui.TextInput(
-        style=discord.TextStyle.long,
-        label='Description',
-        placeholder="Any concerns, feature requests or bug reports for the bot."
-    )
-
-    async def on_submit(self, interaction: discord.Interaction):
-        channel = interaction.client.get_partial_messageable(1124090797613142087)
-        embed = membed(self.message.value)
-        embed.title = f'New Feedback: {self.fb_title.value or "Untitled"}'
-        embed.set_author(
-            name=interaction.user.name, 
-            icon_url=interaction.user.display_avatar.url
-        )
-
-        await channel.send(embed=embed)
-        await interaction.response.send_message(
-            ephemeral=True, 
-            embed=membed("Your response has been submitted!")
-        )
-
-
 class ImageSourceButton(discord.ui.Button):
     def __init__(self, url: Optional[str] = "https://www.google.com") -> None:
         super().__init__(url=url, label="Source", row=1)
@@ -757,12 +726,6 @@ class Utility(commands.Cog):
                 embed=membed('Output too long to display.')
             )
         await interaction.response.send_message(msg, suppress_embeds=True)
-
-    @app_commands.command(name='feedback', description='Send feedback to the c2c developers')
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    @app_commands.allowed_installs(**LIMITED_INSTALLS)
-    async def feedback(self, interaction: discord.Interaction) -> None:
-        await interaction.response.send_modal(FeedbackModal())
 
     @app_commands.command(name='about', description='Learn more about the bot')
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)

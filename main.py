@@ -261,7 +261,6 @@ cogs = {
     "economy", 
     "miscellaneous", 
     "moderation", 
-    "music", 
     "slash_events", 
     "tags",
     "tempvoice"
@@ -272,7 +271,6 @@ classnames = Literal[
     "Moderation", 
     "Utility", 
     "Owner", 
-    "Music", 
     "Tags", 
     "TempVoice"
 ]
@@ -348,7 +346,6 @@ class HelpDropdown(ui.Select):
         "Tags": (0x9EE1FF, "https://i.imgur.com/uHb7xhc.png"),
         "Utility": (0x0FFF87, "https://i.imgur.com/YHBLgVx.png"),
         "Economy": (0xD0C383, "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Robux_2019_Logo_gold.svg/200px-Robux_2019_Logo_gold.svg.png"),
-        "Music": (0x6953E0, "https://i.imgur.com/nFZTMFl.png"),
         "TempVoice": (0x821743, "https://i.imgur.com/b8u1MQj.png")
     }
 
@@ -384,11 +381,6 @@ class HelpDropdown(ui.Select):
                 label="TempVoice", 
                 description="Configure your own temporary voice channel.",
                 emoji="<:tempSTAR:1221502312472903851>"
-            ),
-            SelectOption(
-                label='Music', 
-                description='Stream your favourite tunes from any platform.', 
-                emoji='<:musicSTAR:1221502310967017652>'
             )
         ]
 
@@ -437,17 +429,10 @@ class HelpDropdown(ui.Select):
             all_cmds = fill_up_commands(chosen_help_category)      
             pages = generic_loop_with_subcommand(all_cmds, pages, guild_id)
 
-        elif chosen_help_category == 'Economy':
-
+        else:
             all_cmds = fill_up_commands(chosen_help_category)
             pages = generic_loop_with_subcommand(all_cmds, pages, guild_id)
 
-        else:
-            all_cmds = return_txt_cmds_first({}, chosen_help_category)
-
-            for (cmd, cmd_details) in all_cmds.items():
-                pages.append(f"- [`{HelpDropdown.prefix}{cmd}`](https://youtu.be/dQw4w9WgXcQ) \U00002014 {cmd_details[0]}")        
-        
         return pages
 
     async def callback(self, interaction: Interaction) -> None:

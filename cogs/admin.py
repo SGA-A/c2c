@@ -286,9 +286,10 @@ class Owner(commands.Cog):
     @commands.command(name='urules', description='Update the rules channel for cc', aliases=('ur',))
     async def push_update3(self, ctx: commands.Context):
         """Push an update to the rules channel."""
-        await ctx.message.delete()
-        channel = self.bot.get_partial_messageable(902138223571116052)
-        original = channel.get_partial_message(1245691538319736863)
+        original = (
+            self.bot.get_partial_messageable(902138223571116052)
+            .get_partial_message(1245691538319736863)
+        )
         
         rule_content = (
             "1. <:e1_comfy:1150361201352659066> **Be Respectful!** "
@@ -309,10 +310,13 @@ class Owner(commands.Cog):
         await original.edit(content=rule_content)
 
     async def send_role_guide(self):
-        channel = self.bot.get_partial_messageable(1254883155882672249)
+        message1 = (
+            self.bot.get_partial_messageable(1254883155882672249)
+            .get_partial_message(1254901254530924644)
+        )
         role_content_pt1 = (
             """
-            ## The Role Guide
+            # Role Guide
             Roles are similar to ranks or accessories that you can add to your profile.
             There are a few self-assignable roles that you can pick up in <id:customize> by clicking on the buttons.
             
@@ -329,7 +333,7 @@ class Owner(commands.Cog):
             - <@&923931862001414284>: Granted either admin permissions, a high value reward in our economy, or a developer voicenote.
             """
         )
-        role_content_pt2 = (
+        _ = (
             """
             Other miscellaneous roles for your knowledge:
             - <@&893550756953735278>: The people who manage the server.
@@ -346,15 +350,18 @@ class Owner(commands.Cog):
             """
         )
         
-        await channel.send(content=dedent(role_content_pt1))
-        await channel.send(content=dedent(role_content_pt2))
+        await message1.edit(content=dedent(role_content_pt1))
+        # await channel.send(content=dedent(role_content_pt2))
 
     async def send_channel_guide(self):
-        channel = self.bot.get_partial_messageable(1254882974327898192)
+        message = (
+            self.bot.get_partial_messageable(1254882974327898192)
+            .get_partial_message(1254901539898921093)
+        )
         channel_content_pt1 = (
             """
-            ## The Channel Guide
-            We made this because there are some channels that might be confusing to you.
+            # Channel Guide
+            We made this because there are some channels that may cause confusion.
             To start, all of the channels that contain the word "theory" in them can be read as a "general" channel:
             > <#1119991877010202744> is equivalent to general
             > <#1145008097300066336> is equivalent to general-2
@@ -362,43 +369,44 @@ class Owner(commands.Cog):
             And so on. The theme of the server is "theorized", which is why channels follow this naming convention.
 
             Apart from these three, most of the channels should be straightforward to understand.
-            If you're still lost, let a <@&893550756953735278> know!
+            -# Still lost? Let a <@&893550756953735278> know.
             """
         )
 
-        await channel.send(content=dedent(channel_content_pt1))
+        await message.edit(content=dedent(channel_content_pt1))
     
     async def send_bot_guide(self):
-        channel = self.bot.get_partial_messageable(1254883337386852503)
+        message = (
+            self.bot.get_partial_messageable(1254883337386852503)
+            .get_partial_message(1254900969033175072)
+        )
         channel_content_pt1 = (
             f"""
-            ## About {self.bot.user.mention}
-            {self.bot.user.mention} is a private custom bot, exclusive to this server.
-            Since it's got no other public server, we've decided to drop all internal cooldowns for commands. So while every other popular bots cool down, you just get hotter.
-
-            We want to give it some recognition, so here are just some of the many things it can do:
-            - A vast economy system to make money (similar in nature to <@270904126974590976>)
-              - There is also a tonne of room for personalizing the economy to make it truly your own world
-            - Useful utility functions like a world clock (`>wc`) and searching images across the internet
-            - Temporary voice channel management, slide into <#1220483928666935396> and manage it with the `/voice` subcommands
-            - Fun comamnds like image manipulation on any user, or even ship yourself with another potential partner
-            - Anime related commands and useful developer tools
-            - Streaming ability for any track from YouTube
-            - A global tag system to tag text important to you for later retrieval
-
+            # Meet c2c ({self.bot.user.mention})
+            c2c is a private custom bot, exclusive to this server.
+            We recently verified the bot meaning it is public, anyone can add it. However, we won't expose the bot to the app directory or bot listing sites.
+            Since it's got no other public server, we've decided to drop all internal cooldowns when you run commands. So while every other popular bots cool down, you just get hotter.
+            ## What's it all about?
+            Here are some of the things that make c2c great.
+            - Vast economy system: make money in a simulated game of life, made personalized to your liking
+            - Utility functions: a world clock (`@me wc`) and searching images across the internet
+            - Temporary voice channels: slide into <#1220483928666935396> and manage it with the `/voice` subcommands
+            - Fun comamnds: image manipulation on any user, or even ship yourself with another potential partner
+            - Global tag system: tag text important to you for later retrieval anywhere on the platform
+            - Miscellaneous functionality: anime related commands amongst other useful developer tools
+            ## Our mission
             We're always finding new things to add to our bot, to make it better for every single one of you. 
             It's a bespoke bot, tailored to your needs. Anyone in this server can request a feature for the bot and it will get implemented if there's a genuine desire and valid reason behind it.
-            You can submit feature requests or other feedback through the </feedback:1240258901958463570> command or just message a director. Your bot, your rules.
+            -# You can message a director to submit feedback. Your bot, your rules.
             """
         )
 
-        await channel.send(content=dedent(channel_content_pt1))
+        await message.edit(content=dedent(channel_content_pt1))
 
     @commands.command(name='uinfo', description='Update the information channel for cc', aliases=('ui',))
     async def push_update2(self, _: commands.Context):
         """Push to update the welcome and info embed within its respective channel."""
-
-        await self.send_channel_guide()
+        await self.send_bot_guide()
 
     @commands.command(name='quit', description='Quits the bot gracefully', aliases=('q',))
     async def quit_client(self, ctx: commands.Context) -> None:
@@ -451,10 +459,10 @@ class Owner(commands.Cog):
 
     @commands.command(name="uforuma", description="Update the forum announcement", aliases=("ufa",))
     async def upload2(self, ctx: commands.Context):
-        await ctx.message.delete()
-
-        channel: discord.PartialMessageable = self.bot.get_partial_messageable(1147203137195745431)
-        msg = channel.get_partial_message(1147203137195745431)
+        msg = (
+            self.bot.get_partial_messageable(1147203137195745431)
+            .get_partial_message(1147203137195745431)
+        )
         a = membed(
             "> **What are Forum Channels?**\n\n"
             "Forum Channels are designed to allow conversations to coexist without people talking over each other.\n\n"
