@@ -914,7 +914,6 @@ class Utility(commands.Cog):
         embed.set_image(url=username.banner.with_static_format('png'))
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.checks.cooldown(1, 7, key=lambda i: i.guild.id)
     @app_commands.command(name="imagesearch", description="Browse images from the web")
     @app_commands.describe(
         query="The search query to use for the image search.",
@@ -936,7 +935,6 @@ class Utility(commands.Cog):
         from_only: Optional[str] = None, 
         image_size: Optional[Literal["huge", "icon", "large", "medium", "small", "xlarge", "xxlarge"]] = "medium"
     ) -> None:
-        
 
         params = {
             'key': self.bot.GOOGLE_CUSTOM_SEARCH_API_KEY,
