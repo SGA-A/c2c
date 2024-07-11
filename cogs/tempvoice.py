@@ -398,7 +398,11 @@ class TempVoice(commands.Cog):
     )
     
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if self.active_voice_channels.get(interaction.user.id) is not None:
+        using_setup_cmd = (
+            (interaction.command.parent is None) 
+            or (self.active_voice_channels.get(interaction.user.id) is not None)
+        )
+        if using_setup_cmd:
             return True
         await interaction.response.send_message(
             ephemeral=True, 
@@ -407,40 +411,46 @@ class TempVoice(commands.Cog):
         return False
     
     @app_commands.command(name="setup", description="Setup a creator channel for temporary voice channels")
-    @app_commands.describe(creator_channel="The channel to use for making temporary voice channels.")
+    @app_commands.describe(creator_channel="The channel for making temporary voice channels. Leave empty to remove setup.")
     @app_commands.guild_install()
     @app_commands.allowed_contexts(guilds=True)
-    async def setup_voice(self, interaction: discord.Interaction, creator_channel: discord.VoiceChannel):
+    async def setup_voice(self, interaction: discord.Interaction, creator_channel: Optional[discord.VoiceChannel] = None):
         if not interaction.user.guild_permissions.administrator:
             return await interaction.response.send_message(
                 ephemeral=True,
                 embed=membed("You are not an admin.")
         )
         
-        embed = discord.Embed(title="Setup Complete")
+        resp = interaction.response.send_message
+        embed = discord.Embed(title="Changes to Setup", colour=discord.Colour.blurple())
         async with self.bot.pool.acquire() as conn:
-            await conn.execute(
+            if creator_channel is None:
+                query = "DELETE FROM guildVoiceSettings WHERE guildID = $0 RETURNING voiceID"
+                ret = await conn.fetchone(query, interaction.guild.id)
+                if ret:
+                    ret, = ret
+                    await conn.commit()
+                    embed.description = f"Removed setup for temporary voice channels in <#{ret}>."
+                    return await resp(embed=embed)
+                embed.title = "No Setup Found"
+                embed.description = "You have not set up temporary voice channels in this server."
+                return await resp(embed=embed)
+
+            query = (
                 """
-                INSERT INTO guildVoiceSettings 
-                    (guildID, voiceID) 
-                VALUES 
-                    ($0, $1) 
-                ON CONFLICT 
-                    (guildID) 
-                DO UPDATE SET 
-                    voiceID = $1
-                """, 
-                interaction.guild.id, 
-                creator_channel.id
+                INSERT INTO guildVoiceSettings (guildID, voiceID) 
+                VALUES ($0, $1) 
+                ON CONFLICT(guildID) 
+                DO UPDATE SET voiceID = $1
+                """
             )
 
+            await conn.execute(query, interaction.guild.id, creator_channel.id)
             await conn.commit()
 
-        embed.description = f"Set the creator channel to {creator_channel.mention}."
-        embed.colour = discord.Colour.blurple()
+        embed.description = f"Set the creator channel to {creator_channel.mention} in this server."
         embed.set_footer(text="Permissions are required, double check they are set.")
-
-        await interaction.response.send_message(embed=embed, ephemeral=True)
+        await resp(embed=embed)
 
     @voice.command(name="rename", description="Change the name of your temporary voice channel")
     @app_commands.checks.cooldown(2, 600.0)
