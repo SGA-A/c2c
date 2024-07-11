@@ -2276,7 +2276,7 @@ class MultiplierView(RefreshPagination):
             length = 6
             offset = (page - 1) * length
 
-            embed.description = f"> {self.chose}: **{representation}**\n\n"
+            embed.description = f"> {self.chosen_multiplier}: **{representation}**\n\n"
 
             if not total_multi[0]:
                 n = 1
