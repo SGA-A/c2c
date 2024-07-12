@@ -94,18 +94,23 @@ bot = C2C(
 
 class MyHelp(commands.MinimalHelpCommand):
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.command_callback
+
+    async def command_callback(self, ctx: commands.Context, /, *, command: str | None = None) -> None:
+        """Shows help about the bot, a command, or a category"""
+        return await super().command_callback(ctx, command=command)
+
     async def send_command_help(self, command: commands.Command):
-        embed = membed()
-        ss = StringIO()
-        ss.write(f"{command.callback.__doc__ or 'No help found for this command.'}")
+        docstring = command.callback.__doc__ or 'No explanation found for this command.'
+        embed = membed(f"## {bot.user.mention} {command.qualified_name}\n{docstring}")
 
         alias = command.aliases
         if alias:
             embed.add_field(name="Aliases", value=', '.join(alias))
 
-        embed.description = f"## {bot.user.mention} {command.qualified_name}\n{ss.getvalue()}"
         await self.context.send(embed=embed)
-        ss.close()
 
     def add_subcommand_formatting(self, command: commands.Command) -> None:
         fmt = '{0} {1} \N{EN DASH} {2}' if command.description else '{0} {1}'

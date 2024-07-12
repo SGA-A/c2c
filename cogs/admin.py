@@ -66,7 +66,6 @@ class Owner(commands.Cog):
     async def cog_check(self, ctx: commands.Context) -> bool:
         if ctx.author.id in self.bot.owner_ids:
             return True
-        await ctx.send(embed=membed("You do not own this bot."))
         return False
     
     async def interaction_check(self, interaction: discord.Interaction):
