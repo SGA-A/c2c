@@ -200,6 +200,7 @@ class PrivacyView(discord.ui.View):
 
 
 class TempVoice(commands.Cog):
+    """Interface with temporary voice channels in your server, available for server managers to setup and anyone to use."""
     def __init__(self, bot: commands.Bot) -> None:
         self.bot: commands.Bot = bot
         self.active_voice_channels = {}

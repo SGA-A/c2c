@@ -263,6 +263,7 @@ class MatchWord(discord.ui.Button):
 
 
 class Tags(commands.Cog):
+    """Commands to interface with the global tag system, available for everyone."""
 
     def __init__(self, bot: commands.Bot) -> None:
         
@@ -498,10 +499,7 @@ class Tags(commands.Cog):
             except RuntimeError as r:
                 return await ctx.send(embed=membed(r))
 
-            await ctx.send(
-                content=content, 
-                reference=ctx.message.reference
-            )
+            await ctx.send(content, reference=ctx.message.reference)
 
             # update the usage
             await conn.execute("UPDATE tags SET uses = uses + 1 WHERE name = $0", name)
@@ -896,12 +894,11 @@ class Tags(commands.Cog):
                 em=em
             )
 
-    @commands.hybrid_command()
+    @commands.hybrid_command(description="List tags of a member or your own")
     @app_commands.describe(member='The member to list the tags of. Defaults to your own.')
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def tags(self, ctx: commands.Context, *, member: discord.User = commands.Author):
-        """An alias for tag list command."""
         await ctx.invoke(self._list, member=member)
 
     @tag.command(description="Display a random tag")

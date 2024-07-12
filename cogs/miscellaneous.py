@@ -150,7 +150,9 @@ class CommandUsage(PaginationSimple):
 
         await self.edit_page(interaction)
 
+
 class Utility(commands.Cog):
+    """Helpful commands to ease the experience on Discord, available for everyone."""
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self.process = Process()

@@ -494,6 +494,7 @@ class RoleManagement(app_commands.Group):
 
 
 class Moderation(commands.Cog):
+    """Moderation tools for your servers, available to server managers."""
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         mod_context = app_commands.AppCommandContext(guild=True)

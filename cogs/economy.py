@@ -2297,6 +2297,7 @@ class MultiplierView(RefreshPagination):
 
 
 class Economy(commands.Cog):
+    """Advanced economy system to simulate a real world economy, available for everyone."""
 
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot

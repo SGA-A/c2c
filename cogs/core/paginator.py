@@ -388,25 +388,3 @@ class PaginationItem(discord.ui.View):
         """Based off the total elements available in the iterable, determine how many pages there
         should be within the paginator."""
         return ((total_results - 1) // results_per_page) + 1
-
-
-class RefreshSelectPagination(PaginationItem):
-    """
-    A pagination menu that has its pages changed 
-    each time a different select menu option is selected.
-
-    You should instantiate the select menu first before this view.
-
-    Inherits from the `PaginationItem` class.
-    """
-
-    def __init__(
-        self, 
-        interaction: discord.Interaction, 
-        select: discord.ui.Select, 
-        get_page: Callable | None = None
-    ) -> None:
-        
-        super().__init__(interaction, get_page=get_page)
-        self.add_item(select)
-

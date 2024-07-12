@@ -58,7 +58,7 @@ class InviteButton(discord.ui.View):
 
 
 class Owner(commands.Cog):
-    """Cog containing commands only executable by the bot owners. Contains debugging tools."""
+    """Developer tools relevant to maintainence of the bot. Only available for use by the bot developers."""
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._last_result: Optional[Any] = None
