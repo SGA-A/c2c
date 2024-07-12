@@ -95,11 +95,11 @@ class MyHelp(commands.MinimalHelpCommand):
 
     def __init__(self) -> None:
         super().__init__()
-        self.command_callback
 
     async def command_callback(self, ctx: commands.Context, /, *, command: str | None = None) -> None:
         """Shows help about the bot, a command, or a category"""
-        return await super().command_callback(ctx, command=command)
+        async with ctx.typing():
+            return await super().command_callback(ctx, command=command)
 
     async def send_command_help(self, command: commands.Command):
         docstring = command.callback.__doc__ or 'No explanation found for this command.'
