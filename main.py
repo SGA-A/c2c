@@ -103,12 +103,12 @@ class MyHelp(commands.MinimalHelpCommand):
 
     async def send_command_help(self, command: commands.Command):
         docstring = command.callback.__doc__ or 'No explanation found for this command.'
-        embed = membed(f"## {bot.user.mention} {command.qualified_name}\n{docstring}")
+        embed = membed(f"## {bot.user.mention} {command.qualified_name}\n```Syntax: {self.get_command_signature(command)}```\n{docstring}")
 
         alias = command.aliases
         if alias:
             embed.add_field(name="Aliases", value=', '.join(alias))
-
+        embed.set_footer(text="Usage Syntax: <required> [optional]")
         await self.context.send(embed=embed)
 
     def add_subcommand_formatting(self, command: commands.Command) -> None:
