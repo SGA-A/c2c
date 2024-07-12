@@ -1790,7 +1790,7 @@ class Leaderboard(discord.ui.View):
 
         await interaction.response.edit_message(embed=self.lb, view=self)
 
-@dataclass(slots=True)
+@dataclass(slots=True, repr=False)
 class ConnectionHolder:
     conn: asqlite_Connection
 
