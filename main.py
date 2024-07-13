@@ -67,15 +67,11 @@ class C2C(commands.Bot):
         )
 
 
-intents = Intents(
-    emojis_and_stickers=True,
-    guild_messages=True,
-    guilds=True,
-    members=True,
-    voice_states=True
-)
-
-
+intents = Intents.none()
+intents.emojis_and_stickers = True
+intents.guild_messages = True
+intents.guilds = True
+intents.members = True
 
 
 bot = C2C(
