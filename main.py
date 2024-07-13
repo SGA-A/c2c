@@ -128,8 +128,7 @@ cogs = {
     "miscellaneous", 
     "moderation", 
     "slash_events", 
-    "tags",
-    "tempvoice"
+    "tags"
 }
 
 classnames = Literal[
@@ -137,8 +136,7 @@ classnames = Literal[
     "Moderation", 
     "Utility", 
     "Owner", 
-    "Tags", 
-    "TempVoice"
+    "Tags"
 ]
 
 
