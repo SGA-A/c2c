@@ -22,41 +22,6 @@ from .core.helpers import membed, determine_exponent
 from .core.constants import CURRENCY, LIMITED_CONTEXTS, LIMITED_INSTALLS
 
 
-class InviteButton(discord.ui.View):
-    def __init__(self) -> None:
-        super().__init__()
-
-        perms = discord.Permissions(
-            read_message_history=True,
-            read_messages=True,
-            send_messages_in_threads=True,
-            send_messages=True,
-            manage_channels=True,
-            manage_messages=True,
-            manage_roles=True,
-            manage_threads=True,
-            create_instant_invite=True,
-            external_emojis=True,
-            embed_links=True,
-            attach_files=True,
-            add_reactions=True,
-            connect=True,
-            speak=True,
-            move_members=True,
-            deafen_members=True
-        )
-
-        self.add_item(
-            discord.ui.Button(
-                label="Invite",
-                url=discord.utils.oauth_url(
-                    client_id=1047572530422108311, 
-                    permissions=perms
-                )
-            )
-        )
-
-
 class Owner(commands.Cog):
     """Developer tools relevant to maintainence of the bot. Only available for use by the bot developers."""
     def __init__(self, bot: commands.Bot):
@@ -412,11 +377,6 @@ class Owner(commands.Cog):
         """Quits the bot gracefully."""
         await ctx.send("\U00002705")
         await self.bot.close()
-
-    @commands.command(name='invite', description='Links the invite for c2c', aliases=('i',))
-    async def invite_bot(self, ctx: commands.Context) -> None:
-        content = membed("Remember, only developers can invite the bot.")
-        await ctx.send(embed=content, view=InviteButton())
 
     @commands.hybrid_command(name='repeat', description='Repeat what you typed', aliases=('say',))
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
