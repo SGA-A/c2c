@@ -2194,13 +2194,17 @@ class MultiplierView(RefreshPagination):
 
         self.viewing = viewing
         self.chosen_multiplier = chosen_multiplier
+
+        self.embed = discord.Embed(title=f"{self.viewing.display_name}'s Multipliers")
+        self.embed.colour, thumb_url = self.colour_mapping[chosen_multiplier]
+        self.embed.set_thumbnail(url=thumb_url)
+
         super().__init__(interaction, get_page=get_page)
 
         for option in self.children[-1].options:
             option.default = option.value == chosen_multiplier
 
-    @staticmethod
-    def repr_multi(*, amount, multi: MULTIPLIER_TYPES):
+    def repr_multi(self):
         """
         Represent a multiplier using proper formatting.
 
@@ -2209,18 +2213,18 @@ class MultiplierView(RefreshPagination):
         The units are also converted as necessary based on the type we're looking at.
         """
 
-        unit = "x" if multi == "XP" else "%"
-        amount = amount if multi != "XP" else (1 + (amount / 100))
+        unit = "x" if self.chosen_multiplier == "XP" else "%"
+        amount = self.total_multi if self.chosen_multiplier != "XP" else (1 + (self.total_multi / 100))
 
-        return f"{amount:.2f}{unit}"
+        self.embed.description = f"> {self.chosen_multiplier}: **{amount:.2f}{unit}**\n\n"
 
-    async def format_pages(self) -> tuple[int, list]:
+    async def format_pages(self) -> None:
 
         lowered = self.chosen_multiplier.lower()
         async with self.interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            count = await conn.fetchone(
+            self.total_multi, = await conn.fetchone(
                 """
                 SELECT CAST(TOTAL(amount) AS INTEGER) 
                 FROM multipliers
@@ -2229,7 +2233,7 @@ class MultiplierView(RefreshPagination):
                 """, self.viewing.id, lowered
             )
 
-            pages = await conn.fetchall(
+            self.multiplier_list = await conn.fetchall(
                 """
                 SELECT amount, description, expiry_timestamp
                 FROM multipliers
@@ -2238,8 +2242,6 @@ class MultiplierView(RefreshPagination):
                 ORDER BY amount DESC
                 """, self.viewing.id, lowered
             )
-
-        return count, pages
 
     async def navigate(self) -> None:
         """Get through the paginator properly."""
@@ -2256,43 +2258,12 @@ class MultiplierView(RefreshPagination):
         for option in select.options:
             option.default = option.value == self.chosen_multiplier
 
-        total_multi, pages = await self.format_pages()
+        await self.format_pages()
 
-        embed = discord.Embed(title=f"{self.viewing.display_name}'s Multipliers")
-        embed.colour, thumb_url = self.colour_mapping[self.chosen_multiplier]
-        embed.set_thumbnail(url=thumb_url)
-
-        representation = self.repr_multi(amount=total_multi[0], multi=self.chosen_multiplier)
+        self.embed.colour, thumb_url = self.colour_mapping[self.chosen_multiplier]
+        self.embed.set_thumbnail(url=thumb_url)
         self.index = 1
 
-        async def get_page_part(page: int, force_refresh: Optional[bool] = False):
-
-            if force_refresh:
-                nonlocal pages, total_multi, representation
-
-                total_multi, pages = await self.format_pages()
-                representation = self.repr_multi(amount=total_multi[0], multi=self.chosen_multiplier)
-
-            length = 6
-            offset = (page - 1) * length
-
-            embed.description = f"> {self.chosen_multiplier}: **{representation}**\n\n"
-
-            if not total_multi[0]:
-                n = 1
-                embed.set_footer(text="Empty")
-                return embed, n
-
-            embed.description += "\n".join(
-                format_multiplier(multiplier)
-                for multiplier in pages[offset:offset + length]
-            )
-
-            n = self.compute_total_pages(len(pages), length)
-            embed.set_footer(text=f"Page {page} of {n}")
-            return embed, n
-
-        self.get_page = get_page_part
         await self.edit_page(interaction)
 
 
@@ -3391,43 +3362,28 @@ class Economy(commands.Cog):
     ) -> None:
 
         user = user or interaction.user
+        paginator = MultiplierView(interaction, chosen_multiplier=multiplier, viewing=user)
+        await paginator.format_pages()
+        length = 6
 
-        embed = discord.Embed(title=f"{user.display_name}'s Multipliers")
-        embed.colour, thumb_url = MultiplierView.colour_mapping[multiplier]
-        embed.set_thumbnail(url=thumb_url)
-
-        paginator = MultiplierView(
-            interaction, 
-            chosen_multiplier=multiplier,
-            viewing=user
-        )
-        total_multi, pages = await paginator.format_pages()
         async def get_page_part(page: int, force_refresh: Optional[bool] = False):
-
             if force_refresh:
-                nonlocal pages, total_multi
-
-                total_multi, pages = await paginator.format_pages()
-
-            length = 6
+                await paginator.format_pages()
             offset = ((page - 1) * length)
 
-            representation = paginator.repr_multi(amount=total_multi[0], multi=multiplier)
-            embed.description = f"> {multiplier}: **{representation}**\n\n"
+            paginator.repr_multi()  # always display total multi
+            if not paginator.total_multi:
+                paginator.embed.set_footer(text="Empty")
+                return paginator.embed, 1
 
-            if not total_multi[0]:
-                n = 1
-                embed.set_footer(text="Empty")
-                return embed, n
-
-            embed.description += "\n".join(
+            paginator.embed.description += "\n".join(
                 format_multiplier(multi)
-                for multi in pages[offset:offset + length]
+                for multi in paginator.multiplier_list[offset:offset + length]
             )
 
-            n = paginator.compute_total_pages(len(pages), length)
-            embed.set_footer(text=f"Page {page} of {n}")
-            return embed, n
+            n = paginator.compute_total_pages(len(paginator.multiplier_list), length)
+            paginator.embed.set_footer(text=f"Page {page} of {n}")
+            return paginator.embed, n
 
         paginator.get_page = get_page_part
         await paginator.navigate()

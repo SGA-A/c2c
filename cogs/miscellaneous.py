@@ -129,25 +129,6 @@ class CommandUsage(PaginationSimple):
         await self.fetch_data()
         self.usage_embed.title = f"{self.viewing.display_name}'s Command Usage"
 
-        async def get_page_part(page: int, length: Optional[int] = 12):
-
-            if not self.usage_data:
-                n = 1
-                self.usage_embed.set_footer(text="Empty")
-                return self.usage_embed, n
-
-            offset = (page - 1) * length
-            self.usage_embed.description = f"> Total: {self.total:,}\n\n"
-            self.usage_embed.description += "\n".join(
-                f"` {item[1]:,} ` \U00002014 {item[0]}"
-                for item in self.usage_data[offset:offset + length]
-            )
-
-            n = self.compute_total_pages(len(self.usage_data), length)
-            self.usage_embed.set_footer(text=f"Page {page} of {n}")
-            return self.usage_embed, n
-        self.get_page = get_page_part
-
         await self.edit_page(interaction)
 
 
@@ -330,19 +311,14 @@ class Utility(commands.Cog):
     async def view_user_usage(self, interaction: discord.Interaction, user: Optional[USER_ENTRY]):
         user = user or interaction.user
 
-        paginator = CommandUsage(
-            interaction, 
-            invoker_id=interaction.user.id,
-            viewing=user
-        )
+        paginator = CommandUsage(interaction, invoker_id=interaction.user.id, viewing=user)
         await paginator.fetch_data()
 
         async def get_page_part(page: int, length: Optional[int] = 12):
 
             if not paginator.usage_data:
-                n = 1
                 paginator.usage_embed.set_footer(text="Empty")
-                return paginator.usage_embed, n
+                return paginator.usage_embed, 1
 
             offset = (page - 1) * length
             paginator.usage_embed.description = f"> Total: {paginator.total:,}\n\n"
