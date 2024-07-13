@@ -4270,8 +4270,8 @@ class Economy(commands.Cog):
     @commands.command(name="showcase", description="Test out your showcase before publishing", aliases=('sc',))
     async def show_showcase_data(self, ctx: commands.Context):
         async with self.bot.pool.acquire() as conn:
-            emb = await Economy.fetch_showdata(ctx.author, conn)
-            await ctx.send(embed=emb)
+            emb = await self.fetch_showdata(ctx.author, conn)
+        await ctx.send(embed=emb)
 
     shop = app_commands.Group(
         name='shop', 
