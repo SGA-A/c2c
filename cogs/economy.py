@@ -5694,11 +5694,16 @@ class Economy(commands.Cog):
             embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
             await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(name='leaderboard', description='Rank users based on various stats')
+    leaderboard = app_commands.Group(
+        name="leaderboard",
+        description="Rank users in various different ways.",
+        allowed_contexts=app_commands.AppCommandContext(guild=True),
+        allowed_installs=app_commands.AppInstallationType(guild=True)
+    )
+
+    @leaderboard.command(name='stats', description='Rank users based on various stats')
     @app_commands.describe(stat="The stat you want to see.")
-    @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
-    @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
-    async def get_leaderboard(
+    async def get_stat_lb(
         self, 
         interaction: discord.Interaction, 
         stat: Literal[
