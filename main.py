@@ -68,6 +68,7 @@ class C2C(commands.Bot):
 
 
 intents = Intents.none()
+intents.message_content = True
 intents.emojis_and_stickers = True
 intents.guild_messages = True
 intents.guilds = True
