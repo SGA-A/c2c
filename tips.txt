@@ -27,7 +27,6 @@ Do some quick math with `/calc`, it's easy and all you need are your brain and t
 We have determined you might like some of our image manipulation commands: `/image` and `/image2`. Give it a shot and see what it can do!
 We have determined you might like some of our image manipulation command: `/locket`. You'll need someone to use it with!
 Have you ever thought about how many times you used a command? That thought can now be answered with `/usage`, a detailed briefer on what commands you've used and the amount of times they've been used. It can reveal some insightful info about you! You can even see other player's command usage by passing in the player to the `user` argument. (If you're not happy with this, you are able to opt out via `/resetmydata`.)
-You can now literally search the web (well only the images) with `/imagesearch`! Try it out today.
 Some of the most random but objective statements about the universe can be found here, starting with `/randomfact`.
 You can place your footprint on the global tag system we've implemented! You can store some useful text for later retrieval with it. Make one with [`>tag make`](https://www.google.com) and as long as the bot developer doesn't delete it (or you), it stays there **forever.**
 High quality anime pics available at `/anime` subcommands, go check it out (if that's what you're interested in)!

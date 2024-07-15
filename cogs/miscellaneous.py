@@ -1,20 +1,20 @@
-import datetime
 from io import BytesIO
 from random import choice
 from unicodedata import name
 from time import perf_counter
-from typing import Callable, Literal, Optional, List
+from datetime import datetime, timezone
+from typing import Callable, Literal, Optional
 from xml.etree.ElementTree import fromstring
 
 import discord
-from pytz import timezone
+from pytz import timezone as pytz_timezone
 from discord.ext import commands
 from discord import app_commands
 from psutil import Process, cpu_count
 
 from cogs.economy import total_commands_used_by_user, USER_ENTRY
 from .core.helpers import membed, number_to_ordinal
-from .core.paginator import Pagination, PaginationSimple
+from .core.paginator import Pagination, RefreshPagination
 from .core.constants import LIMITED_CONTEXTS, LIMITED_INSTALLS
 
 ARROW = "<:arrowe:1180428600625877054>"
@@ -46,16 +46,16 @@ def extract_attributes(post_element, mode: Literal["post", "tag"]) -> dict | str
     return data
 
 
-def format_dt(dt: datetime.datetime, style: Optional[str] = None) -> str:
+def format_dt(dt: datetime, style: Optional[str] = None) -> str:
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
+        dt = dt.replace(tzinfo=timezone.utc)
 
     if style is None:
         return f'<t:{int(dt.timestamp())}>'
     return f'<t:{int(dt.timestamp())}:{style}>'
 
 
-def format_relative(dt: datetime.datetime) -> str:
+def format_relative(dt: datetime) -> str:
     return format_dt(dt, 'R')
 
 
@@ -71,37 +71,22 @@ class ImageSourceButton(discord.ui.Button):
         super().__init__(url=url, label="Source", row=1)
 
 
-class CommandUsage(PaginationSimple):
+class CommandUsage(RefreshPagination):
+    length = 12
     def __init__(
         self, 
         interaction: discord.Interaction, 
-        invoker_id: int, 
         viewing: discord.Member | discord.User,
         get_page: Callable | None = None,
     ) -> None:
-        super().__init__(interaction, invoker_id, get_page)
+        super().__init__(interaction, get_page)
         self.viewing = viewing
-        self.usage_embed = discord.Embed(title=f"{self.viewing.display_name}'s Command Usage", colour=0x2B2D31)
-        self.usage_data = []
-        self.total: int = 0
+        self.usage_embed = discord.Embed(title=f"{viewing.display_name}'s Command Usage", colour=0x2B2D31)
+        self.usage_data = []  # commands list
         self.children[-1].default_values = [discord.Object(id=self.viewing.id)]
 
-    async def navigate(self) -> None:
-        """Get through the paginator properly."""
-        emb, self.total_pages = await self.get_page(self.index)
-        self.update_buttons()
-        await self.ctx.response.send_message(embed=emb, view=self)
-
-    async def on_timeout(self) -> None:
-        for item in self.children:
-            item.disabled = True
-        try:
-            await self.ctx.edit_original_response(view=self)
-        except discord.HTTPException:
-            pass
-
     async def fetch_data(self):
-        async with self.ctx.client.pool.acquire() as conn:
+        async with self.interaction.client.pool.acquire() as conn:
             self.usage_data = await conn.fetchall(
                 """
                 SELECT cmd_name, cmd_count
@@ -172,7 +157,7 @@ class Utility(commands.Cog):
         for context_menu in self.cog_context_menus:
             self.bot.tree.remove_command(context_menu)
     
-    async def get_commits(self):
+    async def fetch_commits(self):
         async with self.bot.session.get(
             url="https://api.github.com/repos/SGA-A/c2c/commits",
             headers={"Authorization": f"token {self.bot.GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
@@ -182,12 +167,7 @@ class Utility(commands.Cog):
                 return commits[:3]
             return []
 
-    async def tag_search_autocomplete(
-        self,
-        _: discord.Interaction,
-        current: str,
-    ) -> List[app_commands.Choice[str]]:
-        
+    async def tag_search_autocomplete(self, _: discord.Interaction, current: str) -> list:
         tags_xml = await self.retrieve_via_kona(
             name=current.lower(), 
             mode="tag",
@@ -197,13 +177,12 @@ class Utility(commands.Cog):
         )
 
         if isinstance(tags_xml, int):  # http exception
-            return
+            return []
 
         return [
             app_commands.Choice(name=tag_name, value=tag_name)
             for tag_name in tags_xml if current.lower() in tag_name.lower()
         ]
-
 
     async def retrieve_via_kona(self, **params) -> int | str:
         """Returns a list of dictionaries for you to iterate through and fetch their attributes"""
@@ -213,9 +192,9 @@ class Utility(commands.Cog):
         async with self.bot.session.get(base_url, params=params) as response:
             if response.status != 200:
                 return response.status
-            
+
             posts_xml = await response.text()
-            return parse_xml(posts_xml, mode=mode)
+        return parse_xml(posts_xml, mode=mode)
 
     async def format_gif_api_response(
         self, 
@@ -227,12 +206,10 @@ class Utility(commands.Cog):
         
         async with self.bot.session.get(api_url, **attrs) as response:
             if response.status != 200:
-                await interaction.followup.send(embed=membed(API_EXCEPTION))
-            
+                return await interaction.followup.send(embed=membed(API_EXCEPTION))
             buffer = BytesIO(await response.read())
-            end = perf_counter()
-            
-            await interaction.followup.send(content=f"Took `{end-start:.2f}s`.", file=discord.File(buffer, 'clip.gif'))
+        end = perf_counter()
+        await interaction.followup.send(f"Took `{end-start:.2f}s`.", file=discord.File(buffer, 'clip.gif'))
 
     @app_commands.command(name='serverinfo', description="Show information about the server and its members")
     @app_commands.guild_install()
@@ -311,27 +288,28 @@ class Utility(commands.Cog):
     async def view_user_usage(self, interaction: discord.Interaction, user: Optional[USER_ENTRY]):
         user = user or interaction.user
 
-        paginator = CommandUsage(interaction, invoker_id=interaction.user.id, viewing=user)
+        paginator = CommandUsage(interaction, viewing=user)
         await paginator.fetch_data()
 
-        async def get_page_part(page: int, length: Optional[int] = 12):
+        async def get_page_part(force_refresh: Optional[bool] = None) -> discord.Embed:
+            if force_refresh:
+                await paginator.fetch_data()
 
+            paginator.reset_index(paginator.usage_data)
             if not paginator.usage_data:
                 paginator.usage_embed.set_footer(text="Empty")
-                return paginator.usage_embed, 1
+                return paginator.usage_embed
 
-            offset = (page - 1) * length
+            offset = (paginator.index - 1) * paginator.length
             paginator.usage_embed.description = f"> Total: {paginator.total:,}\n\n"
             paginator.usage_embed.description += "\n".join(
                 f"` {cmd_data[1]:,} ` \U00002014 {cmd_data[0]}"
-                for cmd_data in paginator.usage_data[offset:offset + length]
+                for cmd_data in paginator.usage_data[offset:offset + paginator.length]
             )
+            paginator.usage_embed.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
+            return paginator.usage_embed
 
-            n = paginator.compute_total_pages(len(paginator.usage_data), length)
-            paginator.usage_embed.set_footer(text=f"Page {page} of {n}")
-            return paginator.usage_embed, n
         paginator.get_page = get_page_part
-
         await paginator.navigate()
 
     @app_commands.command(name='calc', description='Calculate an expression')
@@ -373,6 +351,9 @@ class Utility(commands.Cog):
         interaction: discord.Interaction, 
         message: discord.Message
     ) -> None:
+        return await interaction.response.send_message(
+            embed=membed("Not working because unapproved for message content intent. It'll come back soon\U00002122.")
+        )
 
         images = set()
         counter = 0
@@ -398,11 +379,7 @@ class Utility(commands.Cog):
         
         await interaction.response.send_message(ephemeral=True, embed=embed)
 
-    async def embed_colour(
-        self, 
-        interaction: discord.Interaction, 
-        message: discord.Message
-    ) -> None:
+    async def embed_colour(self, interaction: discord.Interaction, message: discord.Message) -> None:
 
         all_embeds = [
             discord.Embed(
@@ -471,7 +448,6 @@ class Utility(commands.Cog):
             return await interaction.response.send_message(embed=embed)
 
         if not len(posts_xml):
-            
             embed = membed(
                 "- There are a few known causes:\n"
                 " - Entering an invalid tag name.\n"
@@ -497,13 +473,10 @@ class Utility(commands.Cog):
 
             offset = (page - 1) * length
 
-            for item_attrs in additional_notes[offset:offset + length]:
-                embed = membed()
-                embed.timestamp = datetime.datetime.fromtimestamp(int(item_attrs[-1]), tz=datetime.timezone.utc)
-                embed.title = item_attrs[1]
-                embed.url = item_attrs[0]
-
-                embed.set_image(url=item_attrs[0])
+            for (jpeg_url, author, created_at) in additional_notes[offset:offset + length]:
+                embed = membed().set_image(url=jpeg_url)
+                embed.title, embed.url = author, jpeg_url
+                embed.timestamp = datetime.fromtimestamp(int(created_at), tz=timezone.utc)
                 embeds.append(embed)
 
             n = Pagination.compute_total_pages(len(additional_notes), length)
@@ -522,33 +495,28 @@ class Utility(commands.Cog):
         async with self.bot.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp:
             if resp.status != 200:
                 return await interaction.response.send_message(embed=membed(API_EXCEPTION))
-
             data = await resp.json()
-            data = data['results'][0]
 
-        embed = discord.Embed(colour=0xFF9D2C)
-        embed.set_author(name=f"{data['artist_name']}")
-        embed.set_image(url=data['url'])
+        data = data["results"][0]
+        embed = discord.Embed(colour=0xFF9D2C).set_image(
+            url=data["url"]
+        ).set_author(name=f"{data["artist_name"]}")
 
-        img_view = discord.ui.View()
-        img_view.add_item(ImageSourceButton(url=data["url"]))
-
+        img_view = discord.ui.View().add_item(ImageSourceButton(url=data["url"]))
         await interaction.response.send_message(embed=embed, view=img_view)
 
     @anime.command(name='random', description="Get a completely random waifu image")
     async def waifu_random_fetch(self, interaction: discord.Interaction) -> None:
 
-        embed = discord.Embed(colour=0xFF9D2C)
         async with self.bot.session.get(choice(ANIME_ENDPOINTS)) as resp:
             if resp.status != 200:
                 return await interaction.response.send_message(embed=membed(API_EXCEPTION))
             data = await resp.json()
-            data = data["link"]
+        data = data["link"]
 
-        embed.set_image(url=data)
-        img_view = discord.ui.View()
-        img_view.add_item(ImageSourceButton(url=data))
-        return await interaction.response.send_message(embed=embed, view=img_view, ephemeral=True)
+        embed = discord.Embed(colour=0xFF9D2C).set_image(url=data)
+        img_view = discord.ui.View().add_item(ImageSourceButton(url=data))
+        await interaction.response.send_message(embed=embed, view=img_view, ephemeral=True)
 
     @app_commands.command(name='emojis', description='Fetch all the emojis c2c can access')
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
@@ -572,16 +540,14 @@ class Utility(commands.Cog):
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def random_fact(self, interaction: discord.Interaction) -> None:
-        
         async with self.bot.session.get(
             url='https://api.api-ninjas.com/v1/facts', 
             params={'X-Api-Key': self.bot.NINJAS_API_KEY}
         ) as resp:
             if resp.status != 200:
                 return await interaction.response.send_message(embed=membed(API_EXCEPTION))
-            
             text = await resp.json()
-            await interaction.response.send_message(embed=membed(f"{text[0]['fact']}."))
+        await interaction.response.send_message(embed=membed(f"{text[0]['fact']}."))
 
     @app_commands.command(name="image", description="Manipulate a user's avatar")
     @app_commands.describe(
@@ -602,10 +568,9 @@ class Utility(commands.Cog):
             ]
         ] = "abstract"
     ) -> None:
-
         start = perf_counter()
         await interaction.response.defer(thinking=True)
-        
+
         params = {'image_url': (user or interaction.user).display_avatar.url}
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
@@ -710,25 +675,20 @@ class Utility(commands.Cog):
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def about_the_bot(self, interaction: discord.Interaction) -> None:
 
-        commits = await self.get_commits()
-        to_iso = datetime.datetime.fromisoformat
+        commits = await self.fetch_commits()
+        to_iso = datetime.fromisoformat
         revision = [
             f"[`{commit['sha'][:6]}`]({commit['html_url']}) {commit['commit']['message'].splitlines()[0]} "
             f"({format_relative(to_iso(commit['commit']['author']['date']))})"
             for commit in commits
         ]
 
-        embed = discord.Embed(colour=discord.Colour.blurple())
-        embed.description = (
-            f'Latest Changes:\n'
-            f'{"\n".join(revision)}'
-        )
-        
-        embed.title = 'Official Bot Server Invite'
-        embed.url = 'https://discord.gg/W3DKAbpJ5E'
-
-        geo = self.bot.get_user(546086191414509599)
-        embed.set_author(name=geo.name, icon_url=geo.display_avatar.url)
+        embed = discord.Embed(
+            title='Official Bot Server Invite',
+            description=f"Latest Changes:\n{'\n'.join(revision)}", 
+            url='https://discord.gg/W3DKAbpJ5E'
+        ).set_author(name="inter_geo", icon_url="https://tinyurl.com/m1m2m3ma")
+        embed.timestamp, embed.colour = discord.utils.utcnow(), discord.Colour.blurple()
 
         total_members, total_unique = 0, len(self.bot.users)
         text, voice, guilds = 0, 0, 0
@@ -747,7 +707,6 @@ class Utility(commands.Cog):
 
         memory_usage = self.process.memory_full_info().uss / 1024 ** 2
         cpu_usage = self.process.cpu_percent() / cpu_count()
-        embed.timestamp = discord.utils.utcnow()
 
         diff = embed.timestamp - self.bot.time_launch
         minutes, seconds = divmod(diff.total_seconds(), 60)
@@ -779,164 +738,56 @@ class Utility(commands.Cog):
         embed.add_field(
             name='<:membersb:1247991723284758610> Members',
             value=f'{total_members} total\n{total_unique} unique'
-        )
-
-        embed.add_field(
+        ).add_field(
             name='<:channelb:1247991694398460007> Channels', 
             value=f'{text + voice} total\n{text} text\n{voice} voice'
-        )
-
-        embed.add_field(
+        ).add_field(
             name='<:processb:1247991668804947968> Process', 
             value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU'
-        )
-
-        embed.add_field(
+        ).add_field(
             name='<:serversb:1247991639427780661> Guilds', 
             value=(
                 f'{guilds} total\n'
                 f'{ARROW}{len(self.bot.emojis)} emojis\n'
                 f'{ARROW}{len(self.bot.stickers)} stickers'
             )
-        )
-
-        embed.add_field(
+        ).add_field(
             name='<:cmdsb:1247991799801315369> Commands Run', 
             value=(
                 f"{total_ran:,} total\n"
                 f"{ARROW} {slash_ran:,} slash\n"
                 f"{ARROW} {text_ran:,} text"
             )
-        )
-
-        embed.add_field(
+        ).add_field(
             name='<:uptimeb:1247991586743255042> Uptime', 
             value=f"{int(days)}d {int(hours)}h {int(minutes)}m {int(seconds)}s"
-        )
-
-        embed.set_footer(
+        ).set_footer(
             text=f'Made with discord.py v{discord.__version__}', 
             icon_url='http://i.imgur.com/5BFecvA.png'
         )
-        
+
         await interaction.response.send_message(embed=embed)
 
-    async def view_avatar(
-        self, 
-        interaction: discord.Interaction,
-        username: discord.User
-    ) -> None:
-        embed = membed()
+    async def view_avatar(self, interaction: discord.Interaction, username: discord.User) -> None:
+        avatar_url = username.display_avatar.with_static_format('png').url
+        embed = membed().set_author(name=username.display_name, icon_url=avatar_url).set_image(url=avatar_url)
 
-        avatar = username.display_avatar.with_static_format('png')
-        embed.set_author(name=username.display_name, url=avatar.url)
-        embed.set_image(url=avatar.url)
-        await interaction.response.send_message(embed=embed)
+        img_view = discord.ui.View().add_item(ImageSourceButton(url=embed.author.icon_url))
+        await interaction.response.send_message(embed=embed, view=img_view)
 
-    async def view_banner(
-        self, 
-        interaction: discord.Interaction, 
-        username: discord.User
-    ) -> None:
-        embed = membed()
-
+    async def view_banner(self, interaction: discord.Interaction, username: discord.User) -> None:
         username = await self.bot.fetch_user(username.id)
-        
-        embed.set_author(
+        embed = membed().set_author(
             name=username.display_name, 
-            icon_url=username.display_avatar.url,
-            url=username.display_avatar.url
-        )
+            icon_url=username.display_avatar.url
+        ).set_image(url=username.banner.with_static_format('png'))
 
         if not username.banner:
             embed.description = "This user does not have a banner."
             return await interaction.response.send_message(embed=embed)
 
-        embed.set_image(url=username.banner.with_static_format('png'))
-        await interaction.response.send_message(embed=embed)
-
-    @app_commands.command(name="imagesearch", description="Browse images from the web")
-    @app_commands.describe(
-        query="The search query to use for the image search.",
-        image_type="The type of image to search for. Defaults to photo.",
-        limit="The maximum number of images to retrieve. Defaults to 5.",
-        image_colour="The colour of the image to search for. Defaults to colour.",
-        from_only="[Limited to Bot Owner] Search from this website only.",
-        image_size="The size of the image. Defaults to medium."
-    )
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    @app_commands.allowed_installs(**LIMITED_INSTALLS)
-    async def image_search(
-        self, 
-        interaction: discord.Interaction, 
-        query: str, 
-        image_type: Optional[Literal["clipart", "face", "lineart", "news", "photo", "animated"]] = "photo", 
-        limit: Optional[app_commands.Range[int, 1, 10]] = 5,
-        image_colour: Optional[Literal["color", "gray", "mono", "trans"]] = "color", 
-        from_only: Optional[str] = None, 
-        image_size: Optional[Literal["huge", "icon", "large", "medium", "small", "xlarge", "xxlarge"]] = "medium"
-    ) -> None:
-
-        params = {
-            'key': self.bot.GOOGLE_CUSTOM_SEARCH_API_KEY,
-            'cx': self.bot.GOOGLE_CUSTOM_SEARCH_ENGINE,
-            'q': query.replace(' ', '+'),
-            'searchType': 'image',
-            'imgType': image_type,
-            'num': limit,
-            'imgSize': image_size,
-            'imgColorType': image_colour
-        }
-
-        if from_only:
-            if interaction.user.id not in self.bot.owner_ids:
-                return await interaction.response.send_message(
-                    ephemeral=True, 
-                    embed=membed("You can't use this feature.")
-                )
-            params.update({'siteSearch': from_only, 'siteSearchFilter': "i"})
-
-        async with self.bot.session.get('https://www.googleapis.com/customsearch/v1', params=params) as response:
-            if response.status != 200:
-                return await interaction.response.send_message(embed=membed(API_EXCEPTION))
-            response_json = await response.json()
-            search_details = response_json.get('searchInformation', {})
-            results_count = search_details.get('formattedTotalResults', 'Not available')
-            search_time = search_details.get('searchTime', 'Not calculated')
-
-            images = response_json.get('items', [])
-            image_info = [
-                (
-                    image.get('title'), 
-                    image.get('link')
-                ) 
-                for image in images
-            ]
-
-        em = membed()
-        em.set_author(
-            name=f"{results_count} results ({search_time}ms)", 
-            icon_url=interaction.user.display_avatar.url
-        )
-        paginator = PaginationSimple(interaction, invoker_id=interaction.user.id)
-        length = 1
-
-        async def get_page_part(page: int):
-            """Helper function to determine what page of the paginator we're on."""
-
-            offset = (page - 1) * length
-
-            for item in image_info[offset:offset + length]:
-                em.title = item[0]
-                em.set_image(url=item[1])
-                em.url = item[1]
-
-            n = paginator.compute_total_pages(len(image_info), length)
-            em.set_footer(text=f"Page {page} of {n}")
-            return em, n
-        
-        paginator.get_page = get_page_part
-        await paginator.navigate()
+        img_view = discord.ui.View().add_item(ImageSourceButton(url=embed.image.url))
+        await interaction.response.send_message(embed=embed, view=img_view)
 
     @app_commands.command(name='post', description='Upload a new forum thread')
     @app_commands.guild_install()
@@ -986,28 +837,25 @@ class Utility(commands.Cog):
             applied_tags=applicable_tags
         )
 
-        await interaction.followup.send(
-            ephemeral=True, 
-            embed=membed(f"Your thread was created here: {thread.jump_url}.")
-        )
+        await interaction.followup.send(ephemeral=True, embed=membed(f"Created thread: {thread.jump_url}."))
 
     @commands.command(name="worldclock", description="See the world clock and the visual sunmap", aliases=('wc',))
     async def worldclock(self, ctx: commands.Context):
         async with ctx.typing():
-            now = discord.utils.utcnow()
-            clock = discord.Embed(colour=0x2AA198, timestamp=now)
-
-            clock.title = "UTC"
-            clock.description = f"```prolog\n{now:%I:%M %p, %A} {number_to_ordinal(int(f"{now:%d}"))} {now:%Y}```"
-            clock.set_author(
+            clock = discord.Embed(
+                title="UTC", 
+                colour=0x2AA198, 
+                timestamp=discord.utils.utcnow()
+            ).set_author(
                 icon_url="https://i.imgur.com/CIl9Dyp.png",
                 name="All formats given in 12h notation"
-            )
+            ).set_footer(text="Sunmap image courtesy of timeanddate.com")
 
             for location, tz in EMBED_TIMEZONES.items():
-                time_there = datetime.datetime.now(tz=timezone(tz))
+                time_there = datetime.datetime.now(tz=pytz_timezone(tz))
                 clock.add_field(name=location, value=f"```prolog\n{time_there:%I:%M %p}```")
 
+            clock.description = f"```prolog\n{clock.timestamp:%I:%M %p, %A} {number_to_ordinal(int(f"{clock.timestamp:%d}"))} {clock.timestamp:%Y}```"
             clock.add_field(
                 name="Legend",
                 inline=False,
@@ -1015,10 +863,7 @@ class Utility(commands.Cog):
                     "☀️ = The Sun's position directly overhead in relation to an observer.\n"
                     "🌕 = The Moon's position at its zenith in relation to an observer."
                 )
-            )
-
-            clock.set_image(url=f"https://www.timeanddate.com/scripts/sunmap.php?iso={now:'%Y%m%dT%H%M'}")
-            clock.set_footer(text="Sunmap image courtesy of timeanddate.com")
+            ).set_image(url=f"https://www.timeanddate.com/scripts/sunmap.php?iso={clock.timestamp:'%Y%m%dT%H%M'}")
             await ctx.send(embed=clock)
 
 

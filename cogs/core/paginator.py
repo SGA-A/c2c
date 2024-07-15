@@ -15,10 +15,10 @@ MOVE_RIGHT_EMOJI = discord.PartialEmoji.from_str("<:right:1212498140620394548>")
 GO_LAST_PAGE_EMOJI = discord.PartialEmoji.from_str("<:final:1212509960483643392>")
 
 
-async def button_response(interaction: discord.Interaction, **kwargs) -> None | discord.Message:
+async def button_response(interaction: discord.Interaction, **kwargs) -> None | discord.InteractionMessage:
     if interaction.response.is_done():
         return await interaction.edit_original_response(**kwargs)
-    return await interaction.response.edit_message(**kwargs)
+    await interaction.response.edit_message(**kwargs)
 
 
 class PaginatorInput(discord.ui.Modal):
@@ -258,7 +258,7 @@ class RefreshPagination(discord.ui.View):
         self.interaction = interaction
         self.get_page = get_page
         self.index = 1
-        self.total_pages: int | None = None
+        self.total_pages = 1
         super().__init__(timeout=45.0)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
@@ -276,22 +276,26 @@ class RefreshPagination(discord.ui.View):
 
     async def navigate(self) -> None:
         """Get through the paginator properly."""
-        emb, self.total_pages = await self.get_page(self.index)
-        kwargs = {"embed": emb, "view": self}
+        emb = await self.get_page()
+        self.update_buttons()
+        await self.interaction.response.send_message(embed=emb, view=self)
 
-        match self.total_pages:
-            case 1:
-                self.stop()
-                del kwargs["view"]
-            case _:
-                self.update_buttons()
+    def reset_index(self, refreshed_data: list, length: int | None = None):
+        """
+        Set the minimum page length in refresh pagination classes.
 
-        await self.interaction.response.send_message(**kwargs)
+        Pass in `length` if it's not present in the paginator instance
+
+        This function returns the class instance to allow for fluent-style chaining.
+        """
+        length = length or self.length
+        self.total_pages = self.compute_total_pages(len(refreshed_data), length) or 1
+        self.index = min(self.index, self.total_pages)
+        return self
 
     async def edit_page(self, interaction: discord.Interaction, force_refresh: bool | None = False) -> None:
         """Update the page index in response to changes in the current page."""
-        emb, self.total_pages = await self.get_page(self.index, force_refresh)
-
+        emb = await self.get_page(force_refresh)
         self.update_buttons()
         await button_response(interaction, embed=emb, view=self)
 

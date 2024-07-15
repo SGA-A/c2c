@@ -1598,7 +1598,46 @@ class HighLow(discord.ui.View):
         await self.send_loss(interaction, button)
 
 
-class Leaderboard(discord.ui.View):
+class Leaderboard(RefreshPagination):
+    podium_pos = {1: "### \U0001f947", 2: "\U0001f948", 3: "\U0001f949"}
+    length = 6
+
+    def __init__(
+        self, 
+        interaction: discord.Interaction, 
+        chosen_option: str, 
+        get_page: Callable | None = None
+    ) -> None:
+        self.chosen_option = chosen_option
+        self.data = []
+        super().__init__(interaction, get_page)
+
+    @staticmethod
+    def populate_data(bot: commands.Bot, ret: list[sqlite3.Row]) -> list[str]:
+        data = []
+        for i, (identifier, metric) in enumerate(ret, start=1):
+            memobj = bot.get_user(identifier)
+            data.append(f"{Leaderboard.podium_pos.get(i, "\U0001f539")} ` {metric:,} ` \U00002014 {memobj.name}{UNIQUE_BADGES.get(memobj.id, '')}")
+        return data
+
+    async def create_lb(self, conn: asqlite_Connection, item_id: int) -> None:
+        data = await conn.fetchall(
+            """
+            SELECT 
+                userID AS identifier,
+                SUM(qty) AS metric
+            FROM inventory
+            WHERE itemID = $0
+            GROUP BY userID
+            ORDER BY SUM(qty) DESC
+            """, item_id
+        )
+
+        self.data = self.populate_data(bot=self.interaction.client, ret=data)
+
+
+class ExtendedLeaderboard(Leaderboard):
+    """A paginated leaderboard, but with a dropdown that displays a list of other filters you can sort by."""
     options = [
         discord.SelectOption(label='Money Net', description='The sum of wallet and bank.'),
         discord.SelectOption(label='Wallet', description='The wallet amount only.'),
@@ -1609,186 +1648,155 @@ class Leaderboard(discord.ui.View):
         discord.SelectOption(label='Level', description="The player level."),
         discord.SelectOption(label='Net Worth', description="The sum of wallet, bank and inventory value.")
     ]
-    podium_pos = {1: "### \U0001f947", 2: "\U0001f948", 3: "\U0001f949"}
 
-    def __init__(self, interaction: discord.Interaction, chosen_stat: str):
-        self.interaction = interaction
-        self.chosen_stat = chosen_stat
+    query_dict = {
+        'Money Net': (
+            """
+            SELECT 
+                userID, 
+                SUM(wallet + bank) AS total_balance 
+            FROM accounts 
+            GROUP BY userID 
+            ORDER BY total_balance DESC
+            """
+        ),
+        'Wallet': (
+            """
+            SELECT 
+                userID, 
+                wallet AS total_wallet 
+            FROM accounts 
+            GROUP BY userID 
+            ORDER BY total_wallet DESC
+            """
+        ),
+        'Bank': (
+            """
+            SELECT 
+                userID, 
+                bank AS total_bank 
+            FROM accounts 
+            GROUP BY userID 
+            ORDER BY total_bank DESC
+            """
+        ),
+        'Inventory Net': (
+            """
+            SELECT 
+                inventory.userID, 
+                SUM(shop.cost * inventory.qty) AS NetValue
+            FROM inventory
+            INNER JOIN shop 
+                ON shop.itemID = inventory.itemID
+            GROUP BY inventory.userID
+            ORDER BY NetValue DESC
+            """
+        ),
+        'Bounty': (
+            """
+            SELECT 
+                userID, 
+                bounty AS total_bounty 
+            FROM accounts 
+            GROUP BY userID 
+            HAVING total_bounty > 0
+            ORDER BY total_bounty DESC
+            """
+        ),
+        'Commands': (
+            """
+            SELECT 
+                userID, 
+                SUM(cmd_count) AS total_commands
+            FROM command_uses
+            GROUP BY userID
+            HAVING total_commands > 0
+            ORDER BY total_commands DESC
+            """
+        ),
+        'Level': (
+            """
+            SELECT userID, level 
+            FROM accounts 
+            GROUP BY userID 
+            HAVING level > 0
+            ORDER BY level DESC
+            """
+        ),
+        'Net Worth': (
+            """
+            SELECT 
+                COALESCE(inventory.userID, money.userID) AS userID, 
+                (COALESCE(SUM(shop.cost * inventory.qty), 0) + COALESCE(money.total_balance, 0)) AS TotalNetWorth
+            FROM 
+                inventory
+            LEFT JOIN 
+                shop ON shop.itemID = inventory.itemID
+            RIGHT JOIN 
+                (
+                    SELECT 
+                        userID, 
+                        SUM(wallet + bank) AS total_balance 
+                    FROM 
+                        accounts 
+                    GROUP BY 
+                        userID
+                ) AS money ON inventory.userID = money.userID
+            GROUP BY 
+                COALESCE(inventory.userID, money.userID)
+            ORDER BY 
+                TotalNetWorth DESC
+            """
+        )
+    }
+
+    def __init__(self, interaction: discord.Interaction, chosen_option: str):
+        super().__init__(interaction, chosen_option=chosen_option, get_page=self.get_page_part)
 
         self.lb = discord.Embed(
-            title=f"Leaderboard: {chosen_stat}",
+            title=f"Global Leaderboard: {chosen_option}",
             color=0x2B2D31,
             timestamp=discord.utils.utcnow()
         )
-        self.lb.set_footer(text="Ranked globally")
 
-        super().__init__(timeout=45.0)
+        for option in self.children[-1].options:
+            option.default = option.value == chosen_option
 
-        for option in self.children[0].options:
-            option.default = option.value == chosen_stat
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, self.interaction.user)
-
-    async def on_timeout(self) -> None:
-        for item in self.children:
-            item.disabled = True
-        try:
-            await self.interaction.edit_original_response(view=self)
-        except discord.HTTPException:
-            pass
-
-    async def create_lb(self) -> discord.Embed:
-
-        self.lb.title = f"Leaderboard: {self.chosen_stat}"
+    async def create_lb(self) -> None:
         self.lb.timestamp = discord.utils.utcnow()
 
-        if self.chosen_stat == 'Money Net':
-
-            data = (
-                """
-                SELECT 
-                    userID, 
-                    SUM(wallet + bank) AS total_balance 
-                FROM accounts 
-                GROUP BY userID 
-                ORDER BY total_balance DESC
-                """
-            )
-
-        elif self.chosen_stat == 'Wallet':
-
-            data = (
-                """
-                SELECT 
-                    userID, 
-                    wallet AS total_wallet 
-                FROM accounts 
-                GROUP BY userID 
-                ORDER BY total_wallet DESC
-                """
-            )
-
-        elif self.chosen_stat == 'Bank':
-            data = (
-                """
-                SELECT 
-                    userID, 
-                    bank AS total_bank 
-                FROM accounts 
-                GROUP BY userID 
-                ORDER BY total_bank DESC
-                """
-            )
-
-        elif self.chosen_stat == 'Inventory Net':
-
-            data = (
-                """
-                SELECT 
-                    inventory.userID, 
-                    SUM(shop.cost * inventory.qty) AS NetValue
-                FROM inventory
-                INNER JOIN shop 
-                    ON shop.itemID = inventory.itemID
-                GROUP BY inventory.userID
-                ORDER BY NetValue DESC
-                """
-            )
-
-        elif self.chosen_stat == 'Bounty':
-
-            data = (
-                """
-                SELECT 
-                    userID, 
-                    bounty AS total_bounty 
-                FROM accounts 
-                GROUP BY userID 
-                HAVING total_bounty > 0
-                ORDER BY total_bounty DESC
-                """
-            )
-
-        elif self.chosen_stat == 'Commands':
-
-            data = (
-                """
-                SELECT 
-                    userID, 
-                    SUM(cmd_count) AS total_commands
-                FROM command_uses
-                GROUP BY userID
-                HAVING total_commands > 0
-                ORDER BY total_commands DESC
-                """
-            )
-
-        elif self.chosen_stat == 'Level':
-
-            data = (
-                """
-                SELECT userID, level 
-                FROM accounts 
-                GROUP BY userID 
-                HAVING level > 0
-                ORDER BY level DESC
-                """
-            )
-
-        else:
-
-            data = (
-                """
-                SELECT 
-                    COALESCE(inventory.userID, money.userID) AS userID, 
-                    (COALESCE(SUM(shop.cost * inventory.qty), 0) + COALESCE(money.total_balance, 0)) AS TotalNetWorth
-                FROM 
-                    inventory
-                LEFT JOIN 
-                    shop ON shop.itemID = inventory.itemID
-                RIGHT JOIN 
-                    (
-                        SELECT 
-                            userID, 
-                            SUM(wallet + bank) AS total_balance 
-                        FROM 
-                            accounts 
-                        GROUP BY 
-                            userID
-                    ) AS money ON inventory.userID = money.userID
-                GROUP BY 
-                    COALESCE(inventory.userID, money.userID)
-                ORDER BY 
-                    TotalNetWorth DESC
-                """
-            )
-
         async with self.interaction.client.pool.acquire() as conn:
-            data = await conn.fetchall(data)
+            data = await conn.fetchall(self.query_dict[self.chosen_option])
 
-        if not data:
-            self.lb.description = 'No data.'
-            return
+        self.data = self.populate_data(bot=self.interaction.client, ret=data)
 
-        top_rankings = []
-        for i, mdata in enumerate(data, start=1):
-            user_id, data = mdata
-            memobj = self.interaction.client.get_user(user_id) or await self.interaction.client.fetch_user(user_id)
-            top_rankings.append(f"{self.podium_pos.get(i, "\U0001f539")} ` {data:,} ` \U00002014 {memobj.name}{UNIQUE_BADGES.get(memobj.id, '')}")
+    async def get_page_part(self, force_refresh: Optional[bool] = None) -> tuple[discord.Embed, int]:
+        if force_refresh:
+            await self.create_lb()
 
-        self.lb.description = '\n'.join(top_rankings)
+        self.reset_index(self.data)
+        if not self.data:
+            self.lb.set_footer(text="Empty")
+            return self.lb
 
-    @discord.ui.select(options=options, placeholder="Select a leaderboard filter")
+        offset = ((self.index - 1) * self.length)
+        self.lb.description = "\n".join(self.data[offset:offset+self.length])
+        self.lb.set_footer(text=f"Page {self.index} of {self.total_pages}")
+
+        return self.lb
+
+    @discord.ui.select(options=options, placeholder="Select a leaderboard filter", row=0)
     async def lb_stat_select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.chosen_stat = select.values[0]
+        self.chosen_option = select.values[0]
+        self.index = 1
+        self.lb.title = f"Global Leaderboard: {self.chosen_option}"
 
         for option in select.options:
-            option.default = option.value == self.chosen_stat
+            option.default = option.value == self.chosen_option
 
         await self.create_lb()
+        await self.edit_page(interaction)
 
-        await interaction.response.edit_message(embed=self.lb, view=self)
 
 @dataclass(slots=True, repr=False)
 class ConnectionHolder:
@@ -1840,8 +1848,7 @@ class ItemQuantityModal(discord.ui.Modal):
                 "**You paid:**\n"
                 f"- {CURRENCY} {new_price:,}"
             )
-        )
-        success.set_footer(text="Thanks for your business.")
+        ).set_footer(text="Thanks for your business.")
 
         if self.activated_coupon:
             await Economy.update_inv_new(interaction.user, -1, "Shop Coupon", conn)
@@ -2163,6 +2170,7 @@ class UserSettings(discord.ui.View):
 
 class MultiplierView(RefreshPagination):
 
+    length = 6
     colour_mapping = {
         "Robux": (0x59DDB3, "https://i.imgur.com/raX1Am0.png"),
         "XP": (0xCDC700, "https://i.imgur.com/7hJ0oiO.png"),
@@ -2245,7 +2253,7 @@ class MultiplierView(RefreshPagination):
 
     async def navigate(self) -> None:
         """Get through the paginator properly."""
-        emb, self.total_pages = await self.get_page(self.index)
+        emb = await self.get_page(self.index)
         self.update_buttons()
 
         await self.interaction.response.send_message(embed=emb, view=self)
@@ -3144,21 +3152,17 @@ class Economy(commands.Cog):
         )
 
         if data is None:
-            view.clear_items()
-            view.stop()
+            view.clear_items().stop()
             return membed("This setting does not exist.")
 
         value, description = data
         view.setting_dropdown.current_setting_state = value
 
-        embed = membed(
-            f"> {description}"
-        )
+        embed = membed(f"> {description}")
 
         embed.title = " ".join(view.setting_dropdown.current_setting.split("_")).title()
 
-        view.clear_items()
-        view.add_item(view.setting_dropdown)
+        view.clear_items().add_item(view.setting_dropdown)
 
         if embed.title == "Profile Customization":
             view.add_item(ProfileCustomizeButton())
@@ -3168,8 +3172,7 @@ class Economy(commands.Cog):
             embed.add_field(name="Current", value=current_text)
             view.disable_button.disabled = not enabled
             view.enable_button.disabled = enabled
-            view.add_item(view.disable_button)
-            view.add_item(view.enable_button)
+            view.add_item(view.disable_button).add_item(view.enable_button)
         return embed
 
     async def send_tip_if_enabled(self, interaction: discord.Interaction, conn: asqlite_Connection) -> None:
@@ -3364,26 +3367,24 @@ class Economy(commands.Cog):
         user = user or interaction.user
         paginator = MultiplierView(interaction, chosen_multiplier=multiplier, viewing=user)
         await paginator.format_pages()
-        length = 6
 
-        async def get_page_part(page: int, force_refresh: Optional[bool] = False):
+        async def get_page_part(force_refresh: Optional[bool] = None):
             if force_refresh:
                 await paginator.format_pages()
-            offset = ((page - 1) * length)
 
-            paginator.repr_multi()  # always display total multi
+            paginator.reset_index(paginator.multiplier_list).repr_multi()
+            offset = ((paginator.index - 1) * paginator.length)
+
             if not paginator.total_multi:
                 paginator.embed.set_footer(text="Empty")
-                return paginator.embed, 1
+                return paginator.embed
 
             paginator.embed.description += "\n".join(
                 format_multiplier(multi)
-                for multi in paginator.multiplier_list[offset:offset + length]
+                for multi in paginator.multiplier_list[offset:offset + paginator.length]
             )
-
-            n = paginator.compute_total_pages(len(paginator.multiplier_list), length)
-            paginator.embed.set_footer(text=f"Page {page} of {n}")
-            return paginator.embed, n
+            paginator.embed.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
+            return paginator.embed
 
         paginator.get_page = get_page_part
         await paginator.navigate()
@@ -3841,13 +3842,12 @@ class Economy(commands.Cog):
                     (+for_robux, interaction.user.id)
                 )
 
-        embed = discord.Embed(colour=0xFFFFFF)
+        embed = discord.Embed(colour=0xFFFFFF).set_footer(text="Thanks for your business.")
         embed.title = "Your Trade Receipt"
         embed.description = (
             f"- {interaction.user.mention} gave {with_who.mention} **{quantity}x {item_details[-1]} {item_details[1]}**.\n"
             f"- {interaction.user.mention} received {CURRENCY} **{for_robux:,}** in return."
         )
-        embed.set_footer(text="Thanks for your business.")
 
         await interaction.followup.send(embed=embed)
 
@@ -3953,13 +3953,12 @@ class Economy(commands.Cog):
                     (+robux_quantity, with_who.id)
                 )
 
-        embed = discord.Embed(colour=0xFFFFFF)
+        embed = discord.Embed(colour=0xFFFFFF).set_footer(text="Thanks for your business.")
         embed.title = "Your Trade Receipt"
         embed.description = (
             f"- {interaction.user.mention} gave {with_who.mention} {CURRENCY} **{robux_quantity:,}**.\n"
             f"- {interaction.user.mention} received **{item_quantity}x** {item_details[-1]} {item_details[1]} in return."
         )
-        embed.set_footer(text="Thanks for your business.")
 
         await interaction.followup.send(embed=embed)
 
@@ -4072,13 +4071,12 @@ class Economy(commands.Cog):
                     ]
                 )
 
-        embed = discord.Embed(colour=0xFFFFFF)
+        embed = discord.Embed(colour=0xFFFFFF).set_footer(text="Thanks for your business.")
         embed.title = "Your Trade Receipt"
         embed.description = (
             f"- {interaction.user.mention} gave {with_who.mention} **{quantity}x {item_details[-1]} {item_details[1]}**.\n"
             f"- {interaction.user.mention} received **{for_quantity}x {item2_details[-1]} {item2_details[1]}** in return."
         )
-        embed.set_footer(text="Thanks for your business.")
         await interaction.followup.send(embed=embed)
 
     @commands.command(name="freemium", description="Get a free random item.", aliases=('fr',))
@@ -4253,45 +4251,44 @@ class Economy(commands.Cog):
                 """
             )
 
-            shop_metadata = [
-                (
-                    f"{item[1]} {item[0]} \U00002500 [{CURRENCY} **{item[2]:,}**](https://youtu.be/dQw4w9WgXcQ)", 
-                    ShopItem(item[0], item[2], item[1], row=i % 2)
-                ) 
-                for i, item in enumerate(shop_sorted)
-            ]
+        shop_metadata = [
+            (
+                f"{item[1]} {item[0]} \U00002500 [{CURRENCY} **{item[2]:,}**](https://youtu.be/dQw4w9WgXcQ)", 
+                ShopItem(item[0], item[2], item[1], row=i % 2)
+            ) 
+            for i, item in enumerate(shop_sorted)
+        ]
 
-            emb = membed()
-            emb.title = "Shop"
-            length = 6
+        emb = membed()
+        emb.title = "Shop"
+        length = 6
 
-            async def get_page_part(page: int):
+        async def get_page_part(page: int):
+            async with self.bot.pool.acquire() as conn:
                 wallet = await self.get_wallet_data_only(interaction.user, conn) or 0
-                emb.description = f"> You have {CURRENCY} **{wallet:,}**.\n\n"
+            emb.description = f"> You have {CURRENCY} **{wallet:,}**.\n\n"
 
-                offset = (page - 1) * length
+            offset = (page - 1) * length
 
-                if len(paginator.children) > 2:
-                    backward_btn, forward_btn = paginator.children[:2]
-                    paginator.clear_items()
-                    paginator.add_item(backward_btn)
-                    paginator.add_item(forward_btn)
+            if len(paginator.children) > 2:
+                backward_btn, forward_btn = paginator.children[:2]
+                paginator.clear_items().add_item(backward_btn).add_item(forward_btn)
 
-                emb.description += "\n".join(
-                    item_metadata[0] 
-                    for item_metadata in shop_metadata[offset:offset + length]
-                )
- 
-                for _, item_btn in shop_metadata[offset:offset + length]:
-                    item_btn.disabled = wallet < item_btn.cost
-                    paginator.add_item(item_btn)
+            emb.description += "\n".join(
+                item_metadata[0] 
+                for item_metadata in shop_metadata[offset:offset + length]
+            )
 
-                n = paginator.compute_total_pages(len(shop_metadata), length)
-                emb.set_footer(text=f"Page {page} of {n}")
-                return emb, n
+            for _, item_btn in shop_metadata[offset:offset + length]:
+                item_btn.disabled = wallet < item_btn.cost
+                paginator.add_item(item_btn)
 
-            paginator.get_page = get_page_part
-            await paginator.navigate()
+            n = paginator.compute_total_pages(len(shop_metadata), length)
+            emb.set_footer(text=f"Page {page} of {n}")
+            return emb, n
+
+        paginator.get_page = get_page_part
+        await paginator.navigate()
 
     @shop.command(name='sell', description='Sell an item from your inventory', extras={"exp_gained": 4})
     @app_commands.describe(
@@ -4362,10 +4359,9 @@ class Economy(commands.Cog):
             embed = membed(
                 f"{seller.mention} sold **{sell_quantity:,}x {ie} {item_name}** "
                 f"and got paid {CURRENCY} **{cost:,}**."
-            )
+            ).set_footer(text="Thanks for your business.")
 
             embed.title = f"{seller.display_name}'s Sale Receipt"
-            embed.set_footer(text="Thanks for your business.")
             await respond(interaction, embed=embed)
 
             await self.update_inv_new(seller, -sell_quantity, item_name, conn)
@@ -4381,9 +4377,7 @@ class Economy(commands.Cog):
         """This is a subcommand. Look up a particular item within the shop to get more information about it."""
 
         async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
             item_details = await Economy.partial_match_for(interaction, item_name, conn)
-
             if item_details is None:
                 return
             item_id, item_name, _ = item_details
@@ -4420,47 +4414,39 @@ class Economy(commands.Cog):
                 WHERE shop.itemID = $1
                 """, item_id, interaction.user.id, "robux"
             )
-
-            their_count, item_type, cost, description, image, rarity, available, sellable, multi = data
-            dynamic_text = (
-                f"> *{description}*\n\n"
-                f"You own **{their_count:,}**"
-            )
-
             net = await self.calculate_inventory_value(interaction.user, conn)
-            if their_count:
-                amt = ((their_count*cost)/net)*100
-                dynamic_text += f" ({amt:.1f}% of your net worth)" if amt >= 0.1 else ""
 
-            em = discord.Embed(
-                title=item_name,
-                description=dynamic_text, 
-                colour=RARITY_COLOUR.get(rarity, 0x2B2D31), 
-                url="https://www.youtube.com"
+        their_count, item_type, cost, description, image, rarity, available, sellable, multi = data
+        dynamic_text = f"> *{description}*\n\nYou own **{their_count:,}**"
+
+        if their_count:
+            amt = ((their_count*cost)/net)*100
+            dynamic_text += f" ({amt:.1f}% of your net worth)" if amt >= 0.1 else ""
+
+        em = discord.Embed(
+            title=item_name,
+            description=dynamic_text, 
+            url="https://www.youtube.com",
+            colour=RARITY_COLOUR.get(rarity, 0x2B2D31)
+        ).set_thumbnail(url=image).set_footer(text=f"{rarity} {item_type}")
+
+        sell_val_orig = int(cost / 4)
+        sell_val_multi = selling_price_algo(sell_val_orig, multi)
+        em.add_field(
+            name="Value",
+            inline=False,
+            value=(
+                f"- buy: {CURRENCY} {cost:,}\n"
+                f"- sell: {CURRENCY} {sell_val_orig:,} ({CURRENCY} {sell_val_multi:,} with your {multi}% multi)"
             )
-
-            sell_val_orig = int(cost / 4)
-            sell_val_multi = selling_price_algo(sell_val_orig, multi)
-            em.add_field(
-                name="Value",
-                inline=False,
-                value=(
-                    f"- buy: {CURRENCY} {cost:,}\n"
-                    f"- sell: {CURRENCY} {sell_val_orig:,} ({CURRENCY} {sell_val_multi:,} with your {multi}% multi)"
-                )
+        ).add_field(
+            name="Additional Info",
+            value=(
+                f"- {'can' if sellable else 'cannot'} be sold\n"
+                f"- {'can' if available else 'cannot'} purchase in the shop"
             )
-
-            em.add_field(
-                name="Additional Info",
-                value=(
-                    f"- {'can' if sellable else 'cannot'} be sold\n"
-                    f"- {'can' if available else 'cannot'} purchase in the shop"
-                )
-            )
-
-            em.set_thumbnail(url=image)
-            em.set_footer(text=f"{rarity} {item_type}")
-            await respond(interaction=interaction, embed=em)
+        )
+        await respond(interaction=interaction, embed=em)
 
     @commands.command(name='reasons', description='Identify causes of registration errors', aliases=('rs',))
     async def not_registered_why(self, ctx: commands.Context) -> None:
@@ -4496,7 +4482,7 @@ class Economy(commands.Cog):
 
         expansion = randint(1_600_000, 6_000_000)
         expansion *= quantity
-        new_bankspace = await conn.fetchone(
+        new_bankspace, = await conn.fetchone(
             """
             UPDATE accounts 
             SET bankspace = bankspace + $0 
@@ -4505,26 +4491,21 @@ class Economy(commands.Cog):
             """, expansion, interaction.user.id
         )
 
-        new_amt = await Economy.update_inv_new(interaction.user, -quantity, "Bank Note", conn)
+        new_amt, = await Economy.update_inv_new(interaction.user, -quantity, "Bank Note", conn)
 
-        embed = membed()
+        embed = membed().set_footer(text=f"{new_amt:,}x bank note left")
 
         embed.add_field(
             name="Used", 
             value=f"{quantity}x <:BankNote:1216429670908694639> Bank Note"
-        )
-
-        embed.add_field(
+        ).add_field(
             name="Added Bank Space", 
             value=f"{CURRENCY} {expansion:,}"
-        )
-
-        embed.add_field(
+        ).add_field(
             name="Total Bank Space", 
-            value=f"{CURRENCY} {new_bankspace[0]:,}"
+            value=f"{CURRENCY} {new_bankspace:,}"
         )
 
-        embed.set_footer(text=f"{new_amt[0]:,}x bank note left")
         await conn.commit()
         await respond(interaction=interaction, embed=embed)
 
@@ -4734,9 +4715,8 @@ class Economy(commands.Cog):
                 f"<:replyi:1199688912646455416> {generate_progress_bar(actual_level_progress)} "
                 f"` {int(actual_level_progress):,}% `"
             )
-        )
-        embed.set_thumbnail(url=emoji.url)
-        embed.set_footer(text="Imagine thinking you can prestige already.")
+        ).set_thumbnail(url=emoji.url).set_footer(text="Imagine thinking you can prestige already.")
+
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='profile', description='View user information and other stats')
@@ -5099,9 +5079,6 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            em = membed()
-            length = 8
-
             query = (
                 """
                 SELECT shop.itemName, shop.emoji, inventory.qty
@@ -5114,42 +5091,36 @@ class Economy(commands.Cog):
 
             owned_items = await conn.fetchall(query, member.id)
 
-            if not owned_items:
-                if member.id == interaction.user.id:
-                    em.description = "You don't have any items yet."
-                else:
-                    em.description = f"{member.mention} has nothing for you to see."
-                return await interaction.response.send_message(embed=em, ephemeral=True)
+        em = membed().set_author(
+            name=f"{member.display_name}'s Inventory", 
+            icon_url=member.display_avatar.url
+        )
+        paginator = RefreshPagination(interaction)
+        paginator.length = 8
 
-            em.set_author(
-                name=f"{member.display_name}'s Inventory", 
-                icon_url=member.display_avatar.url
-            )
-            paginator = RefreshPagination(interaction)
-
-            async def get_page_part(page: int, force_refresh: Optional[bool] = False):
-                """Helper function to determine what page of the paginator we're on."""
-
-                if force_refresh:
-                    nonlocal owned_items
+        async def get_page_part(force_refresh: Optional[bool] = None):
+            """Helper function to determine what page of the paginator we're on."""
+            nonlocal owned_items
+            if force_refresh:
+                async with self.bot.pool.acquire() as conn:
                     owned_items = await conn.fetchall(query, member.id)
 
-                n = paginator.compute_total_pages(len(owned_items), length)
-                page = min(page, n)
-                paginator.index = page
+            paginator.reset_index(owned_items)
+            if not owned_items:
+                em.set_footer(text="Empty")
+                return em
 
-                offset = (page - 1) * length
-                em.description = "\n".join(
-                    f"{item[1]} **{item[0]}** \U00002500 {item[2]:,}" 
-                    for item in owned_items[offset:offset + length]
-                )
+            offset = (paginator.index - 1) * paginator.length
+            em.description = "\n".join(
+                f"{item[1]} **{item[0]}** \U00002500 {item[2]:,}" 
+                for item in owned_items[offset:offset + paginator.length]
+            )
 
-                em.set_footer(text=f"Page {page} of {n}")
-                return em, n
+            em.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
+            return em
 
-            paginator.get_page = get_page_part
-
-            await paginator.navigate()
+        paginator.get_page = get_page_part
+        await paginator.navigate()
 
     async def do_order(self, interaction: discord.Interaction, job_name: str) -> None:
         possible_words: tuple = JOB_KEYWORDS.get(job_name)[0] 
@@ -5719,10 +5690,44 @@ class Economy(commands.Cog):
     ) -> None:
         """View the leaderboard and filter the results based on different stats inputted."""
 
-        lb_view = Leaderboard(interaction, chosen_stat=stat)
-        await lb_view.create_lb()
+        paginator = ExtendedLeaderboard(interaction, chosen_option=stat)
+        await paginator.create_lb()
 
-        await interaction.response.send_message(embed=lb_view.lb, view=lb_view)
+        await paginator.navigate()
+
+    @leaderboard.command(name="item", description="Rank users based on an item count")
+    @app_commands.describe(item=ITEM_DESCRPTION)
+    async def get_item_lb(self, interaction: discord.Interaction, item: str):
+        async with self.bot.pool.acquire() as conn:
+            item_details = await Economy.partial_match_for(interaction, item, conn)
+            if item_details is None:
+                return
+            item_id, item_name, _ = item_details
+            paginator = Leaderboard(interaction, chosen_option=item_name)
+            thumb_url, = await conn.fetchone("SELECT image FROM shop WHERE itemID = $0", item_id)
+            await paginator.create_lb(conn, item_id)
+
+        lb = membed().set_thumbnail(url=thumb_url)
+        lb.timestamp = discord.utils.utcnow()
+        lb.title = f"{item_name} Global Leaderboard"
+
+        async def get_page_part(force_refresh: Optional[bool] = None) -> tuple[discord.Embed, int]:
+            if force_refresh:
+                async with self.bot.pool.acquire() as conn:
+                    await paginator.create_lb(conn, item_id)
+
+            paginator.reset_index(paginator.data)
+            if not paginator.data:
+                lb.set_footer(text="Empty")
+                return lb
+
+            offset = ((paginator.index- 1) * paginator.length)
+            lb.description = "\n".join(paginator.data[offset:offset+paginator.length])
+            lb.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
+            return lb
+
+        paginator.get_page = get_page_part
+        await paginator.navigate()
 
     @app_commands.command(description="Attempt to steal from someone's pocket", extras={"exp_gained": 4})
     @app_commands.describe(user='The user you want to rob money from.')
@@ -6275,6 +6280,7 @@ class Economy(commands.Cog):
         ]
 
     @item.autocomplete('item_name')
+    @get_item_lb.autocomplete('item')
     @trade_coins_for_items.autocomplete('for_item')
     @trade_items_for_items.autocomplete('for_item')
     async def item_lookup(self, _: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
