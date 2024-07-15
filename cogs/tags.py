@@ -1,5 +1,6 @@
 import sqlite3
 import datetime
+from asyncio import TimeoutError
 from typing import (
     Annotated, 
     Callable,
@@ -533,8 +534,82 @@ class Tags(commands.Cog):
         if ctx.interaction is not None:
             return await ctx.interaction.response.send_modal(TagMakeModal(self, ctx))
         
-        tag_view = TagMakeView(self, ctx)
-        tag_view.message = await ctx.send(view=tag_view, embed=membed("Click the button below to begin."))
+        await ctx.send(embed=membed("Hello. What would you like the tag's name to be?"))
+
+        converter = TagName()
+        original = ctx.message
+
+        def check(msg):
+            return msg.author == ctx.author and ctx.channel == msg.channel
+
+        try:
+            name = await self.bot.wait_for('message', timeout=180.0, check=check)
+        except TimeoutError:
+            return await ctx.send(embed=membed('You took too long.'))
+
+        try:
+            ctx.message = name
+            name = await converter.convert(ctx, name.content)
+        except commands.BadArgument as e:
+            return await ctx.send(embed=membed(f'{e}'))            
+        finally:
+            ctx.message = original
+
+        if self.is_tag_being_made(name):
+            return await ctx.send(embed=membed("This tag is currently being made by someone."))
+
+        # it's technically kind of expensive to do two queries like this
+        # i.e. one to check if it exists and then another that does the insert
+        # while also checking if it exists due to the constraints,
+        # however for UX reasons I might as well do it.
+
+        async with self.bot.pool.acquire() as conn:
+            row = await conn.fetchone("SELECT 1 FROM tags WHERE LOWER(name)=$0", name.lower())
+
+        if row is not None:
+            return await ctx.send(
+                embed=membed(
+                    "A tag with that name already exists.\n"
+                    f"Redo the command `{ctx.prefix}tag make` to retry."
+                )
+            )
+
+        self.add_in_progress_tag(name)
+        await ctx.send(
+            embed=membed(
+                "What about the tag's content?\n"
+                "You can type `abort` to abort this process."
+            )
+        )
+
+        try:
+            msg = await self.bot.wait_for('message', check=check, timeout=120.0)
+        except TimeoutError:
+            self.remove_in_progress_tag(name)
+            return await ctx.reply(embed=membed('You took too long.'))
+
+        if msg.content == 'abort':
+            self.remove_in_progress_tag(name)
+            return await msg.reply(embed=membed('Aborted.'))
+        elif msg.content:
+            clean_content = await commands.clean_content().convert(ctx, msg.content)
+        else:
+            # fast path I guess?
+            clean_content = msg.content
+
+        if msg.attachments:
+            clean_content = f'{clean_content}\n{msg.attachments[0].url}'
+
+        if len(clean_content) > 2000:
+            self.remove_in_progress_tag(name)
+            return await msg.reply(embed=membed('Tag content is a maximum of 2000 characters.'))
+
+        try:
+            conn = await self.bot.pool.acquire()
+            await self.create_tag(ctx, name, clean_content, conn=conn)
+        finally:
+            self.remove_in_progress_tag(name)
+            await self.bot.pool.release(conn)
 
     @tag.command(description="Modifiy an existing tag that you own")
     @app_commands.describe(
