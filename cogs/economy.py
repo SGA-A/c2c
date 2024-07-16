@@ -3263,7 +3263,6 @@ class Economy(commands.Cog):
         interaction: discord.Interaction, 
         command: app_commands.Command | app_commands.ContextMenu
     ) -> None:
-
         """
         Track slash commands ran.
 
@@ -3293,8 +3292,6 @@ class Economy(commands.Cog):
         )
 
         async with self.bot.pool.acquire() as connection:
-            connection: asqlite_Connection
-
             async with connection.transaction():
                 try:
                     data = await connection.fetchone(query, interaction.user.id, "xp", f"/{cmd.name}")
@@ -3309,7 +3306,7 @@ class Economy(commands.Cog):
                 if not exp_gainable:
                     return
 
-                exp_gainable *= ((multi/100)+1)
+                exp_gainable *= (1+(multi/100))
                 await self.add_exp_or_levelup(interaction, connection, int(exp_gainable))
 
     @commands.Cog.listener()
@@ -3318,19 +3315,14 @@ class Economy(commands.Cog):
         cmd = ctx.command.parent or ctx.command
 
         async with self.bot.pool.acquire() as connection:
-            connection: asqlite_Connection
-
             try:
                 row = await connection.fetchone("SELECT 1 FROM accounts WHERE userid = $0", ctx.author.id)
                 assert row is not None
             except AssertionError:
                 return
             else:
-                await add_command_usage(
-                    user_id=ctx.author.id, 
-                    command_name=f"@me {cmd.name}", 
-                    conn=connection
-                )
+                await add_command_usage(ctx.author.id, f"@me {cmd.name}", connection)
+                await connection.commit()
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
@@ -4290,7 +4282,7 @@ class Economy(commands.Cog):
         paginator.get_page = get_page_part
         await paginator.navigate()
 
-    @shop.command(name='sell', description='Sell an item from your inventory', extras={"exp_gained": 4})
+    @shop.command(name='sell', description='Sell an item from your inventory', extras={})
     @app_commands.describe(
         item='The name of the item you want to sell.', 
         sell_quantity='The amount of this item to sell. Defaults to 1.'
