@@ -812,22 +812,20 @@ class Utility(commands.Cog):
         file2: Optional[discord.Attachment],
         file3: Optional[discord.Attachment]
     ) -> None:
-
         await interaction.response.defer(thinking=True)
-        tags = tags.lower().split('""')
 
         files = [
             await param_value.to_file() 
             for param_name, param_value in iter(interaction.namespace) 
-            if param_name.startswith("f") and param_value
+            if param_name.startswith("fi") and param_value
         ]
 
-        applicable_tags = []
-        for tag in tags:
-            tag = forum.get_tag(tag)
-            if not tag:
-                continue
-            applicable_tags.append(tag)
+        tag_sep = [s for s in tags.split('"') if s.strip()]
+        applicable_tags = [
+            tag_obj 
+            for tag in tag_sep 
+            if (tag_obj := discord.utils.find(lambda t: t.name.lower() == tag.lower(), forum.available_tags))
+        ]
 
         thread, _ = await forum.create_thread(
             name=name,
