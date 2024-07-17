@@ -82,23 +82,17 @@ class RoleManagement(app_commands.Group):
             return "We are being rate-limited. Try again later"
         finally:
             end_time = perf_counter()
-            success = discord.Embed()
-            success.colour = 0x54CD68
-            success.title = "Success"
+            success = discord.Embed(title="Success", colour=0x54CD68)
             success.description = f"Added {role.mention} to **{how_many}** members."
-            await respond(
-                interaction=interaction,
-                content=f"Took ` {end_time - start_time:.2f}s `.", 
-                embed=success
-            )
+            await respond(interaction, content=f"Took ` {end_time - start_time:.2f}s `.", embed=success)
 
     async def bulk_remove_roles(
-            self, 
-            interaction: discord.Interaction, 
-            targets: set, 
-            new_role: discord.Role, 
-            how_many: int
-        ) -> str | None:
+        self, 
+        interaction: discord.Interaction, 
+        targets: set, 
+        new_role: discord.Role, 
+        how_many: int
+    ) -> str | None:
         
         start_time = perf_counter()
         try:
@@ -108,7 +102,6 @@ class RoleManagement(app_commands.Group):
                     reason=f"Bulk role-remove requested by {interaction.user} (ID: {interaction.user.id})", 
                     atomic=True
                 )
-
         except discord.HTTPException:
             return "We are being rate-limited. Try again later."
         finally:
@@ -208,21 +201,16 @@ class RoleManagement(app_commands.Group):
         if (not added_roles) and (not removed_roles):
             return await interaction.followup.send(embed=membed("No changes were made."))
 
-        embed = discord.Embed(colour=0x2B2D31, title=f"Role Changes: {user.display_name}")
-        embed.set_thumbnail(url=user.display_avatar.url)
+        embed = membed().set_thumbnail(url=user.display_avatar.url)
+        embed.title = f"Role Changes: {user.display_name}"
 
+        custom_reason = f"Custom request by {interaction.user.name} (ID: {interaction.user.id})"
         if added_roles:
-            await user.add_roles(
-                *added_roles, 
-                reason=f"Custom request by {interaction.user.name} (ID: {interaction.user.id})"
-            )
+            await user.add_roles(*added_roles, reason=custom_reason)
             embed.add_field(name="Added", value="\n".join(role.mention for role in added_roles) or "\u200b")
 
         if removed_roles:
-            await user.remove_roles(
-                *removed_roles, 
-                reason=f"Custom request by {interaction.user.name} (ID: {interaction.user.id})"
-            )
+            await user.remove_roles(*removed_roles, reason=custom_reason)
             embed.add_field(name="Removed", value="\n".join(role.mention for role in removed_roles) or "\u200b")
 
         await interaction.followup.send(embed=embed)
@@ -251,12 +239,7 @@ class RoleManagement(app_commands.Group):
         )
         
         if value:
-            resp = await self.bulk_add_roles(
-                interaction, 
-                users_without_it, 
-                role, 
-                how_many
-            )
+            resp = await self.bulk_add_roles(interaction, users_without_it, role, how_many)
             if resp:
                 await interaction.followup.send(embed=membed(resp))
     
@@ -324,8 +307,7 @@ class RoleManagement(app_commands.Group):
         proportion = (how_many_owns / len(interaction.guild.members)) * 100
         fmt_d, fmt_r = discord.utils.format_dt(role.created_at, "D"), discord.utils.format_dt(role.created_at, "R")
 
-        about = discord.Embed()
-        about.colour = role.colour
+        about = discord.Embed(color=role.colour).set_footer(text=f"ID: {role.id}")
         about.title = "Role Info"
         about.description = (
             f"- **Name**: {role.name}\n"
@@ -333,7 +315,6 @@ class RoleManagement(app_commands.Group):
             f"- **Colour**: {role.colour}\n"
             f"- **Created**: {fmt_d} ({fmt_r})"
         )
-        about.set_footer(text=f"ID: {role.id}")
         await interaction.followup.send(embed=about)
 
     @app_commands.command(name="removebots", description="Removes a role from all bots")
@@ -389,12 +370,7 @@ class RoleManagement(app_commands.Group):
         )
 
         if value:
-            resp = await self.bulk_add_roles(
-                interaction, 
-                users_without_it, 
-                role, 
-                count
-            )
+            resp = await self.bulk_add_roles(interaction, users_without_it, role, count)
             if resp:
                 await interaction.followup.send(embed=membed(resp))
 
@@ -402,7 +378,7 @@ class RoleManagement(app_commands.Group):
     @app_commands.describe(role="The role to remove from all humans.")
     async def remove_humans(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
-        
+
         guild = interaction.guild
         users_without_it = {member for member in guild.members if (not member.bot) and (role in member.roles)}
 
@@ -440,9 +416,7 @@ class RoleManagement(app_commands.Group):
         
         count = len(users_without_it)
         if not count:
-            return await interaction.followup.send(
-                embed=membed("Everybody in base role has the new role already.")
-        )
+            return await interaction.followup.send(embed=membed("Everybody in base role has the new role already."))
         
         resp = do_boilerplate_role_checks(new_role, interaction.guild, interaction.guild.me.top_role)
         if resp:
@@ -454,12 +428,7 @@ class RoleManagement(app_commands.Group):
         )
 
         if value:
-            resp = await self.bulk_add_roles(
-                interaction, 
-                users_without_it, 
-                new_role, 
-                count
-            )
+            resp = await self.bulk_add_roles(interaction, users_without_it, new_role, count)
             if resp:
                 await interaction.followup.send(embed=membed(resp))
         
@@ -569,7 +538,7 @@ class Moderation(commands.Cog):
 
     @commands.has_permissions(manage_threads=True)
     @commands.command(name="close", description="Close the invocation thread", aliases=('cl',))
-    async def close_thread(self, ctx: commands.Context, channel_link: discord.Thread = commands.CurrentChannel):
+    async def close_thread(self, ctx: commands.Context, channel_link: discord.abc.GuildChannel = commands.CurrentChannel):
 
         if not isinstance(channel_link, discord.Thread):
             return await ctx.reply(embed=membed("This is not a thread."))
@@ -582,8 +551,7 @@ class Moderation(commands.Cog):
             async for msg in channel_link.history(limit=1):
                 response_method = msg.edit
 
-        message = membed("This thread is now closed due to lack of use.")
-        message.add_field(
+        message = membed("This thread is now closed due to lack of use.").add_field(
             name="Want to re-open this thread?",
             value="Contact any human with the <@&893550756953735278> role."
         )
@@ -641,32 +609,27 @@ class Moderation(commands.Cog):
         )
 
         # Sending message
-        success = discord.Embed()
-        success.colour = role.colour
+        success = discord.Embed(colour=role.colour)
         success.title = "Temporary role added"
         success.description = f"Granted {user.mention} the {role.mention} role for "
         success.description += ' and '.join(f"{quantity} {unit}" for quantity, unit in time_components if quantity)
 
-        await user.add_roles(
-            discord.Object(id=role.id), 
-            reason=f"Temporary role requested by {interaction.user} (ID: {interaction.user.id})"
-        )
+        temprole_reason = f"Temporary role requested by {interaction.user} (ID: {interaction.user.id})"
+        await user.add_roles(discord.Object(id=role.id), reason=temprole_reason)
         await interaction.response.send_message(embed=success)
 
         # Scheduling task
         timestamp = (discord.utils.utcnow() + timedelta(seconds=duration)).timestamp()
 
-        conn = await self.bot.pool.acquire()
-        
-        await conn.execute(
-            """
-            INSERT INTO tasks (mod_to, role_id, end_time, in_guild) 
-            VALUES ($0, $1, $2, $3)
-            """, user.id, role.id, timestamp, guild.id
-        )
+        async with self.bot.pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO tasks (mod_to, role_id, end_time, in_guild) 
+                VALUES ($0, $1, $2, $3)
+                """, user.id, role.id, timestamp, guild.id
+            )
 
-        await conn.commit()
-        await self.bot.pool.release(conn)
+            await conn.commit()
 
         if self.check_for_role.is_running():
             self.check_for_role.restart()

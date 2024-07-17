@@ -1142,10 +1142,9 @@ class BlackjackUi(discord.ui.View):
                 multi_type="robux", 
                 conn=conn
             )
-
-            amount_after_multi = add_multi_to_original(multi=their_multi, original=bet_amount)
-
+            multiplied = add_multi_to_original(multi=their_multi, original=bet_amount)
             await Economy.end_transaction(conn, user_id=self.interaction.user.id)
+
             bj_lose, new_bj_win, new_amount_balance = await conn.fetchone(
                 """
                 UPDATE accounts
@@ -1155,12 +1154,12 @@ class BlackjackUi(discord.ui.View):
                     bjwa = bjwa + $0
                 WHERE userID = $1
                 RETURNING bjl, bjw, wallet
-                """, amount_after_multi, self.interaction.user.id
+                """, multiplied, self.interaction.user.id
             )
 
             await conn.commit()
             prctnw = (new_bj_win / (new_bj_win + bj_lose)) * 100
-        return amount_after_multi, new_amount_balance, prctnw, their_multi
+        return multiplied, new_amount_balance, prctnw, their_multi
 
     async def update_losing_data(self, *, bet_amount: int) -> tuple:
         """
@@ -1210,7 +1209,7 @@ class BlackjackUi(discord.ui.View):
             new_amount_balance, prnctl = await self.update_losing_data(bet_amount=namount)
 
             embed.colour = discord.Colour.brand_red()
-            embed.description=(
+            embed.description = (
                 f"**You lost. You went over 21 and busted.**\n"
                 f"You lost {CURRENCY} **{namount:,}**. "
                 f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
@@ -1224,9 +1223,7 @@ class BlackjackUi(discord.ui.View):
                     f"**Cards** - {' '.join(d_fver_p)}\n"
                     f"**Total** - `{player_sum}`"
                 )
-            )
-
-            embed.set_field_at(
+            ).set_field_at(
                 index=1,
                 name=f"{interaction.client.user.name} (Dealer)", 
                 value=(
@@ -1238,8 +1235,7 @@ class BlackjackUi(discord.ui.View):
             embed.set_author(
                 name=f"{interaction.user.name}'s losing blackjack game", 
                 icon_url=interaction.user.display_avatar.url
-            )
-            embed.remove_footer()
+            ).remove_footer()
 
             await interaction.response.edit_message(embed=embed, view=None)
 
@@ -1269,9 +1265,7 @@ class BlackjackUi(discord.ui.View):
                     f"**Cards** - {' '.join(d_fver_p)}\n"
                     f"**Total** - `{player_sum}`"
                 )
-            )
-
-            embed.set_field_at(
+            ).set_field_at(
                 index=1,
                 name=f"{interaction.client.user.name} (Dealer)", 
                 value=(
@@ -1279,12 +1273,12 @@ class BlackjackUi(discord.ui.View):
                     f"**Total** - `{calculate_hand(dealer_hand)}`"
                 )
             )
-
+            
             embed.set_author(
                 name=f"{interaction.user.name}'s winning blackjack game", 
                 icon_url=interaction.user.display_avatar.url
-            )
-            embed.set_footer(text=f"Multiplier: {new_multi:,}%")
+            ).set_footer(text=f"Multiplier: {new_multi:,}%")
+
             await interaction.response.edit_message(embed=embed, view=None)
         else:
             necessary_show = d_fver_d[0]
@@ -1297,9 +1291,7 @@ class BlackjackUi(discord.ui.View):
                     f"**Cards** - {' '.join(d_fver_p)}\n"
                     f"**Total** - `{player_sum}`"
                 )
-            )
-
-            embed.set_field_at(
+            ).set_field_at(
                 index=1,
                 name=f"{interaction.client.user.name} (Dealer)",
                 value=(
@@ -1347,8 +1339,7 @@ class BlackjackUi(discord.ui.View):
             embed.set_author(
                 icon_url=interaction.user.display_avatar.url, 
                 name=f"{interaction.user.name}'s winning blackjack game"
-            )
-            embed.set_footer(text=f"Multiplier: {new_multi:,}%")
+            ).set_footer(text=f"Multiplier: {new_multi:,}%")
 
         elif dealer_total > player_sum:
             new_amount_balance, prnctl = await self.update_losing_data(bet_amount=namount)
@@ -1363,8 +1354,7 @@ class BlackjackUi(discord.ui.View):
             embed.set_author(
                 icon_url=interaction.user.display_avatar.url,
                 name=f"{interaction.user.name}'s losing blackjack game"
-            )
-            embed.remove_footer()
+            ).remove_footer()
 
         elif dealer_total < player_sum:
 
@@ -1384,9 +1374,7 @@ class BlackjackUi(discord.ui.View):
             embed.set_author(
                 icon_url=interaction.user.display_avatar.url,
                 name=f"{interaction.user.name}'s winning blackjack game"
-            )
-
-            embed.set_footer(text=f"Multiplier: {new_multi:,}%")
+            ).set_footer(text=f"Multiplier: {new_multi:,}%")
 
         else:
             async with interaction.client.pool.acquire() as conn:
@@ -1411,9 +1399,7 @@ class BlackjackUi(discord.ui.View):
                 f"**Cards** - {' '.join(d_fver_p)}\n"
                 f"**Total** - `{player_sum}`"
             )
-        )
-
-        embed.set_field_at(
+        ).set_field_at(
             index=1,
             name=f"{interaction.client.user.name} (Dealer)", 
             value=(
@@ -1454,9 +1440,7 @@ class BlackjackUi(discord.ui.View):
                 f"**Cards** - {' '.join(d_fver_p)}\n"
                 f"**Total** - `{player_sum}`"
             )
-        )
-
-        embed.set_field_at(
+        ).set_field_at(
             index=1,
             name=f"{interaction.client.user.name} (Dealer)", 
             value=(
@@ -1468,9 +1452,7 @@ class BlackjackUi(discord.ui.View):
         embed.set_author(
             icon_url=interaction.user.display_avatar.url, 
             name=f"{interaction.user.name}'s losing blackjack game"
-        )
-
-        embed.remove_footer()
+        ).remove_footer()
 
         await interaction.response.edit_message(embed=embed, view=None)
 
@@ -1489,13 +1471,11 @@ class HighLow(discord.ui.View):
         query = membed(
             "I just chose a secret number between 0 and 100.\n"
             f"Is the secret number *higher* or *lower* than **{self.hint_provided}**?"
-        )
-        query.set_footer(text="The jackpot button is if you think it is the same!")
-
-        query.set_author(
+        ).set_author(
             name=f"{self.interaction.user.name}'s high-low game", 
             icon_url=self.interaction.user.display_avatar.url
-        )
+        ).set_footer(text="The jackpot button is if you think it is the same!")
+
         await self.interaction.response.send_message(embed=query, view=self)
 
     async def make_clicked_blurple_only(self, clicked_button: discord.ui.Button):
@@ -1541,11 +1521,11 @@ class HighLow(discord.ui.View):
             f'The hidden number was **{self.true_value}**.\n'
             f'Your new balance is {CURRENCY} **{new_balance[0]:,}**.'
         )
+
         win.set_author(
             name=f"{interaction.user.name}'s winning high-low game", 
             icon_url=interaction.user.display_avatar.url
-        )
-        win.set_footer(text=f"Multiplier: {new_multi:,}%")
+        ).set_footer(text=f"Multiplier: {new_multi:,}%")
 
         await interaction.response.edit_message(embed=win, view=self)
 
@@ -1564,11 +1544,11 @@ class HighLow(discord.ui.View):
             f'The hidden number was **{self.true_value}**.\n'
             f'Your new balance is {CURRENCY} **{new_amount[0]:,}**.'
         )
-        lose.remove_footer()
+
         lose.set_author(
             name=f"{interaction.user.name}'s losing high-low game", 
             icon_url=interaction.user.display_avatar.url
-        )
+        ).remove_footer()
 
         await interaction.response.edit_message(embed=lose, view=self)
 
@@ -2113,7 +2093,7 @@ class ToggleButton(discord.ui.Button):
         enabled = self.setting_dropdown.current_setting_state == 1
         em = interaction.message.embeds[0]
         em.set_field_at(
-            0, 
+            index=0, 
             name="Current", 
             value="<:Enabled:1231347743356616734> Enabled" if enabled else "<:Disabled:1231347741402071060> Disabled"
         )
@@ -2392,8 +2372,7 @@ class Economy(commands.Cog):
         embed = discord.Embed(
             title=f"{user.display_name}'s Showcase", 
             description="\n".join(ui_data) or "Nothing to see here!"
-        )
-        embed.set_thumbnail(url=user.display_avatar.url)
+        ).set_thumbnail(url=user.display_avatar.url)
         return embed
 
     async def interaction_check(self, interaction: discord.Interaction):
@@ -2404,14 +2383,14 @@ class Economy(commands.Cog):
             if data is None:
                 return True
 
-            a = discord.ui.View().add_item(
+            error_view = discord.ui.View().add_item(
                 discord.ui.Button(
                     label="Explain This!", 
                     url="https://dankmemer.lol/tutorial/interaction-locks"
                 )
             )
             await interaction.response.send_message(
-                view=a, 
+                view=error_view, 
                 ephemeral=True,
                 embed=membed(WARN_FOR_CONCURRENCY)
             )
@@ -3190,8 +3169,7 @@ class Economy(commands.Cog):
                 shuffle(contents)
                 atip = choice(contents)
 
-            tip = membed()
-            tip.description = f"\U0001f4a1 `TIP`: {atip}"
+            tip = membed(f"\U0001f4a1 `TIP`: {atip}")
             tip.set_footer(text="You can disable these tips in /settings.")
 
             await interaction.followup.send(embed=tip, ephemeral=True)
@@ -4530,7 +4508,7 @@ class Economy(commands.Cog):
 
         if not applied_successfully:
             return await respond(
-                interaction=interaction,
+                interaction, 
                 embed=membed("You already have a <:btc:1244948562471551047> Bitcoin multiplier active.")
             )
 
@@ -5539,9 +5517,9 @@ class Economy(commands.Cog):
                     name="<:withdraw:1195657655134470155> Withdrawn", 
                     value=f"{CURRENCY} {bank_amt:,}", 
                     inline=False
-                )
-                embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}")
-                embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
+                ).add_field(
+                    name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}"
+                ).add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
 
                 return await interaction.response.send_message(embed=embed)
 
@@ -5557,10 +5535,11 @@ class Economy(commands.Cog):
                 name="<:withdraw:1195657655134470155> Withdrawn", 
                 value=f"{CURRENCY} {actual_amount:,}", 
                 inline=False
+            ).add_field(
+                name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}"
+            ).add_field(
+                name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}"
             )
-
-            embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}")
-            embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
 
             await interaction.response.send_message(embed=embed)
 
@@ -5932,13 +5911,11 @@ class Economy(commands.Cog):
                 conn=conn
             )
 
+            embed.colour = discord.Colour.brand_green()
             embed.set_author(
                 icon_url=user.display_avatar.url, 
                 name=f"{user.name}'s winning coinflip game"
-            )
-            embed.colour = discord.Colour.brand_green()
-
-            embed.set_footer(text=f"Multiplier: {their_multi}%")
+            ).set_footer(text=f"Multiplier: {their_multi}%")
 
             amount = add_multi_to_original(multi=their_multi, original=amount)
             namount, = await self.update_bank_new(user, conn, +amount)
@@ -6007,20 +5984,16 @@ class Economy(commands.Cog):
         initial = membed(
             f"The game has started. May the best win.\n"
             f"`{CURRENCY} ~{format_number_short(namount)}` is up for grabs on the table."
-        )
-
-        initial.add_field(
+        ).add_field(
             name=f"{interaction.user.name} (Player)", 
             value=f"**Cards** - {' '.join(shallow_pv)}\n**Total** - `{player_sum}`"
-        )
-
-        initial.add_field(
+        ).add_field(
             name=f"{self.bot.user.name} (Dealer)", 
             value=f"**Cards** - {shallow_dv[0]} `?`\n**Total** - ` ? `"
-        )
-
-        initial.set_author(icon_url=interaction.user.display_avatar.url, name=f"{interaction.user.name}'s blackjack game")
-        initial.set_footer(text="K, Q, J = 10  |  A = 1 or 11")
+        ).set_author(
+            name=f"{interaction.user.name}'s blackjack game",
+            icon_url=interaction.user.display_avatar.url
+        ).set_footer(text="K, Q, J = 10  |  A = 1 or 11")
 
         await interaction.response.send_message(
             embed=initial, 
@@ -6169,8 +6142,7 @@ class Economy(commands.Cog):
                 embed.set_author(
                     name=f"{interaction.user.name}'s winning gambling game", 
                     icon_url=interaction.user.display_avatar.url
-                )
-                embed.set_footer(text=f"Multiplier: {pmulti:,}%")
+                ).set_footer(text=f"Multiplier: {pmulti:,}%")
 
             elif their_roll == bot_roll:
                 embed.colour = discord.Color.yellow()

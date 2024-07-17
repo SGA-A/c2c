@@ -1,15 +1,34 @@
+from typing import Callable
+
 import discord
 
 from .helpers import economy_check, respond, membed
 
 
-def format_timeout(embed: discord.Embed, children: list):
+async def format_timeout_view(
+    embed: discord.Embed, 
+    view: discord.ui.View, 
+    edit_meth: Callable
+) -> None:
+    """
+    Edits to the view and embed are in-place. 
+
+    `edit_meth` is the method to use when editing a message, since it's so variable between different contexts.
+    """
+
     embed.colour = discord.Colour.brand_red()
     embed.description = f"~~{embed.description}~~"
     embed.title = "Timed Out"
-    
-    for item in children:
+    view.value = False
+
+    for item in view.children:
         item.disabled = True
+
+    try:
+        await edit_meth(embed=embed, view=view)
+    except discord.HTTPException:
+        pass
+    return False
 
 
 class BaseInteractionView(discord.ui.View):
@@ -100,18 +119,10 @@ async def process_confirmation(
     confirm_embed = membed(prompt)
     confirm_embed.title = "Pending Confirmation"
 
-    msg = await respond(interaction, embed=confirm_embed, view=confirm_view, **kwargs)
+    await respond(interaction, embed=confirm_embed, view=confirm_view, **kwargs)
     await confirm_view.wait()
     if confirm_view.value is None:
-        confirm_view.value = False
-        format_timeout(embed=confirm_embed, children=confirm_view.children)
-        try:
-            if msg:
-                await msg.edit(embed=confirm_embed, view=confirm_view)
-            else:
-                await confirm_view.interaction.edit_original_response(embed=confirm_embed, view=confirm_view)
-        except discord.HTTPException:
-            pass
+        await format_timeout_view(confirm_embed, confirm_view, confirm_view.interaction.edit_original_response)
     return confirm_view.value
 
 
@@ -126,15 +137,9 @@ async def send_boilerplate_confirm(ctx, prompt: str) -> bool:
     confirm_embed.title = "Pending Confirmation"
 
     msg: discord.Message = await ctx.send(embed=confirm_embed, view=confirm_view)
-    
     await confirm_view.wait()
     if confirm_view.value is None:
-        confirm_view.value = False
-        format_timeout(embed=confirm_embed, children=confirm_view.children)
-        try:
-            await msg.edit(embed=confirm_embed, view=confirm_view)
-        except discord.HTTPException:
-            pass
+        await format_timeout_view(confirm_embed, confirm_view, msg.edit)
     return confirm_view.value
 
 

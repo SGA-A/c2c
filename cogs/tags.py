@@ -748,19 +748,24 @@ class Tags(commands.Cog):
     ) -> None:
         """Expects row in this format: rowid, uses, ownerID, created_at"""
 
-        embed = discord.Embed(colour=discord.Colour.blurple())
+        embed = discord.Embed(colour=discord.Colour.blurple()).set_footer(text='Tag created')
 
         rowid, uses, owner_id, created_at = row
 
         embed.title = tag_name
         embed.timestamp = datetime.datetime.fromtimestamp(created_at, tz=datetime.timezone.utc)
-        embed.set_footer(text='Tag created')
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
-        embed.set_author(name=str(user), icon_url=user.display_avatar.url)
-
-        embed.add_field(name='Owner', value=f'<@{owner_id}>')
-        embed.add_field(name='Uses', value=f"` {uses:,} `")
+        embed.set_author(
+            name=str(user), 
+            icon_url=user.display_avatar.url
+        ).add_field(
+            name='Owner', 
+            value=f'<@{owner_id}>'
+        ).add_field(
+            name='Uses', 
+            value=f"` {uses:,} `"
+        )
 
         query = (
             """
@@ -1075,33 +1080,31 @@ class Tags(commands.Cog):
                 f'{emoji}: {name} ({uses} uses)' if name else f'{emoji}: Nothing!'
                 for (emoji, (name, uses, _, _)) in emojize(top_tags)
             )
-        )
-
-        em.add_field(
+        ).add_field(
             name='Top Tag Users', 
             inline=False,
             value='\n'.join(
                 f'{emoji}: <@{author_id}> ({uses} times)' if author_id else f'{emoji}: No one!'
                 for (emoji, (author_id, uses)) in emojize(top_users)
             )
-        )
-
-        em.add_field(
+        ).add_field(
             name='Top Tag Creators', 
             inline=False,
             value='\n'.join(
                 f'{emoji}: <@{owner_id}> ({count} tags)' if owner_id else f'{emoji}: No one!'
                 for (emoji, (owner_id, count)) in emojize(top_creators)
             )
-        )
-        em.set_footer(text="These stats are global.")
+        ).set_footer(text="These stats are global.")
+
         await ctx.send(embed=em)
         del top_data, top_users, top_creators, top_tags
 
     async def member_stats(self, ctx: commands.Context, user: discord.abc.User):
         e = discord.Embed(colour=discord.Colour.blurple())
-        e.set_author(name=str(user), icon_url=user.display_avatar.url)
-        e.set_footer(text='These stats are user-specific.')
+        e.set_author(
+            name=str(user), 
+            icon_url=user.display_avatar.url
+        ).set_footer(text='These stats are user-specific.')
 
         query = (
             """
@@ -1138,9 +1141,13 @@ class Tags(commands.Cog):
 
             records = await conn.fetchall(query, user.id)
 
-        e.add_field(name='Owned Tags', value=owned_tags)
-        e.add_field(name='Owned Tag Uses', value=owned_uses)
-        e.add_field(name='Tag Command Uses', value=f"{count:,}")
+        e.add_field(
+            name='Owned Tags', 
+            value=owned_tags
+        ).add_field(
+            name='Owned Tag Uses', 
+            value=owned_uses
+        ).add_field(name='Tag Command Uses', value=f"{count:,}")
 
         # fill with data to ensure that we have a minimum of 3
         if len(records) < 3:

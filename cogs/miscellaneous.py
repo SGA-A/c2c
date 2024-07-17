@@ -351,9 +351,6 @@ class Utility(commands.Cog):
         interaction: discord.Interaction, 
         message: discord.Message
     ) -> None:
-        return await interaction.response.send_message(
-            embed=membed("Not working because unapproved for message content intent. It'll come back soon\U00002122.")
-        )
 
         images = set()
         counter = 0
@@ -498,9 +495,8 @@ class Utility(commands.Cog):
             data = await resp.json()
 
         data = data["results"][0]
-        embed = discord.Embed(colour=0xFF9D2C).set_image(
-            url=data["url"]
-        ).set_author(name=f"{data["artist_name"]}")
+        embed = discord.Embed(colour=0xFF9D2C)
+        embed.set_image(url=data["url"]).set_author(name=f"{data["artist_name"]}")
 
         img_view = discord.ui.View().add_item(ImageSourceButton(url=data["url"]))
         await interaction.response.send_message(embed=embed, view=img_view)
@@ -770,7 +766,10 @@ class Utility(commands.Cog):
 
     async def view_avatar(self, interaction: discord.Interaction, username: discord.User) -> None:
         avatar_url = username.display_avatar.with_static_format('png').url
-        embed = membed().set_author(name=username.display_name, icon_url=avatar_url).set_image(url=avatar_url)
+        embed = membed().set_image(url=avatar_url).set_author(
+            name=username.display_name, 
+            icon_url=avatar_url
+        )
 
         img_view = discord.ui.View().add_item(ImageSourceButton(url=embed.author.icon_url))
         await interaction.response.send_message(embed=embed, view=img_view)
