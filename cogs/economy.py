@@ -561,7 +561,7 @@ class DepositOrWithdraw(discord.ui.Modal):
                 )
 
             async with interaction.client.pool.acquire() as conn:
-                data = await conn.fetchone(
+                wallet, bank, bankspace = await conn.fetchone(
                     """
                     UPDATE accounts 
                     SET 
@@ -573,18 +573,14 @@ class DepositOrWithdraw(discord.ui.Modal):
                 )
                 await conn.commit()
 
-            prcnt_full = (data[1] / data[2]) * 100
+            prcnt_full = (bank / bankspace) * 100
 
-            embed.set_field_at(0, name="Wallet", value=f"{CURRENCY} {data[0]:,}")
-            embed.set_field_at(1, name="Bank", value=f"{CURRENCY} {data[1]:,}")
-            embed.set_field_at(2, name="Bankspace", value=f"{CURRENCY} {data[2]:,} ({prcnt_full:.2f}% full)")
+            embed.set_field_at(0, name="Wallet", value=f"{CURRENCY} {wallet:,}")
+            embed.set_field_at(1, name="Bank", value=f"{CURRENCY} {bank:,}")
+            embed.set_field_at(2, name="Bankspace", value=f"{CURRENCY} {bankspace:,} ({prcnt_full:.2f}% full)")
             embed.timestamp = discord.utils.utcnow()
 
-            self.view.checks(
-                current_bank=data[1], 
-                current_wallet=data[0], 
-                current_bankspace_left=data[2]-data[1]
-            )
+            self.view.checks(bank, wallet, bankspace-bank)
             return await interaction.response.edit_message(embed=embed, view=self.view)
 
         # ! Deposit Branch
@@ -601,7 +597,7 @@ class DepositOrWithdraw(discord.ui.Modal):
             )
 
         async with interaction.client.pool.acquire() as conn:
-            updated = await conn.fetchone(
+            wallet, bank, bankspace = await conn.fetchone(
                 """
                 UPDATE accounts 
                 SET 
@@ -613,18 +609,14 @@ class DepositOrWithdraw(discord.ui.Modal):
             )
             await conn.commit()
 
-        prcnt_full = (updated[1] / updated[2]) * 100
+        prcnt_full = (bank / bankspace) * 100
 
-        embed.set_field_at(0, name="Wallet", value=f"{CURRENCY} {updated[0]:,}")
-        embed.set_field_at(1, name="Bank", value=f"{CURRENCY} {updated[1]:,}")
-        embed.set_field_at(2, name="Bankspace", value=f"{CURRENCY} {updated[2]:,} ({prcnt_full:.2f}% full)")
+        embed.set_field_at(0, name="Wallet", value=f"{CURRENCY} {wallet:,}")
+        embed.set_field_at(1, name="Bank", value=f"{CURRENCY} {bank:,}")
+        embed.set_field_at(2, name="Bankspace", value=f"{CURRENCY} {bankspace:,} ({prcnt_full:.2f}% full)")
         embed.timestamp = discord.utils.utcnow()
 
-        self.view.checks(
-            current_bank=updated[1], 
-            current_wallet=updated[0], 
-            current_bankspace_left=updated[2]-updated[1]
-        )
+        self.view.checks(bank, wallet, bankspace-bank)
         await interaction.response.edit_message(embed=embed, view=self.view)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
@@ -910,6 +902,7 @@ class BalanceView(discord.ui.View):
                 WHERE userID = $0
                 """
             )
+
             nd = await conn.fetchone(query, self.viewing.id)
             if nd is None:
                 if interaction.user.id != self.viewing.id:
@@ -919,27 +912,25 @@ class BalanceView(discord.ui.View):
 
                 await Economy.open_bank_new(self.viewing, conn)
                 nd = await conn.fetchone(query, self.viewing.id)
-                balance.colour = discord.Colour.green()
 
             inv = await Economy.calculate_inventory_value(self.viewing, conn)
             rank = await Economy.calculate_net_ranking_for(self.viewing, conn)
 
-        space = (nd[1] / nd[2]) * 100
-        money = nd[0] + nd[1]
+        wallet, bank, bankspace = nd
+        del nd
 
-        balance.add_field(name="Wallet", value=f"{CURRENCY} {nd[0]:,}")
-        balance.add_field(name="Bank", value=f"{CURRENCY} {nd[1]:,}")
-        balance.add_field(name="Bankspace", value=f"{CURRENCY} {nd[2]:,} ({space:.2f}% full)")
+        space = (bank / bankspace) * 100
+        money = wallet + bank
+
+        balance.add_field(name="Wallet", value=f"{CURRENCY} {wallet:,}")
+        balance.add_field(name="Bank", value=f"{CURRENCY} {bank:,}")
+        balance.add_field(name="Bankspace", value=f"{CURRENCY} {bankspace:,} ({space:.2f}% full)")
         balance.add_field(name="Money Net", value=f"{CURRENCY} {money:,}")
         balance.add_field(name="Inventory Net", value=f"{CURRENCY} {inv:,}")
         balance.add_field(name="Total Net", value=f"{CURRENCY} {inv+money:,}")
 
         balance.set_footer(text=f"Global Rank: #{rank}")
-        self.checks(
-            current_bank=nd[1], 
-            current_wallet=nd[0], 
-            current_bankspace_left=nd[2]-nd[1]
-        )
+        self.checks(bank, wallet, bankspace-bank)
         return balance
 
     def checks(self, current_bank, current_wallet, current_bankspace_left) -> None:
@@ -984,12 +975,11 @@ class BalanceView(discord.ui.View):
         #! Ensure connections are carried into item callbacks when prerequisites are met
 
         async with interaction.client.pool.acquire() as conn:
-            in_tr = await conn.fetchone(
-                "SELECT EXISTS (SELECT 1 FROM transactions WHERE userID = $0)", interaction.user.id
-            )
-            if in_tr[0]:
+            query = "SELECT EXISTS (SELECT 1 FROM transactions WHERE userID = $0)"
+            in_tr, = await conn.fetchone(query, interaction.user.id)
+            if in_tr:
                 await self.send_failure(interaction)
-            return not in_tr[0]
+            return not in_tr
 
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
         for item in self.children:
@@ -1934,11 +1924,11 @@ class ItemQuantityModal(discord.ui.Modal):
 
         can_proceed = await Economy.handle_confirm_outcome(
             interaction=interaction, 
+            setting="buying_confirmations",
             confirmation_prompt=(
                 f"Are you sure you want to buy **{true_quantity:,}x {self.ie} "
                 f"{self.item_name}** for **{CURRENCY} {new_price:,}**?"
-            ),
-            confirmation_type="buying_confirmations"
+            )
         )
 
         async with interaction.client.pool.acquire() as conn:
@@ -2056,7 +2046,7 @@ class SettingsDropdown(discord.ui.Select):
 
         async with interaction.client.pool.acquire() as conn:
             conn: asqlite_Connection
-            em = await Economy.get_setting_embed(interaction=interaction, view=self.view, conn=conn)
+            em = await Economy.get_setting_embed(interaction, view=self.view, conn=conn)
             await interaction.response.edit_message(embed=em, view=self.view)
 
 
@@ -2274,14 +2264,14 @@ class Economy(commands.Cog):
         interaction: discord.Interaction, 
         confirmation_prompt: str,
         view_owner: discord.Member | None = None,
-        confirmation_type: str | None = None,
+        setting: str | None = None,
         conn: asqlite_Connection | None = None,
         **kwargs
     ) -> None | bool:
         """
         Handle a confirmation outcome correctly, accounting for whether or not a specific confirmation is enabled.
 
-        The `confirmation_type` passed in should be lowercased, since all toggleable confirmation settings are lowercased.
+        The `setting` passed in should be lowercased, since all toggleable confirmation settings are lowercased.
 
         ## Returns
         `None` to indicate that the user doesn't have the specified confirmation enabled. 
@@ -2309,9 +2299,9 @@ class Economy(commands.Cog):
 
         conn = conn or await interaction.client.pool.acquire()  # always hold a connection
         try:
-
             enabled = Economy.is_setting_enabled
-            if confirmation_type and not(await enabled(conn, user_id=view_owner.id, setting=confirmation_type)):
+            can_confirm = setting and not(await enabled(conn, user_id=view_owner.id, setting=setting))
+            if can_confirm:
                 return
 
             await Economy.declare_transaction(conn, user_id=view_owner.id)
@@ -3099,7 +3089,7 @@ class Economy(commands.Cog):
         return int(multiplier)
 
     @staticmethod
-    async def is_setting_enabled(conn: asqlite_Connection, *, user_id: int, setting: str) -> bool:
+    async def is_setting_enabled(conn: asqlite_Connection, user_id: int, setting: str) -> bool:
         """Check if a user has a setting enabled."""
 
         result = await conn.fetchone(
@@ -3157,11 +3147,7 @@ class Economy(commands.Cog):
     async def send_tip_if_enabled(self, interaction: discord.Interaction, conn: asqlite_Connection) -> None:
         """Send a tip if the user has enabled tips."""
 
-        tips_enabled = await self.is_setting_enabled(
-            conn, 
-            user_id=interaction.user.id, 
-            setting="tips"
-        )
+        tips_enabled = await self.is_setting_enabled(conn, interaction.user.id, "tips")
 
         if tips_enabled:
             async with aiofiles.open("C:\\Users\\georg\\Documents\\c2c\\tips.txt") as f:
@@ -3220,11 +3206,7 @@ class Economy(commands.Cog):
             """, randint(50_000, 55_000*level), interaction.user.id
         )
 
-        notifs_enabled = await self.is_setting_enabled(
-            connection, 
-            user_id=interaction.user.id, 
-            setting="levelup_notifications"
-        )
+        notifs_enabled = await self.is_setting_enabled(connection, interaction.user.id, "levelup_notifications")
 
         if notifs_enabled:
             rankup = discord.Embed(title="Level Up!", colour=0x55BEFF)
@@ -3312,13 +3294,12 @@ class Economy(commands.Cog):
         """View or adjust user-specific settings."""
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-            query = "SELECT setting, brief FROM settings_descriptions"
-            settings = await conn.fetchall(query)
+            settings = await conn.fetchall("SELECT setting, brief FROM settings_descriptions")
             chosen_setting = setting or settings[0][0]
 
             view = UserSettings(data=settings, chosen_setting=chosen_setting, interaction=interaction)
             em = await Economy.get_setting_embed(interaction, view=view, conn=conn)
-            await interaction.response.send_message(embed=em, view=view)
+        await interaction.response.send_message(embed=em, view=view)
 
     @app_commands.command(name="multipliers", description="View all of your multipliers within the bot")
     @app_commands.describe(
@@ -3403,7 +3384,7 @@ class Economy(commands.Cog):
         can_proceed = await self.handle_confirm_outcome(
             interaction, 
             confirmation_prompt=f"Are you sure you want to share {CURRENCY} **{quantity:,}** with {recipient.mention}?",
-            confirmation_type="share_robux_confirmations",
+            setting="share_robux_confirmations",
             conn=conn
         )
 
@@ -3425,10 +3406,7 @@ class Economy(commands.Cog):
             if await self.can_call_out(recipient, conn):
                 return await respond(interaction=interaction, embed=NOT_REGISTERED)
 
-            await respond(
-                interaction=interaction,
-                embed=membed(f"Shared {CURRENCY} **{quantity:,}** with {recipient.mention}!")
-            )
+            await respond(interaction, embed=membed(f"Shared {CURRENCY} **{quantity:,}** with {recipient.mention}!"))
 
             await self.update_wallet_many(
                 conn, 
@@ -3466,7 +3444,7 @@ class Economy(commands.Cog):
         can_proceed = await self.handle_confirm_outcome(
             interaction, 
             confirmation_prompt=f"Are you sure you want to share **{quantity:,} {ie} {item_name}** with {recipient.mention}",
-            confirmation_type="share_item_confirmations",
+            setting="share_item_confirmations",
             conn=conn
         )
 
@@ -3479,7 +3457,7 @@ class Economy(commands.Cog):
                     return
 
             if await self.can_call_out(recipient, conn):
-                await respond(interaction=interaction, embed=NOT_REGISTERED)
+                return await respond(interaction=interaction, embed=NOT_REGISTERED)
 
             attrs = await conn.fetchone(
                 """
@@ -3490,10 +3468,7 @@ class Economy(commands.Cog):
                 """, sender.id, item_id
             )
             if attrs is None:
-                return await respond(
-                    interaction,
-                    embed=membed(f"You don't own a single {ie} **{item_name}**.")
-                )
+                return await respond(interaction, embed=membed(f"You don't own a single {ie} **{item_name}**."))
 
             actual_inv_qty, item_rarity = attrs
             if actual_inv_qty < quantity:
@@ -3599,6 +3574,7 @@ class Economy(commands.Cog):
         can_continue = await self.handle_confirm_outcome(
             interaction,
             view_owner=item_sender,
+            content=item_sender.mention,
             confirmation_prompt=dedent(
                 f"""
                 > Are you sure you want to trade with {coin_sender.mention}?
@@ -3609,8 +3585,7 @@ class Economy(commands.Cog):
                 **For Your:**
                 - {item_sender_qty}x {item_sender_data[-1]} {item_sender_data[1]}
                 """
-            ),
-            content=item_sender.mention
+            )
         )
         return can_continue
 
@@ -3638,6 +3613,7 @@ class Economy(commands.Cog):
         can_continue = await self.handle_confirm_outcome(
             interaction,
             view_owner=coin_sender,
+            content=coin_sender.mention,
             confirmation_prompt=dedent(
                 f"""
                 > Are you sure you want to trade with {item_sender.mention}?
@@ -3648,8 +3624,7 @@ class Economy(commands.Cog):
                 **For Your:**
                 - {CURRENCY} {coin_sender_qty:,}
                 """
-            ),
-            content=coin_sender.mention
+            )
         )
         return can_continue
 
@@ -3675,6 +3650,7 @@ class Economy(commands.Cog):
         can_continue = await self.handle_confirm_outcome(
             interaction,
             view_owner=item_sender,
+            content=item_sender.mention,
             confirmation_prompt=dedent(
                 f"""
                 > Are you sure you want to trade with {item_sender2.mention}?
@@ -3685,8 +3661,7 @@ class Economy(commands.Cog):
                 **For Your:**
                 - {item_sender_qty}x {item_sender_data[-1]} {item_sender_data[1]}
                 """
-            ),
-            content=item_sender.mention
+            )
         )
         return can_continue
 
@@ -3854,7 +3829,7 @@ class Economy(commands.Cog):
                 return
 
             try:
-                wallet_amt = await self.get_wallet_data_only(user=interaction.user, conn_input=conn)
+                wallet_amt = await self.get_wallet_data_only(interaction.user, conn)
             except TypeError:
                 return await respond(interaction=interaction, embed=NOT_REGISTERED)
 
@@ -4052,7 +4027,6 @@ class Economy(commands.Cog):
     @commands.command(name="freemium", description="Get a free random item.", aliases=('fr',))
     async def free_item(self, ctx: commands.Context) -> None:
         async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
             rQty = randint(1, 5)
 
             item, emoji = await self.update_user_inventory_with_random_item(ctx.author.id, conn, rQty)
@@ -4080,33 +4054,13 @@ class Economy(commands.Cog):
 
         This does not commit any deletions.
         """
-
-        items_non_existant = await conn.fetchall(
-            """
-            SELECT
-                showcase.itemID
-            FROM showcase
-            LEFT JOIN inventory
-                ON showcase.itemID = inventory.itemID AND inventory.userID = $0
-            WHERE showcase.userID = $0 AND inventory.qty IS NULL
-            """, user_id
-        )
-
-        # meaning no pending deletion tasks
-        if (not items_non_existant) and (items_to_delete is None):
+        items_to_delete = items_to_delete or set()
+        if not items_to_delete:
             return
 
-        items_to_delete = items_to_delete or set()
-        for item in items_non_existant:
-            items_to_delete.add(item[0])
-
         placeholders = ', '.join(f'${i}' for i in range(1, len(items_to_delete)+1))
-        await conn.fetchall(
-            f"""
-            DELETE FROM showcase 
-            WHERE userID = $0 AND itemID IN ({placeholders})
-            """, user_id, *items_to_delete
-        )
+        query = f"""DELETE FROM showcase WHERE userID = $0 AND itemID IN ({placeholders})"""
+        await conn.fetchall(query, user_id, *items_to_delete)
         return len(items_to_delete)
 
     @app_commands.describe(item=ITEM_DESCRPTION)
@@ -4123,10 +4077,7 @@ class Economy(commands.Cog):
 
             async with conn.transaction():
 
-                val = await self.delete_missing_showcase_items(
-                    conn,
-                    user_id=interaction.user.id
-                )
+                val = await self.delete_missing_showcase_items(conn, interaction.user.id)
 
                 if val:
                     all_embeds.append(membed(SHOWCASE_ITEMS_REMOVED))
@@ -4135,11 +4086,7 @@ class Economy(commands.Cog):
 
                 if not val:
                     all_embeds.append(f"You don't have a single {ie} **{item}**.")
-                    return await respond(
-                        interaction=interaction, 
-                        ephemeral=True,
-                        embeds=all_embeds
-                    )
+                    return await respond(interaction, ephemeral=True, embeds=all_embeds)
 
                 # ! Insert branch
                 val = await conn.fetchone(
@@ -4153,16 +4100,12 @@ class Economy(commands.Cog):
                     """, interaction.user.id, item_id
                 )
 
-            if val is None:
-                all_embeds.append(membed(f"You already have **{ie} {item}** in your showcase."))
-                return await respond(
-                    interaction=interaction,
-                    ephemeral=True,
-                    embeds=all_embeds
-                )
+        if val is None:
+            all_embeds.append(membed(f"You already have **{ie} {item}** in your showcase."))
+            return await respond(interaction, ephemeral=True, embeds=all_embeds)
 
-            all_embeds.append(membed(f"Added {ie} {item} to your showcase!"))
-            await respond(interaction=interaction, embeds=all_embeds)
+        all_embeds.append(membed(f"Added {ie} {item} to your showcase!"))
+        await respond(interaction, embeds=all_embeds)
 
     @showcase.command(name="remove", description="Remove an item from your showcase")
     @app_commands.describe(item=ITEM_DESCRPTION)
@@ -4178,10 +4121,11 @@ class Economy(commands.Cog):
             item_id, item, ie = item_details
 
             val = await self.delete_missing_showcase_items(
-                conn,
-                user_id=interaction.user.id,
+                conn, 
+                interaction.user.id, 
                 items_to_delete={item_id,}
             )
+
             all_embeds = []
 
             if val and (val > 1):
@@ -4315,28 +4259,28 @@ class Economy(commands.Cog):
         can_proceed = await self.handle_confirm_outcome(
             interaction,
             confirmation_prompt=f"Are you sure you want to sell **{sell_quantity:,}x {ie} {item_name}** for **{CURRENCY} {cost:,}**?",
-            confirmation_type="selling_confirmations",
+            setting="selling_confirmations",
             conn=conn
         )
 
         async with self.bot.pool.acquire() as conn:
-            if can_proceed is not None:
-                await self.end_transaction(conn, user_id=seller.id)
-                await conn.commit()
-                if can_proceed is False:
-                    return
+            async with conn.transaction():
+                if can_proceed is not None:
+                    await self.end_transaction(conn, user_id=seller.id)
+                    await conn.commit()
+                    if can_proceed is False:
+                        return
 
-            embed = membed(
-                f"{seller.mention} sold **{sell_quantity:,}x {ie} {item_name}** "
-                f"and got paid {CURRENCY} **{cost:,}**."
-            ).set_footer(text="Thanks for your business.")
+                await self.update_inv_new(seller, -sell_quantity, item_name, conn)
+                await self.update_bank_new(seller, conn, +cost)
 
-            embed.title = f"{seller.display_name}'s Sale Receipt"
-            await respond(interaction, embed=embed)
+        embed = membed(
+            f"{seller.mention} sold **{sell_quantity:,}x {ie} {item_name}** "
+            f"and got paid {CURRENCY} **{cost:,}**."
+        ).set_footer(text="Thanks for your business.")
 
-            await self.update_inv_new(seller, -sell_quantity, item_name, conn)
-            await self.update_bank_new(seller, conn, +cost)
-            await conn.commit()
+        embed.title = f"{seller.display_name}'s Sale Receipt"
+        await respond(interaction, embed=embed)
 
     @app_commands.command(name='item', description='Get more details on a specific item')
     @app_commands.describe(item_name=ITEM_DESCRPTION)
@@ -4554,29 +4498,30 @@ class Economy(commands.Cog):
                 """, item_id, interaction.user.id
             )
 
-            if not data:
-                return await respond(
-                    interaction=interaction,
-                    ephemeral=True,
-                    embed=membed(f"You don't own a single {ie} **{item_name}**, therefore cannot use it.")
-                )
+        if not data:
+            return await respond(
+                interaction=interaction,
+                ephemeral=True,
+                embed=membed(f"You don't have a single {ie} **{item_name}**, therefore cannot use it.")
+            )
 
-            qty, = data
-            if qty < quantity:
-                return await respond(
-                    interaction=interaction,
-                    ephemeral=True,
-                    embed=membed(f"You don't own **{quantity}x {ie} {item_name}**, therefore cannot use this many.")
-                )
+        qty, = data
+        if qty < quantity:
+            return await respond(
+                interaction=interaction,
+                ephemeral=True,
+                embed=membed(f"You don't have **{quantity}x {ie} {item_name}**, therefore cannot use this many.")
+            )
 
-            handler = item_handlers.get(item_name)
-            if handler is None:
-                return await respond(
-                    interaction=interaction,
-                    ephemeral=True,
-                    embed=membed(f"{ie} **{item_name}** does not have a use yet.\nWait until it does!")
-                )
+        handler = item_handlers.get(item_name)
+        if handler is None:
+            return await respond(
+                interaction=interaction,
+                ephemeral=True,
+                embed=membed(f"{ie} **{item_name}** does not have a use yet.\nWait until it does!")
+            )
 
+        async with self.bot.pool.acquire() as conn:
             await handler(interaction, quantity, conn)
 
     async def start_prestige(self, interaction: discord.Interaction, prestige: int) -> None:
