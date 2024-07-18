@@ -518,16 +518,24 @@ async def find_fav_cmd_for(user_id, conn: asqlite_Connection) -> str:
 
 
 class DepositOrWithdraw(discord.ui.Modal):
+    bigarg_response = {
+        "Withdraw": "You don't have that much money in your bank.",
+        "Deposit": (
+            "Either one (or both) of the following is true:\n" 
+            "1. You only have don't have that much money in your wallet.\n"
+            "2. You don't have enough bankspace to deposit that amount."
+        )
+    }
+
     def __init__(
-        self, *, 
+        self, 
+        *, 
         title: str, 
-        default_val: int, 
-        message: discord.InteractionMessage, 
+        default_val: int,
         view: "BalanceView"
     ) -> None:
 
         self.their_default = default_val
-        self.message = message
         self.view = view
         self.amount.default = f"{self.their_default:,}"
         super().__init__(title=title, timeout=120.0)
@@ -540,63 +548,28 @@ class DepositOrWithdraw(discord.ui.Modal):
     )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
-        val = await determine_exponent(
-            interaction=interaction, 
-            rinput=self.amount.value
-        )
+        val = await determine_exponent(interaction, rinput=self.amount.value)
         if val is None:
             return
         val = int(val)
 
-        embed = self.message.embeds[0]
-        if self.title.startswith("W"):
-            if val > self.their_default:
-                return await interaction.response.send_message(
-                    ephemeral=True,
-                    delete_after=5.0,
-                    embed=membed(
-                        f"You only have {CURRENCY} **{self.their_default:,}**, "
-                        f"therefore cannot withdraw {CURRENCY} **{val:,}**."
-                    )
-                )
-
-            async with interaction.client.pool.acquire() as conn:
-                wallet, bank, bankspace = await conn.fetchone(
-                    """
-                    UPDATE accounts 
-                    SET 
-                        bank = bank - $0, 
-                        wallet = wallet + $0 
-                    WHERE userID = $1 
-                    RETURNING wallet, bank, bankspace
-                    """, val, interaction.user.id
-                )
-                await conn.commit()
-
-            prcnt_full = (bank / bankspace) * 100
-
-            embed.set_field_at(0, name="Wallet", value=f"{CURRENCY} {wallet:,}")
-            embed.set_field_at(1, name="Bank", value=f"{CURRENCY} {bank:,}")
-            embed.set_field_at(2, name="Bankspace", value=f"{CURRENCY} {bankspace:,} ({prcnt_full:.2f}% full)")
-            embed.timestamp = discord.utils.utcnow()
-
-            self.view.checks(bank, wallet, bankspace-bank)
-            return await interaction.response.edit_message(embed=embed, view=self.view)
-
-        # ! Deposit Branch
-
         if val > self.their_default:
             return await interaction.response.send_message(
-                ephemeral=True, 
-                delete_after=10.0,
-                embed=membed(
-                    "Either one (or both) of the following is true:\n" 
-                    "1. You only have don't have that much money in your wallet.\n"
-                    "2. You don't have enough bankspace to deposit that amount."
-                )
+                ephemeral=True,
+                delete_after=5.0,
+                embed=membed(self.bigarg_response[self.title])
             )
 
+        if self.title == "Withdraw":
+            val = -val
+
+        wallet, bank, bankspace = await self.update_account(interaction, val)
+        await self.update_embed(interaction, wallet, bank, bankspace)
+
+    async def update_account(self, interaction: discord.Interaction, val: int) -> tuple:
         async with interaction.client.pool.acquire() as conn:
+
+            # ! flip the value of val if it is a withdrawal 
             wallet, bank, bankspace = await conn.fetchone(
                 """
                 UPDATE accounts 
@@ -608,9 +581,18 @@ class DepositOrWithdraw(discord.ui.Modal):
                 """, val, interaction.user.id
             )
             await conn.commit()
+        return wallet, bank, bankspace
 
+    async def update_embed(
+        self, 
+        interaction: discord.Interaction, 
+        wallet: int, 
+        bank: int, 
+        bankspace: int
+    ) -> None:
         prcnt_full = (bank / bankspace) * 100
 
+        embed = interaction.message.embeds[0]
         embed.set_field_at(0, name="Wallet", value=f"{CURRENCY} {wallet:,}")
         embed.set_field_at(1, name="Bank", value=f"{CURRENCY} {bank:,}")
         embed.set_field_at(2, name="Bankspace", value=f"{CURRENCY} {bankspace:,} ({prcnt_full:.2f}% full)")
@@ -994,11 +976,7 @@ class BalanceView(discord.ui.View):
         """Withdraw money from the bank."""
 
         async with interaction.client.pool.acquire() as conn:
-            bank_amt = await Economy.get_spec_bank_data(
-                interaction.user, 
-                field_name="bank", 
-                conn_input=conn
-            )
+            bank_amt = await Economy.get_spec_bank_data(interaction.user, "bank", conn)
 
         if not bank_amt:
             return await interaction.response.send_message(
@@ -1008,12 +986,7 @@ class BalanceView(discord.ui.View):
             )
 
         await interaction.response.send_modal(
-            DepositOrWithdraw(
-                title=button.label, 
-                default_val=bank_amt, 
-                message=interaction.message, 
-                view=self
-            )
+            DepositOrWithdraw(title=button.label, default_val=bank_amt, view=self)
         )
 
     @discord.ui.button(label="Deposit", disabled=True, row=1)
@@ -1021,7 +994,7 @@ class BalanceView(discord.ui.View):
         """Deposit money into the bank."""
 
         async with interaction.client.pool.acquire() as conn:
-            data = await conn.fetchone(
+            wallet, bank, bankspace = await conn.fetchone(
                 """
                 SELECT wallet, bank, bankspace 
                 FROM accounts 
@@ -1029,32 +1002,27 @@ class BalanceView(discord.ui.View):
                 """, interaction.user.id
             )
 
-        if not data[0]:
+        if not wallet:
             return await interaction.response.send_message(
                 ephemeral=True, 
                 delete_after=3.0,
                 embed=membed("You have nothing to deposit.")
             )
 
-        available_bankspace = data[2] - data[1]
+        available_bankspace = bankspace - bank
         if not available_bankspace:
             return await interaction.response.send_message(
                 ephemeral=True, 
                 delete_after=5.0,
                 embed=membed(
-                    f"You can only hold {CURRENCY} **{data[2]:,}** in your bank right now.\n"
+                    f"You can only hold {CURRENCY} **{bankspace:,}** in your bank right now.\n"
                     "To hold more, use currency commands and level up more."
                 )
             )
 
-        available_bankspace = min(data[0], available_bankspace)
+        available_bankspace = min(wallet, available_bankspace)
         await interaction.response.send_modal(
-            DepositOrWithdraw(
-                title=button.label, 
-                default_val=available_bankspace,
-                message=interaction.message, 
-                view=self
-            )
+            DepositOrWithdraw(title=button.label, default_val=available_bankspace, view=self)
         )
 
     @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a registered user", row=0)
