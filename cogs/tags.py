@@ -359,9 +359,9 @@ class Tags(commands.Cog):
             """
             SELECT name
             FROM tags
-            WHERE LOWER(name) LIKE LOWER($0) 
+            WHERE LOWER(name) LIKE $0 
             LIMIT 10
-            """, f"%{word_input}%"
+            """, f"%{word_input.lower()}%"
         )
 
         meth = meth or self.partial_match_for
@@ -381,9 +381,9 @@ class Tags(commands.Cog):
             """
             SELECT name
             FROM tags
-            WHERE ownerID = $0 AND LOWER(name) LIKE LOWER($1)
+            WHERE LOWER(name) LIKE $1 AND ownerID = $0
             LIMIT 10
-            """, ctx.author.id, f"%{word_input}%", 
+            """, ctx.author.id, f"%{word_input.lower()}%"
         )
 
         meth = meth or self.partial_match_for
@@ -426,13 +426,7 @@ class Tags(commands.Cog):
 
     async def get_tag_content(self, name: str, conn: asqlite_Connection):
         
-        res = await conn.fetchone(
-            """
-            SELECT content
-            FROM tags
-            WHERE LOWER(name) = $0
-            """, name.lower()
-        )
+        res = await conn.fetchone("SELECT content FROM tags WHERE LOWER(name) = $0", name.lower())
 
         if res is None:
             raise RuntimeError(TAG_NOT_FOUND_SIMPLE_RESPONSE)
@@ -564,7 +558,7 @@ class Tags(commands.Cog):
         # however for UX reasons I might as well do it.
 
         async with self.bot.pool.acquire() as conn:
-            row = await conn.fetchone("SELECT 1 FROM tags WHERE LOWER(name)=$0", name.lower())
+            row = await conn.fetchone("SELECT 1 FROM tags WHERE name = $0", name)
 
         if row is not None:
             return await ctx.send(
@@ -653,9 +647,10 @@ class Tags(commands.Cog):
                     ).set_image(url="https://i.imgur.com/5sPCTCZ.png")
                 )
 
-            content_row: Optional[tuple[str]] = await conn.fetchone(
-                "SELECT content FROM tags WHERE name = $0", name
-            )
+            async with self.bot.pool.acquire() as conn:
+                content_row: Optional[tuple[str]] = await conn.fetchone(
+                    "SELECT content FROM tags WHERE name = $0", name
+                )
 
             modal = TagEditModal(content_row[0])
             await interaction.response.send_modal(modal)
@@ -672,7 +667,7 @@ class Tags(commands.Cog):
                 """
                 UPDATE tags 
                 SET content = $0 
-                WHERE LOWER(name) = $1 AND ownerID = $2 
+                WHERE name = $1 AND ownerID = $2 
                 RETURNING name
                 """, content, name, ctx.author.id
             )
@@ -693,7 +688,7 @@ class Tags(commands.Cog):
         async with self.bot.pool.acquire() as conn:
 
             bypass_owner_check = ctx.author.id in self.bot.owner_ids
-            clause = "name=$0"
+            clause = "name = $0"
 
             if bypass_owner_check:
                 name = await self.owned_partial_matching(ctx, name, conn)
@@ -706,7 +701,7 @@ class Tags(commands.Cog):
                     return
                 
                 args = (name, ctx.author.id)
-                clause = f"{clause} AND ownerID=$1"
+                clause = f"{clause} AND ownerID = $1"
 
             query = f"DELETE FROM tags WHERE {clause} RETURNING rowid, name"
             deleted_info = await conn.fetchone(query, *args)
@@ -723,13 +718,13 @@ class Tags(commands.Cog):
     async def remove_id(self, ctx: commands.Context, tag_id: int):
 
         bypass_owner_check = ctx.author.id in self.bot.owner_ids
-        clause = 'rowid=$0'
+        clause = 'rowid = $0'
 
         if bypass_owner_check:
             args = (tag_id,)
         else:
             args = (tag_id, ctx.author.id)
-            clause = f'{clause} AND ownerID=$1'
+            clause = f'{clause} AND ownerID = $1'
 
         async with self.bot.pool.acquire() as conn:
             query = f'DELETE FROM tags WHERE {clause} RETURNING rowid, name'
@@ -827,21 +822,21 @@ class Tags(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            row: tuple[int] = await conn.fetchone("SELECT COUNT(*) FROM tags WHERE ownerID=$0", user.id)
+            row: tuple[int] = await conn.fetchone("SELECT COUNT(*) FROM tags WHERE ownerID = $0", user.id)
             count = row[0]
 
             if not count:
-                return await ctx.send(embed=membed(f"{user.mention} has no tags."))
+                return await ctx.send(embed=membed(f"{user.name} has no tags."))
 
-        val = await send_boilerplate_confirm(ctx, f"Upon approval, **{count}** tag(s) by {user.mention} will be deleted.")
+        val = await send_boilerplate_confirm(ctx, f"Upon approval, **{count}** tag(s) by {user.name} will be deleted.")
 
         if val:
             async with self.bot.pool.acquire() as conn:
-                query = "DELETE FROM tags WHERE ownerID=$0"
+                query = "DELETE FROM tags WHERE ownerID = $0"
                 await conn.execute(query, user.id)
                 await conn.commit()
 
-            await ctx.reply(embed=membed(f"Removed all tags by {user.mention}."))
+            await ctx.reply(embed=membed(f"Removed all tags by {user.name}."))
 
     async def reusable_paginator_via(self, ctx, *, results: tuple, length: Optional[int] = 12, em: discord.Embed):
         """Only use this when you have a tuple containing the tag name and rowid in this order."""
@@ -878,12 +873,12 @@ class Tags(commands.Cog):
                 """
                 SELECT name, rowid
                 FROM tags
-                WHERE name LIKE '%' || $0 || '%'
+                WHERE LOWER(name) LIKE '%' || $0 || '%'
                 LIMIT 100
                 """
             )
 
-            results = await conn.fetchall(sql, query)
+            results = await conn.fetchall(sql, query.lower())
 
         if not results:
             return await ctx.send(embed=membed('No tags found.'))
@@ -910,16 +905,20 @@ class Tags(commands.Cog):
             tag = await self.owned_partial_matching(ctx, tag, conn)
             if not tag:
                 return
-            
-            row = await conn.fetchone("SELECT rowid FROM tags WHERE name=$0 AND ownerID=$1", tag, ctx.author.id)
 
-            if row is None:
+            ret = await conn.execute(
+                """
+                UPDATE tags 
+                SET ownerID = $2 
+                WHERE name = $0 AND ownerID = $1
+                RETURNING rowid
+                """, tag, ctx.author.id, member.id
+            )
+
+            if ret is None:
                 return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
-
-            await conn.execute("UPDATE tags SET ownerID = $0 WHERE rowid = $1", member.id, row[0])
             await conn.commit()
-
-            await ctx.send(embed=membed(f'Successfully transferred tag ownership to {member.mention}.'))
+        await ctx.send(embed=membed(f'Successfully transferred tag ownership to {member.name}.'))
 
     @tag.command(name="all", description="List all tags ever made")
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
@@ -954,25 +953,14 @@ class Tags(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            query = (
-                """
-                SELECT name, rowid
-                FROM tags
-                WHERE ownerID=$0
-                ORDER BY name
-                """
-            )
+            query = "SELECT name, rowid FROM tags WHERE ownerID = $0 ORDER BY name"
             rows = await conn.fetchall(query, member.id)
             if not rows:
-                return await ctx.send(embed=membed(f"{member.mention} has no tags."))
+                return await ctx.send(embed=membed(f"{member.name} has no tags."))
         
             em = discord.Embed(colour=discord.Colour.blurple())
             em.set_author(name=member.display_name, icon_url=member.display_avatar.url)
-            await self.reusable_paginator_via(
-                ctx, 
-                results=rows, 
-                em=em
-            )
+            await self.reusable_paginator_via(ctx, results=rows, em=em)
 
     @commands.hybrid_command(description="List tags of a member or your own")
     @app_commands.describe(member='The member to list the tags of. Defaults to your own.')
