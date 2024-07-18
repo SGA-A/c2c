@@ -381,7 +381,7 @@ class Tags(commands.Cog):
             """
             SELECT name
             FROM tags
-            WHERE LOWER(name) LIKE $1 AND ownerID = $0
+            WHERE ownerID = $0 AND LOWER(name) LIKE $1
             LIMIT 10
             """, ctx.author.id, f"%{word_input.lower()}%"
         )
