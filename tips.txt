@@ -6,7 +6,7 @@ Own a Shop Coupon? You can use it when you buy an item from the shop, simply set
 Make sure to check `/multipliers` to see what your current multi is before you use the `/shop sell` command. The higher the multiplier you have, the more money you can get for sellable type items!
 You can flex on others by adding items in your showcase with the `/showcase add` command. Just type the name of the item you wish to add.
 `/highlow` is a fun guessing game to bet your money on, use it to flex your skills!
-Have you tried out all our gambling commands? Here's a list of all of them: `/highlow`, `/bet`, `/slots`, `/blackjack`, `/coinflip`. Those with a <:lanyard:1165935243140796487> Keycard have higher chances of winning!
+Have you tried out all our gambling commands? Here's a list of all of them: `/highlow`, `/bet`, `/slots`, `/blackjack`, `/coinflip`. Those with a <:Keycard:1263922058220408872> Keycard have higher chances of winning!
 If you right-click on someone's message and go to apps, you can extract the source of the image just by clicking the associated option!
 You can view specific details about an item with `/item`. It allows you to see how many people own the item, the description, the art, and sometimes more!
 Prestiging is the first step into endgame with `/prestige`.

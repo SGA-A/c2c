@@ -256,17 +256,17 @@ class Owner(commands.Cog):
         )
         
         rule_content = (
-            "1. <:e1_comfy:1150361201352659066> **Be Respectful!** "
+            "1. <:comfyCat:1263920108015849593> **Be Respectful!** "
             "Treat others the way you would want to be treated, and avoid offensive language or behaviour.\n"
-            "2. <:pepe_blanket:798869466648674356> **Be mindful of others!** "
+            "2. <:pepeBlanket:1263926092465573939> **Be mindful of others!** "
             "Refrain from excessive messages, links, or images that disrupt the flow of conversation.\n"
-            "3. <:threadwhite:1169704299509596190> **Stay on topic.** "
+            "3. <:Thread:1263923709203320955> **Stay on topic.** "
             "Keep discussions relevant to the designated channels to maintain a focused "
             "and organized environment. Innapropriate content is subject to removal!\n"
-            "4. <:Polarizer:1171491374756012152> **Keep our server safe.** "
+            "4. <:Polarizer:1263922970095784007> **Keep our server safe.** "
             "Any form of content that suggests normalization or justification of NSFW content should not escape the "
             "boundaries of <#1160547937420582942>, sanctions will be upheld for such cases.\n"
-            "5. <:discordthinking:1173681144718446703> **Adhere to the Terms of Service.** "
+            "5. <:discordThinking:1263921476369645609> **Adhere to the Terms of Service.** "
             "Abide by Discord\'s [terms of service](<https://discord.com/terms>) and [community guidelines](<https://discord.com/guidelines/>) at all times.\n\n"
             "**That's all.** Thanks for reading, now go have fun! <a:anime_salute:1170379416845692928>"
         )

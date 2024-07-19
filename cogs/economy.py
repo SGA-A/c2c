@@ -95,12 +95,12 @@ WARN_FOR_CONCURRENCY = (
 ITEM_DESCRPTION = 'Select an item.'
 ROBUX_DESCRIPTION = 'Can be a constant number like "1234" or a shorthand (max, all, 1e6).'
 UNIQUE_BADGES = {
-    992152414566232139: " <:e1_stafff:1145039666916110356>",
-    546086191414509599: " <:in_power:1153754243220647997>",
-    1134123734421217412: " <:e1_bughunterGold:1145053225414832199>",
-    1154092136115994687: " <:e1_bughunterGreen:1145052762351095998>",
-    1047572530422108311: " <:c2c:1258332572396818482>",
-    1148206353647669298: " <:e1_stafff:1145039666916110356>",
+    992152414566232139: " <:staffMember:1263921583949480047>",
+    546086191414509599: " <:devilAdvocate:1263921422166786179>",
+    1134123734421217412: " <:goldBugHunter:1263921864963653662>",
+    1154092136115994687: " <:bugHunter:1263920006392188968>",
+    1047572530422108311: " <:c2cAvatar:1263920021063733451>",
+    1148206353647669298: " <:staffMember:1263921583949480047>",
     10: " (MAX)"
 }
 RARITY_COLOUR = {
@@ -206,17 +206,17 @@ JOB_KEYWORDS = {
 }
 
 PRESTIGE_EMOTES = {
-    1: "<:irn:1195469430054985749>",
-    2: "<:iirn:1195469426783432714>",
-    3: "<:iiirn:1195469423969054901>",
-    4: "<:ivrn:1195469421628633119>",
-    5: "<:vrn:1195469418235445328>",
-    6: "<:virn:1195469416712900658>",
-    7: "<:viirn:1195469413995003944>",
-    8: "<:viiirn:1195469412438904973>",
-    9: "<:ixrn:1195469410916388874>",
-    10: "<:xrn:1195469408806637578>",
-    11: "<:Xrne:1164937391514062848>"
+    1: "<:irn:1263922000049471650>",
+    2: "<:iirn:1263921924082368665>",
+    3: "<:iiirn:1263921904675323914>",
+    4: "<:ivrn:1263922020232728667>",
+    5: "<:vrn:1263924189178499126>",
+    6: "<:virn:1263924087214837801>",
+    7: "<:viirn:1263924064553013369>",
+    8: "<:viiirn:1263924020395376682>",
+    9: "<:ixrn:1263922037018202112>",
+    10: "<:xrn:1263924236242780171>",
+    11: "<:Xrne:1263924252470415476>"
 }
 
 item_handlers = {}
@@ -402,28 +402,28 @@ def generate_progress_bar(percentage: float | int) -> str:
     percentage = min(percentage, 100)
     
     progress_bar = {
-        0: "<:pb1e:1199056980195676201><:pb2e:1199056978908037180>"
-           "<:pb2e:1199056978908037180><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
-        10: "<:pb1hf:1199058030768181368><:pb2e:1199056978908037180>"
-            "<:pb2e:1199056978908037180><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
-        20: "<:pb1f:1199056982670315621><:pb2e:1199056978908037180>"
-            "<:pb2e:1199056978908037180><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
-        30: "<:pb1f:1199056982670315621><:pb2hf:1199056986571022428>"
-            "<:pb2e:1199056978908037180><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
-        40: "<:pb1f:1199056982670315621><:pb2f:1199062626408337549>"
-            "<:pb2e:1199056978908037180><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
-        50: "<:pb1f:1199056982670315621><:pb2f:1199062626408337549>"
-            "<:pb2hf:1199056986571022428><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
-        60: "<:pb1f:1199056982670315621><:pb2f:1199062626408337549>"
-            "<:pb2f:1199062626408337549><:pb2e:1199056978908037180><:pb3e:1199056983966367785>",
-        70: "<:pb1f:1199056982670315621><:pb2f:1199062626408337549>"
-            "<:pb2f:1199062626408337549><:pb2hf:1199056986571022428><:pb3e:1199056983966367785>",
-        80: "<:pb1f:1199056982670315621><:pb2f:1199062626408337549>"
-            "<:pb2f:1199062626408337549><:pb2f:1199062626408337549><:pb3e:1199056983966367785>",
-        90: "<:pb1f:1199056982670315621><:pb2f:1199062626408337549>"
-            "<:pb2f:1199062626408337549><:pb2f:1199062626408337549><:pb3hf:1199063922779623565>",
-        100: "<:pb1f:1199056982670315621><:pb2f:1199062626408337549>"
-             "<:pb2f:1199062626408337549><:pb2f:1199062626408337549><:pb3f:1199059438456291510>"
+        0: "<:pb1e:1263922730588311582><:pb2e:1263922807293612042>"
+           "<:pb2e:1263922807293612042><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
+        10: "<:pb1hf:1263922784124539053><:pb2e:1263922807293612042>"
+            "<:pb2e:1263922807293612042><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
+        20: "<:pb1f:1263922756727341171><:pb2e:1263922807293612042>"
+            "<:pb2e:1263922807293612042><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
+        30: "<:pb1f:1263922756727341171><:pb2hf:1263922865707946036>"
+            "<:pb2e:1263922807293612042><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
+        40: "<:pb1f:1263922756727341171><:pb2f:1263922838239182991>"
+            "<:pb2e:1263922807293612042><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
+        50: "<:pb1f:1263922756727341171><:pb2f:1263922838239182991>"
+            "<:pb2hf:1263922865707946036><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
+        60: "<:pb1f:1263922756727341171><:pb2f:1263922838239182991>"
+            "<:pb2f:1263922838239182991><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
+        70: "<:pb1f:1263922756727341171><:pb2f:1263922838239182991>"
+            "<:pb2f:1263922838239182991><:pb2hf:1263922865707946036><:pb3e:1263922895969583105>",
+        80: "<:pb1f:1263922756727341171><:pb2f:1263922838239182991>"
+            "<:pb2f:1263922838239182991><:pb2f:1263922838239182991><:pb3e:1263922895969583105>",
+        90: "<:pb1f:1263922756727341171><:pb2f:1263922838239182991>"
+            "<:pb2f:1263922838239182991><:pb2f:1263922838239182991><:pb3hf:1263922944829292577>",
+        100: "<:pb1f:1263922756727341171><:pb2f:1263922838239182991>"
+            "<:pb2f:1263922838239182991><:pb2f:1263922838239182991><:pb3f:1263922923060727838>"
 
     }.get(percentage)
 
@@ -632,7 +632,7 @@ class ConfirmResetData(discord.ui.View):
             async with self.interaction.client.pool.acquire() as conn:
                 await Economy.end_transaction(conn, user_id=self.interaction.user.id)
 
-    @discord.ui.button(label='RESET MY DATA', style=discord.ButtonStyle.danger, emoji=discord.PartialEmoji.from_str("<a:rooFireAhh:1208545466132860990>"))
+    @discord.ui.button(label='RESET MY DATA', style=discord.ButtonStyle.danger, emoji=discord.PartialEmoji.from_str("<:rooFire:1263923362154156103>"))
     async def confirm_button_reset(self, interaction: discord.Interaction, _: discord.ui.Button):
 
         self.count += 1
@@ -1033,13 +1033,13 @@ class BalanceView(discord.ui.View):
         balance = await self.fetch_balance(interaction)
         await interaction.response.edit_message(embed=balance, view=self)
 
-    @discord.ui.button(emoji="<:refreshicon:1205432056369389590>", row=1)
+    @discord.ui.button(emoji="<:refreshPages:1263923160433168414>", row=1)
     async def refresh_balance(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Refresh the current message to display the user's latest balance."""
         balance = await self.fetch_balance(interaction)
         await interaction.response.edit_message(embed=balance, view=self)
 
-    @discord.ui.button(emoji="<:terminate:1205810058357907487>", row=1)
+    @discord.ui.button(emoji="<:terminatePages:1263923664433319957>", row=1)
     async def close_view(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Close the balance view."""
         self.stop()
@@ -1790,7 +1790,7 @@ class ItemQuantityModal(discord.ui.Modal):
 
         if self.activated_coupon:
             await Economy.update_inv_new(interaction.user, -1, "Shop Coupon", conn)
-            success.description += "\n\n**Additional info:**\n- <:coupon:1210894601829879818> 5% Coupon Discount was applied"
+            success.description += "\n\n**Additional info:**\n- <:shopCoupon:1263923497323855907> 5% Coupon Discount was applied"
         await respond(interaction, embed=success)
         await conn.commit()
 
@@ -1830,7 +1830,7 @@ class ItemQuantityModal(discord.ui.Modal):
         value = await process_confirmation(
             interaction=interaction, 
             prompt=(
-                "Would you like to use your <:coupon:1210894601829879818> "
+                "Would you like to use your <:shopCoupon:1263923497323855907> "
                 "**Shop Coupon** for an additional **5**% off?\n"
                 f"(You have **{data[0]:,}** coupons in total)\n\n"
                 f"This will bring your total for this purchase to {CURRENCY} "
@@ -2053,7 +2053,7 @@ class ToggleButton(discord.ui.Button):
         em.set_field_at(
             index=0, 
             name="Current", 
-            value="<:Enabled:1231347743356616734> Enabled" if enabled else "<:Disabled:1231347741402071060> Disabled"
+            value="<:Enabled:1263921710990622802> Enabled" if enabled else "<:Disabled:1263921453229801544> Disabled"
         )
 
         self.view.disable_button.disabled = not enabled
@@ -2118,15 +2118,15 @@ class MultiplierView(RefreshPagination):
     multipliers = [
         discord.SelectOption(
             label='Robux',
-            emoji="<:robuxMulti:1247992187006750803>"
+            emoji="<:robuxMulti:1263923323088408688>"
         ),
         discord.SelectOption(
             label='XP',
-            emoji='<:xpMulti:1247992334910623764>'
+            emoji='<:xpMulti:1263924221109731471>'
         ),
         discord.SelectOption(
             label='Luck', 
-            emoji='<:luckMulti:1247992217272844290>'
+            emoji='<:luckMulti:1263922104231792710>'
         )
     ]
 
@@ -2220,7 +2220,7 @@ class Economy(commands.Cog):
         self.bot = bot
 
         self.not_registered = membed(
-            "## <:noacc:1183086855181324490> You are not registered.\n"
+            "## <:notFound:1263922668823122075> You are not registered.\n"
             "You'll need to register first before you can use this command.\n"
             "### Already Registered?\n"
             "Find out what could've happened by calling "
@@ -3105,7 +3105,7 @@ class Economy(commands.Cog):
             view.add_item(ProfileCustomizeButton())
         else:
             enabled = value == 1
-            current_text = "<:Enabled:1231347743356616734> Enabled" if enabled else "<:Disabled:1231347741402071060> Disabled"
+            current_text = "<:Enabled:1263921710990622802> Enabled" if enabled else "<:Disabled:1263921453229801544> Disabled"
             embed.add_field(name="Current", value=current_text)
             view.disable_button.disabled = not enabled
             view.enable_button.disabled = enabled
@@ -4379,7 +4379,7 @@ class Economy(commands.Cog):
 
         embed.add_field(
             name="Used", 
-            value=f"{quantity}x <:BankNote:1216429670908694639> Bank Note"
+            value=f"{quantity}x <:BankNote:1263919952562487418> Bank Note"
         ).add_field(
             name="Added Bank Space", 
             value=f"{CURRENCY} {expansion:,}"
@@ -4399,7 +4399,7 @@ class Economy(commands.Cog):
             interaction=interaction,
             embed=membed(
                 f"{interaction.user.name} is flexing on you all "
-                f"with their <:tr1:1165936712468418591> **~~PEPE~~ TROPHY**{content}"
+                f"with their <:Trophy:1263923814874615930> **~~PEPE~~ TROPHY**{content}"
             )
         )
 
@@ -4421,7 +4421,7 @@ class Economy(commands.Cog):
         if not applied_successfully:
             return await respond(
                 interaction, 
-                embed=membed("You already have a <:btc:1244948562471551047> Bitcoin multiplier active.")
+                embed=membed("You already have a <:Bitcoin:1263919978717908992> Bitcoin multiplier active.")
             )
 
         await Economy.update_inv_by_id(interaction.user, amount=-1, item_id=21, conn=conn)
@@ -4430,7 +4430,7 @@ class Economy(commands.Cog):
         await respond(
             interaction=interaction,
             embed=membed(
-                "You just activated a **30 minute** <:btc:1244948562471551047> Bitcoin multiplier!\n"
+                "You just activated a **30 minute** <:Bitcoin:1263919978717908992> Bitcoin multiplier!\n"
                 "You'll get 500% more robux from transactions during this time."
             )
         )
@@ -4589,13 +4589,12 @@ class Economy(commands.Cog):
             colour=0x2B2D31,
             description=(
                 f"**Total Balance**\n"
-                f"<:replyconti:1199688910649954335> {CURRENCY} {actual_robux:,}/{req_robux:,}\n"
-                f"<:replyi:1199688912646455416> {generate_progress_bar(actual_robux_progress)} "
-                f"` {int(actual_robux_progress):,}% `\n"
-                f"\n"
+                f"<:replyBranchExt:1263923237016834249> {CURRENCY} {actual_robux:,}/{req_robux:,}\n"
+                f"<:replyBranch:1263923209921757224> {generate_progress_bar(actual_robux_progress)} "
+                f"` {int(actual_robux_progress):,}% `\n\n"
                 f"**Level Required**\n"
-                f"<:replyconti:1199688910649954335> {actual_level:,}/{req_level:,}\n"
-                f"<:replyi:1199688912646455416> {generate_progress_bar(actual_level_progress)} "
+                f"<:replyBranchExt:1263923237016834249> {actual_level:,}/{req_level:,}\n"
+                f"<:replyBranch:1263923209921757224> {generate_progress_bar(actual_level_progress)} "
                 f"` {int(actual_level_progress):,}% `"
             )
         ).set_thumbnail(url=emoji.url).set_footer(text="Imagine thinking you can prestige already.")
@@ -4603,227 +4602,22 @@ class Economy(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='profile', description='View user information and other stats')
-    @app_commands.describe(
-        user='The user whose profile you want to see.', 
-        category='What type of data you want to view.'
-    )
+    @app_commands.describe(user='The user whose profile you want to see.')
     @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
     @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def find_profile(
         self, 
         interaction: discord.Interaction, 
-        user: Optional[USER_ENTRY], 
-        category: Optional[Literal["Main Profile", "Gambling Stats"]] = "Main Profile"
+        user: Optional[USER_ENTRY]
     ) -> None:
         """View your profile within the economy."""
 
-        return await interaction.response.send_message(
+        await interaction.response.send_message(
             embed=membed(
                 "We're working on custom profiles so this command is disabled for now.\n"
-                "Track our progress [here](https://github.com/SGA-A/c2c/issues/110)."
+                "-# Track our progress [here](https://github.com/SGA-A/c2c/issues/110)."
             )
         )
-
-        user = user or interaction.user
-
-        vis = True
-        if vis:
-            return await interaction.response.send_message(
-                embed=membed(
-                    f"# <:security:1153754206143000596> {user.name}'s profile is protected.\n"
-                    f"Only approved users can view {user.name}'s profile info."
-                )
-            )
-
-        ephemerality = (vis == "private") and (interaction.user.id == user.id)
-
-        async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            if category == "Main Profile":
-                procfile = discord.Embed(colour=user.colour)
-
-                data = await conn.fetchone(
-                    """
-                    SELECT wallet, bank, showcase, title, bounty, prestige, level, exp 
-                    FROM accounts 
-                    WHERE userID = $0
-                    """, user.id
-                )
-
-                if data is None:
-                    return await interaction.response.send_message(ephemeral=True, embed=NOT_REGISTERED)
-
-                wallet, bank, showcase, title, bounty, prestige, level, exp = data
-
-                net_attrs = await conn.fetchone(
-                    """
-                    SELECT 
-                        COUNT(DISTINCT inventory.itemID), 
-                        COALESCE(SUM(qty), 0), 
-                        COALESCE(SUM(qty * cost), 0)
-                    FROM inventory
-                    JOIN shop ON inventory.itemID = shop.itemID
-                    WHERE userID = $0
-                    """, user.id
-                )
-
-                # ----------- SHOWCASE STUFF ------------
-
-                showcase_ui_new = await self.do_showcase_lookup(
-                    raw_showcase=showcase,
-                    conn=conn,
-                    user_id=user.id
-                )
-
-                # -------------- COMMANDS --------------
-
-                cmd_count = await total_commands_used_by_user(user.id, conn=conn)
-                fav = await find_fav_cmd_for(user.id, conn=conn)
-
-                # ---------------------------------------
-
-                procfile.title = f"{user.name} - {title}"
-                procfile.url = "https://www.dis.gd/support"
-                procfile.description = dedent(
-                    f"""
-                    {PRESTIGE_EMOTES.get(prestige, "")} Prestige Level **{prestige}** {UNIQUE_BADGES.get(prestige, "")}
-                    <:bountybag:1195653667135692800> Bounty: {CURRENCY} **{bounty:,}**
-                    {vis or "No badges acquired yet"}
-                    """
-                )
-
-                boundary = self.calculate_exp_for(level=level)
-                procfile.add_field(
-                    name='Level',
-                    value=(
-                        f"Level: `{level:,}`\n"
-                        f"Experience: `{format_number_short(exp)}/{format_number_short(boundary)}`\n"
-                        f"{generate_progress_bar((exp / boundary) * 100)}"
-                    )
-                )
-
-                procfile.add_field(
-                    name='Robux',
-                    value=(
-                        f"Wallet: `{CURRENCY} {format_number_short(wallet)}`\n"
-                        f"Bank: `{CURRENCY} {format_number_short(bank)}`\n"
-                        f"Net: `{CURRENCY} {format_number_short(wallet+bank)}`"
-                    )
-                )
-
-                procfile.add_field(
-                    name='Items',
-                    value=(
-                        f"Unique: `{net_attrs[0]:,}`\n"
-                        f"Total: `{format_number_short(net_attrs[1])}`\n"
-                        f"Worth: `{CURRENCY} {format_number_short(net_attrs[2])}`"
-                    )
-                )
-
-                procfile.add_field(
-                    name='Commands', 
-                    value=(
-                        f"Total: `{format_number_short(cmd_count)}`\n"
-                        f"Favourite: `{fav[1:]}`"
-                    )
-                )
-
-                procfile.add_field(
-                    name="Showcase", 
-                    value="\n".join(showcase_ui_new) or "No showcase"
-                )
-
-                return await interaction.response.send_message(embed=procfile, ephemeral=ephemerality)
-            else:
-                data = await conn.fetchone(
-                    """
-                    SELECT 
-                        slotw, slotl, betw, betl, bjw, bjl, 
-                        slotwa, slotla, betwa, betla, bjwa, bjla 
-                    FROM 
-                        accounts 
-                    WHERE 
-                        userID = $0
-                    """, user.id
-                )
-
-                if data is None:
-                    return await interaction.response.send_message(embed=NOT_REGISTERED, ephemeral=True)
-
-                total_slots = data[0] + data[1]
-                total_bets = data[2] + data[3]
-                total_blackjacks = data[4] + data[5]
-
-                try:
-                    winbe = (data[2] / total_bets) * 100
-                except ZeroDivisionError:
-                    winbe = 0
-                try:
-                    winsl = (data[0] / total_slots) * 100
-                except ZeroDivisionError:
-                    winsl = 0
-                try:
-                    winbl = (data[4] / total_blackjacks) * 100
-                except ZeroDivisionError:
-                    winbl = 0
-
-                stats = membed("**Reminder:** Games that have resulted in a tie are not tracked.")
-                stats.title = f"{user.name}'s gambling stats"
-
-                stats.add_field(
-                    name=f"BET ({total_bets:,})",
-                    value=(
-                        f"Won: {CURRENCY} {data[8]:,}\n"
-                        f"Lost: {CURRENCY} {data[9]:,}\n"
-                        f"Net: {CURRENCY} {data[8] - data[9]:,}\n"
-                        f"Win: {winbe:.0f}% ({data[2]})"
-                    )
-                )
-
-                stats.add_field(
-                    name=f"SLOTS ({total_slots:,})",
-                    value=(
-                        f"Won: {CURRENCY} {data[6]:,}\n"
-                        f"Lost: {CURRENCY} {data[7]:,}\n"
-                        f"Net: {CURRENCY} {data[6] - data[7]:,}\n"
-                        f"Win: {winsl:.0f}% ({data[0]})"
-                    )
-                )
-
-                stats.add_field(
-                    name=f"BLACKJACK ({total_blackjacks:,})",
-                    value=(
-                        f"Won: {CURRENCY} {data[10]:,}\n"
-                        f"Lost: {CURRENCY} {data[11]:,}\n"
-                        f"Net: {CURRENCY} {data[10] - data[11]:,}\n"
-                        f"Win: {winbl:.0f}% ({data[4]})"
-                    )
-                )
-
-                stats.set_footer(text="The number next to the name is how many matches are recorded")
-
-                piee = membed()
-                piee.title = "Game's played"  # piee - pie embed
-
-                try:
-                    its_sum = total_bets + total_slots + total_blackjacks
-                    img_url = (
-                        "https://image-charts.com/chart?"
-                        f"cht=pd&chs=600x480&chd=t:{(total_bets / its_sum) * 100},"
-                        f"{(total_slots / its_sum) * 100},{(total_blackjacks / its_sum) * 100}"
-                        f"&chco=EA469E|03A9F4|FFC00C"
-                        f"&chl=BET ({total_bets})|SLOTS ({total_slots})|BJ ({total_blackjacks})"
-                        f"&chdl=Total bet games|Total slot games|Total blackjack games"
-                        f"&chli={its_sum}"
-                        f"&chtt={user.name}'s total games played"
-                    )
-
-                    piee.set_image(url=img_url)
-                except ZeroDivisionError:
-                    piee.description = f"{user.mention} has not got enough data yet to form a pie chart."
-
-                await interaction.response.send_message(embeds=[stats, piee], ephemeral=ephemerality)
 
     @app_commands.command(name='highlow', description='Guess the number. Jackpot wins big!', extras={"exp_gained": 3})
     @app_commands.describe(robux=ROBUX_DESCRIPTION)
@@ -5427,7 +5221,7 @@ class Economy(commands.Cog):
                 wallet_new, bank_new = new_data
 
                 embed.add_field(
-                    name="<:withdraw:1195657655134470155> Withdrawn", 
+                    name="<:withdraw:1263924204986699938> Withdrawn", 
                     value=f"{CURRENCY} {bank_amt:,}", 
                     inline=False
                 ).add_field(
@@ -5445,7 +5239,7 @@ class Economy(commands.Cog):
             wallet_new, bank_new = new_data
 
             embed.add_field(
-                name="<:withdraw:1195657655134470155> Withdrawn", 
+                name="<:withdraw:1263924204986699938> Withdrawn", 
                 value=f"{CURRENCY} {actual_amount:,}", 
                 inline=False
             ).add_field(
@@ -5520,7 +5314,7 @@ class Economy(commands.Cog):
                 await conn.commit()
 
                 embed.add_field(
-                    name="<:deposit:1195657772231036948> Deposited", 
+                    name="<:deposit:1263920154648121375> Deposited", 
                     value=f"{CURRENCY} {available_bankspace:,}", 
                     inline=False
                 )
@@ -5540,7 +5334,7 @@ class Economy(commands.Cog):
             await conn.commit()
 
             embed.add_field(
-                name="<:deposit:1195657772231036948> Deposited", 
+                name="<:deposit:1263920154648121375> Deposited", 
                 value=f"{CURRENCY} {actual_amount:,}", 
                 inline=False
             )
@@ -5676,10 +5470,8 @@ class Economy(commands.Cog):
                 if not result[0]:
                     emote = choice(
                         (
-                            "<a:kekRealize:970295657233539162>", "<:smhlol:1160157952410386513>", 
-                            "<:z_HaH:783399959068016661>", "<:lmao:784308818418728972>", 
-                            "<:lamaww:789865027007414293>", "<a:StoleThisEmote5:791327136296075327>", 
-                            "<:jerryLOL:792239708364341258>", "<:dogkekw:797946573144850432>"
+                            "<a:kekRealize:970295657233539162>", 
+                            "<:smhlol:1160157952410386513>", 
                         )
                     )
 
@@ -5961,7 +5753,7 @@ class Economy(commands.Cog):
                     embed=membed(
                         f"You can't bet less than {CURRENCY} **{MIN_BET_WITHOUT:,}**.\n"
                         f"You also can't bet anything more than {CURRENCY} **{MAX_BET_WITHOUT:,}**.\n"
-                        f"These values can increase when you acquire a <:lanyard:1165935243140796487> Keycard."
+                        f"These values can increase when you acquire a <:Keycard:1263922058220408872> Keycard."
                     )
                 )
         return amount
@@ -6006,7 +5798,7 @@ class Economy(commands.Cog):
             badges = set()
 
             if has_keycard:
-                badges.add("<:lanyard:1165935243140796487>")
+                badges.add("<:Keycard:1263922058220408872>")
 
                 their_roll, = choices(
                     population=(1, 2, 3, 4, 5, 6), 

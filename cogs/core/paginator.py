@@ -9,10 +9,10 @@ from .helpers import membed, determine_exponent, economy_check
 NOT_YOUR_MENU = membed("This menu is not for you.")
 
 # Button emojis
-GO_FIRST_PAGE_EMOJI = discord.PartialEmoji.from_str("<:start:1212509961943252992>")
-MOVE_LEFT_EMOJI = discord.PartialEmoji.from_str("<:left:1212498142726066237>")
-MOVE_RIGHT_EMOJI = discord.PartialEmoji.from_str("<:right:1212498140620394548>")
-GO_LAST_PAGE_EMOJI = discord.PartialEmoji.from_str("<:final:1212509960483643392>")
+GO_FIRST_PAGE_EMOJI = discord.PartialEmoji.from_str("<:firstPage:1263921815345041460>")
+MOVE_LEFT_EMOJI = discord.PartialEmoji.from_str("<:leftPage:1263922081696059404>")
+MOVE_RIGHT_EMOJI = discord.PartialEmoji.from_str("<:rightPage:1263923290959773706>")
+GO_LAST_PAGE_EMOJI = discord.PartialEmoji.from_str("<:finalPage:1263921799633047573>")
 
 
 async def button_response(interaction: discord.Interaction, **kwargs) -> None | discord.InteractionMessage:
@@ -319,7 +319,7 @@ class RefreshPagination(discord.ui.View):
         self.index -= 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(emoji="<:refreshicon:1205432056369389590>", row=1)
+    @discord.ui.button(emoji="<:refreshPages:1263923160433168414>", row=1)
     async def refresh_paginator(self, interaction: discord.Interaction, _: discord.ui.Button):
         await self.edit_page(interaction, force_refresh=True)
 

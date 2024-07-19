@@ -17,7 +17,7 @@ from .core.helpers import membed, number_to_ordinal
 from .core.paginator import Pagination, RefreshPagination
 from .core.constants import LIMITED_CONTEXTS, LIMITED_INSTALLS
 
-ARROW = "<:arrowe:1180428600625877054>"
+ARROW = "<:Arrow:1263919893762543717>"
 API_EXCEPTION = "The API fucked up, try again later."
 UPLOAD_FILE_DESCRIPTION = "A file to upload alongside the thread."
 ANIME_ENDPOINTS = (
@@ -263,9 +263,9 @@ class Utility(commands.Cog):
         serverinfo.add_field(
             name="Channel Info",
             value=(
-                f"\U00002023 <:categoryCh:1226619447171875006> {len(guild.categories)}\n"
-                f"\U00002023 <:textCh:1226619349037482154> {len(guild.text_channels)}\n"
-                f"\U00002023 <:voiceCh:1226619160050663495> {len(guild.voice_channels)}"
+                f"\U00002023 <:categoryCh:1263920042056089680> {len(guild.categories)}\n"
+                f"\U00002023 <:textChannel:1263923690056319137> {len(guild.text_channels)}\n"
+                f"\U00002023 <:voiceChannel:1263924105967566968> {len(guild.voice_channels)}"
             )
         )
 
@@ -732,30 +732,30 @@ class Utility(commands.Cog):
             )
 
         embed.add_field(
-            name='<:membersb:1247991723284758610> Members',
+            name='<:Members:1263922150125994054> Members',
             value=f'{total_members} total\n{total_unique} unique'
         ).add_field(
-            name='<:channelb:1247991694398460007> Channels', 
+            name='<:searchChannels:1263923406592540802> Channels', 
             value=f'{text + voice} total\n{text} text\n{voice} voice'
         ).add_field(
-            name='<:processb:1247991668804947968> Process', 
+            name='<:Process:1263923016803418203> Process', 
             value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU'
         ).add_field(
-            name='<:serversb:1247991639427780661> Guilds', 
+            name='<:Servers:1263923465409400832> Guilds', 
             value=(
                 f'{guilds} total\n'
                 f'{ARROW}{len(self.bot.emojis)} emojis\n'
                 f'{ARROW}{len(self.bot.stickers)} stickers'
             )
         ).add_field(
-            name='<:cmdsb:1247991799801315369> Commands Run', 
+            name='<:slashCommands:1263923524213538917> Commands Run', 
             value=(
                 f"{total_ran:,} total\n"
                 f"{ARROW} {slash_ran:,} slash\n"
                 f"{ARROW} {text_ran:,} text"
             )
         ).add_field(
-            name='<:uptimeb:1247991586743255042> Uptime', 
+            name='<:Uptime:1263923835602993183> Uptime', 
             value=f"{int(days)}d {int(hours)}h {int(minutes)}m {int(seconds)}s"
         ).set_footer(
             text=f'Made with discord.py v{discord.__version__}', 
