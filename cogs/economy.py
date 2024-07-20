@@ -3341,6 +3341,11 @@ class Economy(commands.Cog):
             return
 
         conn = await self.bot.pool.acquire()
+
+        if await self.can_call_out(recipient, conn):
+            await self.bot.pool.release(conn)
+            return await respond(interaction=interaction, embed=NOT_REGISTERED)
+
         try:
             actual_wallet = await Economy.get_wallet_data_only(sender, conn)
         except TypeError:
@@ -3371,17 +3376,16 @@ class Economy(commands.Cog):
                     embed=membed("You don't have that much money to share.")
                 )
 
-            if await self.can_call_out(recipient, conn):
-                return await respond(interaction=interaction, embed=NOT_REGISTERED)
-
-            await respond(interaction, embed=membed(f"Shared {CURRENCY} **{quantity:,}** with {recipient.mention}!"))
-
             await self.update_wallet_many(
                 conn, 
                 (-int(quantity), sender.id), 
                 (int(quantity), recipient.id)
             )
             await conn.commit()
+        await respond(
+            interaction, 
+            embed=membed(f"Shared {CURRENCY} **{quantity:,}** with {recipient.mention}!")
+        )
 
     @share.command(name='items', description='Share items with another user', extras={"exp_gained": 5})
     @app_commands.rename(recipient='user')
@@ -3394,7 +3398,7 @@ class Economy(commands.Cog):
         self, 
         interaction: discord.Interaction, 
         recipient: USER_ENTRY,
-        quantity: int, 
+        quantity: app_commands.Range[int, 1], 
         item: str
     ) -> None:
         """Give an amount of items to another user."""
@@ -3404,6 +3408,11 @@ class Economy(commands.Cog):
             return await interaction.response.send_message(embed=membed("You can't share with yourself."))
 
         conn = await self.bot.pool.acquire()
+
+        if await self.can_call_out(recipient, conn):
+            await self.bot.pool.release(conn)
+            return await respond(interaction=interaction, embed=NOT_REGISTERED)
+
         item = await Economy.partial_match_for(interaction, item, conn)
         if item is None:
             return
@@ -3424,9 +3433,6 @@ class Economy(commands.Cog):
                 if can_proceed is False:
                     return
 
-            if await self.can_call_out(recipient, conn):
-                return await respond(interaction=interaction, embed=NOT_REGISTERED)
-
             attrs = await conn.fetchone(
                 """
                 SELECT inventory.qty, shop.rarity
@@ -3445,14 +3451,6 @@ class Economy(commands.Cog):
                     embed=membed(f"You don't have **{quantity}x {ie} {item_name}**.")
                 )
 
-            await respond(
-                interaction,
-                embed=discord.Embed(
-                    colour=RARITY_COLOUR.get(item_rarity, 0x2B2D31),
-                    description=f"Shared **{quantity}x {ie} {item_name}** with {recipient.mention}!"
-                )
-            )
-
             await self.update_inv_by_id(sender, -quantity, item_id, conn)
             await conn.execute(
                 """
@@ -3462,6 +3460,13 @@ class Economy(commands.Cog):
                 """, recipient.id, item_id, quantity
             )
             await conn.commit()
+        await respond(
+            interaction,
+            embed=discord.Embed(
+                colour=RARITY_COLOUR.get(item_rarity, 0x2B2D31),
+                description=f"Shared **{quantity}x {ie} {item_name}** with {recipient.mention}!"
+            )
+        )
 
     trade = app_commands.Group(
         name='trade', 

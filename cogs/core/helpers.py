@@ -104,8 +104,8 @@ async def determine_exponent(interaction: discord.Interaction, rinput: str) -> s
         else:
             rinput = rinput.translate(str.maketrans('', '', ','))
             actual_value = abs(int(rinput))
-        if not actual_value:
-            actual_value = None
+        if actual_value == 0:
+            raise ValueError
     except (ValueError, TypeError):
         await respond(
             interaction=interaction,
