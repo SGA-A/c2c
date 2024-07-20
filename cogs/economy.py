@@ -3432,7 +3432,7 @@ class Economy(commands.Cog):
 
             can_proceed = await self.handle_confirm_outcome(
                 interaction, 
-                f"Are you sure you want to share **{quantity:,} {ie} {item_name}** with {recipient.mention}",
+                f"Are you sure you want to share **{quantity:,} {ie} {item_name}** with {recipient.mention}?",
                 setting="share_item_confirmations",
                 conn=conn
             )
