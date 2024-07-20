@@ -1900,13 +1900,19 @@ class ItemQuantityModal(discord.ui.Modal):
         )
 
         async with interaction.client.pool.acquire() as conn:
-            if can_proceed is not None:
-                await Economy.end_transaction(conn, user_id=interaction.user.id)
-                await conn.commit()
-                if can_proceed is False:
-                    return
+            async with conn.transaction():
+                if can_proceed is not None:
+                    await Economy.end_transaction(conn, user_id=interaction.user.id)
+                    if can_proceed is False:
+                        return
 
-            await self.begin_purchase(interaction, true_quantity, conn, current_balance, new_price)
+                await self.begin_purchase(
+                    interaction, 
+                    true_quantity, 
+                    conn, 
+                    current_balance, 
+                    new_price
+                )
 
 
 class ShopItem(discord.ui.Button):
@@ -2391,7 +2397,7 @@ class Economy(commands.Cog):
             check.start(interaction)
 
     @staticmethod
-    async def partial_match_for(interaction: discord.Interaction, item_input: str, conn: asqlite_Connection) -> None | tuple:
+    async def partial_match_for(interaction: discord.Interaction, item_input: str, conn: asqlite_Connection):
         """
         If the user types part of an item name, get that item name indicated.
 
@@ -3333,55 +3339,49 @@ class Economy(commands.Cog):
         if sender.id == recipient.id:
             return await interaction.response.send_message(embed=membed("You can't share with yourself."))
 
-        quantity = await determine_exponent(
-            interaction=interaction, 
-            rinput=quantity
-        )
+        quantity = await determine_exponent(interaction, rinput=quantity)
         if quantity is None:
             return
 
-        conn = await self.bot.pool.acquire()
-
-        if await self.can_call_out(recipient, conn):
-            await self.bot.pool.release(conn)
-            return await respond(interaction=interaction, embed=NOT_REGISTERED)
-
-        try:
-            actual_wallet = await Economy.get_wallet_data_only(sender, conn)
-        except TypeError:
-            return await interaction.response.send_message(embed=self.not_registered)
-
-        if isinstance(quantity, str):
-            quantity = actual_wallet
-
-        can_proceed = await self.handle_confirm_outcome(
-            interaction, 
-            confirmation_prompt=f"Are you sure you want to share {CURRENCY} **{quantity:,}** with {recipient.mention}?",
-            setting="share_robux_confirmations",
-            conn=conn
-        )
-
         async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
+            if await self.can_call_out(recipient, conn):
+                return await respond(interaction=interaction, embed=NOT_REGISTERED)
 
-            if can_proceed is not None:
-                await self.end_transaction(conn, user_id=sender.id)
-                await conn.commit()
-                if can_proceed is False:
-                    return
+            try:
+                actual_wallet = await Economy.get_wallet_data_only(sender, conn)
+            except TypeError:
+                return await interaction.response.send_message(embed=self.not_registered)
 
+            if isinstance(quantity, str):
+                quantity = actual_wallet
+            
             if quantity > actual_wallet:
                 return await respond(
                     interaction,
                     embed=membed("You don't have that much money to share.")
                 )
 
-            await self.update_wallet_many(
-                conn, 
-                (-int(quantity), sender.id), 
-                (int(quantity), recipient.id)
+            can_proceed = await self.handle_confirm_outcome(
+                interaction, 
+                f"Are you sure you want to share {CURRENCY} **{quantity:,}** with {recipient.mention}?",
+                setting="share_robux_confirmations",
+                conn=conn
             )
-            await conn.commit()
+
+        async with self.bot.pool.acquire() as conn:
+            conn: asqlite_Connection
+            async with conn.transaction():
+                if can_proceed is not None:
+                    await self.end_transaction(conn, user_id=sender.id)
+                    if can_proceed is False:
+                        return
+
+                await self.update_wallet_many(
+                    conn, 
+                    (-int(quantity), sender.id), 
+                    (int(quantity), recipient.id)
+                )
+
         await respond(
             interaction, 
             embed=membed(f"Shared {CURRENCY} **{quantity:,}** with {recipient.mention}!")
@@ -3407,59 +3407,52 @@ class Economy(commands.Cog):
         if sender.id == recipient.id:
             return await interaction.response.send_message(embed=membed("You can't share with yourself."))
 
-        conn = await self.bot.pool.acquire()
-
-        if await self.can_call_out(recipient, conn):
-            await self.bot.pool.release(conn)
-            return await respond(interaction=interaction, embed=NOT_REGISTERED)
-
-        item = await Economy.partial_match_for(interaction, item, conn)
-        if item is None:
-            return
-        item_id, item_name, ie = item
-
-        can_proceed = await self.handle_confirm_outcome(
-            interaction, 
-            confirmation_prompt=f"Are you sure you want to share **{quantity:,} {ie} {item_name}** with {recipient.mention}",
-            setting="share_item_confirmations",
-            conn=conn
-        )
-
         async with self.bot.pool.acquire() as conn:
+            if await self.can_call_out(recipient, conn):
+                return await respond(interaction=interaction, embed=NOT_REGISTERED)
 
-            if can_proceed is not None:
-                await self.end_transaction(conn, user_id=sender.id)
-                await conn.commit()
-                if can_proceed is False:
-                    return
+            item = await self.partial_match_for(interaction, item, conn)
+            if item is None:
+                return
+            item_id, item_name, ie = item
 
             attrs = await conn.fetchone(
                 """
-                SELECT inventory.qty, shop.rarity
-                FROM inventory
-                INNER JOIN shop ON inventory.itemID = shop.itemID
-                WHERE inventory.userID = $0 AND inventory.itemID = $1
+                SELECT COALESCE(inventory.qty, 0), rarity
+                FROM shop
+                LEFT JOIN inventory 
+                    ON inventory.itemID = shop.itemID AND inventory.userID = $0
+                WHERE shop.itemID = $1
                 """, sender.id, item_id
             )
-            if attrs is None:
-                return await respond(interaction, embed=membed(f"You don't own a single {ie} **{item_name}**."))
 
             actual_inv_qty, item_rarity = attrs
             if actual_inv_qty < quantity:
-                return await respond(
-                    interaction, 
-                    embed=membed(f"You don't have **{quantity}x {ie} {item_name}**.")
+                return await respond(interaction, embed=membed(f"You don't have **{quantity}x {ie} {item_name}**."))
+
+            can_proceed = await self.handle_confirm_outcome(
+                interaction, 
+                f"Are you sure you want to share **{quantity:,} {ie} {item_name}** with {recipient.mention}",
+                setting="share_item_confirmations",
+                conn=conn
+            )
+
+        async with self.bot.pool.acquire() as conn:
+            async with conn.transaction():
+                if can_proceed is not None:
+                    await self.end_transaction(conn, user_id=sender.id)
+                    if can_proceed is False:
+                        return
+
+                await self.update_inv_by_id(sender, -quantity, item_id, conn)
+                await conn.execute(
+                    """
+                    INSERT INTO inventory (userID, itemID, qty) 
+                    VALUES ($0, $1, $2) 
+                    ON CONFLICT(userID, itemID) DO UPDATE SET qty = qty + $2
+                    """, recipient.id, item_id, quantity
                 )
 
-            await self.update_inv_by_id(sender, -quantity, item_id, conn)
-            await conn.execute(
-                """
-                INSERT INTO inventory (userID, itemID, qty) 
-                VALUES ($0, $1, $2) 
-                ON CONFLICT(userID, itemID) DO UPDATE SET qty = qty + $2
-                """, recipient.id, item_id, quantity
-            )
-            await conn.commit()
         await respond(
             interaction,
             embed=discord.Embed(
@@ -3682,7 +3675,7 @@ class Economy(commands.Cog):
 
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-            item_details = await Economy.partial_match_for(interaction, item, conn)
+            item_details = await self.partial_match_for(interaction, item, conn)
 
             if item_details is None:
                 return
@@ -4041,7 +4034,7 @@ class Economy(commands.Cog):
     async def add_showcase_item(self, interaction: discord.Interaction, item: str) -> None:
 
         async with self.bot.pool.acquire() as conn:
-            item_details = await Economy.partial_match_for(interaction, item, conn)
+            item_details = await self.partial_match_for(interaction, item, conn)
 
             if item_details is None:
                 return
@@ -4087,7 +4080,7 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            item_details = await Economy.partial_match_for(interaction, item, conn)
+            item_details = await self.partial_match_for(interaction, item, conn)
 
             if item_details is None:
                 return
@@ -4191,56 +4184,51 @@ class Economy(commands.Cog):
         """Sell an item you already own."""
         seller = interaction.user
 
-        conn = await self.bot.pool.acquire()
-        item_details = await Economy.partial_match_for(interaction, item, conn)
-        if item_details is None:
-            return
-        item_id, item_name, ie = item_details
+        async with self.bot.pool.acquire() as conn:
+            conn: asqlite_Connection
+            item_details = await self.partial_match_for(interaction, item, conn)
+            if item_details is None:
+                return
+            item_id, item_name, ie = item_details
 
-        item_attrs = await conn.fetchone(
-            """
-            SELECT shop.cost, inventory.qty, shop.sellable
-            FROM shop
-            INNER JOIN inventory ON shop.itemID = inventory.itemID
-            WHERE shop.itemID = $0 AND inventory.userID = $1
-            """, item_id, seller.id
-        )
-        if item_attrs is None:
-            return await respond(
-                interaction=interaction, 
-                ephemeral=True,
-                embed=membed(f"You don't own a single {ie} **{item_name}**.")
+            item_attrs = await conn.fetchone(
+                """
+                SELECT COALESCE(inventory.qty, 0), cost, sellable
+                FROM shop
+                LEFT JOIN inventory 
+                    ON inventory.itemID = shop.itemID AND inventory.userID = $0
+                WHERE shop.itemID = $1
+                """, seller.id, item_id
             )
 
-        cost, qty, sellable = item_attrs
-        if not sellable:
-            return await respond(
-                interaction=interaction, 
-                ephemeral=True,
-                embed=membed(f"You can't sell **{ie} {item_name}**.")
-            )
+            qty, cost, sellable = item_attrs
+            if not sellable:
+                return await respond(
+                    interaction=interaction, 
+                    ephemeral=True,
+                    embed=membed(f"You can't sell **{ie} {item_name}**.")
+                )
 
-        if qty < sell_quantity:
-            return await respond(
-                interaction=interaction,
-                ephemeral=True, 
-                embed=membed(f"You don't have {ie} **{sell_quantity:,}x** {item_name}, so uh no.")
-            )
+            if qty < sell_quantity:
+                return await respond(
+                    interaction=interaction,
+                    ephemeral=True, 
+                    embed=membed(f"You don't have {ie} **{sell_quantity:,}x** {item_name}, so uh no.")
+                )
 
-        multi = await Economy.get_multi_of(user_id=seller.id, multi_type="robux", conn=conn)
-        cost = selling_price_algo((cost / 4) * sell_quantity, multi)
-        can_proceed = await self.handle_confirm_outcome(
-            interaction,
-            confirmation_prompt=f"Are you sure you want to sell **{sell_quantity:,}x {ie} {item_name}** for **{CURRENCY} {cost:,}**?",
-            setting="selling_confirmations",
-            conn=conn
-        )
+            multi = await Economy.get_multi_of(user_id=seller.id, multi_type="robux", conn=conn)
+            cost = selling_price_algo((cost / 4) * sell_quantity, multi)
+            can_proceed = await self.handle_confirm_outcome(
+                interaction,
+                f"Are you sure you want to sell **{sell_quantity:,}x {ie} {item_name}** for **{CURRENCY} {cost:,}**?",
+                setting="selling_confirmations",
+                conn=conn
+            )
 
         async with self.bot.pool.acquire() as conn:
             async with conn.transaction():
                 if can_proceed is not None:
                     await self.end_transaction(conn, user_id=seller.id)
-                    await conn.commit()
                     if can_proceed is False:
                         return
 
@@ -4264,7 +4252,7 @@ class Economy(commands.Cog):
         """This is a subcommand. Look up a particular item within the shop to get more information about it."""
 
         async with self.bot.pool.acquire() as conn:
-            item_details = await Economy.partial_match_for(interaction, item_name, conn)
+            item_details = await self.partial_match_for(interaction, item_name, conn)
             if item_details is None:
                 return
             item_id, item_name, _ = item_details
@@ -4457,7 +4445,7 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
 
-            item_details = await Economy.partial_match_for(interaction, item, conn)
+            item_details = await self.partial_match_for(interaction, item, conn)
 
             if item_details is None:
                 return
@@ -4511,7 +4499,7 @@ class Economy(commands.Cog):
             Are you sure you want to prestige?
             """
         )
-        can_proceed = await self.handle_confirm_outcome(interaction, confirmation_prompt=massive_prompt)
+        can_proceed = await self.handle_confirm_outcome(interaction, massive_prompt)
 
         async with self.bot.pool.acquire() as conn:
             await self.end_transaction(conn, user_id=interaction.user.id)
@@ -4560,11 +4548,13 @@ class Economy(commands.Cog):
         )
 
         if data is None:
+            await self.bot.pool.release(conn)
             return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
 
         prestige, actual_level, actual_robux = data
 
         if prestige == 10:
+            await self.bot.pool.release(conn)
             return await interaction.response.send_message(
                 ephemeral=True,
                 embed=membed(
@@ -5382,7 +5372,7 @@ class Economy(commands.Cog):
     @app_commands.describe(item=ITEM_DESCRPTION)
     async def get_item_lb(self, interaction: discord.Interaction, item: str):
         async with self.bot.pool.acquire() as conn:
-            item_details = await Economy.partial_match_for(interaction, item, conn)
+            item_details = await self.partial_match_for(interaction, item, conn)
             if item_details is None:
                 return
             item_id, item_name, _ = item_details
