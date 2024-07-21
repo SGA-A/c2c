@@ -592,11 +592,12 @@ class Tags(commands.Cog):
             clean_content = msg.content
 
         if msg.attachments:
-            clean_content = f'{clean_content}\n{msg.attachments[0].url}'
+            attachments_refs = "\n".join(attachment.url for attachment in msg.attachments)
+            clean_content = f'{clean_content}\n{attachments_refs}'
 
         if len(clean_content) > 2000:
             self.remove_in_progress_tag(name)
-            return await msg.reply(embed=membed('Tag content is a maximum of 2000 characters.'))
+            return await msg.reply(embed=membed('Tag content cannot exceed 2000 characters.'))
 
         try:
             conn = await self.bot.pool.acquire()
