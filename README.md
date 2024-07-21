@@ -18,7 +18,7 @@
 </p>
 
 ## Installation
-Not supported currently because of the evolving database schema. This will be made when the schema is made final, ie., all the incomplete issues in the `Projects` tab in this repo are implemented (roughly around 2030).
+Not supported currently because of the evolving database schema. This will be made when the schema is made final, i.e., all the incomplete issues in the `Projects` tab in this repo are implemented (roughly around 2030).
 
 We are not responsible for any errors that may occur when running this bot on your own. It is also **not** production-ready.
 
