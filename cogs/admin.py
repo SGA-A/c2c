@@ -32,13 +32,13 @@ class Owner(commands.Cog):
         if ctx.author.id in self.bot.owner_ids:
             return True
         return False
-    
+
     async def interaction_check(self, interaction: discord.Interaction):
         if interaction.user.id in self.bot.owner_ids:
             return True
         await interaction.response.send_message(embed=membed("You do not own this bot."))
         return False
-    
+
     @staticmethod
     def cleanup_code(content: str) -> str:
         """Automatically removes code blocks from the code."""
@@ -56,7 +56,7 @@ class Owner(commands.Cog):
         minutes, seconds = divmod(diff.total_seconds(), 60)
         hours, minutes = divmod(minutes, 60)
         days, hours = divmod(hours, 24)
-        
+
         uptime = (
             f"{int(days)} days, {int(hours)} hours, "
             f"{int(minutes)} minutes and {int(seconds)} seconds."
@@ -83,7 +83,7 @@ class Owner(commands.Cog):
         medium: Optional[Literal["wallet", "bank"]] = "wallet"
     ) -> None:
         """Generates or deducts a given amount of robux to the mentioned user."""
-        
+
         user = user or interaction.user
         real_amount = await determine_exponent(
             interaction=interaction, 
@@ -254,7 +254,7 @@ class Owner(commands.Cog):
             self.bot.get_partial_messageable(902138223571116052)
             .get_partial_message(1245691538319736863)
         )
-        
+
         rule_content = (
             "1. <:comfyCat:1263920108015849593> **Be Respectful!** "
             "Treat others the way you would want to be treated, and avoid offensive language or behaviour.\n"
@@ -418,27 +418,11 @@ class Owner(commands.Cog):
 
     @commands.command(name="uforuma", description="Update the forum announcement", aliases=("ufa",))
     async def upload2(self, ctx: commands.Context):
-        msg = (
-            self.bot.get_partial_messageable(1147203137195745431)
-            .get_partial_message(1147203137195745431)
-        )
-        a = membed(
-            "> **What are Forum Channels?**\n\n"
-            "Forum Channels are designed to allow conversations to coexist without people talking over each other.\n\n"
-            "> **What is this channel for?**\n\n"
-            "The channel is based on uploading media and sharing your thoughts about it.\n\n"
-            "> **Where do I start?!**\n\n"
-            "- Refresh your memory of the Post Guidelines\n"
-            "- Engage in an existing thread, or create your own, talk about whatever you like\n"
-            "- Include some tags in your posts to give people an idea of what your post is all about\n\n"
-            "And that's it!"
-        )
-        a.title = "FAQ"
-        a.set_thumbnail(url="https://i.imgur.com/Udo4MDP.png")
+        f: discord.Thread = await ctx.guild.fetch_channel(1264509374508830833)
+        s = await f.fetch_message(1264509374508830833)
+        await s.edit(...)
 
-        await msg.edit(embed=a)
-
-    async def do_via_webhook(self, kwargs: dict, edit_message_id: Optional[int] = None) -> None:
+    async def do_via_webhook(self, edit_message_id: Optional[int] = None, **kwargs) -> None:
         """`edit_message_id` must be an ID that is in the same channel this webhook is designated in."""
         webhook = discord.Webhook.from_url(url=self.bot.WEBHOOK_URL, session=self.bot.session)
         webhook = await webhook.fetch()
@@ -446,59 +430,36 @@ class Owner(commands.Cog):
         if edit_message_id:
             del kwargs["silent"]
             return await webhook.edit_message(edit_message_id, **kwargs)
-        
+
         await webhook.send(**kwargs)
 
     @commands.command(name='dispatch-webhook', description="Dispatch customizable quarterly updates", aliases=('dw',))
-    async def dispatch_webhook(self, ctx: commands.Context):
-        all_ems = [
-            discord.Embed(
-                colour=discord.Colour.from_rgb(3, 102, 214),
-                title='Changelog',
-                description=(
-                    "Changes taken place between <t:1711929600:d> - <t:1719705600:d> are noted here.\n\n"
-                    "- ~~Added new colour roles~~ Superseded[**\U000000b2**](https://discord.com/channels/829053898333225010/1124782048041762867/1241137977225248873)\n"
-                    "- ~~Changed the colour of some colour roles~~ Superseded[**\U000000b2**](https://discord.com/channels/829053898333225010/1124782048041762867/1241137977225248873)\n"
-                    "- Changed the default colour for <@&914565377961369632>\n"
-                    "- Emojified the topic of all non-archived channels\n"
-                    "- Added new tasks to complete in Server Onboarding\n"
-                    "- Removed more redundant permissions from bots\n"
-                    "- Cleaned the pinned messages of most channels\n"
-                    "- Added a requirement to include tags upon creating a post\n"
-                    "- Simplified the guidelines thread for the forum (https://discord.com/channels/829053898333225010/1147203137195745431)\n"
-                    "- Added a policy to never close threads that are inactive, only lock them\n"
-                    "- Kicked more bots off the server\n"
-                    "- Renamed some channels for consistency\n"
-                    "- Disabled some custom AutoMod rules\n"
-                    "- Added some new chatbots\n"
-                    "- Improve the onboarding question selection\n"
-                    "- Change how channel opt in works[**\U000000b9**](https://discord.com/channels/829053898333225010/1124782048041762867)\n"
-                    "- Removed the developer channel opt in, and deleted its respective channel"
-                )
+    async def dispatch_webhook(self, _: commands.Context):
+        embed = discord.Embed(
+            colour=discord.Colour.from_rgb(3, 102, 214),
+            title='Changelog',
+            description=(
+                "Changes taken place between <t:1711929600:d> - <t:1719705600:d> are noted here.\n\n"
+                "- ~~Added new colour roles~~ Superseded[**\U000000b2**](https://discord.com/channels/829053898333225010/1124782048041762867/1241137977225248873)\n"
+                "- ~~Changed the colour of some colour roles~~ Superseded[**\U000000b2**](https://discord.com/channels/829053898333225010/1124782048041762867/1241137977225248873)\n"
+                "- Changed the default colour for <@&914565377961369632>\n"
+                "- Emojified the topic of all non-archived channels\n"
+                "- Added new tasks to complete in Server Onboarding\n"
+                "- Removed more redundant permissions from bots\n"
+                "- Cleaned the pinned messages of most channels\n"
+                "- Added a requirement to include tags upon creating a post\n"
+                "- Simplified the guidelines thread for the forum (https://discord.com/channels/829053898333225010/1147203137195745431)\n"
+                "- Added a policy to never close threads that are inactive, only lock them\n"
+                "- Kicked more bots off the server\n"
+                "- Renamed some channels for consistency\n"
+                "- Disabled some custom AutoMod rules\n"
+                "- Added some new chatbots\n"
+                "- Improve the onboarding question selection\n"
+                "- Change how channel opt in works[**\U000000b9**](https://discord.com/channels/829053898333225010/1124782048041762867)\n"
+                "- Removed the developer channel opt in, and deleted its respective channel"
             )
-        ]
-
-        second_em = membed(
-            "### Breaking change to channel opt-in[**\U000000b9**](https://discord.com/channels/829053898333225010/1124782048041762867)\n"
-            "You'll now no longer see these opt in channels if you do not select them. "
-            "When selected, you will get **roles** that allow you to see the channel instead of joining it. "
-            "This means less clutter, more of the stuff you're interested in. "
-            "There's also a new option allowing you to see the server archives.\n"
-            "### The Colour Role Wipeout[**\U000000b2**](https://discord.com/channels/829053898333225010/1124782048041762867/1241137977225248873)\n"
-            "Since it received little to no usage, the deed had to be done. "
-            "We are bringing the functionality back however in the form of a slash command. "
-            "We'll reveal more details about it later before it's released."
         )
-        second_em.title = "Index"
-
-        second_em.set_footer(
-            icon_url=ctx.guild.icon.url, 
-            text="End of Q2. Next quarterly update due: 30th September 2024"
-        )
-        all_ems.append(second_em)
-
-        kwargs = {"embeds": all_ems, "silent": True, "content": None}
-        await self.do_via_webhook(kwargs, edit_message_id=1241137977225248873)
+        await self.do_via_webhook(embed=embed)
 
 
 async def setup(bot: commands.Bot):

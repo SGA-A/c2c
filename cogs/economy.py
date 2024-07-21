@@ -3354,7 +3354,7 @@ class Economy(commands.Cog):
 
             if isinstance(quantity, str):
                 quantity = actual_wallet
-            
+
             if quantity > actual_wallet:
                 return await respond(
                     interaction,
