@@ -1,3 +1,5 @@
+name: Run Ruff
+
 on: [push]
 
 jobs:
@@ -6,19 +8,14 @@ jobs:
     name: "ruff"
     steps:
       - uses: actions/checkout@v2
-      
+
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
           python-version: "3.12"
-      
+
       - name: Install Ruff
         run: pip install ruff
 
       - name: Run Ruff
         run: ruff check . --ignore=E722
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pylint
