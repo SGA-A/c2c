@@ -2313,16 +2313,13 @@ class Economy(commands.Cog):
             """, user.id
         )
 
-        ui_data = []
-        garbage = set()
+        ui_data, garbage = [], set()
 
-        offset = 0
         for (item_name, ie, inv_qty, itemID) in showdata:
 
             # ensures items in the showcase not in their inventory are removed
             if not inv_qty:
                 garbage.add(itemID)
-                offset += 1
                 continue
 
             ui_data.append(f"` {inv_qty:,}x ` {ie} {item_name}")
@@ -5890,85 +5887,103 @@ class Economy(commands.Cog):
     @trade_items_for_coins.autocomplete('item')
     @trade_items_for_items.autocomplete('item')
     async def owned_items_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        query = (
+            """
+            SELECT itemName
+            FROM shop
+            INNER JOIN inventory ON shop.itemID = inventory.itemID
+            WHERE LOWER(itemName) LIKE '%' || $0 || '%' AND userID = $1
+            LIMIT 25
+            """
+        )
 
         async with self.bot.pool.acquire() as conn:
-            options = await conn.fetchall(
-                """
-                SELECT shop.itemName, inventory.qty
-                FROM shop
-                INNER JOIN inventory ON shop.itemID = inventory.itemID
-                WHERE inventory.userID = $0
-                """, interaction.user.id
-            )
+            options = await conn.fetchall(query, f'%{current.lower()}%', interaction.user.id)
 
-        return [
-            app_commands.Choice(name=option[0], value=option[0]) 
-            for option in options if current.lower() in option[0].lower()
-        ]
+        return [app_commands.Choice(name=option[0], value=option[0]) for option in options]
 
     @add_showcase_item.autocomplete('item')
     async def owned_not_in_showcase_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
 
+        query = (
+            """
+            SELECT itemName
+            FROM shop
+            INNER JOIN inventory ON shop.itemID = inventory.itemID
+            LEFT JOIN showcase ON shop.itemID = showcase.itemID
+            WHERE LOWER(itemName) LIKE '%' || ? || '%' 
+                AND showcase.itemID IS NULL 
+                AND inventory.userID = ?
+            LIMIT 25
+            """
+        )
+
         async with self.bot.pool.acquire() as conn:
-            options = await conn.fetchall(
-                """
-                SELECT shop.itemName
-                FROM shop
-                INNER JOIN inventory ON shop.itemID = inventory.itemID
-                LEFT JOIN showcase ON shop.itemID = showcase.itemID AND showcase.userID = $0
-                WHERE inventory.userID = $0 AND showcase.itemID IS NULL
-                """, interaction.user.id
-            )
+            results = await conn.fetchall(query, (current.lower(), interaction.user.id))
 
         return [
-            app_commands.Choice(name=option[0], value=option[0]) 
-            for option in options if current.lower() in option[0].lower()
+            app_commands.Choice(name=result[0], value=result[0])
+            for result in results
         ]
 
     @remove_showcase_item.autocomplete('item')
     async def showcase_items_lookup(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
-        async with self.bot.pool.acquire() as conn:
-            options = await conn.fetchall(
-                """
-                SELECT itemName
-                FROM shop
-                INNER JOIN showcase ON shop.itemID = showcase.itemID
-                WHERE showcase.userID = $0
-                ORDER BY showcase.itemPos DESC
-                """, interaction.user.id
-            )
+        query = (
+            """
+            SELECT itemName
+            FROM shop
+            INNER JOIN showcase ON shop.itemID = showcase.itemID AND showcase.userID = ?
+            WHERE LOWER(itemName) LIKE '%' || ? || '%'
+            ORDER BY showcase.itemPos DESC
+            """
+        )
 
-        return [
-            app_commands.Choice(name=option[0], value=option[0]) 
-            for option in options if current.lower() in option[0].lower()
-        ]
+        async with self.bot.pool.acquire() as conn:
+            options = await conn.fetchall(query, (interaction.user.id, current.lower()))
+
+        return [app_commands.Choice(name=option[0], value=option[0]) for option in options]
 
     @item.autocomplete('item_name')
     @get_item_lb.autocomplete('item')
     @trade_coins_for_items.autocomplete('for_item')
     @trade_items_for_items.autocomplete('for_item')
     async def item_lookup(self, _: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        query = (
+            """
+            SELECT itemName 
+            FROM shop
+            WHERE LOWER(itemName) LIKE '%' || $0 || '%'
+            ORDER BY itemName
+            LIMIT 25
+            """
+        )
+
         async with self.bot.pool.acquire() as conn:
-            res = await conn.fetchall("SELECT itemName FROM shop")
-        return [
-            app_commands.Choice(name=iterable[0], value=iterable[0]) 
-            for iterable in res if current.lower() in iterable[0].lower()
-        ]
+            options = await conn.fetchall(query, f'%{current.lower()}%')
+
+        return [app_commands.Choice(name=option[0], value=option[0]) for option in options]
 
     @view_user_settings.autocomplete('setting')
     async def setting_lookup(self, _: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+        query = (
+            """
+            SELECT 
+                setting, 
+                REPLACE(LOWER(setting), '_', ' ') AS formatted_setting 
+            FROM settings_descriptions
+            WHERE LOWER(setting) LIKE '%' || $0 || '%'
+            ORDER BY formatted_string
+            """
+        )
 
         async with self.bot.pool.acquire() as conn:
-            query = "SELECT setting FROM settings_descriptions"
-            results = await conn.fetchall(query)
+            results = await conn.fetchall(query, f'%{current.lower()}%')
 
-        choices = []
+        return [
+            app_commands.Choice(name=result[1].title(), value=result[0])
+            for result in results
+        ]
 
-        for result in results:
-            formatted = " ".join(result[0].split("_"))
-            if current.lower() in formatted:
-                choices.append(app_commands.Choice(name=formatted.title(), value=result[0]))
-        return choices
 
 
 async def setup(bot: commands.Bot) -> None:
