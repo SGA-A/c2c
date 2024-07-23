@@ -12,7 +12,14 @@ from logging import (
     info as log_info
 )
 
-from discord import AllowedMentions, Embed, Intents, Status, utils
+from discord import (
+    AllowedMentions, 
+    Embed, 
+    Intents,
+    MemberCacheFlags, 
+    Status, 
+    utils
+)
 from dotenv import load_dotenv
 from asqlite import create_pool
 from discord.ext import commands
@@ -66,6 +73,8 @@ class C2C(commands.Bot):
             cookie_jar=DummyCookieJar(loop=self.loop)
         )
 
+flags = MemberCacheFlags.none()
+flags.joined = True
 
 intents = Intents.none()
 intents.message_content = True
@@ -82,6 +91,7 @@ bot = C2C(
     intents=intents,
     max_messages=None,
     max_ratelimit_timeout=30.0,
+    member_cache_flags=flags,
     owner_ids={992152414566232139, 546086191414509599},
     status=Status.idle,
     strip_after_prefix=True
