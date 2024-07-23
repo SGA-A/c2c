@@ -4332,14 +4332,8 @@ class Economy(commands.Cog):
                     description=(
                         'This list is not exhaustive, all known causes will be displayed:\n'
                         '- You were removed by the c2c developers.\n'
-                        '- You opted out of the system yourself.\n'
-                        '- The database is currently under construction.\n'
-                        '- The database malfunctioned due to a undelivered transaction.\n'
-                        '- You called a command that is using an outdated database.\n'
-                        '- The database unexpectedly closed (likely due to maintenance).\n'
-                        '- The developers are modifying the database contents.\n'
-                        '- The database is closed and a connection has not been yet.\n'
-                        '- The command hasn\'t acquired a pool connection (devs know why).\n\n'
+                        '- You opted out of the economy.\n'
+                        '- The pool connection is outdated and hasn\'t been released yet.\n\n'
                         'Found an unusual bug on a command? **Report it now to prevent further issues.**'
                     )
                 )
