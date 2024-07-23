@@ -318,10 +318,10 @@ class Utility(commands.Cog):
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def calculator(self, interaction: discord.Interaction, expression: str) -> None:
         try:
-            interpretable = expression.replace('^', '**').replace(',', '_')
-            
+            expression = expression.replace('^', '**').replace(',', '_')
+
             # Evaluate the expression
-            result = eval(interpretable)
+            result = eval(expression)
 
             # Format the result with commas for thousands separator
             result = f"{result:,}" if isinstance(result, (int, float)) else "Invalid Equation"
@@ -331,9 +331,9 @@ class Utility(commands.Cog):
         output = membed(
             f"""
             \U0001f4e5 **Input:**
-            ```{expression}```
+            ```py\n{expression}```
             \U0001f4e4 **Output:**
-            ```{result}```
+            ```py\n{result}```
             """
         )
 
