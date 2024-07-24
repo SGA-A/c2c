@@ -779,13 +779,15 @@ class Utility(commands.Cog):
         embed = membed().set_author(
             name=username.display_name, 
             icon_url=username.display_avatar.url
-        ).set_image(url=username.banner.with_static_format('png'))
+        )
 
         if not username.banner:
             embed.description = "This user does not have a banner."
             return await interaction.response.send_message(embed=embed)
 
+        embed.set_image(url=username.banner.with_static_format('png'))
         img_view = discord.ui.View().add_item(ImageSourceButton(url=embed.image.url))
+
         await interaction.response.send_message(embed=embed, view=img_view)
 
     @app_commands.command(name='post', description='Upload a new forum thread')
