@@ -1,6 +1,6 @@
 import sqlite3
-import datetime
 from asyncio import TimeoutError
+from datetime import datetime, timezone
 from typing import (
     Annotated, 
     Callable,
@@ -443,8 +443,8 @@ class Tags(commands.Cog):
 
         query = (
             """
-            INSERT INTO tags (name, content, ownerID, created_at)
-            VALUES ($0, $1, $2, $3)
+            INSERT INTO tags (name, content, ownerID)
+            VALUES ($0, $1, $2)
             """
         )
 
@@ -453,10 +453,9 @@ class Tags(commands.Cog):
 
         tr = conn.transaction()
         await tr.start()
-        timestamp = datetime.datetime.now(tz=datetime.timezone.utc).timestamp()
 
         try:
-            await conn.execute(query, name, content, ctx.author.id, timestamp)
+            await conn.execute(query, name, content, ctx.author.id)
         except sqlite3.IntegrityError:
             await tr.rollback()
             await ctx.send(embed=membed(f"A tag named {name!r} already exists."))
@@ -749,7 +748,7 @@ class Tags(commands.Cog):
         rowid, uses, owner_id, created_at = row
 
         embed.title = tag_name
-        embed.timestamp = datetime.datetime.fromtimestamp(created_at, tz=datetime.timezone.utc)
+        embed.timestamp = datetime.fromtimestamp(created_at, tz=timezone.utc)
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
         embed.set_author(
@@ -760,7 +759,7 @@ class Tags(commands.Cog):
             value=f'<@{owner_id}>'
         ).add_field(
             name='Uses', 
-            value=f"` {uses:,} `"
+            value=f"{uses:,}"
         )
 
         query = (
@@ -781,7 +780,7 @@ class Tags(commands.Cog):
 
         rank = await conn.fetchone(query, rowid)
         if rank is not None:
-            embed.add_field(name='Rank', value=f"` {rank[0]:,} / {rank[1]:,} `")
+            embed.add_field(name='Rank', value=f"{rank[0]:,} / {rank[1]:,}")
 
         await ctx.send(embed=embed)
 
