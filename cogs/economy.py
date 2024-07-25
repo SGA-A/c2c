@@ -5913,6 +5913,7 @@ class Economy(commands.Cog):
         )
 
         async with self.bot.pool.acquire() as conn:
+            conn: asqlite_Connection
             results = await conn.fetchall(query, (current.lower(), interaction.user.id))
 
         return [
@@ -5928,7 +5929,6 @@ class Economy(commands.Cog):
             FROM shop
             INNER JOIN showcase ON shop.itemID = showcase.itemID AND showcase.userID = ?
             WHERE LOWER(itemName) LIKE '%' || ? || '%'
-            ORDER BY showcase.itemPos DESC
             """
         )
 
@@ -5947,7 +5947,6 @@ class Economy(commands.Cog):
             SELECT itemName 
             FROM shop
             WHERE LOWER(itemName) LIKE '%' || $0 || '%'
-            ORDER BY itemName
             LIMIT 25
             """
         )
@@ -5963,10 +5962,9 @@ class Economy(commands.Cog):
             """
             SELECT 
                 setting, 
-                REPLACE(LOWER(setting), '_', ' ') AS formatted_setting 
+                REPLACE(setting, '_', ' ') AS formatted_setting 
             FROM settings_descriptions
             WHERE LOWER(setting) LIKE '%' || $0 || '%'
-            ORDER BY formatted_string
             """
         )
 
