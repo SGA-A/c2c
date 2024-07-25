@@ -29,6 +29,7 @@ We are not responsible for any errors that may occur when running this bot on yo
 
 ## Credits
 - [Jake Lee](https://blog.jakelee.co.uk/converting-levels-into-xp-vice-versa/)
+- [Jeyy API](https://github.com/JeyyGit/jeyyapi)
 - [DrenJaha](https://github.com/DrenJaha/discord-blackjack-bot)
 - [Skrphenix](https://github.com/Modern-Realm/economy-bot-discord.py/tree/master/economy%20with%20aiosqlite)
 - [RDanny](https://github.com/Rapptz/RoboDanny/)
