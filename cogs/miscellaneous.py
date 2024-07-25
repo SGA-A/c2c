@@ -519,15 +519,18 @@ class Utility(commands.Cog):
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def emojis_paginator(self, interaction: discord.Interaction) -> None:
         length = 8
-        all_emojis = [f"{i} (**{i.name}**) \U00002014 `{i}`" for i in self.bot.emojis]
-
         emb = membed()
         emb.title = "Emojis"
 
+        def emoji_generator():
+            for emoji in self.bot.emojis:
+                yield f"{emoji} (**{emoji.name}**) \U00002014 `{emoji}`"
+
         async def get_page_part(page: int):
             offset = (page - 1) * length
-            emb.description = "\n".join(all_emojis[offset:offset + length])
-            n = Pagination.compute_total_pages(len(all_emojis), length)
+            all_emojis = emoji_generator()
+            emb.description = "\n".join(emoji for i, emoji in enumerate(all_emojis) if offset <= i < offset + length)
+            n = Pagination.compute_total_pages(len(self.bot.emojis), length)
             return emb, n
 
         await Pagination(interaction, get_page=get_page_part).navigate()

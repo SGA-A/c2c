@@ -3,6 +3,7 @@ from typing import Optional, Union
 from datetime import datetime, timedelta
 
 import discord
+from discord.ext.commands import Context
 from pytz import timezone
 
 
@@ -126,3 +127,14 @@ async def economy_check(interaction: discord.Interaction, original: Union[discor
         embed=membed(f"This menu is controlled by {original.mention}.")
     )
     return False
+
+
+async def send_message(invocation: Context | discord.Interaction, **kwargs):
+    """
+    Only for use when sending messages needs to be done 
+    either via a `discord.Interaction` or a `commands.Context` 
+    and is not invoked from a hybrid command.
+    """
+    if isinstance(invocation, discord.Interaction):
+        return await respond(invocation, **kwargs)
+    await invocation.send(**kwargs)

@@ -13,13 +13,17 @@ from discord import app_commands
 from discord.ext import commands
 from asqlite import ProxiedConnection as asqlite_Connection
 
-from .core.views import BaseContextView, send_boilerplate_confirm
-from .core.helpers import membed
+from .core.views import send_boilerplate_confirm
+from .core.helpers import membed, send_message
 from .core.constants import LIMITED_INSTALLS, LIMITED_CONTEXTS
 from .core.paginator import PaginationSimple
 
 
+MAX_CHARACTERS_EXCEEDED_RESPONSE = "Tag content cannot exceed 2000 characters."
+TIMED_OUT_RESPONSE = "You took too long."
 TAG_NOT_FOUND_SIMPLE_RESPONSE = "Tag not found, it may have been deleted when you called the command."
+TAG_BEING_MADE_RESPONSE = "This tag is already being made by someone right now!"
+TAG_ALREADY_EXISTS_RESPONSE = "A tag with that name already exists.\n-# Restart the process via `>tag make` or the context menu."
 TAG_NOT_FOUND_RESPONSE = (
     "Could not find any tag with these properties.\n"
     "- You can't modify the tag if it doesn't belong to you.\n"
@@ -32,7 +36,7 @@ class TagName(commands.clean_content):
         self.lower: bool = lower
         super().__init__()
 
-    async def convert(self, ctx: commands.Context, argument: str) -> str:
+    async def convert(self, ctx: commands.Context | discord.Interaction, argument: str) -> str:
         converted = await super().convert(ctx, argument)
         lower = converted.lower().strip()
 
@@ -44,8 +48,9 @@ class TagName(commands.clean_content):
 
         first_word, _, _ = lower.partition(' ')
 
-        # get tag command.
-        root: commands.GroupMixin = ctx.bot.get_command('tag')  # type: ignore
+        # get tag command
+        bot = getattr(ctx, "bot", None) or ctx.client
+        root: commands.GroupMixin = bot.get_command('tag')  # type: ignore
         if first_word in root.all_commands:
             raise commands.BadArgument('This tag name starts with a reserved word.')
 
@@ -87,49 +92,26 @@ class TagMakeModal(discord.ui.Modal, title='Create New Tag'):
         placeholder="The content of this tag."
     )
 
-    def __init__(self, cog: "Tags", ctx: commands.Context) -> None:
+    def __init__(self, cog: "Tags") -> None:
         super().__init__()
         self.cog = cog
-        self.ctx = ctx
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         name = str(self.name)
         try:
-            name = await TagName().convert(self.ctx, name)
+            name = await TagName().convert(interaction, name)
         except commands.BadArgument as e:
             return await interaction.response.send_message(embed=membed(str(e)), ephemeral=True)
-        
-        if self.cog.is_tag_being_made(name):
-            return await interaction.response.send_message(
-                embed=membed('This tag is already being made by someone else.'), 
-                ephemeral=True
-            )
 
-        self.ctx.interaction = interaction
+        if self.cog.is_tag_being_made(name):
+            return await interaction.response.send_message(embed=membed(TAG_BEING_MADE_RESPONSE))
+
         content = str(self.content)
         if len(content) > 2000:
-            return await interaction.response.send_message(
-                embed=membed('Tag content must be a maximum of 2000 characters.'), 
-                ephemeral=True
-            )
-        
+            return await interaction.response.send_message(embed=membed(MAX_CHARACTERS_EXCEEDED_RESPONSE))
+
         async with interaction.client.pool.acquire() as conn:
-            await self.cog.create_tag(self.ctx, name, content, conn=conn)
-
-
-class TagMakeView(BaseContextView):
-    def __init__(self, cog: "Tags", ctx: commands.Context):
-        super().__init__(ctx)  # default controlling_user to ctx.author
-        self.cog = cog
-
-    async def on_timeout(self) -> None:
-        await self.message.delete()
-
-    @discord.ui.button(style=discord.ButtonStyle.primary, label="Create Tag")
-    async def create_tag_button(self, interaction: discord.Interaction, _: discord.ui.Button):
-        await interaction.response.send_modal(TagMakeModal(self.cog, ctx=self.ctx))
-        await interaction.message.delete()
-        self.stop()
+            await self.cog.create_tag(interaction, name, content, conn)
 
 
 class TagLeaderboard(PaginationSimple):
@@ -161,7 +143,7 @@ class TagLeaderboard(PaginationSimple):
         self.lb.set_footer(text=f"Page {page} of {n}")
         return self.lb, n
 
-    async def create_lb(self):
+    async def create_lb(self) -> None:
         if self.chosen_stat == "Tag Usage":
             async with self.ctx.bot.pool.acquire() as conn:
                 data = await conn.fetchall(
@@ -178,10 +160,10 @@ class TagLeaderboard(PaginationSimple):
                 self.data = []
                 return
 
-            self.data = [
+            self.data = (
                 f"{self.podium_pos.get(i, '\U0001f539')} ` {tag_usage:,} ` \U00002014 {tag_name}" 
                 for i, (tag_name, tag_usage) in enumerate(data, start=1)
-            ]
+            )
             return
 
         elif self.chosen_stat == "Tags Created":
@@ -245,6 +227,7 @@ class TagLeaderboard(PaginationSimple):
 
         await self.edit_page(interaction)
 
+
 class MatchWord(discord.ui.Button):
     """
     Represents a button in the user interface for a single word.
@@ -272,6 +255,30 @@ class Tags(commands.Cog):
 
         # ownerID: set(name)
         self._reserved_tags_being_made: set[str] = set()
+        self.create_tag_menu = app_commands.ContextMenu(
+            name="Tag Message",
+            callback=self.create_tag_menu_callback,
+            allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=True),
+            allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
+        )
+        self.bot.tree.add_command(self.create_tag_menu)
+
+    async def cog_unload(self) -> None:
+        self.bot.tree.remove_command(self.create_tag_menu)
+
+    async def create_tag_menu_callback(self, interaction: discord.Interaction, message: discord.Message):
+        clean_content = await commands.clean_content().convert(interaction, message.content) if message.content else ""
+
+        if message.attachments:
+            attachments_refs = "\n".join(attachment.url for attachment in message.attachments)
+            clean_content = f"{clean_content}\n{attachments_refs}"
+
+        if len(clean_content) > 2000:
+            return await interaction.response.send_message(embed=membed(MAX_CHARACTERS_EXCEEDED_RESPONSE))
+
+        modal = TagMakeModal(self)
+        modal.content.default = clean_content
+        await interaction.response.send_modal(modal)
 
     async def partial_match_for(
         self,
@@ -404,10 +411,9 @@ class Tags(commands.Cog):
             )
 
             results: list[tuple[str]] = await conn.fetchall(query, current.lower())
-            return [app_commands.Choice(name=a, value=a) for a, in results]
+        return [app_commands.Choice(name=a, value=a) for a, in results]
         
     async def owned_non_aliased_tag_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        
         async with self.bot.pool.acquire() as conn:
 
             query = (
@@ -419,18 +425,14 @@ class Tags(commands.Cog):
                 LIMIT 12
                 """
             )
-            
-            all_tags: list[tuple[str]] = await conn.fetchall(query, interaction.user.id, current.lower())
-            return [app_commands.Choice(name=tag, value=tag) for tag, in all_tags]
 
+            all_tags: list[tuple[str]] = await conn.fetchall(query, interaction.user.id, current.lower())
+        return [app_commands.Choice(name=tag, value=tag) for tag, in all_tags]
 
     async def get_tag_content(self, name: str, conn: asqlite_Connection):
-        
-        res = await conn.fetchone("SELECT content FROM tags WHERE LOWER(name) = $0", name.lower())
-
+        res = await conn.fetchone("SELECT content FROM tags WHERE name = $0", name)
         if res is None:
             raise RuntimeError(TAG_NOT_FOUND_SIMPLE_RESPONSE)
-
         return res[0]
 
     async def create_tag(
@@ -441,12 +443,7 @@ class Tags(commands.Cog):
         conn: asqlite_Connection
     ) -> None:
 
-        query = (
-            """
-            INSERT INTO tags (name, content, ownerID)
-            VALUES ($0, $1, $2)
-            """
-        )
+        query = "INSERT INTO tags (name, content, ownerID) VALUES ($0, $1, $2)"
 
         # since I'm checking for the exception type and acting on it, I need
         # to use the manual transaction blocks
@@ -455,26 +452,27 @@ class Tags(commands.Cog):
         await tr.start()
 
         try:
-            await conn.execute(query, name, content, ctx.author.id)
+            author: discord.Member | discord.User = getattr(ctx, "author", None) or ctx.user
+            await conn.execute(query, name, content, author.id)
         except sqlite3.IntegrityError:
             await tr.rollback()
-            await ctx.send(embed=membed(f"A tag named {name!r} already exists."))
+            await send_message(ctx, embed=membed(f"A tag named {name!r} already exists."))
         except Exception as e:
             self.bot.log_exception(e)
             await tr.rollback()
-            await ctx.send(embed=membed("Could not create tag."))
+            await send_message(ctx, embed=membed("Could not create tag."))
         else:
             await tr.commit()
-            await ctx.send(embed=membed(f'Tag {name!r} successfully created.'))
+            await send_message(ctx, embed=membed(f'Tag {name!r} successfully created.'))
 
     def is_tag_being_made(self, name: str) -> bool:
-        return name.lower() in self._reserved_tags_being_made
+        return name in self._reserved_tags_being_made
 
     def add_in_progress_tag(self, name: str) -> None:
-        self._reserved_tags_being_made.add(name.lower())
+        self._reserved_tags_being_made.add(name)
 
     def remove_in_progress_tag(self, name: str) -> None:
-        self._reserved_tags_being_made.discard(name.lower())
+        self._reserved_tags_being_made.discard(name)
 
     @commands.hybrid_group(description="Tag text for later retrieval", fallback='get')
     @app_commands.describe(name='The tag to retrieve.')
@@ -483,7 +481,6 @@ class Tags(commands.Cog):
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def tag(self, ctx: commands.Context, *, name: str):
         async with self.bot.pool.acquire() as conn:
-            
             name = await self.non_owned_partial_matching(ctx, name, conn)
             if name is None:
                 return
@@ -517,16 +514,16 @@ class Tags(commands.Cog):
             return await ctx.send(embed=membed('Tag content is a maximum of 2000 characters.'))
 
         async with self.bot.pool.acquire() as conn:
-            await self.create_tag(ctx, name, content, conn=conn)
-    
+            await self.create_tag(ctx, name, content, conn)
+
     @tag.command(description="Interactively make your own tag", ignore_extra=True)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def make(self, ctx: commands.Context):
 
         if ctx.interaction is not None:
-            return await ctx.interaction.response.send_modal(TagMakeModal(self, ctx))
-        
+            return await ctx.interaction.response.send_modal(TagMakeModal(self))
+
         await ctx.send(embed=membed("Hello. What would you like the tag's name to be?"))
 
         converter = TagName()
@@ -536,20 +533,20 @@ class Tags(commands.Cog):
             return msg.author == ctx.author and ctx.channel == msg.channel
 
         try:
-            name = await self.bot.wait_for('message', timeout=180.0, check=check)
+            name = await self.bot.wait_for("message", timeout=180.0, check=check)
         except TimeoutError:
-            return await ctx.send(embed=membed('You took too long.'))
+            return await ctx.send(embed=membed(TIMED_OUT_RESPONSE))
 
         try:
             ctx.message = name
             name = await converter.convert(ctx, name.content)
         except commands.BadArgument as e:
-            return await ctx.send(embed=membed(f'{e}'))            
+            return await ctx.send(embed=membed(str(e)))
         finally:
             ctx.message = original
 
         if self.is_tag_being_made(name):
-            return await ctx.send(embed=membed("This tag is currently being made by someone."))
+            return await ctx.send(embed=membed(TAG_BEING_MADE_RESPONSE))
 
         # it's technically kind of expensive to do two queries like this
         # i.e. one to check if it exists and then another that does the insert
@@ -560,18 +557,13 @@ class Tags(commands.Cog):
             row = await conn.fetchone("SELECT 1 FROM tags WHERE name = $0", name)
 
         if row is not None:
-            return await ctx.send(
-                embed=membed(
-                    "A tag with that name already exists.\n"
-                    f"Redo the command `{ctx.prefix}tag make` to retry."
-                )
-            )
+            return await ctx.send(embed=membed(TAG_ALREADY_EXISTS_RESPONSE))
 
         self.add_in_progress_tag(name)
         await ctx.send(
             embed=membed(
                 "What about the tag's content?\n"
-                "You can type `abort` to abort this process."
+                "-# Type `abort` to end this process."
             )
         )
 
@@ -579,7 +571,7 @@ class Tags(commands.Cog):
             msg = await self.bot.wait_for('message', check=check, timeout=120.0)
         except TimeoutError:
             self.remove_in_progress_tag(name)
-            return await ctx.reply(embed=membed('You took too long.'))
+            return await ctx.reply(embed=membed(TIMED_OUT_RESPONSE))
 
         if msg.content == 'abort':
             self.remove_in_progress_tag(name)
@@ -596,11 +588,11 @@ class Tags(commands.Cog):
 
         if len(clean_content) > 2000:
             self.remove_in_progress_tag(name)
-            return await msg.reply(embed=membed('Tag content cannot exceed 2000 characters.'))
+            return await msg.reply(embed=membed(MAX_CHARACTERS_EXCEEDED_RESPONSE))
 
+        conn = await self.bot.pool.acquire()
         try:
-            conn = await self.bot.pool.acquire()
-            await self.create_tag(ctx, name, clean_content, conn=conn)
+            await self.create_tag(ctx, name, clean_content, conn)
         finally:
             self.remove_in_progress_tag(name)
             await self.bot.pool.release(conn)
@@ -820,25 +812,20 @@ class Tags(commands.Cog):
             return await ctx.send(embed=membed("You can only delete tags made by you."))
 
         async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
+            count, = await conn.fetchone("SELECT COUNT(*) FROM tags WHERE ownerID = $0", user.id)
 
-            row: tuple[int] = await conn.fetchone("SELECT COUNT(*) FROM tags WHERE ownerID = $0", user.id)
-            count = row[0]
-
-            if not count:
-                return await ctx.send(embed=membed(f"{user.name} has no tags."))
+        if not count:
+            return await ctx.send(embed=membed(f"{user.name} has no tags."))
 
         val = await send_boilerplate_confirm(ctx, f"Upon approval, **{count}** tag(s) by {user.name} will be deleted.")
-
         if val:
             async with self.bot.pool.acquire() as conn:
-                query = "DELETE FROM tags WHERE ownerID = $0"
-                await conn.execute(query, user.id)
+                await conn.execute("DELETE FROM tags WHERE ownerID = $0", user.id)
                 await conn.commit()
 
             await ctx.reply(embed=membed(f"Removed all tags by {user.name}."))
 
-    async def reusable_paginator_via(self, ctx, *, results: tuple, length: Optional[int] = 12, em: discord.Embed):
+    async def reusable_paginator_via(self, ctx, results: tuple, em: discord.Embed, length: Optional[int] = 12):
         """Only use this when you have a tuple containing the tag name and rowid in this order."""
 
         async def get_page_part(page: int):
@@ -850,16 +837,11 @@ class Tags(commands.Cog):
                 for index, tag in enumerate(results[offset:offset+length], start=offset+1)
             )
 
-            n = paginator.compute_total_pages(len(results), length)
+            n = PaginationSimple.compute_total_pages(len(results), length)
             em.set_footer(text=f"Page {page} of {n}")
             return em, n
-        
-        paginator = PaginationSimple(
-            ctx, 
-            invoker_id=ctx.author.id, 
-            get_page=get_page_part
-        )
-        await paginator.navigate()
+
+        await PaginationSimple(ctx, ctx.author.id, get_page_part).navigate()
 
     @tag.command(description="Search for a tag")
     @app_commands.describe(query='The tag name to search for.')
@@ -867,17 +849,16 @@ class Tags(commands.Cog):
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def search(self, ctx: commands.Context, *, query: Annotated[str, commands.clean_content]):
 
+        sql = (
+            """
+            SELECT name, rowid
+            FROM tags
+            WHERE LOWER(name) LIKE '%' || $0 || '%'
+            LIMIT 100
+            """
+        )
+
         async with self.bot.pool.acquire() as conn:
-
-            sql = (
-                """
-                SELECT name, rowid
-                FROM tags
-                WHERE LOWER(name) LIKE '%' || $0 || '%'
-                LIMIT 100
-                """
-            )
-
             results = await conn.fetchall(sql, query.lower())
 
         if not results:
@@ -924,43 +905,30 @@ class Tags(commands.Cog):
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def all_tags(self, ctx: commands.Context):
-
         async with self.bot.pool.acquire() as conn:
-            query = (
-                """
-                SELECT name, rowid
-                FROM tags
-                ORDER BY name
-                """
-            )
+            rows = await conn.fetchall("SELECT name, rowid FROM tags ORDER BY name")
 
-            rows = await conn.fetchall(query)
-            if not rows:
-                return await ctx.send(embed=membed('No tags exist!'))
+        if not rows:
+            return await ctx.send(embed=membed('No tags exist!'))
 
-            em = discord.Embed(colour=discord.Colour.blurple())
-            await self.reusable_paginator_via(
-                ctx,
-                results=rows, 
-                em=em
-            )
-    
+        em = discord.Embed(colour=discord.Colour.blurple())
+        await self.reusable_paginator_via(ctx, em, rows)
+
     @tag.command(name="list", description="Display all tags you made")
     @app_commands.describe(member='The member to list tags of. Defaults to show yours.')
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def _list(self, ctx: commands.Context, *, member: discord.User = commands.Author):
+        query = "SELECT name, rowid FROM tags WHERE ownerID = $0 ORDER BY name"
         async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            query = "SELECT name, rowid FROM tags WHERE ownerID = $0 ORDER BY name"
             rows = await conn.fetchall(query, member.id)
-            if not rows:
-                return await ctx.send(embed=membed(f"{member.name} has no tags."))
-        
-            em = discord.Embed(colour=discord.Colour.blurple())
-            em.set_author(name=member.display_name, icon_url=member.display_avatar.url)
-            await self.reusable_paginator_via(ctx, results=rows, em=em)
+
+        if not rows:
+            return await ctx.send(embed=membed(f"{member.name} has no tags."))
+
+        em = discord.Embed(colour=discord.Colour.blurple())
+        em.set_author(name=member.display_name, icon_url=member.display_avatar.url)
+        await self.reusable_paginator_via(ctx, em, rows)
 
     @commands.hybrid_command(description="List tags of a member or your own")
     @app_commands.describe(member='The member to list the tags of. Defaults to your own.')
@@ -974,70 +942,64 @@ class Tags(commands.Cog):
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def random(self, ctx: commands.Context):
         async with self.bot.pool.acquire() as conn:
+            row = await conn.fetchone("SELECT name, content FROM tags ORDER BY RANDOM() LIMIT 1")
 
-            row = await conn.fetchone(
-                """
-                SELECT name, content
+        if row is None:
+            return await ctx.send(embed=membed('No tags exist yet!'))
+
+        name, content = row
+
+        await ctx.send(f"Random tag found: {name}")
+        await ctx.send(content)
+
+    async def global_stats(self, ctx: commands.Context) -> None:
+
+        top_tags_query = (
+            """
+            SELECT 
+                name, 
+                uses, 
+                COUNT(*) OVER () AS "Count",
+                SUM(uses) OVER () AS "Total Uses" 
+            FROM tags
+            ORDER BY uses DESC
+            LIMIT 3
+            """
+        )
+
+        top_data_query = (
+            """
+            WITH top_users AS (
+                SELECT 
+                    'user' AS source,
+                    userID AS identifier,
+                    SUM(cmd_count) AS metric
+                FROM command_uses
+                WHERE cmd_name LIKE '%tag%'
+                GROUP BY userID
+                ORDER BY cmd_count DESC
+                LIMIT 3
+            ),
+            top_creators AS (
+                SELECT 
+                    'creator' AS source,
+                    ownerID AS identifier,
+                    COUNT(*) AS metric
                 FROM tags
-                ORDER BY RANDOM()
-                LIMIT 1
-                """
+                GROUP BY ownerID
+                ORDER BY COUNT(*) DESC
+                LIMIT 3
             )
+            SELECT source, identifier, metric FROM top_users
+            UNION ALL
+            SELECT source, identifier, metric FROM top_creators
+            """
+        )
 
-            if row is None:
-                return await ctx.send(embed=membed('No tags exist yet!'))
-            
-            name, content = row
-
-            await ctx.send(f"Random tag found: {name}")
-            await ctx.send(content=content)
-
-    async def global_stats(self, ctx: commands.Context):
-        
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
-
-            top_tags = await conn.fetchall(
-                """
-                SELECT 
-                    name, 
-                    uses, 
-                    COUNT(*) OVER () AS "Count",
-                    SUM(uses) OVER () AS "Total Uses" 
-                FROM tags
-                ORDER BY uses DESC
-                LIMIT 3
-                """
-            )
-
-            top_data = await conn.fetchall(
-                """
-                WITH top_users AS (
-                    SELECT 
-                        'user' AS source,
-                        userID AS identifier,
-                        SUM(cmd_count) AS metric
-                    FROM command_uses
-                    WHERE cmd_name LIKE '%tag%'
-                    GROUP BY userID
-                    ORDER BY cmd_count DESC
-                    LIMIT 3
-                ),
-                top_creators AS (
-                    SELECT 
-                        'creator' AS source,
-                        ownerID AS identifier,
-                        COUNT(*) AS metric
-                    FROM tags
-                    GROUP BY ownerID
-                    ORDER BY COUNT(*) DESC
-                    LIMIT 3
-                )
-                SELECT source, identifier, metric FROM top_users
-                UNION ALL
-                SELECT source, identifier, metric FROM top_creators
-                """
-            )
+            top_tags = await conn.fetchall(top_tags_query)
+            top_data = await conn.fetchall(top_data_query)
 
         top_users = [row[1:] for row in top_data if row[0] == 'user']
         top_creators = [row[1:] for row in top_data if row[0] == 'creator']
@@ -1085,7 +1047,7 @@ class Tags(commands.Cog):
         ).set_footer(text="These stats are global.")
 
         await ctx.send(embed=em)
-        del top_data, top_users, top_creators, top_tags
+        del top_data, top_users, top_creators, top_tags, top_tags_query, top_data_query
 
     async def member_stats(self, ctx: commands.Context, user: discord.abc.User):
         e = discord.Embed(colour=discord.Colour.blurple())
@@ -1166,7 +1128,7 @@ class Tags(commands.Cog):
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def leaderboard(self, ctx: commands.Context, stat: Literal["Tag Usage", "Tags Created", "Tags Used"]):
-        lb_view = TagLeaderboard(ctx, chosen_stat=stat)
+        lb_view = TagLeaderboard(ctx, stat)
 
         await lb_view.create_lb()
         await lb_view.navigate()
