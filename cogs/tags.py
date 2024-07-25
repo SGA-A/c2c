@@ -267,7 +267,11 @@ class Tags(commands.Cog):
         self.bot.tree.remove_command(self.create_tag_menu)
 
     async def create_tag_menu_callback(self, interaction: discord.Interaction, message: discord.Message):
-        clean_content = await commands.clean_content().convert(interaction, message.content) if message.content else ""
+        if not message.content:
+            return await interaction.response.send_message(embed=membed("This message has no content to tag."))
+
+        interaction.message = message
+        clean_content = await commands.clean_content().convert(interaction, message.content)
 
         if message.attachments:
             attachments_refs = "\n".join(attachment.url for attachment in message.attachments)
