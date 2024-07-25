@@ -20,7 +20,7 @@ class ContextCommandHandler(commands.Cog):
         err = getattr(err, "original", err)
         if isinstance(err, commands.CommandNotFound):
             return
-        
+
         embed = Embed(colour=0x2B2D31)
         if isinstance(err, commands.UserInputError):
 
@@ -38,11 +38,6 @@ class ContextCommandHandler(commands.Cog):
                     name=f"Missing Permissions ({len(err.missing_permissions)})", 
                     value="\n".join(err.replace('_', ' ').title() for err in err.missing_permissions)
                 )
-                return await ctx.send(embed=embed, view=self.view)
-
-            if isinstance(err, commands.MissingRole):
-                embed.description = "You're missing a role required to use this command."
-                embed.add_field(name="Missing Role", value=f"<@&{err.missing_role}>")
                 return await ctx.send(embed=embed, view=self.view)
             return
 
