@@ -79,11 +79,11 @@ class TagEditModal(discord.ui.Modal, title='Edit Tag'):
 class TagMakeModal(discord.ui.Modal, title='Create New Tag'):
     name = discord.ui.TextInput(
         label='Name',  
-        max_length=100, 
+        max_length=80, 
         min_length=1, 
         placeholder="The name of this tag."
     )
-    
+
     content = discord.ui.TextInput(
         label='Content', 
         style=discord.TextStyle.long, 

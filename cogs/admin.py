@@ -16,11 +16,17 @@ import discord
 
 from discord import app_commands
 from discord.ext import commands
-from asqlite import Connection as asqlite_Connection
 
 from .core.helpers import membed, determine_exponent
 from .core.constants import CURRENCY, LIMITED_CONTEXTS, LIMITED_INSTALLS
 
+
+GUILD_MESSAGEABLE = (
+    discord.ForumChannel | 
+    discord.TextChannel | 
+    discord.VoiceChannel | 
+    discord.StageChannel
+)
 
 class Owner(commands.Cog):
     """Developer tools relevant to maintainence of the bot. Only available for use by the bot developers."""
@@ -97,43 +103,23 @@ class Owner(commands.Cog):
             embed.description = "Shorthands are not supported here."
             return await interaction.response.send_message(ephemeral=True, embed=embed)
 
+        if configuration.startswith("a"):
+            embed.description = f"Added {CURRENCY} **{real_amount:,}** to {user.mention}!"
+            query = f"UPDATE accounts SET {medium} = {medium} + $0 WHERE userID = $1"
+
+        elif configuration.startswith("r"):
+            embed.description = f"Deducted {CURRENCY} **{real_amount:,}** from {user.mention}!"
+            query = f"UPDATE accounts SET {medium} = {medium} - $0 WHERE userID = $1"
+
+        else:
+            embed.description = f"Set {CURRENCY} **{real_amount:,}** to {user.mention}!"
+            query = f"UPDATE accounts SET {medium} = $0 WHERE userID = $1"
+
         async with self.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
-
-            if configuration.startswith("a"):
-                embed.description = f"Added {CURRENCY} **{real_amount:,}** to {user.mention}!"
-                query = (
-                    f"""
-                    UPDATE accounts 
-                    SET {medium} = {medium} + $0
-                    WHERE userID = $1
-                    """
-                )
-
-            elif configuration.startswith("r"):
-                embed.description = f"Deducted {CURRENCY} **{real_amount:,}** from {user.mention}!"
-                query = (
-                    f"""
-                    UPDATE accounts 
-                    SET {medium} = {medium} - $0
-                    WHERE userID = $1
-                    """
-                )
-
-            else:
-                embed.description = f"Set {CURRENCY} **{real_amount:,}** to {user.mention}!"
-                query = (
-                    f"""
-                    UPDATE accounts 
-                    SET {medium} = $0
-                    WHERE userID = $1
-                    """
-                )
-
             await conn.execute(query, real_amount, user.id)
             await conn.commit()
 
-            await interaction.response.send_message(embed=embed, ephemeral=is_private)
+        await interaction.response.send_message(embed=embed, ephemeral=is_private)
 
     @commands.command(name='sync', description='Sync the bot tree for changes', aliases=("sy",))
     async def sync_tree(self, ctx: commands.Context) -> None:
@@ -333,7 +319,7 @@ class Owner(commands.Cog):
             And so on. The theme of the server is "theorized", which is why channels follow this naming convention.
 
             Apart from these three, most of the channels should be straightforward to understand.
-            -# Still lost? Let a <@&893550756953735278> know.
+            -# Still lost? Any other queries? Let a <@&893550756953735278> know.
             """
         )
 
@@ -354,14 +340,13 @@ class Owner(commands.Cog):
             Here are some of the things that make c2c great.
             - Vast economy system: make money in a simulated game of life, made personalized to your liking
             - Utility functions: a world clock (`@me wc`) and searching images across the internet
-            - Temporary voice channels: slide into <#1220483928666935396> and manage it with the `/voice` subcommands
             - Fun comamnds: image manipulation on any user, or even ship yourself with another potential partner
             - Global tag system: tag text important to you for later retrieval anywhere on the platform
             - Miscellaneous functionality: anime related commands amongst other useful developer tools
             ## Our mission
             We're always finding new things to add to our bot, to make it better for every single one of you. 
             It's a bespoke bot, tailored to your needs. Anyone in this server can request a feature for the bot and it will get implemented if there's a genuine desire and valid reason behind it.
-            -# You can message a director to submit feedback. Your bot, your rules.
+            -# Message a director for feedback. Your bot, your rules.
             """
         )
 
@@ -370,6 +355,7 @@ class Owner(commands.Cog):
     @commands.command(name='uinfo', description='Update the information channel for cc', aliases=('ui',))
     async def push_update2(self, _: commands.Context):
         """Push to update the welcome and info embed within its respective channel."""
+        await self.send_channel_guide()
         await self.send_bot_guide()
 
     @commands.command(name='quit', description='Quits the bot gracefully', aliases=('q',))
@@ -383,12 +369,12 @@ class Owner(commands.Cog):
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.describe(
         message='What you want me to say.', 
-        channel='What channel i should send in.'
+        channel='What channel to send it in.'
     )
     async def repeat(
         self, 
         ctx: commands.Context, 
-        channel: Optional[discord.abc.GuildChannel] = commands.CurrentChannel, 
+        channel: Optional[GUILD_MESSAGEABLE] = commands.CurrentChannel, 
         *, 
         message: str
     ) -> None:
@@ -416,50 +402,9 @@ class Owner(commands.Cog):
                 embed=membed(f"Sent this message to {channel.mention}.")
             )
 
-    @commands.command(name="uforuma", description="Update the forum announcement", aliases=("ufa",))
-    async def upload2(self, ctx: commands.Context):
-        f: discord.Thread = await ctx.guild.fetch_channel(1264509374508830833)
-        s = await f.fetch_message(1264509374508830833)
-        await s.edit(...)
-
-    async def do_via_webhook(self, edit_message_id: Optional[int] = None, **kwargs) -> None:
-        """`edit_message_id` must be an ID that is in the same channel this webhook is designated in."""
-        webhook = discord.Webhook.from_url(url=self.bot.WEBHOOK_URL, session=self.bot.session)
-        webhook = await webhook.fetch()
-
-        if edit_message_id:
-            del kwargs["silent"]
-            return await webhook.edit_message(edit_message_id, **kwargs)
-
-        await webhook.send(**kwargs)
-
     @commands.command(name='dispatch-webhook', description="Dispatch customizable quarterly updates", aliases=('dw',))
     async def dispatch_webhook(self, _: commands.Context):
-        embed = discord.Embed(
-            colour=discord.Colour.from_rgb(3, 102, 214),
-            title='Changelog',
-            description=(
-                "Changes taken place between <t:1711929600:d> - <t:1719705600:d> are noted here.\n\n"
-                "- ~~Added new colour roles~~ Superseded[**\U000000b2**](https://discord.com/channels/829053898333225010/1124782048041762867/1241137977225248873)\n"
-                "- ~~Changed the colour of some colour roles~~ Superseded[**\U000000b2**](https://discord.com/channels/829053898333225010/1124782048041762867/1241137977225248873)\n"
-                "- Changed the default colour for <@&914565377961369632>\n"
-                "- Emojified the topic of all non-archived channels\n"
-                "- Added new tasks to complete in Server Onboarding\n"
-                "- Removed more redundant permissions from bots\n"
-                "- Cleaned the pinned messages of most channels\n"
-                "- Added a requirement to include tags upon creating a post\n"
-                "- Simplified the guidelines thread for the forum (https://discord.com/channels/829053898333225010/1147203137195745431)\n"
-                "- Added a policy to never close threads that are inactive, only lock them\n"
-                "- Kicked more bots off the server\n"
-                "- Renamed some channels for consistency\n"
-                "- Disabled some custom AutoMod rules\n"
-                "- Added some new chatbots\n"
-                "- Improve the onboarding question selection\n"
-                "- Change how channel opt in works[**\U000000b9**](https://discord.com/channels/829053898333225010/1124782048041762867)\n"
-                "- Removed the developer channel opt in, and deleted its respective channel"
-            )
-        )
-        await self.do_via_webhook(embed=embed)
+        pass  # custom command logic goes here
 
 
 async def setup(bot: commands.Bot):
