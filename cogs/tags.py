@@ -813,7 +813,7 @@ class Tags(commands.Cog):
     async def purge(self, ctx: commands.Context, user: Optional[discord.User] = commands.Author):
 
         if (ctx.author.id != user.id) and (ctx.author.id not in self.bot.owner_ids):
-            return await ctx.send(embed=membed("You can only delete tags made by you."))
+            return await ctx.send(embed=membed("You can only delete tags you own."))
 
         async with self.bot.pool.acquire() as conn:
             count, = await conn.fetchone("SELECT COUNT(*) FROM tags WHERE ownerID = $0", user.id)
@@ -829,7 +829,7 @@ class Tags(commands.Cog):
 
             await ctx.reply(embed=membed(f"Removed all tags by {user.name}."))
 
-    async def reusable_paginator_via(self, ctx, results: tuple, em: discord.Embed, length: Optional[int] = 12):
+    async def reusable_paginator_via(self, ctx, rows: tuple, em: discord.Embed, length: Optional[int] = 12):
         """Only use this when you have a tuple containing the tag name and rowid in this order."""
 
         async def get_page_part(page: int):
@@ -838,10 +838,10 @@ class Tags(commands.Cog):
             offset = (page - 1) * length
             em.description = "\n".join(
                 f'{index}. {tag[0]} (ID: {tag[1]})'
-                for index, tag in enumerate(results[offset:offset+length], start=offset+1)
+                for index, tag in enumerate(rows[offset:offset+length], start=offset+1)
             )
 
-            n = PaginationSimple.compute_total_pages(len(results), length)
+            n = PaginationSimple.compute_total_pages(len(rows), length)
             em.set_footer(text=f"Page {page} of {n}")
             return em, n
 
@@ -863,16 +863,13 @@ class Tags(commands.Cog):
         )
 
         async with self.bot.pool.acquire() as conn:
-            results = await conn.fetchall(sql, query.lower())
+            rows = await conn.fetchall(sql, query.lower())
 
-        if not results:
+        if not rows:
             return await ctx.send(embed=membed('No tags found.'))
-        
-        await self.reusable_paginator_via(
-            ctx,
-            results=results, 
-            em=discord.Embed(colour=discord.Colour.blurple())
-        )
+
+        em = discord.Embed(colour=discord.Colour.blurple())
+        await self.reusable_paginator_via(ctx, rows, em)
 
     @tag.command(description="Transfer a tag to another member")
     @app_commands.describe(member='The member to transfer the tag to.', tag="The tag to transfer.")
@@ -916,7 +913,7 @@ class Tags(commands.Cog):
             return await ctx.send(embed=membed('No tags exist!'))
 
         em = discord.Embed(colour=discord.Colour.blurple())
-        await self.reusable_paginator_via(ctx, em, rows)
+        await self.reusable_paginator_via(ctx, rows, em)
 
     @tag.command(name="list", description="Display all tags you made")
     @app_commands.describe(member='The member to list tags of. Defaults to show yours.')
@@ -932,7 +929,7 @@ class Tags(commands.Cog):
 
         em = discord.Embed(colour=discord.Colour.blurple())
         em.set_author(name=member.display_name, icon_url=member.display_avatar.url)
-        await self.reusable_paginator_via(ctx, em, rows)
+        await self.reusable_paginator_via(ctx, rows, em)
 
     @commands.hybrid_command(description="List tags of a member or your own")
     @app_commands.describe(member='The member to list the tags of. Defaults to your own.')
