@@ -3,6 +3,7 @@ from unicodedata import name
 from time import perf_counter
 from datetime import datetime, timezone
 from typing import Callable, Literal
+from typing import Callable, Literal
 from xml.etree.ElementTree import fromstring
 
 import discord
@@ -32,6 +33,7 @@ EMBED_TIMEZONES = {
 }
 
 
+
 def extract_attributes(post_element, mode: Literal["post", "tag"]) -> dict | str:
     if mode == "post":
         keys_to_extract = {"created_at", "jpeg_url", "author"}
@@ -43,6 +45,7 @@ def extract_attributes(post_element, mode: Literal["post", "tag"]) -> dict | str
     return data
 
 
+def format_dt(dt: datetime, style: str | None = None) -> str:
 def format_dt(dt: datetime, style: str | None = None) -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
@@ -64,6 +67,7 @@ def parse_xml(xml_content, mode: Literal["post", "tag"]):
 
 
 class ImageSourceButton(discord.ui.Button):
+    def __init__(self, url: str = "https://www.google.com") -> None:
     def __init__(self, url: str = "https://www.google.com") -> None:
         super().__init__(url=url, label="Source", row=1)
 
@@ -147,12 +151,14 @@ class Utility(commands.Cog):
             )
         }
 
+
         for context_menu in self.cog_context_menus:
             self.bot.tree.add_command(context_menu)
 
     async def cog_unload(self) -> None:
         for context_menu in self.cog_context_menus:
             self.bot.tree.remove_command(context_menu)
+
 
     async def fetch_commits(self):
         async with self.bot.session.get(
@@ -164,6 +170,7 @@ class Utility(commands.Cog):
                 return commits[:3]
             return []
 
+    async def tag_search_autocomplete(self, _: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
     async def tag_search_autocomplete(self, _: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         tags_xml = await self.retrieve_via_kona(
             name=current.lower(), 
@@ -206,6 +213,7 @@ class Utility(commands.Cog):
                 return await interaction.followup.send(embed=membed(API_EXCEPTION))
             buffer = BytesIO(await response.read())
         end = perf_counter()
+        await interaction.followup.send(f"Took ~{end-start:.2f} seconds", file=discord.File(buffer, 'clip.gif'))
         await interaction.followup.send(f"Took ~{end-start:.2f} seconds", file=discord.File(buffer, 'clip.gif'))
 
     @app_commands.command(name='serverinfo', description="Show information about the server and its members")
@@ -282,6 +290,7 @@ class Utility(commands.Cog):
         paginator = CommandUsage(interaction, viewing=user)
         await paginator.fetch_data()
 
+        async def get_page_part(force_refresh: bool = None) -> discord.Embed:
         async def get_page_part(force_refresh: bool = None) -> discord.Embed:
             if force_refresh:
                 await paginator.fetch_data()
@@ -418,7 +427,14 @@ class Utility(commands.Cog):
         length: app_commands.Range[int, 1, 10] = 3,
         maximum: app_commands.Range[int, 1, 9999] = 30,
         page: app_commands.Range[int, 1] = 1
+        tag2: str = None,
+        tag3: str = None,
+        private: bool = True,
+        length: app_commands.Range[int, 1, 10] = 3,
+        maximum: app_commands.Range[int, 1, 9999] = 30,
+        page: app_commands.Range[int, 1] = 1
     ) -> None:
+
 
         tags = filter(lambda x: isinstance(x[1], str), iter(interaction.namespace))
         tagviewing = ' '.join(val for _, val in tags)
@@ -478,6 +494,7 @@ class Utility(commands.Cog):
         self, 
         interaction: discord.Interaction, 
         filter_by: Literal["neko", "kitsune", "waifu", "husbando"] = "neko"
+        filter_by: Literal["neko", "kitsune", "waifu", "husbando"] = "neko"
     ) -> None:
 
         async with self.bot.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp:
@@ -529,6 +546,7 @@ class Utility(commands.Cog):
     @app_commands.command(name="image", description="Manipulate a user's avatar")
     @app_commands.describe(
         user="The user to apply the manipulation to. Defaults to you.", 
+        user="The user to apply the manipulation to. Defaults to you.", 
         endpoint="What kind of manipulation sorcery to use."
     )
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
@@ -544,9 +562,12 @@ class Utility(commands.Cog):
         user: discord.User | None = None
     ) -> None:
 
+
         start = perf_counter()
         await interaction.response.defer(thinking=True)
 
+        user = user or interaction.user
+        params = {'image_url': user.display_avatar.url}
         user = user or interaction.user
         params = {'image_url': user.display_avatar.url}
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
@@ -562,6 +583,7 @@ class Utility(commands.Cog):
 
     @app_commands.command(name="image2", description="Manipulate a user's avatar further")
     @app_commands.describe(
+        user="The user to apply the manipulation to. Defaults to you.",
         user="The user to apply the manipulation to. Defaults to you.",
         endpoint="What kind of manipulation sorcery to use."
     )
@@ -583,6 +605,8 @@ class Utility(commands.Cog):
 
         user = user or interaction.user
         params = {'image_url': user.display_avatar.url}
+        user = user or interaction.user
+        params = {'image_url': user.display_avatar.url}
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
@@ -598,6 +622,7 @@ class Utility(commands.Cog):
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.describe(characters='Any written letters or symbols.')
+    async def charinfo(self, interaction: discord.Interaction, characters: str) -> None:
     async def charinfo(self, interaction: discord.Interaction, characters: str) -> None:
         """
         Shows you information about a number of characters.
