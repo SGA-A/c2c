@@ -4,12 +4,7 @@ from io import StringIO
 from traceback import format_exc
 from textwrap import indent, dedent
 from contextlib import redirect_stdout
-
-from typing import (
-    Any, 
-    Literal,
-    Optional 
-)
+from typing import Any, Literal
 
 import asyncio
 import discord
@@ -32,7 +27,7 @@ class Owner(commands.Cog):
     """Developer tools relevant to maintainence of the bot. Only available for use by the bot developers."""
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self._last_result: Optional[Any] = None
+        self._last_result: Any | None = None
 
     async def cog_check(self, ctx: commands.Context) -> bool:
         if ctx.author.id in self.bot.owner_ids:
@@ -84,9 +79,9 @@ class Owner(commands.Cog):
         interaction: discord.Interaction,
         configuration: Literal["add", "remove", "make"], 
         amount: str,
-        user: Optional[discord.User],
-        is_private: Optional[bool] = False,
-        medium: Optional[Literal["wallet", "bank"]] = "wallet"
+        user: discord.User | None = None,
+        is_private: bool = False,
+        medium: Literal["wallet", "bank"] = "wallet"
     ) -> None:
         """Generates or deducts a given amount of robux to the mentioned user."""
 
@@ -175,8 +170,8 @@ class Owner(commands.Cog):
                 if value:
                     try:
                         await ctx.send(f'```py\n{value}\n```')
-                    except discord.HTTPException as e:
-                        return await ctx.send(e)
+                    except discord.HTTPException:
+                        return await ctx.send(embed=membed("Output too long to display."))
             else:
                 self._last_result = ret
                 await ctx.send(f'```py\n{value}{ret}\n```')
@@ -364,7 +359,7 @@ class Owner(commands.Cog):
         await ctx.send("\U00002705")
         await self.bot.close()
 
-    @commands.hybrid_command(name='repeat', description='Repeat what you typed', aliases=('say',))
+    @app_commands.command(name='repeat', description='Repeat what you typed')
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.describe(
@@ -373,15 +368,11 @@ class Owner(commands.Cog):
     )
     async def repeat(
         self, 
-        ctx: commands.Context, 
-        channel: Optional[GUILD_MESSAGEABLE] = commands.CurrentChannel, 
-        *, 
-        message: str
+        interaction: discord.Interaction, 
+        message: str,
+        channel: GUILD_MESSAGEABLE | None = None
     ) -> None:
         """Repeat what you typed, also converting emojis based on whats inside two equalities."""
-
-        if not ctx.interaction:
-            await ctx.message.delete()
 
         matches = findall(r'<(.*?)>', message)
 
@@ -390,17 +381,16 @@ class Owner(commands.Cog):
             if emoji:
                 message = message.replace(f'<{match}>', f"{emoji}")
                 continue
-            if ctx.interaction:
-                return await ctx.send(ephemeral=True, embed=membed("Could not find that emoji."))
-            return
-
-        await channel.send(message)
-        if ctx.interaction:
-            await ctx.send(
-                delete_after=3.0, 
+            return await interaction.response.send_message(
                 ephemeral=True, 
-                embed=membed(f"Sent this message to {channel.mention}.")
+                embed=membed("Could not find that emoji.")
             )
+
+        await interaction.response.send_message(
+            ephemeral=True, 
+            delete_after=3.0, 
+            embed=membed(f"Sent this message to {channel.mention}.")
+        )
 
     @commands.command(name='dispatch-webhook', description="Dispatch customizable quarterly updates", aliases=('dw',))
     async def dispatch_webhook(self, _: commands.Context):

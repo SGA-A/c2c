@@ -1,12 +1,7 @@
 import sqlite3
 from asyncio import TimeoutError
 from datetime import datetime, timezone
-from typing import (
-    Annotated, 
-    Callable,
-    Literal,
-    Optional 
-)
+from typing import Annotated, Callable, Literal
 
 import discord
 from discord import app_commands
@@ -289,7 +284,7 @@ class Tags(commands.Cog):
         ctx: commands.Context, 
         word_input: str, 
         tag_results: list[sqlite3.Row],
-        match_view: Optional[discord.ui.View] = None
+        match_view: discord.ui.View | None = None
     ) -> None | str:
         """
         If the user types part of an name, get the tag name and its content indicated.
@@ -362,7 +357,7 @@ class Tags(commands.Cog):
         ctx: commands.Context, 
         word_input: str, 
         conn: asqlite_Connection,
-        meth: Optional[Callable] = None
+        meth: Callable | None = None
     ):
         """Partial matching for every existing tag"""
 
@@ -384,7 +379,7 @@ class Tags(commands.Cog):
         ctx: commands.Context, 
         word_input: str, 
         conn: asqlite_Connection,
-        meth: Optional[Callable] = None
+        meth: Callable | None = None
     ) -> tuple | str | None:
         """Partial matching for tags that are owned by the invoker"""
 
@@ -614,7 +609,7 @@ class Tags(commands.Cog):
         ctx: commands.Context,
         name: str,
         *,
-        content: Annotated[Optional[str], commands.clean_content] = None,
+        content: Annotated[str | None, commands.clean_content] = None,
     ):
 
         if content is None:
@@ -644,7 +639,7 @@ class Tags(commands.Cog):
                 )
 
             async with self.bot.pool.acquire() as conn:
-                content_row: Optional[tuple[str]] = await conn.fetchone(
+                content_row = await conn.fetchone(
                     "SELECT content FROM tags WHERE name = $0", name
                 )
 
@@ -810,7 +805,7 @@ class Tags(commands.Cog):
     @app_commands.describe(user='The user to remove all tags of. Defaults to your own.')
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    async def purge(self, ctx: commands.Context, user: Optional[discord.User] = commands.Author):
+    async def purge(self, ctx: commands.Context, user: discord.User = commands.Author):
 
         if (ctx.author.id != user.id) and (ctx.author.id not in self.bot.owner_ids):
             return await ctx.send(embed=membed("You can only delete tags you own."))
@@ -829,7 +824,7 @@ class Tags(commands.Cog):
 
             await ctx.reply(embed=membed(f"Removed all tags by {user.name}."))
 
-    async def reusable_paginator_via(self, ctx, rows: tuple, em: discord.Embed, length: Optional[int] = 12):
+    async def reusable_paginator_via(self, ctx, rows: tuple, em: discord.Embed, length: int = 12):
         """Only use this when you have a tuple containing the tag name and rowid in this order."""
 
         async def get_page_part(page: int):
@@ -1119,7 +1114,7 @@ class Tags(commands.Cog):
     @app_commands.describe(member="The member to get stats about, defaults to displaying global stats.")
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    async def stats(self, ctx: commands.Context, member: Optional[discord.User] = None):
+    async def stats(self, ctx: commands.Context, member: discord.User | None = None):
         if member:
             return await self.member_stats(ctx, member)
         await self.global_stats(ctx)

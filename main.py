@@ -2,7 +2,6 @@ from os import environ
 from asyncio import run
 from sys import version
 from pathlib import Path
-from typing import Literal
 from traceback import format_exception
 from aiohttp import ClientSession, DummyCookieJar, TCPConnector
 from logging import (
@@ -140,16 +139,8 @@ cogs = {
     "tags"
 }
 
-classnames = Literal[
-    "Economy", 
-    "Moderation", 
-    "Utility", 
-    "Owner", 
-    "Tags"
-]
 
-
-def get_cog_name(*, shorthand: str) -> str:
+def get_cog_name(*, shorthand: str) -> str | None:
     # Match the shortened name with the full cog name
     matches = [cog for cog in cogs if shorthand.lower() in cog]
     if len(matches) >= 1:
@@ -159,8 +150,7 @@ def get_cog_name(*, shorthand: str) -> str:
 
 @bot.command(name="test")
 async def testit(ctx: commands.Context) -> None:
-    embed = Embed()
-    embed.title = "Your balance"
+    embed = Embed(title="Your balance")
     embed.add_field(name="Field 1", value="240,254,794")
     embed.add_field(name="Field 2", value="693,201,329")
     embed.add_field(name="\U0000200b", value="\U0000200b")

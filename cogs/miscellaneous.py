@@ -1,9 +1,8 @@
 from io import BytesIO
-from random import choice
 from unicodedata import name
 from time import perf_counter
 from datetime import datetime, timezone
-from typing import Callable, Literal, Optional
+from typing import Callable, Literal
 from xml.etree.ElementTree import fromstring
 
 import discord
@@ -20,9 +19,6 @@ from .core.constants import LIMITED_CONTEXTS, LIMITED_INSTALLS
 ARROW = "<:Arrow:1263919893762543717>"
 API_EXCEPTION = "The API fucked up, try again later."
 UPLOAD_FILE_DESCRIPTION = "A file to upload alongside the thread."
-ANIME_ENDPOINTS = (
-    "https://purrbot.site/api/img/nsfw/neko/img",
-)
 EMBED_TIMEZONES = {
     'Pacific': 'US/Pacific',
     'Mountain': 'US/Mountain',
@@ -35,6 +31,7 @@ EMBED_TIMEZONES = {
     'India': 'Asia/Kolkata'
 }
 
+
 def extract_attributes(post_element, mode: Literal["post", "tag"]) -> dict | str:
     if mode == "post":
         keys_to_extract = {"created_at", "jpeg_url", "author"}
@@ -46,7 +43,7 @@ def extract_attributes(post_element, mode: Literal["post", "tag"]) -> dict | str
     return data
 
 
-def format_dt(dt: datetime, style: Optional[str] = None) -> str:
+def format_dt(dt: datetime, style: str | None = None) -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
 
@@ -67,7 +64,7 @@ def parse_xml(xml_content, mode: Literal["post", "tag"]):
 
 
 class ImageSourceButton(discord.ui.Button):
-    def __init__(self, url: Optional[str] = "https://www.google.com") -> None:
+    def __init__(self, url: str = "https://www.google.com") -> None:
         super().__init__(url=url, label="Source", row=1)
 
 
@@ -149,14 +146,14 @@ class Utility(commands.Cog):
                 allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
             )
         }
-        
+
         for context_menu in self.cog_context_menus:
             self.bot.tree.add_command(context_menu)
 
     async def cog_unload(self) -> None:
         for context_menu in self.cog_context_menus:
             self.bot.tree.remove_command(context_menu)
-    
+
     async def fetch_commits(self):
         async with self.bot.session.get(
             url="https://api.github.com/repos/SGA-A/c2c/commits",
@@ -167,7 +164,7 @@ class Utility(commands.Cog):
                 return commits[:3]
             return []
 
-    async def tag_search_autocomplete(self, _: discord.Interaction, current: str) -> list:
+    async def tag_search_autocomplete(self, _: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         tags_xml = await self.retrieve_via_kona(
             name=current.lower(), 
             mode="tag",
@@ -209,7 +206,7 @@ class Utility(commands.Cog):
                 return await interaction.followup.send(embed=membed(API_EXCEPTION))
             buffer = BytesIO(await response.read())
         end = perf_counter()
-        await interaction.followup.send(f"Took `{end-start:.2f}s`.", file=discord.File(buffer, 'clip.gif'))
+        await interaction.followup.send(f"Took ~{end-start:.2f} seconds", file=discord.File(buffer, 'clip.gif'))
 
     @app_commands.command(name='serverinfo', description="Show information about the server and its members")
     @app_commands.guild_install()
@@ -285,13 +282,13 @@ class Utility(commands.Cog):
     @app_commands.command(name="usage", description="See your total command usage")
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    async def view_user_usage(self, interaction: discord.Interaction, user: Optional[USER_ENTRY]):
+    async def view_user_usage(self, interaction: discord.Interaction, user: USER_ENTRY = None):
         user = user or interaction.user
 
         paginator = CommandUsage(interaction, viewing=user)
         await paginator.fetch_data()
 
-        async def get_page_part(force_refresh: Optional[bool] = None) -> discord.Embed:
+        async def get_page_part(force_refresh: bool = None) -> discord.Embed:
             if force_refresh:
                 await paginator.fetch_data()
 
@@ -421,14 +418,14 @@ class Utility(commands.Cog):
         self, 
         interaction: discord.Interaction, 
         tag1: str, 
-        tag2: Optional[str],
-        tag3: Optional[str],
-        private: Optional[bool] = True,
-        length: Optional[app_commands.Range[int, 1, 10]] = 3,
-        maximum: Optional[app_commands.Range[int, 1, 9999]] = 30,
-        page: Optional[app_commands.Range[int, 1]] = 1
+        tag2: str = None,
+        tag3: str = None,
+        private: bool = True,
+        length: app_commands.Range[int, 1, 10] = 3,
+        maximum: app_commands.Range[int, 1, 9999] = 30,
+        page: app_commands.Range[int, 1] = 1
     ) -> None:
-        
+
         tags = filter(lambda x: isinstance(x[1], str), iter(interaction.namespace))
         tagviewing = ' '.join(val for _, val in tags)
 
@@ -486,7 +483,7 @@ class Utility(commands.Cog):
     async def get_via_nekos(
         self, 
         interaction: discord.Interaction, 
-        filter_by: Optional[Literal["neko", "kitsune", "waifu", "husbando"]] = "neko"
+        filter_by: Literal["neko", "kitsune", "waifu", "husbando"] = "neko"
     ) -> None:
 
         async with self.bot.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp:
@@ -500,19 +497,6 @@ class Utility(commands.Cog):
 
         img_view = discord.ui.View().add_item(ImageSourceButton(url=data["url"]))
         await interaction.response.send_message(embed=embed, view=img_view)
-
-    @anime.command(name='random', description="Get a completely random waifu image")
-    async def waifu_random_fetch(self, interaction: discord.Interaction) -> None:
-
-        async with self.bot.session.get(choice(ANIME_ENDPOINTS)) as resp:
-            if resp.status != 200:
-                return await interaction.response.send_message(embed=membed(API_EXCEPTION))
-            data = await resp.json()
-        data = data["link"]
-
-        embed = discord.Embed(colour=0xFF9D2C).set_image(url=data)
-        img_view = discord.ui.View().add_item(ImageSourceButton(url=data))
-        await interaction.response.send_message(embed=embed, view=img_view, ephemeral=True)
 
     @app_commands.command(name='emojis', description='Fetch all the emojis c2c can access')
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
@@ -550,7 +534,7 @@ class Utility(commands.Cog):
 
     @app_commands.command(name="image", description="Manipulate a user's avatar")
     @app_commands.describe(
-        user="The user to apply the manipulation to.", 
+        user="The user to apply the manipulation to. Defaults to you.", 
         endpoint="What kind of manipulation sorcery to use."
     )
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
@@ -558,19 +542,19 @@ class Utility(commands.Cog):
     async def image_manip(
         self, 
         interaction: discord.Interaction, 
-        user: Optional[discord.User], 
-        endpoint: Optional[
-            Literal[
-                "abstract", "balls", "billboard", "bonks", "bubble", "canny", "clock",
-                "cloth", "contour", "cow", "cube", "dilate", "fall", "fan", "flush", "gallery",
-                "globe", "half-invert", "hearts", "infinity", "laundry", "lsd", "optics", "parapazzi"
-            ]
-        ] = "abstract"
+        endpoint: Literal[
+            "abstract", "balls", "billboard", "bonks", "bubble", "canny", "clock",
+            "cloth", "contour", "cow", "cube", "dilate", "fall", "fan", "flush", "gallery",
+            "globe", "half-invert", "hearts", "infinity", "laundry", "lsd", "optics", "parapazzi"
+        ],
+        user: discord.User = None
     ) -> None:
+
         start = perf_counter()
         await interaction.response.defer(thinking=True)
 
-        params = {'image_url': (user or interaction.user).display_avatar.url}
+        user = user or interaction.user
+        params = {'image_url': user.display_avatar.url}
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
@@ -584,7 +568,7 @@ class Utility(commands.Cog):
 
     @app_commands.command(name="image2", description="Manipulate a user's avatar further")
     @app_commands.describe(
-        user="The user to apply the manipulation to.",
+        user="The user to apply the manipulation to. Defaults to you.",
         endpoint="What kind of manipulation sorcery to use."
     )
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
@@ -592,47 +576,21 @@ class Utility(commands.Cog):
     async def image2_manip(
         self, 
         interaction: discord.Interaction,
-        user: Optional[discord.User],
-        endpoint: Optional[
-            Literal[
-                "minecraft", "patpat", "plates", "pyramid", "radiate", "rain", "ripped", "ripple",
-                "shred", "wiggle", "warp", "wave"
-            ]
-        ] = "wave"
-    ) -> None | discord.InteractionMessage:
+        endpoint: Literal[
+            "minecraft", "patpat", "plates", "pyramid", 
+            "radiate", "rain", "ripped", "ripple",
+            "shred", "wiggle", "warp", "wave"
+        ],
+        user: discord.User = None
+    ):
 
         start = perf_counter()
         await interaction.response.defer(thinking=True)
 
-        params = {'image_url': (user or interaction.user).display_avatar.url}
+        user = user or interaction.user
+        params = {'image_url': user.display_avatar.url}
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
-
-        await self.format_gif_api_response(
-            interaction,
-            start=start,
-            api_url=api_url,
-            params=params,
-            headers=headers
-        )
-
-    @app_commands.command(name="locket", description="Insert people into a heart-shaped locket")
-    @app_commands.describe(user="The user to add to the locket.", user2="The second user to add to the locket.")
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    @app_commands.allowed_installs(**LIMITED_INSTALLS)
-    async def locket_manip(
-        self, 
-        interaction: discord.Interaction, 
-        user: Optional[discord.User], 
-        user2: discord.User
-    ) -> None:
-
-        start = perf_counter()
-        await interaction.response.defer(thinking=True)
-
-        params = {'image_url': (user or interaction.user).display_avatar.url, 'image_url_2': user2.display_avatar.url}
-        headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
-        api_url = "https://api.jeyy.xyz/v2/image/heart_locket"
 
         await self.format_gif_api_response(
             interaction,
@@ -646,7 +604,7 @@ class Utility(commands.Cog):
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.describe(characters='Any written letters or symbols.')
-    async def charinfo(self, interaction: discord.Interaction, *, characters: str) -> None:
+    async def charinfo(self, interaction: discord.Interaction, characters: str) -> None:
         """
         Shows you information about a number of characters.
         Only up to 25 characters at a time.
@@ -811,11 +769,11 @@ class Utility(commands.Cog):
         interaction: discord.Interaction, 
         forum: discord.ForumChannel,
         name: str, 
-        description: Optional[str], 
         tags: str, 
-        file: Optional[discord.Attachment], 
-        file2: Optional[discord.Attachment],
-        file3: Optional[discord.Attachment]
+        description: str = None, 
+        file: discord.Attachment = None, 
+        file2: discord.Attachment = None,
+        file3: discord.Attachment = None
     ) -> None:
         await interaction.response.defer(thinking=True)
 

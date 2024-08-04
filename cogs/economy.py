@@ -1,5 +1,5 @@
 import sqlite3
-import datetime
+from datetime import datetime, timedelta, timezone
 from re import search
 from asyncio import sleep
 from textwrap import dedent
@@ -19,14 +19,12 @@ from typing import (
     Any,
     Callable,
     Coroutine, 
-    Optional, 
     Literal, 
     List
 )
 
 import discord
 import aiofiles
-from pytz import timezone
 from discord.ext import commands, tasks
 from discord import app_commands
 from asqlite import ProxiedConnection as asqlite_Connection
@@ -65,7 +63,7 @@ def format_multiplier(multiplier):
     """Formats a multiplier for a more readable display."""
     description = f"` {multiplier[0]} ` \U00002014 {multiplier[1]}"
     if multiplier[2]:
-        expiry_time = datetime.datetime.fromtimestamp(multiplier[2], tz=timezone("UTC"))
+        expiry_time = datetime.fromtimestamp(multiplier[2], tz=timezone.utc)
         expiry_time = discord.utils.format_dt(expiry_time, style="R")
         description += f" (expires {expiry_time})"
     return description
@@ -1706,9 +1704,9 @@ class ExtendedLeaderboard(Leaderboard):
         async with self.interaction.client.pool.acquire() as conn:
             data = await conn.fetchall(self.query_dict[self.chosen_option])
 
-        self.data = self.populate_data(bot=self.interaction.client, ret=data)
+        self.data = self.populate_data(self.interaction.client, data)
 
-    async def get_page_part(self, force_refresh: Optional[bool] = None) -> tuple[discord.Embed, int]:
+    async def get_page_part(self, force_refresh: bool | None = None) -> discord.Embed:
         if force_refresh:
             await self.create_lb()
 
@@ -2141,7 +2139,7 @@ class MultiplierView(RefreshPagination):
         interaction: discord.Interaction, 
         chosen_multiplier: str, 
         viewing: USER_ENTRY, 
-        get_page: Optional[Callable] = None
+        get_page: Callable | None = None
     ) -> None:
 
         self.viewing = viewing
@@ -2378,7 +2376,7 @@ class Economy(commands.Cog):
             return
 
         row_id, expiry = next_task
-        timestamp = datetime.datetime.fromtimestamp(expiry, tz=timezone("UTC"))
+        timestamp = datetime.fromtimestamp(expiry, tz=timezone.utc)
         await discord.utils.sleep_until(timestamp)
 
         async with interaction.client.pool.acquire() as conn:
@@ -2590,7 +2588,7 @@ class Economy(commands.Cog):
         conn_input: asqlite_Connection, 
         amount: float | int = 0, 
         mode: str = "wallet"
-    ) -> Optional[Any]:
+    ) -> Any | None:
 
         """
         Modifies a user's balance in a given mode: either wallet (default) or bank.
@@ -2615,7 +2613,7 @@ class Economy(commands.Cog):
         conn_input: asqlite_Connection, 
         amount: float | int | str = 0, 
         mode: str = "wallet"
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """
         Modifies a user's field values in any given mode.
 
@@ -2645,8 +2643,8 @@ class Economy(commands.Cog):
         amount1: float | int, 
         mode2: str, 
         amount2: float | int, 
-        table_name: Optional[str] = "accounts"
-        ) -> Optional[Any]:
+        table_name: str = "accounts"
+        ) -> Any | None:
         """
         Modifies any two fields at once by their respective amounts. Returning the values of both fields.
 
@@ -2674,8 +2672,8 @@ class Economy(commands.Cog):
         amount2: float | int, 
         mode3: str, 
         amount3: float | int, 
-        table_name: Optional[str] = "accounts"
-    ) -> Optional[Any]:
+        table_name: str = "accounts"
+    ) -> Any | None:
         """
         Modifies any three fields at once by their respective amounts. Returning the values of both fields.
 
@@ -2720,8 +2718,13 @@ class Economy(commands.Cog):
     # ------------------ INVENTORY FUNCS ------------------ #
 
     @staticmethod
-    async def get_one_inv_data_new(user: USER_ENTRY, item_name: str, conn_input: asqlite_Connection) -> Optional[Any]:
+    async def get_one_inv_data_new(
+        user: USER_ENTRY, 
+        item_name: str, 
+        conn_input: asqlite_Connection
+    ) -> Any | None:
         """Fetch inventory data from one specific item inputted. Use this method before making any updates."""
+
         query = (
             """
             SELECT inventory.qty
@@ -2772,7 +2775,7 @@ class Economy(commands.Cog):
         amount: float | int, 
         item_name: str, 
         conn: asqlite_Connection
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """
         Modify a user's inventory. 
 
@@ -2815,7 +2818,7 @@ class Economy(commands.Cog):
         amount: float | int, 
         item_id: int, 
         conn: asqlite_Connection
-    ) -> Optional[Any]:
+    ) -> Any | None:
         """
         Modify a user's inventory by the item ID. 
 
@@ -2911,7 +2914,7 @@ class Economy(commands.Cog):
     async def check_has_cd(
         conn: asqlite_Connection, 
         user_id: int, 
-        cd_type: Optional[str] = None, 
+        cd_type: str | None = None, 
         mode="t", 
         until = "N/A"
     ) -> bool | str:
@@ -2939,21 +2942,22 @@ class Economy(commands.Cog):
             return None
 
         current_time = discord.utils.utcnow()
-        time_left = datetime.datetime.fromtimestamp(until, tz=timezone('UTC'))
+        time_left = datetime.fromtimestamp(until, tz=timezone.utc)
         time_left = (time_left - current_time).total_seconds()
 
         if time_left > 0:
-            when = current_time + datetime.timedelta(seconds=time_left)
+            when = current_time + timedelta(seconds=time_left)
             return discord.utils.format_dt(when, style=mode), discord.utils.format_dt(when, style="R")
         return False
 
     @staticmethod
     async def update_cooldown(
-        conn_input: asqlite_Connection, *, 
+        conn_input: asqlite_Connection, 
+        *, 
         user_id: USER_ENTRY, 
         cooldown_type: str, 
         new_cd: str
-    ) -> Any:
+    ) -> None:
         """Update a user's cooldown.
 
         Raises `sqlite3.IntegrityError` when foreign userID constraint fails.
@@ -2985,8 +2989,8 @@ class Economy(commands.Cog):
         multi_type: MULTIPLIER_TYPES,
         cause: str,
         description: str,
-        expiry: Optional[float] = None,
-        on_conflict: Optional[str] = "UPDATE SET amount = amount + $1, description = $4"
+        expiry: float | None = None,
+        on_conflict: str = "UPDATE SET amount = amount + $1, description = $4"
     ) -> None:
         """
         Add a multiplier to the database.
@@ -3119,17 +3123,18 @@ class Economy(commands.Cog):
         """Send a tip if the user has enabled tips."""
 
         tips_enabled = await self.is_setting_enabled(conn, interaction.user.id, "tips")
+        if not tips_enabled:
+            return
 
-        if tips_enabled:
-            async with aiofiles.open("C:\\Users\\georg\\Documents\\c2c\\tips.txt") as f:
-                contents = await f.readlines()
-                shuffle(contents)
-                atip = choice(contents)
+        async with aiofiles.open("C:\\Users\\georg\\Documents\\c2c\\tips.txt") as f:
+            contents = await f.readlines()
+            atip = choice(contents)
 
-            tip = membed(f"\U0001f4a1 `TIP`: {atip}")
-            tip.set_footer(text="You can disable these tips in /settings.")
+        tip = membed(f"\U0001f4a1 `TIP`: {atip}")
+        tip.set_footer(text="You can disable these tips in /settings.")
 
-            await interaction.followup.send(embed=tip, ephemeral=True)
+        await interaction.followup.send(embed=tip, ephemeral=True)
+        del contents, atip, tip
 
     async def add_exp_or_levelup(
         self, 
@@ -3261,7 +3266,7 @@ class Economy(commands.Cog):
     @app_commands.describe(setting="The specific setting you want to adjust. Defaults to view.")
     @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
     @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
-    async def view_user_settings(self, interaction: discord.Interaction, setting: Optional[str]) -> None:
+    async def view_user_settings(self, interaction: discord.Interaction, setting: str | None = None) -> None:
         """View or adjust user-specific settings."""
         async with self.bot.pool.acquire() as conn:
             conn: asqlite_Connection
@@ -3282,15 +3287,15 @@ class Economy(commands.Cog):
     async def my_multi(
         self, 
         interaction: discord.Interaction, 
-        user: Optional[USER_ENTRY], 
-        multiplier: Optional[Literal["Robux", "XP", "Luck"]] = "Robux"
+        user: USER_ENTRY | None = None, 
+        multiplier: Literal["Robux", "XP", "Luck"] = "Robux"
     ) -> None:
 
         user = user or interaction.user
         paginator = MultiplierView(interaction, chosen_multiplier=multiplier, viewing=user)
         await paginator.format_pages()
 
-        async def get_page_part(force_refresh: Optional[bool] = None):
+        async def get_page_part(force_refresh: bool = None) -> discord.Embed:
             if force_refresh:
                 await paginator.format_pages()
 
@@ -3521,7 +3526,7 @@ class Economy(commands.Cog):
         item_sender_data: tuple,
         coin_sender: discord.Member,
         coin_sender_qty: int,
-        can_continue: Optional[bool] = True
+        can_continue: bool = True
     ) -> None | bool:
         """
         Send a confirmation prompt to `item_sender`, asking to confirm whether 
@@ -3560,7 +3565,7 @@ class Economy(commands.Cog):
         coin_sender_qty: int,
         item_sender_qty: int,
         item_sender_data: tuple,
-        can_continue: Optional[bool] = True
+        can_continue: bool = True
     ) -> None | bool:
 
         """
@@ -3600,7 +3605,7 @@ class Economy(commands.Cog):
         item_sender2: discord.Member,
         item_sender2_qty: int,
         item_sender2_data: tuple,
-        can_continue: Optional[bool] = True
+        can_continue: bool = True
     ) -> None | bool:
 
         """
@@ -4008,7 +4013,7 @@ class Economy(commands.Cog):
         self, 
         conn: asqlite_Connection, 
         user_id: int, 
-        items_to_delete: Optional[set] = None 
+        items_to_delete: set | None = None
     ) -> int | None:
         """
         Delete showcase items that a user no longer has. 
@@ -4140,7 +4145,7 @@ class Economy(commands.Cog):
         emb.title = "Shop"
         length = 6
 
-        async def get_page_part(page: int):
+        async def get_page_part(page: int) -> tuple[discord.Embed, int]:
             async with self.bot.pool.acquire() as conn:
                 wallet = await self.get_wallet_data_only(interaction.user, conn) or 0
             emb.description = f"> You have {CURRENCY} **{wallet:,}**.\n\n"
@@ -4176,7 +4181,7 @@ class Economy(commands.Cog):
         self, 
         interaction: discord.Interaction, 
         item: str, 
-        sell_quantity: Optional[app_commands.Range[int, 1]] = 1
+        sell_quantity: app_commands.Range[int, 1] = 1
     ) -> None:
         """Sell an item you already own."""
         seller = interaction.user
@@ -4389,7 +4394,7 @@ class Economy(commands.Cog):
 
     @register_item('Bitcoin')
     async def gain_bitcoin_multiplier(interaction: discord.Interaction, _: int, conn: asqlite_Connection) -> None:
-        future_expiry = (discord.utils.utcnow() + datetime.timedelta(minutes=30)).timestamp()
+        future_expiry = (discord.utils.utcnow() + timedelta(minutes=30)).timestamp()
 
         applied_successfully = await Economy.add_multiplier(
             conn, 
@@ -4429,7 +4434,7 @@ class Economy(commands.Cog):
         self, 
         interaction: discord.Interaction, 
         item: str, 
-        quantity: Optional[app_commands.Range[int, 1]] = 1
+        quantity: app_commands.Range[int, 1] = 1
     ) -> discord.WebhookMessage | None:
         """Use a currently owned item."""
 
@@ -4594,7 +4599,7 @@ class Economy(commands.Cog):
     async def find_profile(
         self, 
         interaction: discord.Interaction, 
-        user: Optional[USER_ENTRY]
+        user: USER_ENTRY | None = None
     ) -> None:
         """View your profile within the economy."""
 
@@ -4734,7 +4739,7 @@ class Economy(commands.Cog):
     async def inventory(
         self, 
         interaction: discord.Interaction, 
-        member: Optional[USER_ENTRY]
+        member: USER_ENTRY | None = None
     ) -> None:
         """View your inventory or another player's inventory."""
         member = member or interaction.user
@@ -4761,7 +4766,7 @@ class Economy(commands.Cog):
         paginator = RefreshPagination(interaction)
         paginator.length = 8
 
-        async def get_page_part(force_refresh: Optional[bool] = None):
+        async def get_page_part(force_refresh: bool | None = None) -> discord.Embed:
             """Helper function to determine what page of the paginator we're on."""
             nonlocal owned_items
             if force_refresh:
@@ -4885,7 +4890,7 @@ class Economy(commands.Cog):
                 )
 
             async with conn.transaction():
-                ncd = (discord.utils.utcnow() + datetime.timedelta(minutes=40)).timestamp()
+                ncd = (discord.utils.utcnow() + timedelta(minutes=40)).timestamp()
 
                 await self.update_cooldown(
                     conn, 
@@ -4954,7 +4959,7 @@ class Economy(commands.Cog):
                     )
                 )
 
-            ncd = (discord.utils.utcnow() + datetime.timedelta(days=2)).timestamp()
+            ncd = (discord.utils.utcnow() + timedelta(days=2)).timestamp()
             async with conn.transaction():
 
                 await self.update_cooldown(
@@ -5019,7 +5024,7 @@ class Economy(commands.Cog):
         )
 
         if value:
-            ncd = (discord.utils.utcnow() + datetime.timedelta(days=2)).timestamp()
+            ncd = (discord.utils.utcnow() + timedelta(days=2)).timestamp()
 
             async with self.bot.pool.acquire() as conn:
                 await self.change_job_new(interaction.user, conn, job_name='None')
@@ -5037,7 +5042,7 @@ class Economy(commands.Cog):
     async def find_balance(
         self, 
         interaction: discord.Interaction, 
-        user: Optional[USER_ENTRY]
+        user: USER_ENTRY | None = None
     ) -> None:
         user = user or interaction.user
 
@@ -5074,7 +5079,7 @@ class Economy(commands.Cog):
                     embed=membed(f"You already got your {recurring_income_type} robux this {noun_period}, try again {has_cd[1]}.")
                 )
 
-            next_cd = discord.utils.utcnow() + datetime.timedelta(weeks=weeks_away)
+            next_cd = discord.utils.utcnow() + timedelta(weeks=weeks_away)
             async with conn.transaction():
 
                 try:
@@ -5123,7 +5128,7 @@ class Economy(commands.Cog):
     @app_commands.describe(member='The player to remove all of the data of. Defaults to you.')
     @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
     @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
-    async def discontinue_bot(self, interaction: discord.Interaction, member: Optional[USER_ENTRY]) -> None:
+    async def discontinue_bot(self, interaction: discord.Interaction, member: USER_ENTRY | None = None) -> None:
         """Opt out of the virtual economy and delete all of the user data associated."""
 
         member = member or interaction.user
@@ -5375,7 +5380,7 @@ class Economy(commands.Cog):
         lb.timestamp = discord.utils.utcnow()
         lb.title = f"{item_name} Global Leaderboard"
 
-        async def get_page_part(force_refresh: Optional[bool] = None) -> tuple[discord.Embed, int]:
+        async def get_page_part(force_refresh: bool | None = None) -> discord.Embed:
             if force_refresh:
                 async with self.bot.pool.acquire() as conn:
                     await paginator.create_lb(conn, item_id)
@@ -5696,7 +5701,7 @@ class Economy(commands.Cog):
         interaction: discord.Interaction,  
         wallet_amount: int, 
         exponent_amount : str | int,
-        has_keycard: Optional[bool] = False
+        has_keycard: bool = False
     ) -> int | None:
         """Reusable wallet checks that are common amongst most gambling commands."""
 

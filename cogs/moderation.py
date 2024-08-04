@@ -1,7 +1,6 @@
 from re import compile
-from pytz import timezone
 from time import perf_counter
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 
 import discord
 from discord import app_commands
@@ -136,7 +135,7 @@ class RoleManagement(app_commands.Group):
 
         await interaction.response.send_message(embed=membed(f"Added {role.mention} to {user.mention}."))
 
-    @app_commands.command(name="remove", description="Removes a role from the specified member")
+    @app_commands.command(name="remove", description="Removes a role from a member")
     @app_commands.describe(user="The user to remove the role from.", role="The role to remove from this user.")
     async def remove_role(self, interaction: discord.Interaction, user: discord.Member, role: discord.Role):
         
@@ -157,17 +156,12 @@ class RoleManagement(app_commands.Group):
 
         await interaction.response.send_message(embed=membed(f"Removed {role.mention} from {user.mention}."))
 
-    @app_commands.command(name="custom", description="Add or remove multiple roles in a single command")
+    @app_commands.command(name="custom", description="Add or remove multiple roles from a user")
     @app_commands.describe(
         user="The user to add/remove roles to.",
         roles="Precede role name with +/- to add or remove. Separate each with spaces."
     )
-    async def custom_roles(
-        self,
-        interaction: discord.Interaction,
-        user: discord.Member,
-        roles: str
-    ) -> discord.WebhookMessage:
+    async def custom_roles(self, interaction: discord.Interaction, user: discord.Member, roles: str):
         await interaction.response.defer()
 
         pattern = compile(r'([+-])([^+-]+)')
@@ -184,9 +178,7 @@ class RoleManagement(app_commands.Group):
                 interaction.guild.roles
             )
 
-            if rolemention is None:
-                continue
-            if rolemention.managed:
+            if (rolemention is None) or rolemention.managed:
                 continue
 
             if switch == "+":
@@ -215,8 +207,8 @@ class RoleManagement(app_commands.Group):
 
         await interaction.followup.send(embed=embed)
 
-    @app_commands.command(name="all", description="Adds a role to all members")
-    @app_commands.describe(role="The role to add to all members.")
+    @app_commands.command(name="all", description="Adds a role to all server members")
+    @app_commands.describe(role="The role to add to all server members.")
     async def add_role_all(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
         
@@ -243,8 +235,8 @@ class RoleManagement(app_commands.Group):
             if resp:
                 await interaction.followup.send(embed=membed(resp))
     
-    @app_commands.command(name="rall", description="Removes a role from all members")
-    @app_commands.describe(role="The role to remove to all members.")
+    @app_commands.command(name="rall", description="Removes a role from all server members")
+    @app_commands.describe(role="The role to remove to all server members.")
     async def remove_roles_all(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
 
@@ -348,7 +340,7 @@ class RoleManagement(app_commands.Group):
             if resp:
                 return await interaction.followup.send(embed=membed(resp))
         
-    @app_commands.command(name="humans", description="Adds a role to all humans")
+    @app_commands.command(name="humans", description="Add a role to all humans in the server")
     @app_commands.describe(role="The role to add to all humans.")
     async def add_humans(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
@@ -374,7 +366,7 @@ class RoleManagement(app_commands.Group):
             if resp:
                 await interaction.followup.send(embed=membed(resp))
 
-    @app_commands.command(name="removehumans", description="Removes a role from all humans")
+    @app_commands.command(name="removehumans", description="Remove a role from all humans in the server")
     @app_commands.describe(role="The role to remove from all humans.")
     async def remove_humans(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
@@ -404,9 +396,9 @@ class RoleManagement(app_commands.Group):
             )
             if resp:
                 return await interaction.followup.send(embed=membed(resp))
-        
+
     @app_commands.command(name="in", description="Adds a role to all members currently in a base role")
-    @app_commands.describe(base_role="The role members need to get a new role.", new_role="The new role to add to all members in the base role.")
+    @app_commands.describe(base_role="The role members need to get the new role.", new_role="The new role to add to all members in the base role.")
     async def add_role_in(self, interaction: discord.Interaction, base_role: discord.Role, new_role: discord.Role):
         await interaction.response.defer(thinking=True)
 
@@ -468,6 +460,7 @@ class Moderation(commands.Cog):
         self.bot = bot
         mod_context = app_commands.AppCommandContext(guild=True)
         mod_install = app_commands.AppInstallationType(guild=True)
+
         self.purge_from_here_cmd = app_commands.ContextMenu(
             name='Purge Up To Here',
             callback=self.purge_from_here,
@@ -502,35 +495,28 @@ class Moderation(commands.Cog):
 
     @tasks.loop()
     async def check_for_role(self):
-        # fetch the task with the lowest/earliest `end_time`
+        # sqlite implicitly orders by end_time in ascending order 
         async with self.bot.pool.acquire() as conn:
-            next_task = await conn.fetchone('SELECT * FROM tasks ORDER BY end_time ASC LIMIT 1')
+            next_task = await conn.fetchone('SELECT * FROM tasks ORDER BY end_time LIMIT 1')
 
-        # if no remaining tasks, stop the loop
         if next_task is None:
             self.check_for_role.cancel()
             return
         
-        # sleep until the task should be done
-        # if the time is before now, this should return immediately
-        
         mod_to, role_id, end_time, in_guild = next_task
-        timestamp = datetime.fromtimestamp(end_time, tz=timezone("UTC"))
+        timestamp = datetime.fromtimestamp(end_time, tz=timezone.utc)
         await discord.utils.sleep_until(timestamp)
 
-        # do your actual task stuff here
         guild = self.bot.get_guild(in_guild)
-        
+        mem: discord.Member = guild.get_member(mod_to)
+
         try:
-            mem: discord.Member = guild.get_member(mod_to)
             guild = await mem.remove_roles(
                 discord.Object(id=role_id),
                 reason="Temporary role has expired"
             )
-
         except discord.HTTPException:
             pass
-
         finally:
             async with self.bot.pool.acquire() as conn:
                 await conn.execute('DELETE FROM tasks WHERE mod_to = $0', mod_to)
@@ -576,7 +562,7 @@ class Moderation(commands.Cog):
 
     temprole = app_commands.Group(
         name="temprole", 
-        description="Set roles that expire after a certain time.", 
+        description="Manage roles containing an expiry attribute.", 
         default_permissions=discord.Permissions(manage_roles=True),
         allowed_contexts=app_commands.AppCommandContext(guild=True, dm_channel=False, private_channel=False),
         allowed_installs=app_commands.AppInstallationType(guild=True, user=False)
