@@ -404,7 +404,6 @@ class Tags(commands.Cog):
                 SELECT name
                 FROM tags
                 WHERE LOWER(name) LIKE '%' || $0 || '%'
-                ORDER BY name DESC
                 LIMIT 12
                 """
             )
@@ -420,7 +419,6 @@ class Tags(commands.Cog):
                 SELECT name
                 FROM tags
                 WHERE ownerID = $0 AND LOWER(name) LIKE '%' || $1 || '%'
-                ORDER BY name DESC
                 LIMIT 12
                 """
             )
