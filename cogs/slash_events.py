@@ -3,7 +3,7 @@ from datetime import timedelta
 from traceback import format_exception
 from logging import error as log_error
 
-from discord.ext import commands
+from discord.ext.commands import Cog, Bot
 from discord.utils import format_dt, utcnow
 from discord import (
     app_commands, 
@@ -16,8 +16,8 @@ from .core.views import MessageDevelopers
 from .core.constants import COOLDOWN_PROMPTS
 
 
-class SlashExceptionHandler(commands.Cog):
-    def __init__(self, bot: commands.Bot) -> None:
+class SlashExceptionHandler(Cog):
+    def __init__(self, bot: Bot) -> None:
         self.bot = bot
         self.view = MessageDevelopers()
 
@@ -76,5 +76,5 @@ class SlashExceptionHandler(commands.Cog):
         log_error(formatted_traceback)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: Bot):
     await bot.add_cog(SlashExceptionHandler(bot))
