@@ -909,7 +909,7 @@ class Tags(commands.Cog):
         await self.reusable_paginator_via(ctx, rows, em)
 
     @tag.command(name="list", description="Show tags created by a specific user")
-    @app_commands.describe(member='The member to list tags of. Defaults to show yours.')
+    @app_commands.describe(member='The member to show the tags of. Defaults to yours.')
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def _list(self, ctx: commands.Context, *, member: discord.User = commands.Author):
@@ -925,7 +925,7 @@ class Tags(commands.Cog):
         await self.reusable_paginator_via(ctx, rows, em)
 
     @commands.hybrid_command(description="Show tags created by a specific user (alias command)")
-    @app_commands.describe(member='The member to list the tags of. Defaults to your own.')
+    @app_commands.describe(member='The member to show the tags of. Defaults to yours.')
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def tags(self, ctx: commands.Context, *, member: discord.User = commands.Author):
