@@ -730,14 +730,14 @@ class Tags(commands.Cog):
         tag_name: str, 
         row: sqlite3.Row
     ) -> None:
-        """Expects row in this format: rowid, uses, ownerID, created_at"""
+        """Expects row in this format: rowid, uses, ownerID, time_created"""
 
         embed = discord.Embed(colour=discord.Colour.blurple()).set_footer(text='Tag created')
 
-        rowid, uses, owner_id, created_at = row
+        rowid, uses, owner_id, time_created = row
 
         embed.title = tag_name
-        embed.timestamp = datetime.fromtimestamp(created_at, tz=timezone.utc)
+        embed.timestamp = datetime.fromtimestamp(time_created, tz=timezone.utc)
 
         user = self.bot.get_user(owner_id) or (await self.bot.fetch_user(owner_id))
         embed.set_author(
@@ -788,7 +788,7 @@ class Tags(commands.Cog):
             
             record = await conn.fetchone(
                 """
-                SELECT rowid, uses, ownerID, created_at
+                SELECT rowid, uses, ownerID, time_created
                 FROM tags
                 WHERE name = $0
                 """, name
