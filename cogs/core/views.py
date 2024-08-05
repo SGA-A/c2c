@@ -48,8 +48,7 @@ class BaseInteractionView(discord.ui.View):
         super().__init__(timeout=timeout)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, original=self.controlling_user.id)
-
+        return await economy_check(interaction, self.controlling_user.id)
 
 
 class BaseContextView(discord.ui.View):
@@ -69,7 +68,7 @@ class BaseContextView(discord.ui.View):
         super().__init__(timeout=timeout)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, original=self.controlling_user.id)
+        return await economy_check(interaction, self.controlling_user.id)
 
 
 class ConfirmationButton(discord.ui.Button):
