@@ -943,8 +943,8 @@ class Tags(commands.Cog):
 
         name, content = row
 
-        await ctx.send(f"Random tag found: {name}")
-        await ctx.send(content)
+        msg = await ctx.send(f"Random tag found: {name}")
+        await msg.reply(content)
 
     async def global_stats(self, ctx: commands.Context) -> None:
 
