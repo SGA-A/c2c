@@ -908,7 +908,7 @@ class Tags(commands.Cog):
         em = discord.Embed(colour=discord.Colour.blurple())
         await self.reusable_paginator_via(ctx, rows, em)
 
-    @tag.command(name="list", description="Display all tags you made")
+    @tag.command(name="list", description="Show tags created by a specific user")
     @app_commands.describe(member='The member to list tags of. Defaults to show yours.')
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
@@ -924,7 +924,7 @@ class Tags(commands.Cog):
         em.set_author(name=member.display_name, icon_url=member.display_avatar.url)
         await self.reusable_paginator_via(ctx, rows, em)
 
-    @commands.hybrid_command(description="List tags of a member or your own")
+    @commands.hybrid_command(description="Show tags created by a specific user (alias command)")
     @app_commands.describe(member='The member to list the tags of. Defaults to your own.')
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
