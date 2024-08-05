@@ -35,8 +35,6 @@ class BaseInteractionView(discord.ui.View):
     """
     A view that ensures that only the interaction creator can make use of this view.
     
-    This view also deletes itself when timing out.
-    
     This view has no items, you'll need to add them in manually.
     """
     def __init__(
@@ -50,7 +48,7 @@ class BaseInteractionView(discord.ui.View):
         super().__init__(timeout=timeout)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, original=self.controlling_user)
+        return await economy_check(interaction, original=self.controlling_user.id)
 
 
 
@@ -71,7 +69,7 @@ class BaseContextView(discord.ui.View):
         super().__init__(timeout=timeout)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, original=self.controlling_user)
+        return await economy_check(interaction, original=self.controlling_user.id)
 
 
 class ConfirmationButton(discord.ui.Button):

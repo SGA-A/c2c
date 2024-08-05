@@ -196,8 +196,7 @@ class PaginationSimple(discord.ui.View):
             case _:
                 self.update_buttons()
 
-        # is it an interaction?
-        if hasattr(self.ctx, "response"):
+        if isinstance(self.ctx, discord.Interaction):
             await self.ctx.response.send_message(**kwargs)
 
             if self.is_finished():
@@ -263,7 +262,7 @@ class RefreshPagination(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Make sure only original user that invoked interaction can interact"""
-        return await economy_check(interaction, self.interaction.user)
+        return await economy_check(interaction, self.interaction.user.id)
 
     async def on_timeout(self) -> None:
         for item in self.children:
@@ -354,7 +353,7 @@ class PaginationItem(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Make sure only original user that invoked interaction can interact"""
-        return await economy_check(interaction, self.interaction.user)
+        return await economy_check(interaction, self.interaction.user.id)
 
     async def on_timeout(self) -> None:
         for item in self.children:

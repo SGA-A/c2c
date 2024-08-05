@@ -117,16 +117,23 @@ async def determine_exponent(interaction: discord.Interaction, rinput: str) -> s
     return actual_value
 
 
-async def economy_check(interaction: discord.Interaction, original: Union[discord.Member, discord.User]) -> bool:
+async def economy_check(interaction: discord.Interaction, original_id: int) -> bool:
     """Shared interaction check common amongst most interactions."""
-    if original.id == interaction.user.id:
+    if original_id == interaction.user.id:
         return True
     await interaction.response.send_message(
         ephemeral=True,
         delete_after=5.0,
-        embed=membed(f"This menu is controlled by {original.mention}.")
+        embed=membed(f"This menu is controlled by <@{original_id}>.")
     )
     return False
+
+
+async def fetchall_generator(conn, query: str, /, *parameters):
+    """Generator version of fetchall to yield rows one by one."""
+    async with conn.execute(query, *parameters) as cursor:
+        async for row in cursor:
+            yield row
 
 
 async def send_message(invocation: Context | discord.Interaction, **kwargs):

@@ -619,7 +619,7 @@ class ConfirmResetData(discord.ui.View):
         super().__init__(timeout=30.0)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, self.interaction.user)
+        return await economy_check(interaction, self.interaction.user.id)
 
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
         try:
@@ -697,7 +697,7 @@ class RememberPositionView(discord.ui.View):
             self.add_item(RememberPosition(emoji, self.determine_outcome))
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, self.interaction.user)
+        return await economy_check(interaction, self.interaction.user.id)
 
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
 
@@ -778,7 +778,7 @@ class RememberOrder(discord.ui.View):
             self.add_item(removed[index])
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, self.interaction.user)
+        return await economy_check(interaction, self.interaction.user.id)
 
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
 
@@ -945,7 +945,7 @@ class BalanceView(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         #! Check it's the author of the original interaction running this
 
-        value = await economy_check(interaction, self.interaction.user)
+        value = await economy_check(interaction, self.interaction.user.id)
         if not value:
             return False
         del value
@@ -1143,7 +1143,7 @@ class BlackjackUi(discord.ui.View):
         return new_amount_balance, prnctl
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, self.interaction.user)
+        return await economy_check(interaction, self.interaction.user.id)
 
     @discord.ui.button(label='Hit', style=discord.ButtonStyle.primary)
     async def hit_bj(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -1445,7 +1445,7 @@ class HighLow(discord.ui.View):
             item.style = discord.ButtonStyle.secondary
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, self.interaction.user)
+        return await economy_check(interaction, self.interaction.user.id)
 
     async def on_timeout(self) -> None:
         async with self.interaction.client.pool.acquire() as conn:
@@ -1944,7 +1944,7 @@ class MatchView(discord.ui.View):
         super().__init__(timeout=15.0)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, self.interaction.user)
+        return await economy_check(interaction, self.interaction.user.id)
 
     async def on_timeout(self) -> None:
         await self.interaction.delete_original_response()
@@ -2107,7 +2107,7 @@ class UserSettings(discord.ui.View):
             pass
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return await economy_check(interaction, self.interaction.user)
+        return await economy_check(interaction, self.interaction.user.id)
 
 
 class MultiplierView(RefreshPagination):
