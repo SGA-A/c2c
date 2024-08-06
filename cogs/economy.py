@@ -240,13 +240,6 @@ def calculate_hand(hand: list) -> int:
     return total
 
 
-def plural_for_own(count: int) -> str:
-    """Only use this pluralizer if the term is 'own'. Nothing else."""
-    if count == 1:
-        return "owns"
-    return "own"
-
-
 def generateID() -> str:
     """
     Generate a random string of alphanumeric characters.
@@ -3251,14 +3244,11 @@ class Economy(commands.Cog):
         cmd = ctx.command.parent or ctx.command
 
         async with self.bot.pool.acquire() as connection:
-            try:
-                row = await connection.fetchone("SELECT 1 FROM accounts WHERE userid = $0", ctx.author.id)
-                assert row is not None
-            except AssertionError:
-                return
-            else:
-                await add_command_usage(ctx.author.id, f"@me {cmd.name}", connection)
-                await connection.commit()
+            async with connection.transaction():
+                try:
+                    await add_command_usage(ctx.author.id, f"@me {cmd.name}", connection)
+                except sqlite3.IntegrityError:
+                    pass
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
