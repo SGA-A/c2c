@@ -1,9 +1,13 @@
 from os import environ
-from asyncio import run
-from sys import version
+from sys import version, platform
 from pathlib import Path
 from traceback import format_exception
 from aiohttp import ClientSession, DummyCookieJar, TCPConnector
+from asyncio import (
+    run, 
+    WindowsSelectorEventLoopPolicy, 
+    set_event_loop_policy
+)
 from logging import (
     INFO, 
     FileHandler, 
@@ -27,7 +31,10 @@ from discord.utils import setup_logging
 from cogs.core.helpers import membed
 
 
-# Search for a specific term in this project using Ctrl + Shift + F
+# If you're on Windows, starting in aiohttp >3.10, 
+# you need to need to override the event loop policy as shown
+if platform == 'win32':
+    set_event_loop_policy(WindowsSelectorEventLoopPolicy())
 
 
 class C2C(commands.Bot):

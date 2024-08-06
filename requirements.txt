@@ -7,7 +7,7 @@ asqlite @ git+https://github.com/Rapptz/asqlite@fcd8ce0672562e440f99eb4b7a56eba1
 attrs==24.1.0
 Brotli==1.1.0
 cffi==1.16.0
-discord.py==2.4.0
+discord.py[speed]==2.4.0
 frozenlist==1.4.1
 idna==3.7
 multidict==6.0.5
