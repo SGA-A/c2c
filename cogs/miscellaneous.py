@@ -807,7 +807,7 @@ class Utility(commands.Cog):
             ).set_footer(text="Sunmap image courtesy of timeanddate.com")
 
             for location, tz in EMBED_TIMEZONES.items():
-                time_there = datetime.datetime.now(tz=pytz_timezone(tz))
+                time_there = datetime.now(tz=pytz_timezone(tz))
                 clock.add_field(name=location, value=f"```prolog\n{time_there:%I:%M %p}```")
 
             clock.description = f"```prolog\n{clock.timestamp:%I:%M %p, %A} {number_to_ordinal(int(f"{clock.timestamp:%d}"))} {clock.timestamp:%Y}```"

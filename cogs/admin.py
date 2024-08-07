@@ -229,7 +229,7 @@ class Owner(commands.Cog):
         )
 
     @commands.command(name='urules', description='Update the rules channel for cc', aliases=('ur',))
-    async def push_update3(self, ctx: commands.Context):
+    async def push_update3(self, _: commands.Context):
         """Push an update to the rules channel."""
         original = (
             self.bot.get_partial_messageable(902138223571116052)
@@ -249,7 +249,7 @@ class Owner(commands.Cog):
             "boundaries of <#1160547937420582942>, sanctions will be upheld for such cases.\n"
             "5. <:discordThinking:1263921476369645609> **Adhere to the Terms of Service.** "
             "Abide by Discord\'s [terms of service](<https://discord.com/terms>) and [community guidelines](<https://discord.com/guidelines/>) at all times.\n\n"
-            "**That's all.** Thanks for reading, now go have fun! <a:anime_salute:1170379416845692928>"
+            "**That's all.** Thanks for reading, now go have fun!"
         )
 
         await original.edit(content=rule_content)

@@ -138,32 +138,36 @@ class TagLeaderboard(PaginationSimple):
         self.lb.set_footer(text=f"Page {page} of {n}")
         return self.lb, n
 
-    async def create_lb(self) -> None:
+    async def process_data(self, data):
+        self.data = []
+        if not data:
+            return
+
         if self.chosen_stat == "Tag Usage":
-            async with self.ctx.bot.pool.acquire() as conn:
-                data = await conn.fetchall(
-                    """
-                    SELECT 
-                        name AS identifier,
-                        uses AS metric
-                    FROM tags
-                    ORDER BY uses DESC
-                    """
-                )
-
-            if not data:
-                self.data = []
-                return
-
-            self.data = (
+            self.data = [
                 f"{self.podium_pos.get(i, '\U0001f539')} ` {tag_usage:,} ` \U00002014 {tag_name}" 
                 for i, (tag_name, tag_usage) in enumerate(data, start=1)
+            ]
+        else:
+            for i, (identifier, metric) in enumerate(data, start=1):
+                memobj = self.ctx.bot.get_user(identifier) or await self.ctx.bot.fetch_user(identifier)
+                self.data.append(f"{self.podium_pos.get(i, '\U0001f539')} ` {metric:,} ` \U00002014 {memobj.name}")
+
+    async def create_lb(self) -> None:
+        if self.chosen_stat == "Tag Usage":
+            query = (
+                """
+                SELECT 
+                    name AS identifier,
+                    uses AS metric
+                FROM tags
+                ORDER BY uses DESC
+                """
             )
-            return
 
         elif self.chosen_stat == "Tags Created":
 
-            data = (
+            query = (
                 """
                 SELECT 
                     ownerID AS identifier,
@@ -176,7 +180,7 @@ class TagLeaderboard(PaginationSimple):
 
         else:  # Tags Used
 
-            data = (
+            query = (
                 """
                 SELECT 
                     userID AS identifier,
@@ -189,17 +193,8 @@ class TagLeaderboard(PaginationSimple):
             )
 
         async with self.ctx.bot.pool.acquire() as conn:
-            conn: asqlite_Connection
-            data = await conn.fetchall(data)
-
-        if not data:
-            self.data = []
-
-        self.data = []
-        for i, mdata in enumerate(data, start=1):
-            tag_owner, tag_count = mdata
-            memobj = self.ctx.bot.get_user(tag_owner) or await self.ctx.bot.fetch_user(tag_owner)
-            self.data.append(f"{self.podium_pos.get(i, "\U0001f539")} ` {tag_count:,} ` \U00002014 {memobj.name}")
+            data = await conn.fetchall(query)
+        await self.process_data(data)
 
     @discord.ui.select(row=0, options=options)
     async def tag_lb_select(self, interaction: discord.Interaction, select: discord.ui.Select):
@@ -359,7 +354,6 @@ class Tags(commands.Cog):
         conn: asqlite_Connection,
         meth: Callable | None = None
     ):
-        """Partial matching for every existing tag"""
 
         tag_names = await conn.fetchall(
             """
@@ -381,53 +375,26 @@ class Tags(commands.Cog):
         conn: asqlite_Connection,
         meth: Callable | None = None
     ) -> tuple | str | None:
-        """Partial matching for tags that are owned by the invoker"""
-
-        tag_names = await conn.fetchall(
-            """
-            SELECT name
-            FROM tags
-            WHERE ownerID = $0 AND LOWER(name) LIKE $1
-            LIMIT 10
-            """, ctx.author.id, f"%{word_input.lower()}%"
-        )
+        query = "SELECT name FROM tags WHERE ownerID = ? AND LOWER(name) LIKE '%' || ? || '%' LIMIT 10"
+        tag_names = await conn.fetchall(query, (ctx.author.id, word_input.lower()))
 
         meth = meth or self.partial_match_for
         return await meth(ctx, word_input, tag_results=tag_names)
 
     async def non_aliased_tag_autocomplete(self, _: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        
+        query = "SELECT name FROM tags WHERE LOWER(name) LIKE '%' || ? || '%' LIMIT 12"
         async with self.bot.pool.acquire() as conn:
-    
-            query = (
-                """
-                SELECT name
-                FROM tags
-                WHERE LOWER(name) LIKE '%' || $0 || '%'
-                LIMIT 12
-                """
-            )
-
-            results: list[tuple[str]] = await conn.fetchall(query, current.lower())
-        return [app_commands.Choice(name=a, value=a) for a, in results]
+            rows = await conn.fetchall(query, (current.lower(),))
+        return [app_commands.Choice(name=row, value=row) for row, in rows]
         
     async def owned_non_aliased_tag_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
+        query = "SELECT name FROM tags WHERE ownerID = ? AND LOWER(name) LIKE '%' || ? || '%' LIMIT 12"
         async with self.bot.pool.acquire() as conn:
-
-            query = (
-                """
-                SELECT name
-                FROM tags
-                WHERE ownerID = $0 AND LOWER(name) LIKE '%' || $1 || '%'
-                LIMIT 12
-                """
-            )
-
-            all_tags: list[tuple[str]] = await conn.fetchall(query, interaction.user.id, current.lower())
+            all_tags = await conn.fetchall(query, (interaction.user.id, current.lower()))
         return [app_commands.Choice(name=tag, value=tag) for tag, in all_tags]
 
     async def get_tag_content(self, name: str, conn: asqlite_Connection):
-        res = await conn.fetchone("SELECT content FROM tags WHERE name = $0", name)
+        res = await conn.fetchone("SELECT content FROM tags WHERE name = ?", (name,))
         if res is None:
             raise RuntimeError(TAG_NOT_FOUND_SIMPLE_RESPONSE)
         return res[0]
@@ -442,14 +409,11 @@ class Tags(commands.Cog):
 
         query = "INSERT INTO tags (name, content, ownerID) VALUES ($0, $1, $2)"
 
-        # since I'm checking for the exception type and acting on it, I need
-        # to use the manual transaction blocks
-
         tr = conn.transaction()
         await tr.start()
 
         try:
-            author: discord.Member | discord.User = getattr(ctx, "author", None) or ctx.user
+            author: discord.Member | discord.User = getattr(ctx, "author", ctx.user)
             await conn.execute(query, name, content, author.id)
         except sqlite3.IntegrityError:
             await tr.rollback()
@@ -615,9 +579,9 @@ class Tags(commands.Cog):
             async with self.bot.pool.acquire() as conn:
                 name, interaction = await self.owned_partial_matching(
                     ctx, 
-                    word_input=name, 
-                    conn=conn, 
-                    meth=self.partial_match_including_interaction
+                    name, 
+                    conn, 
+                    self.partial_match_including_interaction
                 )
             if name is None:
                 return
@@ -648,7 +612,7 @@ class Tags(commands.Cog):
             content = modal.text
 
         if len(content) > 2000:
-            return await ctx.send(ephemeral=True, embed=membed('Tag content can only be up to 2000 characters.'))
+            return await ctx.send(ephemeral=True, embed=membed(MAX_CHARACTERS_EXCEEDED_RESPONSE))
 
         async with self.bot.pool.acquire() as conn:
             
@@ -663,9 +627,8 @@ class Tags(commands.Cog):
 
             if val is None:
                 return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND_RESPONSE))
-        
             await conn.commit()
-            await ctx.send(embed=membed(f'Successfully edited tag named {name!r}.'))
+        await ctx.send(embed=membed(f'Successfully edited tag named {name!r}.'))
 
     @tag.command(description="Remove a tag that you own", aliases=('delete',))
     @app_commands.describe(name='The tag to remove')
@@ -721,15 +684,9 @@ class Tags(commands.Cog):
 
             if deleted_info is None:
                 return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND_RESPONSE))
-            await ctx.send(embed=membed(f'Tag named {deleted_info[1]!r} (ID {deleted_info[0]}) successfully deleted.'))
+        await ctx.send(embed=membed(f'Tag named {deleted_info[1]!r} (ID {deleted_info[0]}) successfully deleted.'))
 
-    async def _send_tag_info(
-        self, 
-        ctx: commands.Context, 
-        conn: asqlite_Connection, 
-        tag_name: str, 
-        row: sqlite3.Row
-    ) -> None:
+    async def _send_tag_info(self, ctx: commands.Context, tag_name: str, row: sqlite3.Row) -> None:
         """Expects row in this format: rowid, uses, ownerID, time_created"""
 
         embed = discord.Embed(colour=discord.Colour.blurple()).set_footer(text='Tag created')
@@ -766,8 +723,8 @@ class Tags(commands.Cog):
             WHERE first.rowid=$1
             """
         )
-
-        rank = await conn.fetchone(query, rowid)
+        async with self.bot.pool.acquire() as conn:
+            rank = await conn.fetchone(query, rowid)
         if rank is not None:
             embed.add_field(name='Rank', value=f"{rank[0]:,} / {rank[1]:,}")
 
@@ -794,10 +751,10 @@ class Tags(commands.Cog):
                 """, name
             )
             
-            if record is None:
-                return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
+        if record is None:
+            return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
 
-            await self._send_tag_info(ctx, conn, tag_name=name, row=record)
+        await self._send_tag_info(ctx, conn, tag_name=name, row=record)
 
     @tag.command(description="Remove all tags made by a user")
     @app_commands.describe(user='The user to remove all tags of. Defaults to your own.')
