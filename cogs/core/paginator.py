@@ -3,7 +3,8 @@ from typing import Callable
 import discord
 from discord.ext import commands
 
-from .helpers import membed, determine_exponent, economy_check
+from .helpers import membed, economy_check
+from .transformers import RawIntegerTransformer
 
 
 NOT_YOUR_MENU = membed("This menu is not for you.")
@@ -120,22 +121,12 @@ class Pagination(discord.ui.View):
     async def numeric(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         modal = PaginatorInput(their_view=self)
         await interaction.response.send_modal(modal)
+
         val = await modal.wait()
-        
         if val:
             return
 
-        val = await determine_exponent(modal.interaction, modal.page_num.value)
-        
-        if val is None:
-            return
-        
-        if isinstance(val, str):
-            return await modal.interaction.response.send_message(
-                ephemeral=True, 
-                embed=membed("Invalid page number.")
-            )
-
+        val = RawIntegerTransformer(reject_shorthands=True).transform(interaction, modal.page_num.value)
         self.index = min(self.total_pages, val)
         await self.edit_page(modal.interaction)
 

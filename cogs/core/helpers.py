@@ -83,40 +83,6 @@ def membed(custom_description: Optional[str] = None) -> discord.Embed:
     return membedder
 
 
-async def determine_exponent(interaction: discord.Interaction, rinput: str) -> str | int | None:
-    """
-    Finds out what the exponential value entered is equivalent to in numerical form. (e.g, 1e6)
-
-    Can handle normal integers.
-    
-    The shorthands "max" and "all" always return 'as-is', and must be handled yourself.
-    """
-
-    rinput = rinput.lower()
-
-    if rinput in {"max", "all"}:
-        return rinput
-    try:
-        if 'e' in rinput:
-            before_e_str, after_e_str = map(str, rinput.split('e'))
-            before_e = float(before_e_str)
-            ten_exponent = min(int(after_e_str), 50)
-            actual_value = abs(int(before_e * (10 ** ten_exponent)))
-        else:
-            rinput = rinput.translate(str.maketrans('', '', ','))
-            actual_value = abs(int(rinput))
-        if actual_value == 0:
-            raise ValueError
-    except (ValueError, TypeError):
-        await respond(
-            interaction=interaction,
-            ephemeral=True,
-            embed=membed("You need to provide a real positive number.")
-        )
-        actual_value = None
-    return actual_value
-
-
 async def economy_check(interaction: discord.Interaction, original_id: int) -> bool:
     """Shared interaction check common amongst most interactions."""
     if original_id == interaction.user.id:
@@ -127,13 +93,6 @@ async def economy_check(interaction: discord.Interaction, original_id: int) -> b
         embed=membed(f"This menu is controlled by <@{original_id}>.")
     )
     return False
-
-
-async def fetchall_generator(conn, query: str, /, *parameters):
-    """Generator version of fetchall to yield rows one by one."""
-    async with conn.execute(query, *parameters) as cursor:
-        async for row in cursor:
-            yield row
 
 
 async def send_message(invocation: Context | discord.Interaction, **kwargs):

@@ -12,7 +12,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-from .core.helpers import membed, determine_exponent
+from .core.helpers import membed
 from .core.constants import CURRENCY, LIMITED_CONTEXTS, LIMITED_INSTALLS
 
 
@@ -78,7 +78,7 @@ class Owner(commands.Cog):
         self, 
         interaction: discord.Interaction,
         configuration: Literal["add", "remove", "make"], 
-        amount: str,
+        amount: int,
         user: discord.User | None = None,
         is_private: bool = False,
         medium: Literal["wallet", "bank"] = "wallet"
@@ -86,32 +86,22 @@ class Owner(commands.Cog):
         """Generates or deducts a given amount of robux to the mentioned user."""
 
         user = user or interaction.user
-        real_amount = await determine_exponent(
-            interaction=interaction, 
-            rinput=amount
-        )
-        if real_amount is None:
-            return
-
         embed = membed()
-        if isinstance(real_amount, str):
-            embed.description = "Shorthands are not supported here."
-            return await interaction.response.send_message(ephemeral=True, embed=embed)
 
         if configuration.startswith("a"):
-            embed.description = f"Added {CURRENCY} **{real_amount:,}** to {user.mention}!"
+            embed.description = f"Added {CURRENCY} **{amount:,}** to {user.mention}!"
             query = f"UPDATE accounts SET {medium} = {medium} + $0 WHERE userID = $1"
 
         elif configuration.startswith("r"):
-            embed.description = f"Deducted {CURRENCY} **{real_amount:,}** from {user.mention}!"
+            embed.description = f"Deducted {CURRENCY} **{amount:,}** from {user.mention}!"
             query = f"UPDATE accounts SET {medium} = {medium} - $0 WHERE userID = $1"
 
         else:
-            embed.description = f"Set {CURRENCY} **{real_amount:,}** to {user.mention}!"
+            embed.description = f"Set {CURRENCY} **{amount:,}** to {user.mention}!"
             query = f"UPDATE accounts SET {medium} = $0 WHERE userID = $1"
 
         async with self.bot.pool.acquire() as conn:
-            await conn.execute(query, real_amount, user.id)
+            await conn.execute(query, amount, user.id)
             await conn.commit()
 
         await interaction.response.send_message(embed=embed, ephemeral=is_private)

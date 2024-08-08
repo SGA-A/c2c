@@ -325,7 +325,7 @@ class Utility(commands.Cog):
             \U0001f4e5 **Input:**
             ```py\n{expression}```
             \U0001f4e4 **Output:**
-            ```py\n{result}```
+            ```\n{result}```
             """
         )
 
@@ -501,18 +501,17 @@ class Utility(commands.Cog):
         emb = membed()
         emb.title = "Emojis"
 
-        def emoji_generator():
-            for emoji in self.bot.emojis:
-                yield f"{emoji} (**{emoji.name}**) \U00002014 `{emoji}`"
-
         async def get_page_part(page: int):
             offset = (page - 1) * length
-            all_emojis = emoji_generator()
-            emb.description = "\n".join(emoji for i, emoji in enumerate(all_emojis) if offset <= i < offset + length)
+
+            emb.description = "\n".join(
+                f"{emoji} (**{emoji.name}**) \U00002014 `{emoji}`" 
+                for emoji in self.bot.emojis[offset:offset+length]
+            )
             n = Pagination.compute_total_pages(len(self.bot.emojis), length)
             return emb, n
 
-        await Pagination(interaction, get_page=get_page_part).navigate()
+        await Pagination(interaction, get_page_part).navigate()
 
     @app_commands.command(name='randomfact', description='Queries a random fact')
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
@@ -793,6 +792,7 @@ class Utility(commands.Cog):
         )
 
         await interaction.followup.send(ephemeral=True, embed=membed(f"Created thread: {thread.jump_url}."))
+        del files, tag_sep, applicable_tags
 
     @commands.command(name="worldclock", description="See the world clock and the visual sunmap", aliases=('wc',))
     async def worldclock(self, ctx: commands.Context):
