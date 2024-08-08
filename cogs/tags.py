@@ -413,7 +413,7 @@ class Tags(commands.Cog):
         await tr.start()
 
         try:
-            author: discord.Member | discord.User = getattr(ctx, "author", ctx.user)
+            author: discord.Member | discord.User = getattr(ctx, "author", None) or ctx.user
             await conn.execute(query, name, content, author.id)
         except sqlite3.IntegrityError:
             await tr.rollback()
@@ -754,7 +754,7 @@ class Tags(commands.Cog):
         if record is None:
             return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
 
-        await self._send_tag_info(ctx, conn, tag_name=name, row=record)
+        await self._send_tag_info(ctx, tag_name=name, row=record)
 
     @tag.command(description="Remove all tags made by a user")
     @app_commands.describe(user='The user to remove all tags of. Defaults to your own.')
