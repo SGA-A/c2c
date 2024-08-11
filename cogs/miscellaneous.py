@@ -12,9 +12,11 @@ from discord import app_commands
 from psutil import Process, cpu_count
 
 from cogs.economy import total_commands_used_by_user, USER_ENTRY
+from .core.bot import C2C
 from .core.helpers import membed, number_to_ordinal
-from .core.paginator import Pagination, RefreshPagination
+from .core.paginators import Pagination, RefreshPagination
 from .core.constants import LIMITED_CONTEXTS, LIMITED_INSTALLS
+
 
 ARROW = "<:Arrow:1263919893762543717>"
 API_EXCEPTION = "The API fucked up, try again later."
@@ -114,36 +116,73 @@ class CommandUsage(RefreshPagination):
         await self.edit_page(interaction)
 
 
-class Utility(commands.Cog):
+class MyHelp(commands.MinimalHelpCommand):
+
+    def __init__(self) -> None:
+        super().__init__()
+
+    async def command_callback(self, ctx: commands.Context, /, *, command: str | None = None) -> None:
+        """Shows help about the bot, a command, or a category"""
+        async with ctx.typing():
+            return await super().command_callback(ctx, command=command)
+
+    async def send_command_help(self, command: commands.Command):
+        docstring = command.callback.__doc__ or 'No explanation found for this command.'
+        embed = membed(f"## {self.cog.bot.user.mention} {command.qualified_name}\n```Syntax: {self.get_command_signature(command)}```\n{docstring}")
+
+        alias = command.aliases
+        if alias:
+            embed.add_field(name="Aliases", value=', '.join(alias))
+        embed.set_footer(text="Usage Syntax: <required> [optional]")
+        await self.context.send(embed=embed)
+
+    def add_subcommand_formatting(self, command: commands.Command) -> None:
+        fmt = '{0} {1} \N{EN DASH} {2}' if command.description else '{0} {1}'
+        self.paginator.add_line(fmt.format(self.cog.bot.user.mention, command.qualified_name, command.description))
+
+    async def send_pages(self):
+        await self.context.send(embed=membed(self.paginator.pages[0]))
+
+    async def on_help_command_error(self, ctx: commands.Context, error: commands.CommandError) -> None:
+        await ctx.send(str(error.original))
+
+
+class Miscellaneous(commands.Cog):
     """Helpful commands to ease the experience on Discord, available for everyone."""
-    def __init__(self, bot: commands.Bot) -> None:
+    def __init__(self, bot: C2C) -> None:
         self.bot = bot
         self.process = Process()
+
+        bot.help_command = MyHelp()
+        bot.help_command.cog = self
+
+        contexts = app_commands.AppCommandContext(guild=True, private_channel=True)
+        installs = app_commands.AppInstallationType(guild=True, user=True)
 
         self.cog_context_menus = {
             app_commands.ContextMenu(
                 name='Extract Image Source',
                 callback=self.extract_source,
-                allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=True),
-                allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
+                allowed_contexts=contexts,
+                allowed_installs=installs
             ),
             app_commands.ContextMenu(
                 name='Extract Embed Colour',
                 callback=self.embed_colour,
-                allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=True),
-                allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
+                allowed_contexts=contexts,
+                allowed_installs=installs
             ),
             app_commands.ContextMenu(
                 name="View User Avatar",
                 callback=self.view_avatar,
-                allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=True),
-                allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
+                allowed_contexts=contexts,
+                allowed_installs=installs
             ),
             app_commands.ContextMenu(
                 name="View User Banner",
                 callback=self.view_banner,
-                allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=True),
-                allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
+                allowed_contexts=contexts,
+                allowed_installs=installs
             )
         }
 
@@ -151,6 +190,7 @@ class Utility(commands.Cog):
             self.bot.tree.add_command(context_menu)
 
     async def cog_unload(self) -> None:
+        self.bot.help_command = None
         for context_menu in self.cog_context_menus:
             self.bot.tree.remove_command(context_menu)
 
@@ -209,10 +249,10 @@ class Utility(commands.Cog):
         await interaction.followup.send(f"Took ~{end-start:.2f} seconds", file=discord.File(buffer, 'clip.gif'))
         await interaction.followup.send(f"Took ~{end-start:.2f} seconds", file=discord.File(buffer, 'clip.gif'))
 
-    @app_commands.command(name='serverinfo', description="Show information about the server and its members")
+    @app_commands.command(description="Show information about the server and its members")
     @app_commands.guild_install()
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    async def display_server_info(self, interaction: discord.Interaction) -> None:
+    async def serverinfo(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(thinking=True)
 
         guild = interaction.guild
@@ -273,11 +313,11 @@ class Utility(commands.Cog):
 
         await interaction.followup.send(embed=serverinfo)
 
+    @app_commands.command(description="See your total command usage")
     @app_commands.describe(user="Whose command usage to display. Defaults to you.")
-    @app_commands.command(name="usage", description="See your total command usage")
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    async def view_user_usage(self, interaction: discord.Interaction, user: USER_ENTRY | None = None):
+    async def usage(self, interaction: discord.Interaction, user: USER_ENTRY | None = None):
         user = user or interaction.user
 
         paginator = CommandUsage(interaction, viewing=user)
@@ -304,11 +344,11 @@ class Utility(commands.Cog):
         paginator.get_page = get_page_part
         await paginator.navigate()
 
-    @app_commands.command(name='calc', description='Calculate an expression')
+    @app_commands.command(description='Calculate an expression')
     @app_commands.describe(expression='The expression to evaluate.')
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    async def calculator(self, interaction: discord.Interaction, expression: str) -> None:
+    async def calc(self, interaction: discord.Interaction, expression: str) -> None:
         try:
             expression = expression.replace('^', '**').replace(',', '_')
 
@@ -331,7 +371,7 @@ class Utility(commands.Cog):
 
         await interaction.response.send_message(embed=output)
 
-    @commands.command(name='ping', description='Checks latency of the bot')
+    @commands.command(description='Checks latency of the bot')
     async def ping(self, ctx: commands.Context) -> None:
         msg_content = "Pong!"
         msg = await ctx.send(msg_content)
@@ -493,10 +533,10 @@ class Utility(commands.Cog):
         img_view = discord.ui.View().add_item(ImageSourceButton(url=data["url"]))
         await interaction.response.send_message(embed=embed, view=img_view)
 
-    @app_commands.command(name='emojis', description='Fetch all the emojis c2c can access')
+    @app_commands.command(description='Fetch all the emojis c2c can access')
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
-    async def emojis_paginator(self, interaction: discord.Interaction) -> None:
+    async def emojis(self, interaction: discord.Interaction) -> None:
         length = 8
         emb = membed()
         emb.title = "Emojis"
@@ -504,19 +544,19 @@ class Utility(commands.Cog):
         async def get_page_part(page: int):
             offset = (page - 1) * length
 
+            n = Pagination.compute_total_pages(len(self.bot.emojis), length)
             emb.description = "\n".join(
                 f"{emoji} (**{emoji.name}**) \U00002014 `{emoji}`" 
                 for emoji in self.bot.emojis[offset:offset+length]
             )
-            n = Pagination.compute_total_pages(len(self.bot.emojis), length)
             return emb, n
 
         await Pagination(interaction, get_page_part).navigate()
 
-    @app_commands.command(name='randomfact', description='Queries a random fact')
+    @app_commands.command(description='Queries a random fact')
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
-    async def random_fact(self, interaction: discord.Interaction) -> None:
+    async def randomfact(self, interaction: discord.Interaction) -> None:
         async with self.bot.session.get(
             url='https://api.api-ninjas.com/v1/facts', 
             params={'X-Api-Key': self.bot.NINJAS_API_KEY}
@@ -526,14 +566,14 @@ class Utility(commands.Cog):
             text = await resp.json()
         await interaction.response.send_message(embed=membed(f"{text[0]['fact']}."))
 
-    @app_commands.command(name="image", description="Manipulate a user's avatar")
+    @app_commands.command(description="Manipulate a user's avatar")
     @app_commands.describe(
         user="The user to apply the manipulation to. Defaults to you.", 
         endpoint="What kind of manipulation sorcery to use."
     )
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
-    async def image_manip(
+    async def image(
         self, 
         interaction: discord.Interaction, 
         endpoint: Literal[
@@ -560,14 +600,14 @@ class Utility(commands.Cog):
             headers=headers
         )
 
-    @app_commands.command(name="image2", description="Manipulate a user's avatar further")
+    @app_commands.command(description="Manipulate a user's avatar further")
     @app_commands.describe(
         user="The user to apply the manipulation to. Defaults to you.",
         endpoint="What kind of manipulation sorcery to use."
     )
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
-    async def image2_manip(
+    async def image2(
         self, 
         interaction: discord.Interaction,
         endpoint: Literal[
@@ -594,7 +634,7 @@ class Utility(commands.Cog):
             headers=headers
         )
 
-    @app_commands.command(name='charinfo', description='Show information about characters')
+    @app_commands.command(description='Show information about characters')
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.describe(characters='Any written letters or symbols.')
@@ -621,10 +661,10 @@ class Utility(commands.Cog):
             )
         await interaction.response.send_message(msg, suppress_embeds=True)
 
-    @app_commands.command(name='about', description='Learn more about the bot')
+    @app_commands.command(description='Learn more about the bot')
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
-    async def about_the_bot(self, interaction: discord.Interaction) -> None:
+    async def about(self, interaction: discord.Interaction) -> None:
 
         commits = await self.fetch_commits()
         to_iso = datetime.fromisoformat
@@ -745,7 +785,7 @@ class Utility(commands.Cog):
 
         await interaction.response.send_message(embed=embed, view=img_view)
 
-    @app_commands.command(name='post', description='Upload a new forum thread')
+    @app_commands.command(description='Upload a new forum thread')
     @app_commands.guild_install()
     @app_commands.allowed_contexts(guilds=True)
     @app_commands.describe(
@@ -758,7 +798,7 @@ class Utility(commands.Cog):
         file3=UPLOAD_FILE_DESCRIPTION
     )
     @app_commands.default_permissions(manage_guild=True)
-    async def create_new_thread(
+    async def post(
         self, 
         interaction: discord.Interaction, 
         forum: discord.ForumChannel,
@@ -794,7 +834,7 @@ class Utility(commands.Cog):
         await interaction.followup.send(ephemeral=True, embed=membed(f"Created thread: {thread.jump_url}."))
         del files, tag_sep, applicable_tags
 
-    @commands.command(name="worldclock", description="See the world clock and the visual sunmap", aliases=('wc',))
+    @commands.command(description="See the world clock and the visual sunmap", aliases=('wc',))
     async def worldclock(self, ctx: commands.Context):
         async with ctx.typing():
             clock = discord.Embed(
@@ -822,5 +862,5 @@ class Utility(commands.Cog):
             await ctx.send(embed=clock)
 
 
-async def setup(bot: commands.Bot):
-    await bot.add_cog(Utility(bot))
+async def setup(bot: C2C):
+    await bot.add_cog(Miscellaneous(bot))

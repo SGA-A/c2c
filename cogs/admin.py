@@ -12,6 +12,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from .core.bot import C2C
 from .core.helpers import membed
 from .core.constants import CURRENCY, LIMITED_CONTEXTS, LIMITED_INSTALLS
 
@@ -23,9 +24,10 @@ GUILD_MESSAGEABLE = (
     discord.StageChannel
 )
 
-class Owner(commands.Cog):
+
+class Admin(commands.Cog):
     """Developer tools relevant to maintainence of the bot. Only available for use by the bot developers."""
-    def __init__(self, bot: commands.Bot):
+    def __init__(self, bot: C2C):
         self.bot = bot
         self._last_result: Any | None = None
 
@@ -64,7 +66,7 @@ class Owner(commands.Cog):
         )
         await ctx.reply(content=uptime)
 
-    @app_commands.command(name="config", description="Adjust a user's robux directly")
+    @app_commands.command(description="Adjust a user's robux directly")
     @app_commands.describe(
         configuration='Whether to add, remove, or specify robux.',
         amount='The amount of robux to modify. Supports Shortcuts (exponents only).',
@@ -106,8 +108,8 @@ class Owner(commands.Cog):
 
         await interaction.response.send_message(embed=embed, ephemeral=is_private)
 
-    @commands.command(name='sync', description='Sync the bot tree for changes', aliases=("sy",))
-    async def sync_tree(self, ctx: commands.Context) -> None:
+    @commands.command(description='Sync the bot tree for changes', aliases=("sy",))
+    async def sync(self, ctx: commands.Context) -> None:
         """Sync the bot's tree to either the guild or globally, varies from time to time."""
         await self.bot.tree.sync(guild=None)
 
@@ -166,7 +168,7 @@ class Owner(commands.Cog):
                 self._last_result = ret
                 await ctx.send(f'```py\n{value}{ret}\n```')
 
-    @commands.command(name='blank', description='Sends newlines to clear a channel', aliases=('b',))
+    @commands.command(description='Sends newlines to clear a channel', aliases=('b',))
     async def blank(self, ctx: commands.Context):
         """Clear out the channel."""
         await ctx.send(
@@ -218,8 +220,8 @@ class Owner(commands.Cog):
             """
         )
 
-    @commands.command(name='urules', description='Update the rules channel for cc', aliases=('ur',))
-    async def push_update3(self, _: commands.Context):
+    @commands.command(description='Update the rules channel for cc', aliases=('ur',))
+    async def urules(self, _: commands.Context):
         """Push an update to the rules channel."""
         original = (
             self.bot.get_partial_messageable(902138223571116052)
@@ -337,19 +339,19 @@ class Owner(commands.Cog):
 
         await message.edit(content=dedent(channel_content_pt1))
 
-    @commands.command(name='uinfo', description='Update the information channel for cc', aliases=('ui',))
-    async def push_update2(self, _: commands.Context):
+    @commands.command(description='Update the information channel for cc', aliases=('ui',))
+    async def uinfo(self, _: commands.Context):
         """Push to update the welcome and info embed within its respective channel."""
         await self.send_channel_guide()
         await self.send_bot_guide()
 
     @commands.command(name='quit', description='Quits the bot gracefully', aliases=('q',))
-    async def quit_client(self, ctx: commands.Context) -> None:
+    async def close(self, ctx: commands.Context) -> None:
         """Quits the bot gracefully."""
         await ctx.send("\U00002705")
         await self.bot.close()
 
-    @app_commands.command(name='repeat', description='Repeat what you typed')
+    @app_commands.command(description='Repeat what you typed')
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.describe(
@@ -382,11 +384,11 @@ class Owner(commands.Cog):
             embed=membed(f"Sent this message to {channel.mention}.")
         )
 
-    @commands.command(name='dispatch-webhook', description="Dispatch customizable quarterly updates", aliases=('dw',))
-    async def dispatch_webhook(self, _: commands.Context):
+    @commands.command(description="Dispatch customizable quarterly updates")
+    async def hook(self, _: commands.Context):
         pass  # custom command logic goes here
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: C2C):
     """Setup for cog."""
-    await bot.add_cog(Owner(bot))
+    await bot.add_cog(Admin(bot))

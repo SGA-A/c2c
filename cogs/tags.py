@@ -8,10 +8,10 @@ from discord import app_commands
 from discord.ext import commands
 from asqlite import ProxiedConnection as asqlite_Connection
 
-from .core.views import send_boilerplate_confirm
-from .core.helpers import membed, send_message
+from .core.helpers import membed, send_message, send_boilerplate_confirm
 from .core.constants import LIMITED_INSTALLS, LIMITED_CONTEXTS
-from .core.paginator import PaginationSimple
+from .core.paginators import PaginationSimple
+from .core.bot import C2C
 
 
 MAX_CHARACTERS_EXCEEDED_RESPONSE = "Tag content cannot exceed 2000 characters."
@@ -239,9 +239,8 @@ class MatchWord(discord.ui.Button):
 class Tags(commands.Cog):
     """Commands to interface with the global tag system, available for everyone."""
 
-    def __init__(self, bot: commands.Bot) -> None:
-        
-        self.bot: commands.Bot = bot
+    def __init__(self, bot: C2C) -> None:
+        self.bot = bot
 
         # ownerID: set(name)
         self._reserved_tags_being_made: set[str] = set()
@@ -1085,5 +1084,5 @@ class Tags(commands.Cog):
         await lb_view.navigate()
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: C2C):
     await bot.add_cog(Tags(bot))
