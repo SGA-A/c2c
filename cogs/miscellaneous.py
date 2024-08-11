@@ -1,6 +1,5 @@
 from io import BytesIO
 from unicodedata import name
-from time import perf_counter
 from datetime import datetime, timezone
 from typing import Callable, Literal
 from xml.etree.ElementTree import fromstring
@@ -235,19 +234,17 @@ class Miscellaneous(commands.Cog):
 
     async def format_gif_api_response(
         self, 
-        interaction: discord.Interaction, 
-        start: float, 
+        interaction: discord.Interaction,
         api_url: str, 
-        **attrs
+        params: dict,
+        headers: dict,
+        /
     ) -> None | discord.WebhookMessage:
-        
-        async with self.bot.session.get(api_url, **attrs) as response:
+        async with self.bot.session.get(api_url, params=params, headers=headers) as response:
             if response.status != 200:
                 return await interaction.followup.send(embed=membed(API_EXCEPTION))
             buffer = BytesIO(await response.read())
-        end = perf_counter()
-        await interaction.followup.send(f"Took ~{end-start:.2f} seconds", file=discord.File(buffer, 'clip.gif'))
-        await interaction.followup.send(f"Took ~{end-start:.2f} seconds", file=discord.File(buffer, 'clip.gif'))
+        await interaction.followup.send(file=discord.File(buffer, 'clip.gif'))
 
     @app_commands.command(description="Show information about the server and its members")
     @app_commands.guild_install()
@@ -583,8 +580,6 @@ class Miscellaneous(commands.Cog):
         ],
         user: discord.User | None = None
     ) -> None:
-
-        start = perf_counter()
         await interaction.response.defer(thinking=True)
 
         user = user or interaction.user
@@ -592,13 +587,7 @@ class Miscellaneous(commands.Cog):
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
-        await self.format_gif_api_response(
-            interaction,
-            start=start,
-            api_url=api_url,
-            params=params,
-            headers=headers
-        )
+        await self.format_gif_api_response(interaction, api_url, params, headers)
 
     @app_commands.command(description="Manipulate a user's avatar further")
     @app_commands.describe(
@@ -617,8 +606,6 @@ class Miscellaneous(commands.Cog):
         ],
         user: discord.User | None = None
     ):
-
-        start = perf_counter()
         await interaction.response.defer(thinking=True)
 
         user = user or interaction.user
@@ -626,13 +613,7 @@ class Miscellaneous(commands.Cog):
         headers = {'Authorization': f'Bearer {self.bot.JEYY_API_KEY}'}
         api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
-        await self.format_gif_api_response(
-            interaction,
-            start=start,
-            api_url=api_url,
-            params=params,
-            headers=headers
-        )
+        await self.format_gif_api_response(interaction, api_url, params, headers)
 
     @app_commands.command(description='Show information about characters')
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)

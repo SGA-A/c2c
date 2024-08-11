@@ -12,29 +12,32 @@ from .core.paginators import PaginationItem
 from .core.bot import C2C
 
 
-def do_boilerplate_role_checks(role: discord.Role, guild: discord.Guild, my_top: discord.Role) -> None:
+def do_boilerplate_role_checks(r: discord.Role, g: discord.Guild) -> None:
 
-    if role.managed:
+    if r.managed:
         raise FailingConditionalError(
-            f"The role {role.mention} is managed and cannot be assigned or removed."
+            f"The role {r.name!r} is managed and cannot be assigned or removed."
         )
-    if role >= my_top:
+    if r >= g.me.top_role:
         roles_beneath = (
             iter_role.name 
-            for iter_role in guild.roles 
-            if (iter_role < role) and (iter_role > my_top)
+            for iter_role in g.roles 
+            if (iter_role < r) and (iter_role > g.me.top_role)
         )
-    
-        raise FailingConditionalError(
-            f"""
-            The role '{role.mention}' (pos {role.position}) is above my highest role '{my_top.mention}' (pos {my_top.position}) meaning I cannot alter their roles.
-            Please ensure my highest role is above the role you want assigned or removed.
 
-            {role.name} **<-- The role you wish to assign or remove**
-            {'\n'.join(roles_beneath)}
-            {my_top.name} **<-- The bot's highest role**
-            """
+        rpos, rname = r.position, r.name
+        mpos, mname = g.me.top_role.position, g.me.top_role.name
+
+        resp = (
+            f"The role {rname!r} (pos {rpos}) is above my highest role {mname!r} (pos {mpos}) "
+            f"meaning I cannot alter their roles.\n"
+            f"Please ensure my highest role is above the role you want assigned or removed.\n\n"
+            f"{rname} **<-- The role you wish to assign or remove**\n"
+            f"{'\n'.join(roles_beneath) or ''}\n"
+            f"{mname} **<-- The bot's highest role**"
         )
+
+        raise FailingConditionalError(resp)
 
 
 class TimeConverter(app_commands.Transformer):
@@ -109,7 +112,7 @@ class RoleManagement(app_commands.Group):
 
         if role in user.roles:
             return await interaction.response.send_message(
-                embed=membed(f"{user.mention} already has {role.mention}.")
+                embed=membed(f"{user.mention} already has {role.name!r}.")
             )
 
         do_boilerplate_role_checks(role, interaction.guild)
@@ -127,7 +130,7 @@ class RoleManagement(app_commands.Group):
         
         if role not in user.roles:
             return await interaction.response.send_message(
-                embed=membed(f"{user.mention} does not have {role.mention}.")
+                embed=membed(f"{user.mention} does not have {role.namE!r}.")
             )
 
         do_boilerplate_role_checks(role, interaction.guild)
