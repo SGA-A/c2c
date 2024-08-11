@@ -574,15 +574,11 @@ class ConfirmResetData(BaseInteractionView):
         self.stop()
         await self.interaction.delete_original_response()
 
-        async with interaction.client.pool.acquire() as conn:
-            tr = conn.transaction()
-            await tr.start()
-
+        async with interaction.client.pool.acquire() as conn, conn.transaction() as tr:
             try:
                 await conn.execute("DELETE FROM accounts WHERE userID = $0", self.to_remove.id)
             except Exception as e:
                 interaction.client.log_exception(e)
-
                 await tr.rollback()
 
                 return await interaction.response.send_message(
@@ -591,8 +587,6 @@ class ConfirmResetData(BaseInteractionView):
                         "Report this to the developers so they can get it fixed."
                     )
                 )
-
-            await tr.commit()
 
         whose = "your" if interaction.user.id == self.to_remove.id else f"{self.to_remove.mention}'s"
         end_note = " Thanks for using the bot." if whose == "your" else ""
@@ -727,12 +721,12 @@ class BalanceView(discord.ui.View):
         except discord.HTTPException:
             pass
 
-    @discord.ui.button(label="Withdraw", disabled=True, row=1)
+    @discord.ui.button(label="Withdraw", row=1)
     async def withdraw_money_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Withdraw money from the bank."""
 
         async with interaction.client.pool.acquire() as conn:
-            bank_amt = await Economy.fetch_account_data(interaction.user, "bank", conn)
+            bank_amt = await Economy.fetch_account_data(interaction.user.id, "bank", conn)
 
         if not bank_amt:
             return await interaction.response.send_message(
@@ -745,7 +739,7 @@ class BalanceView(discord.ui.View):
             DepositOrWithdraw(title=button.label, default_val=bank_amt, view=self)
         )
 
-    @discord.ui.button(label="Deposit", disabled=True, row=1)
+    @discord.ui.button(label="Deposit", row=1)
     async def deposit_money_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
         """Deposit money into the bank."""
 
@@ -1078,7 +1072,7 @@ class BlackjackUi(BaseInteractionView):
                 await end_transaction(conn, user_id=interaction.user.id)
                 await conn.commit()
 
-                wallet_amt = await Economy.fetch_wallet(interaction.user, conn)
+                wallet_amt = await Economy.fetch_balance(interaction.user.id, conn)
 
             embed.colour = discord.Colour.yellow()
             embed.description = (
@@ -1200,7 +1194,7 @@ class HighLow(BaseInteractionView):
         async with interaction.client.pool.acquire() as conn:
             new_multi = await Economy.get_multi_of(interaction.user.id, "robux", conn)
             total = add_multi_to_original(new_multi, self.their_bet)
-            new_balance = await Economy.update_account(interaction.user, total, conn)
+            new_balance = await Economy.update_account(interaction.user.id, total, conn)
             await end_transaction(conn, user_id=self.interaction.user.id)
             await conn.commit()
 
@@ -1223,7 +1217,7 @@ class HighLow(BaseInteractionView):
     async def send_loss(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.make_clicked_blurple_only(button)
         async with interaction.client.pool.acquire() as conn:
-            new_amount = await Economy.update_account(interaction.user, -self.their_bet, conn)
+            new_amount = await Economy.update_account(interaction.user.id, -self.their_bet, conn)
             await end_transaction(conn, user_id=self.interaction.user.id)
             await conn.commit()
 
@@ -1716,7 +1710,7 @@ class ItemQuantityModal(discord.ui.Modal):
     ) -> None:
 
         await Economy.update_inv_new(interaction.user, true_qty, self.item_name, conn)
-        new_am, = await Economy.update_account(interaction.user, -new_price, conn)
+        new_am, = await Economy.update_account(interaction.user.id, -new_price, conn)
 
         success = discord.Embed(
             title="Successful Purchase",
@@ -1816,7 +1810,7 @@ class ItemQuantityModal(discord.ui.Modal):
                 )
             )
 
-        current_balance = await Economy.fetch_wallet(interaction.user, conn_holder.conn)
+        current_balance = await Economy.fetch_balance(interaction.user.id, conn_holder.conn)
         if new_price > current_balance:
             await interaction.client.pool.release(conn_holder.conn)
             return await respond(
@@ -1836,14 +1830,13 @@ class ItemQuantityModal(discord.ui.Modal):
             )
         )
 
-        async with interaction.client.pool.acquire() as conn:
-            async with conn.transaction():
-                if can_proceed is not None:
-                    await end_transaction(conn, user_id=interaction.user.id)
-                    if can_proceed is False:
-                        return
+        async with interaction.client.pool.acquire() as conn, conn.transaction():
+            if can_proceed is not None:
+                await end_transaction(conn, user_id=interaction.user.id)
+                if can_proceed is False:
+                    return
 
-                await self.begin_purchase(interaction, true_quantity, conn, new_price)
+            await self.begin_purchase(interaction, true_quantity, conn, new_price)
 
 
 class ShopItem(discord.ui.Button):
@@ -2172,25 +2165,20 @@ class Economy(commands.Cog):
         return rows_present == 2
 
     @staticmethod
-    async def fetch_wallet(user: USER_ENTRY, /, conn_input: Connection) -> int:
-        """Shorthand to get the wallet data of a user."""
-        return await Economy.fetch_account_data(user, "wallet", 0, conn_input)
+    async def fetch_balance(user_id: int, /, conn: Connection, mode: str = "wallet") -> int:
+        """Shorthand to get balance data of a user."""
+        return await Economy.fetch_account_data(user_id, mode, 0, conn)
 
     @staticmethod
-    async def fetch_account_data(
-        user: USER_ENTRY, 
-        field_name: str, 
-        default: Any, 
-        conn_input: Connection
-    ) -> Any:
+    async def fetch_account_data(user_id: int, field_name: str, default: Any, conn: Connection) -> Any:
         """Retrieves a specific field name only from the accounts table."""
-        query = f"SELECT COALESCE({field_name}, {default}) FROM accounts WHERE userID = $0"
-        data, = await conn_input.fetchone(query, user.id)
+        query = f"SELECT {field_name} FROM accounts WHERE userID = $0"
+        data, = await conn.fetchone(query, user_id) or (default,)
         return data
 
     @staticmethod
     async def update_account(
-        user: USER_ENTRY, 
+        user_id: int, 
         amount: float | int, 
         conn: Connection,
         mode: str = "wallet"
@@ -2198,11 +2186,11 @@ class Economy(commands.Cog):
         """Update miscellaneous account data."""
         query = f"UPDATE accounts SET {mode} = {mode} + $0 WHERE userID = $1 RETURNING {mode}"
 
-        return await conn.fetchone(query, amount, user.id)
+        return await conn.fetchone(query, amount, user_id)
 
     @staticmethod
     async def update_fields(
-        user: USER_ENTRY, 
+        user_id: int, 
         conn: Connection, 
         table_name: str = "accounts",
         **kwargs: float | int
@@ -2219,7 +2207,7 @@ class Economy(commands.Cog):
             raise ValueError("At least one field must be provided to update.")
 
         set_clause = ", ".join(f"{field} = {field} + ?" for field in kwargs.keys())
-        values = tuple(kwargs.values()) + (user.id,)
+        values = tuple(kwargs.values()) + (user_id,)
 
         query = (
             f"""
@@ -2258,15 +2246,8 @@ class Economy(commands.Cog):
     @staticmethod
     async def fetch_item_qty_from_id(user_id: int, item_id: int, conn: Connection) -> bool:
         """Fetch the quantity of an item owned by a user based via it's ID."""
-        query = (
-            """
-            SELECT COALESCE(qty, 0)
-            FROM inventory
-            WHERE inventory.userID = ? AND inventory.itemID = ?
-            """
-        )
-
-        val, = await conn.fetchone(query, (user_id, item_id))
+        query = "SELECT qty FROM inventory WHERE userID = ? AND itemID = ?"
+        val, = await conn.fetchone(query, (user_id, item_id)) or (0,)
         return val
 
     @staticmethod
@@ -2274,7 +2255,7 @@ class Economy(commands.Cog):
         """Fetch the quantity of an item owned by a user based via it's name."""
         query = (
             """
-            SELECT COALESCE(qty, 0)
+            SELECT qty
             FROM inventory
             INNER JOIN shop 
                 ON inventory.itemID = shop.itemID
@@ -2282,7 +2263,7 @@ class Economy(commands.Cog):
             """
         )
 
-        result, = await conn.fetchone(query, (user_id, item_name))
+        result, = await conn.fetchone(query, (user_id, item_name)) or (0,)
         return result
 
     @staticmethod
@@ -2392,94 +2373,26 @@ class Economy(commands.Cog):
         await conn.execute(update_query, user_id, random_item_query[0], qty)
         return random_item_query[1:]
 
-    @staticmethod
-    async def kill_the_user(user: USER_ENTRY, conn_input: Connection) -> None:
-        """Define what it means to kill a user."""
-
-        await conn_input.execute(
-            """
-            UPDATE accounts 
-            SET 
-                wallet = 0, 
-                bank = 0, 
-                job = $0, 
-                bounty = 0 
-            WHERE userID = $1
-            """, "None", user.id
-        )
-
-        await conn_input.execute("DELETE FROM inventory WHERE userID = $0", user.id)
-
-    # ------------ JOB FUNCS ----------------
-
-    @staticmethod
-    async def change_job_new(user: USER_ENTRY, conn_input: Connection, job_name: str) -> None:
-        """Modifies a user's job, returning the new job after changes were made."""
-
-        await conn_input.execute(
-            """
-            UPDATE accounts 
-            SET job = $0 
-            WHERE userID = $1
-            """, job_name, user.id
-        )
-
     # ------------ cooldowns ----------------
 
     @staticmethod
-    async def check_has_cd(
-        conn: Connection, 
-        user_id: int, 
-        cd_type: str | None = None, 
-        mode="t", 
-        until = "N/A"
-    ) -> bool | str:
-        """
-        Check if a user has no cooldowns.
-
-        To save queries, if you can, make the query yourself in
-        advance and pass it in to the `until` kwarg.
-        """
-
-        if isinstance(until, str):
-            until = (
-                """
-                SELECT until 
-                FROM cooldowns 
-                WHERE userID = $0 AND cooldown = $1
-                """
-            )
-
-            until = await conn.fetchone(until, user_id, cd_type)
-            if until:
-                until, = until
-
-        if not until:
-            return None
-
-        current_time = discord.utils.utcnow()
-        time_left = datetime.fromtimestamp(until, tz=timezone.utc)
-        time_left = (time_left - current_time).total_seconds()
-
-        if time_left > 0:
-            when = current_time + timedelta(seconds=time_left)
-            return discord.utils.format_dt(when, style=mode), discord.utils.format_dt(when, style="R")
-        return False
+    def has_cd(cd_timestamp: float) -> None | float:
+        """Check if a cooldown has expired. Returns when it will expire if not already."""
+        if not cd_timestamp:
+            return
+        current_time = discord.utils.utcnow().timestamp()
+        if current_time > cd_timestamp:
+            return
+        return datetime.fromtimestamp(cd_timestamp)
 
     @staticmethod
-    async def update_cooldown(
-        conn_input: Connection, 
-        *, 
-        user_id: USER_ENTRY, 
-        cooldown_type: str, 
-        new_cd: str
-    ) -> None:
+    async def update_cooldown(conn: Connection, user_id: int, cooldown_type: str, new_cd: str) -> None:
         """Update a user's cooldown.
 
         Raises `sqlite3.IntegrityError` when foreign userID constraint fails.
         """
 
-        await conn_input.execute(
+        await conn.execute(
             """
             INSERT INTO cooldowns (userID, cooldown, until)
             VALUES ($0, $1, $2)
@@ -2794,7 +2707,7 @@ class Economy(commands.Cog):
             if await self.can_call_out(recipient, conn):
                 return await respond(interaction, embed=NOT_REGISTERED)
 
-            actual_wallet = await self.fetch_wallet(sender, conn)
+            actual_wallet = await self.fetch_balance(sender.id, conn)
             if isinstance(quantity, str):
                 quantity = actual_wallet
 
@@ -2811,18 +2724,17 @@ class Economy(commands.Cog):
                 conn=conn
             )
 
-        async with self.bot.pool.acquire() as conn:
-            async with conn.transaction():
-                if can_proceed is not None:
-                    await end_transaction(conn, user_id=sender.id)
-                    if can_proceed is False:
-                        return
+        async with self.bot.pool.acquire() as conn, conn.transaction():
+            if can_proceed is not None:
+                await end_transaction(conn, user_id=sender.id)
+                if can_proceed is False:
+                    return
 
-                await self.update_wallet_many(
-                    conn, 
-                    (-int(quantity), sender.id), 
-                    (int(quantity), recipient.id)
-                )
+            await self.update_wallet_many(
+                conn, 
+                (-int(quantity), sender.id), 
+                (int(quantity), recipient.id)
+            )
 
         await respond(
             interaction, 
@@ -2875,21 +2787,20 @@ class Economy(commands.Cog):
                 conn=conn
             )
 
-        async with self.bot.pool.acquire() as conn:
-            async with conn.transaction():
-                if can_proceed is not None:
-                    await end_transaction(conn, user_id=sender.id)
-                    if can_proceed is False:
-                        return
+        async with self.bot.pool.acquire() as conn, conn.transaction():
+            if can_proceed is not None:
+                await end_transaction(conn, user_id=sender.id)
+                if can_proceed is False:
+                    return
 
-                await self.update_inv_by_id(sender, -quantity, item_id, conn)
-                await conn.execute(
-                    """
-                    INSERT INTO inventory (userID, itemID, qty) 
-                    VALUES ($0, $1, $2) 
-                    ON CONFLICT(userID, itemID) DO UPDATE SET qty = qty + $2
-                    """, recipient.id, item_id, quantity
-                )
+            await self.update_inv_by_id(sender, -quantity, item_id, conn)
+            await conn.execute(
+                """
+                INSERT INTO inventory (userID, itemID, qty) 
+                VALUES ($0, $1, $2) 
+                ON CONFLICT(userID, itemID) DO UPDATE SET qty = qty + $2
+                """, recipient.id, item_id, quantity
+            )
 
         await respond(
             interaction,
@@ -3068,7 +2979,7 @@ class Economy(commands.Cog):
         self.default_checks_passing(interaction.user, with_who)
 
         async with self.bot.pool.acquire() as conn:
-            wallet_amt = await self.fetch_wallet(with_who, conn)
+            wallet_amt = await self.fetch_balance(with_who.id, conn)
 
             # ! For the person sending items
             await self.item_checks_passing(conn, interaction.user, item, quantity)
@@ -3105,19 +3016,18 @@ class Economy(commands.Cog):
         )
 
         query = "DELETE FROM transactions WHERE userID IN ($0, $1)"
-        async with self.bot.pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.execute(query, interaction.user.id, with_who.id)
-                if not can_proceed:
-                    return
+        async with self.bot.pool.acquire() as conn, conn.transaction():
+            await conn.execute(query, interaction.user.id, with_who.id)
+            if not can_proceed:
+                return
 
-                await self.update_inv_by_id(interaction.user, -quantity, item_id=item[0], conn=conn)
-                await self.update_inv_by_id(with_who, +quantity, item_id=item[0], conn=conn)
-                await self.update_wallet_many(
-                    conn, 
-                    (-for_robux, with_who.id), 
-                    (+for_robux, interaction.user.id)
-                )
+            await self.update_inv_by_id(interaction.user, -quantity, item_id=item[0], conn=conn)
+            await self.update_inv_by_id(with_who, +quantity, item_id=item[0], conn=conn)
+            await self.update_wallet_many(
+                conn, 
+                (-for_robux, with_who.id), 
+                (+for_robux, interaction.user.id)
+            )
 
         embed = discord.Embed(colour=0xFFFFFF).set_footer(text="Thanks for your business.")
         embed.title = "Your Trade Receipt"
@@ -3148,7 +3058,7 @@ class Economy(commands.Cog):
         self.default_checks_passing(interaction.user, with_who)
 
         async with self.bot.pool.acquire() as conn:
-            wallet_amt = await self.fetch_wallet(interaction.user, conn)
+            wallet_amt = await self.fetch_balance(interaction.user.id, conn)
 
             if isinstance(robux, str):
                 robux = wallet_amt
@@ -3181,19 +3091,18 @@ class Economy(commands.Cog):
         )
 
         query = "DELETE FROM transactions WHERE userID IN ($0, $1)"
-        async with self.bot.pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.execute(query, interaction.user.id, with_who.id)
-                if not can_proceed:
-                    return
+        async with self.bot.pool.acquire() as conn, conn.transaction():
+            await conn.execute(query, interaction.user.id, with_who.id)
+            if not can_proceed:
+                return
 
-                await self.update_inv_by_id(with_who, -item_quantity, item_id=for_item[0], conn=conn)
-                await self.update_inv_by_id(interaction.user, item_quantity, item_id=for_item[0], conn=conn)
-                await self.update_wallet_many(
-                    conn, 
-                    (-robux, interaction.user.id), 
-                    (+robux, with_who.id)
-                )
+            await self.update_inv_by_id(with_who, -item_quantity, item_id=for_item[0], conn=conn)
+            await self.update_inv_by_id(interaction.user, item_quantity, item_id=for_item[0], conn=conn)
+            await self.update_wallet_many(
+                conn, 
+                (-robux, interaction.user.id), 
+                (+robux, with_who.id)
+            )
 
         embed = discord.Embed(colour=0xFFFFFF).set_footer(text="Thanks for your business.")
         embed.title = "Your Trade Receipt"
@@ -3262,21 +3171,20 @@ class Economy(commands.Cog):
         )
 
         query = "DELETE FROM transactions WHERE userID IN ($0, $1)"
-        async with self.bot.pool.acquire() as conn:
-            async with conn.transaction():
-                await conn.execute(query, interaction.user.id, with_who.id)
-                if not can_proceed:
-                    return
+        async with self.bot.pool.acquire() as conn, conn.transaction():
+            await conn.execute(query, interaction.user.id, with_who.id)
+            if not can_proceed:
+                return
 
-                await self.update_inv_by_id(interaction.user, -quantity, item[0], conn)
-                await self.update_inv_by_id(with_who, -for_quantity, for_item[0], conn)
-                await conn.executemany(
-                    sql="UPDATE inventory SET qty = qty + $0 WHERE userID = $1 AND itemID = $2",
-                    seq_of_parameters=[
-                        (for_quantity, interaction.user.id, for_item[0]), 
-                        (quantity, with_who.id, item[0])
-                    ]
-                )
+            await self.update_inv_by_id(interaction.user, -quantity, item[0], conn)
+            await self.update_inv_by_id(with_who, -for_quantity, for_item[0], conn)
+            await conn.executemany(
+                sql="UPDATE inventory SET qty = qty + $0 WHERE userID = $1 AND itemID = $2",
+                seq_of_parameters=[
+                    (for_quantity, interaction.user.id, for_item[0]), 
+                    (quantity, with_who.id, item[0])
+                ]
+            )
 
         embed = discord.Embed(colour=0xFFFFFF).set_footer(text="Thanks for your business.")
         embed.title = "Your Trade Receipt"
@@ -3334,7 +3242,7 @@ class Economy(commands.Cog):
 
         async def get_page_part(page: int) -> tuple[discord.Embed, int]:
             async with self.bot.pool.acquire() as conn:
-                wallet = await self.fetch_wallet(interaction.user, conn)
+                wallet = await self.fetch_balance(interaction.user.id, conn)
             emb.description = f"> You have {CURRENCY} **{wallet:,}**.\n\n"
 
             offset = (page - 1) * length
@@ -3407,15 +3315,14 @@ class Economy(commands.Cog):
                 conn=conn
             )
 
-        async with self.bot.pool.acquire() as conn:
-            async with conn.transaction():
-                if can_proceed is not None:
-                    await end_transaction(conn, user_id=seller.id)
-                    if can_proceed is False:
-                        return
+        async with self.bot.pool.acquire() as conn, conn.transaction():
+            if can_proceed is not None:
+                await end_transaction(conn, user_id=seller.id)
+                if can_proceed is False:
+                    return
 
-                await self.update_inv_new(seller, -sell_quantity, item_name, conn)
-                await self.update_account(seller, +cost, conn)
+            await self.update_inv_new(seller, -sell_quantity, item_name, conn)
+            await self.update_account(seller.id, +cost, conn)
 
         embed = membed(
             f"{seller.mention} sold **{sell_quantity:,}x {ie} {item_name}** "
@@ -3791,7 +3698,7 @@ class Economy(commands.Cog):
         """
 
         async with self.bot.pool.acquire() as conn:
-            wallet_amt = await self.fetch_wallet(interaction.user, conn)
+            wallet_amt = await self.fetch_balance(interaction.user.id, conn)
             has_keycard = await self.fetch_item_qty_from_id(interaction.user.id, item_id=1, conn=conn)
 
             robux = self.do_wallet_checks(wallet_amt, robux, has_keycard)
@@ -3807,23 +3714,12 @@ class Economy(commands.Cog):
     async def slots(self, interaction: discord.Interaction, robux: ROBUX_CONVERTER) -> None:
         """Play a round of slots. At least one matching combination is required to win."""
 
-
-        query = (
-            """
-            SELECT 
-                COALESCE(slotw, 0), 
-                COALESCE(slotl, 0), 
-                COALESCE(wallet, 0) 
-            FROM accounts 
-            WHERE userID = $0
-            """
-        )
-
+        query = "SELECT slotw, slotl, wallet FROM accounts WHERE userID = $0"
 
         # --------------- Checks before betting i.e. has keycard, meets bet constraints. -------------
         async with self.bot.pool.acquire() as conn:
             has_keycard = await self.fetch_item_qty_from_id(interaction.user.id, item_id=1, conn=conn)
-            slot_wins, slot_losses, wallet_amt = await conn.fetchone(query, interaction.user.id)
+            slot_wins, slot_losses, wallet_amt = await conn.fetchone(query, interaction.user.id) or (0, 0, 0)
         robux = self.do_wallet_checks(wallet_amt, robux, has_keycard)
 
         # ------------------ THE SLOT MACHINE ITESELF ------------------------
@@ -3837,7 +3733,7 @@ class Economy(commands.Cog):
 
             async with self.bot.pool.acquire() as conn:
                 data = await self.update_fields(
-                    interaction.user, 
+                    interaction.user.id, 
                     conn, 
                     slotwa=amount_after_multi, 
                     slotw=1, 
@@ -3849,15 +3745,16 @@ class Economy(commands.Cog):
 
             slot_machine.colour = discord.Color.brand_green()
             slot_machine.description = (
-                f"Payout: {CURRENCY} **{amount_after_multi:,}**.\n",
-                f"New Balance: {CURRENCY} **{data[-1]:,}**."
+                f"**\U0000003e** {emoji_1} {emoji_2} {emoji_3} **\U0000003c**\n\n"
+                f"Payout: {CURRENCY} **{amount_after_multi:,}**.\n"
+                f"New Balance: {CURRENCY} **{data[-1]:,}**.\n"
                 f"-# {prcntw:.1f}% of all slots games won with {multiplier}% multiplier."
             )
 
         else:
             async with self.bot.pool.acquire() as conn:
                 data = await self.update_fields(
-                    interaction.user, 
+                    interaction.user.id, 
                     conn, 
                     slotla=robux,
                     slotl=1,
@@ -3955,52 +3852,55 @@ class Economy(commands.Cog):
         recurring_income_type: str,
         weeks_away: int
     ) -> None:
+        multiplier = {
+            "weekly": 10_000_000,
+            "monthly": 100_000_000,
+            "yearly": 1_000_000_000
+        }.get(recurring_income_type)
 
+        # ! Do they have a cooldown?
         async with self.bot.pool.acquire() as conn:
-            multiplier = {
-                "weekly": 10_000_000,
-                "monthly": 100_000_000,
-                "yearly": 1_000_000_000
-            }.get(recurring_income_type)
+            query = "SELECT until FROM cooldowns WHERE userID = $0 AND cooldown = $1"
+            cd_timestamp = await conn.fetchone(query, interaction.user.id, recurring_income_type)
 
-            has_cd = await self.check_has_cd(
-                conn, 
-                user_id=interaction.user.id, 
-                cd_type=recurring_income_type
+        noun_period = recurring_income_type[:-2]
+        if cd_timestamp is not None:
+            cd_timestamp, = cd_timestamp
+
+        has_cd = self.has_cd(cd_timestamp, recurring_income_type)
+        if isinstance(has_cd, float):
+            r = discord.utils.format_dt(has_cd, style="R")
+            return await interaction.response.send_message(
+                embed=membed(f"You already got your {recurring_income_type} robux this {noun_period}, try again {r}.")
             )
-            noun_period = recurring_income_type[:-2]
 
-            if isinstance(has_cd, tuple):
-                return await interaction.response.send_message(
-                    embed=membed(f"You already got your {recurring_income_type} robux this {noun_period}, try again {has_cd[1]}.")
+        # ! Try updating the cooldown, giving robux
+        r = discord.utils.utcnow() + timedelta(weeks=weeks_away)
+        rformatted = discord.utils.format_dt(r, style="R")
+
+        async with self.bot.pool.acquire() as conn, conn.transaction() as tr:
+            try:
+                ret = await self.update_account(interaction.user.id, multiplier, conn)
+                assert ret is not None
+                await self.update_cooldown(
+                    conn, 
+                    interaction.user.id, 
+                    recurring_income_type, 
+                    r.timestamp()
                 )
+            except (AssertionError, IntegrityError):
+                await tr.rollback()
+                return await interaction.response.send_message(embed=self.not_registered)
 
-            next_cd = discord.utils.utcnow() + timedelta(weeks=weeks_away)
-            async with conn.transaction():
+        success = membed(
+            f"You just got {CURRENCY} **{multiplier:,}** for checking in this {noun_period}.\n"
+            f"See you next {noun_period} ({rformatted})!"
+        )
 
-                try:
-                    await self.update_cooldown(
-                        conn, 
-                        user_id=interaction.user.id, 
-                        cooldown_type=recurring_income_type, 
-                        new_cd=next_cd.timestamp()
-                    )
+        success.title = f"{interaction.user.display_name}'s {recurring_income_type.title()} Robux"
+        success.url = "https://www.youtube.com/watch?v=ue_X8DskUN4"
 
-                except IntegrityError:
-                    return await interaction.response.send_message(embed=self.not_registered)
-
-                await self.update_account(interaction.user, multiplier, conn)
-
-            next_cd = discord.utils.format_dt(next_cd, style="R")    
-            success = membed(
-                f"You just got {CURRENCY} **{multiplier:,}** for checking in this {noun_period}.\n"
-                f"See you next {noun_period} ({next_cd})!"
-            )
-
-            success.title = f"{interaction.user.display_name}'s {recurring_income_type.title()} Robux"
-            success.url = "https://www.youtube.com/watch?v=ue_X8DskUN4"
-
-            await interaction.response.send_message(embed=success)
+        await interaction.response.send_message(embed=success)
 
     @app_commands.command(description="Get a weekly injection of robux")
     @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
@@ -4062,21 +3962,10 @@ class Economy(commands.Cog):
     @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def withdraw(self, interaction: discord.Interaction, robux: ROBUX_CONVERTER) -> None:
         """Withdraw a given amount of robux from your bank."""
-
         user = interaction.user
-        query = (
-            """
-            UPDATE accounts
-            SET 
-                wallet = wallet + $0,
-                bank = bank - $0
-            WHERE userID = $1
-            RETURNING wallet, bank
-            """
-        )
 
         async with self.bot.pool.acquire() as conn:
-            bank_amt = await self.fetch_account_data(user, "bank", 0, conn)
+            bank_amt = await self.fetch_balance(user.id, conn, "bank")
             embed = membed()
             if not bank_amt:
                 embed.description = "You have nothing to withdraw."
@@ -4087,6 +3976,17 @@ class Economy(commands.Cog):
             elif robux > bank_amt:
                 embed.description = f"You only have {CURRENCY} **{bank_amt:,}** in your bank right now."
                 return await interaction.response.send_message(embed=embed, ephemeral=True)
+
+            query = (
+                """
+                UPDATE accounts
+                SET 
+                    wallet = wallet + $0,
+                    bank = bank - $0
+                WHERE userID = $1
+                RETURNING wallet, bank
+                """
+            )
 
             wallet_new, bank_new = await conn.fetchone(query, robux, user.id)
             await conn.commit()
@@ -4107,21 +4007,11 @@ class Economy(commands.Cog):
     @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def deposit(self, interaction: discord.Interaction, robux: ROBUX_CONVERTER) -> None:
         """Deposit an amount of robux into your bank."""
-
         user = interaction.user
-        query = (
-            """
-            SELECT
-                COALESCE(wallet, 0),
-                COALESCE(bank, 0),
-                COALESCE(bankspace, 0)
-            FROM accounts
-            WHERE userID = $0
-            """
-        )
 
+        query = "SELECT wallet, bank, bankspace FROM accounts WHERE userID = $0"
         async with self.bot.pool.acquire() as conn:
-            wallet_amt, bank, bankspace = await conn.fetchone(query, interaction.user.id)
+            wallet_amt, bank, bankspace = await conn.fetchone(query, user.id) or (0, 0, 0)
             embed = membed()
 
         if not wallet_amt:
@@ -4129,7 +4019,6 @@ class Economy(commands.Cog):
             return await interaction.response.send_message(embed=embed)
         can_deposit = bankspace - bank
 
-        # Already at max bank space
         if can_deposit <= 0:
             embed.description = (
                 f"You can only hold **{CURRENCY} {bankspace:,}** in your bank right now.\n"
@@ -4138,7 +4027,6 @@ class Economy(commands.Cog):
             return await interaction.response.send_message(embed=embed)
 
         if isinstance(robux, str):
-            # Has space but wants to deposit all of their wallet
             can_deposit = min(wallet_amt, can_deposit)
         elif robux > wallet_amt:
             embed.description = f"You only have {CURRENCY} **{wallet_amt:,}** in your wallet right now."
@@ -4155,9 +4043,8 @@ class Economy(commands.Cog):
             """
         )
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.bot.pool.acquire() as conn, conn.transaction():
             wallet_new, bank_new = await conn.fetchone(query, robux, user.id)
-            await conn.commit()
 
         embed.add_field(
             name="<:deposit:1263920154648121375> Deposited", 
@@ -4383,7 +4270,7 @@ class Economy(commands.Cog):
         # ------ Game checks ---------
 
         async with self.bot.pool.acquire() as conn:
-            wallet_amt = await self.fetch_wallet(interaction.user, conn)
+            wallet_amt = await self.fetch_balance(interaction.user.id, conn)
             has_keycard = await self.fetch_item_qty_from_id(interaction.user.id, item_id=1, conn=conn)
         robux = self.do_wallet_checks(wallet_amt, robux, has_keycard)
 
@@ -4453,19 +4340,10 @@ class Economy(commands.Cog):
 
         # --------------- Contains checks before betting i.e. has keycard, meets bet constraints. -------------
         user = interaction.user
-        query = (
-            """
-            SELECT 
-                COALESCE(wallet, 0), 
-                COALESCE(betw, 0), 
-                COALESCE(betl, 0) 
-            FROM accounts 
-            WHERE userID = $0
-            """
-        )
+        query = "SELECT wallet, betw, betl FROM accounts WHERE userID = $0"
 
         async with self.bot.pool.acquire() as conn:
-            data = await conn.fetchone(query, user.id)
+            data = await conn.fetchone(query, user.id) or (0, 0, 0)
             wallet_amt, id_won_amount, id_lose_amount = data
 
             has_keycard = await self.fetch_item_qty_from_id(user.id, item_id=1, conn=conn)
@@ -4507,7 +4385,7 @@ class Economy(commands.Cog):
             amount_after_multi = add_multi_to_original(pmulti, robux)
             async with self.bot.pool.acquire() as conn:
                 updated = await self.update_fields(
-                    user, 
+                    user.id, 
                     conn, 
                     betwa=amount_after_multi, 
                     betw=1, 
@@ -4542,7 +4420,7 @@ class Economy(commands.Cog):
         else:
             async with self.bot.pool.acquire() as conn:
                 updated = await self.update_fields(
-                    user, 
+                    user.id, 
                     conn, 
                     betla=robux, 
                     betl=1, 

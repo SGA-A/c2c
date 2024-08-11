@@ -33,7 +33,7 @@ def do_boilerplate_role_checks(r: discord.Role, g: discord.Guild) -> None:
             f"meaning I cannot alter their roles.\n"
             f"Please ensure my highest role is above the role you want assigned or removed.\n\n"
             f"{rname} **<-- The role you wish to assign or remove**\n"
-            f"{'\n'.join(roles_beneath) or ''}\n"
+            f"{'\n'.join(roles_beneath)}\n"
             f"{mname} **<-- The bot's highest role**"
         )
 
@@ -82,7 +82,7 @@ class RoleManagement(app_commands.Group):
             raise FailingConditionalError("The process has been ratelimited, try again later.")
 
         success = discord.Embed(title="Success", colour=0x54CD68)
-        success.description = f"Added {role.mention} to **{count:,}** members."
+        success.description = f"Added {role.name!r} to **{count:,}** member(s)."
         await interaction.followup.send(embed=success)
 
     async def bulk_remove_roles(
@@ -103,61 +103,67 @@ class RoleManagement(app_commands.Group):
         success = discord.Embed()
         success.colour = 0x54CD68
         success.title = "Success"
-        success.description = f"Removed {new_role.mention} from **{count:,}** members."
+        success.description = f"Removed {new_role.name!r} from **{count:,}** member(s)."
         await interaction.followup.send(embed=success)
 
-    @app_commands.command(name="add", description="Adds a role to the specified member")
-    @app_commands.describe(user="The user to add the role to.", role="The role to add to this user.")
+    @app_commands.command(name="add", description="Adds a role to a member")
+    @app_commands.describe(
+        user="The member to add a role to.", 
+        role="The role to add to this member."
+    )
     async def add_role(self, interaction: discord.Interaction, user: discord.Member, role: discord.Role):
 
         if role in user.roles:
             return await interaction.response.send_message(
-                embed=membed(f"{user.mention} already has {role.name!r}.")
+                embed=membed(f"{user.display_name} already has {role.name!r}.")
             )
 
         do_boilerplate_role_checks(role, interaction.guild)
-
         await user.add_roles(
             discord.Object(id=role.id), 
             reason=f"Requested by {interaction.user} (ID: {interaction.user.id})"
         )
 
-        await interaction.response.send_message(embed=membed(f"Added {role.mention} to {user.mention}."))
+        await interaction.response.send_message(embed=membed(f"Added {role.name!r} to {user.display_name}."))
 
     @app_commands.command(name="remove", description="Removes a role from a member")
-    @app_commands.describe(user="The user to remove the role from.", role="The role to remove from this user.")
-    async def remove_role(self, interaction: discord.Interaction, user: discord.Member, role: discord.Role):
+    @app_commands.describe(
+        member="The user to remove the role from.", 
+        role="The role to remove from this user."
+    )
+    async def remove_role(self, interaction: discord.Interaction, member: discord.Member, role: discord.Role):
         
-        if role not in user.roles:
+        if role not in member.roles:
             return await interaction.response.send_message(
-                embed=membed(f"{user.mention} does not have {role.namE!r}.")
+                embed=membed(f"{member.display_name} does not have {role.name!r}.")
             )
 
         do_boilerplate_role_checks(role, interaction.guild)
-
-        await user.remove_roles(
+        await member.remove_roles(
             discord.Object(id=role.id), 
             reason=f"Requested by {interaction.user} (ID: {interaction.user.id})"
         )
 
-        await interaction.response.send_message(embed=membed(f"Removed {role.mention} from {user.mention}."))
+        await interaction.response.send_message(
+            embed=membed(f"Removed {role.name!r} from {member.display_name}.")
+        )
 
-    @app_commands.command(name="custom", description="Add or remove multiple roles from a user")
+    @app_commands.command(name="custom", description="Add or remove multiple roles from a member")
     @app_commands.describe(
-        user="The user to add/remove roles to.",
+        member="The user to add/remove roles to.",
         roles="Precede role name with +/- to add or remove. Separate each with spaces."
     )
-    async def custom_role(self, interaction: discord.Interaction, user: discord.Member, roles: str):
+    async def custom_role(self, interaction: discord.Interaction, member: discord.Member, roles: str):
         await interaction.response.defer()
 
         pattern = compile(r'([+-])([^+-]+)')
         role_changes = pattern.findall(roles)
-        
+
         added_roles, removed_roles = set(), set()
 
         for switch, role_name in role_changes:
             role_name = role_name.strip()
-            
+
             rolemention = discord.utils.find(
                 lambda r: r.name.lower() == role_name.lower(), 
                 interaction.guild.roles
@@ -171,59 +177,57 @@ class RoleManagement(app_commands.Group):
             else:
                 removed_roles.add(rolemention)
 
-        their_roles = set(user.roles)
+        their_roles = set(member.roles)
         added_roles = added_roles.difference(their_roles)
         removed_roles = removed_roles.intersection(their_roles)
 
         if (not added_roles) and (not removed_roles):
             return await interaction.followup.send(embed=membed("No changes were made."))
 
-        embed = membed().set_thumbnail(url=user.display_avatar.url)
-        embed.title = f"Role Changes: {user.display_name}"
+        embed = membed().set_thumbnail(url=member.display_avatar.url)
+        embed.title = f"Role Changes: {member.display_name}"
 
         custom_reason = f"Custom request by {interaction.user.name} (ID: {interaction.user.id})"
         if added_roles:
-            await user.add_roles(*added_roles, reason=custom_reason)
+            await member.add_roles(*added_roles, reason=custom_reason)
             embed.add_field(name="Added", value="\n".join(role.mention for role in added_roles) or "\u200b")
 
         if removed_roles:
-            await user.remove_roles(*removed_roles, reason=custom_reason)
+            await member.remove_roles(*removed_roles, reason=custom_reason)
             embed.add_field(name="Removed", value="\n".join(role.mention for role in removed_roles) or "\u200b")
 
         await interaction.followup.send(embed=embed)
 
-    @app_commands.command(name="all", description="Adds a role to all server members")
-    @app_commands.describe(role="The role to add to all server members.")
+    @app_commands.command(name="all", description="Adds a role to all members")
+    @app_commands.describe(role="The role to add to all members.")
     async def add_role_to_all(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
         
         guild = interaction.guild
-        yielded_users = (member for member in guild.members if role not in member.roles)
-
         do_boilerplate_role_checks(role, guild)
+        yielded_users = (member for member in guild.members if role not in member.roles)
 
         value = await process_confirmation(
             interaction, 
-            prompt=f"This will add {role.mention} to all members."
+            prompt=f"This will add {role.name!r} to all members."
         )
-        
+
         if not value:
             return
         await self.bulk_add_roles(interaction, yielded_users, role)
     
-    @app_commands.command(name="rall", description="Removes a role from all server members")
-    @app_commands.describe(role="The role to remove to all server members.")
+    @app_commands.command(name="rall", description="Removes a role from all members")
+    @app_commands.describe(role="The role to remove from all members.")
     async def remove_roles_all(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
 
         guild = interaction.guild
-        yielded_users = (member for member in guild.members if role in member.roles)
-
         do_boilerplate_role_checks(role, guild)
+        yielded_users = (member for member in guild.members if role in member.roles)
 
         value = await process_confirmation(
             interaction, 
-            prompt=f"This will remove {role.mention} from all members."
+            prompt=f"This will remove {role.name!r} from all members."
         )
 
         if not value:
@@ -232,19 +236,15 @@ class RoleManagement(app_commands.Group):
 
     @app_commands.command(name="allroles", description="Lists all roles in the server")
     async def all_roles(self, interaction: discord.Interaction):
-
-        guild_roles = sorted(interaction.guild.roles[1:], reverse=True)
-        guild_roles = [
-            f"{role.mention} \U00002014 {role.id}" 
-            for role in guild_roles
-        ] + [f"@everyone \U00002014 {interaction.guild.id}"]
-
-        emb = membed()
-        length = 12
+        guild_roles = sorted(interaction.guild.roles[1:], reverse=True) + [interaction.guild.default_role]
+        emb, length = membed(), 12
 
         async def get_page_part(page: int):
             offset = (page - 1) * length
-            emb.description = "\n".join(guild_roles[offset:offset + length])
+            emb.description = "\n".join(
+                f"{role.mention} \U00002014 {role.id}" 
+                for role in guild_roles[offset:offset+length]
+            )
 
             n = PaginationItem.compute_total_pages(len(guild_roles), length)
             emb.set_footer(text=f"Page {page} of {n}")
@@ -277,104 +277,105 @@ class RoleManagement(app_commands.Group):
         await interaction.response.defer(thinking=True)
 
         guild = interaction.guild
+        do_boilerplate_role_checks(role, guild)
         yielded_users = (
             member 
             for member in guild.members 
             if (member.bot) and (role in member.roles)
         )
-        
-        do_boilerplate_role_checks(role, guild)
 
         value = await process_confirmation(
             interaction, 
-            prompt=f"This will remove {role.mention} from all bots."
+            prompt=f"This will remove {role.name!r} from all bots."
         )
 
         if not value:
             return
         await self.bulk_remove_roles(interaction, yielded_users, role)
 
-    @app_commands.command(name="humans", description="Add a role to all humans in the server")
+    @app_commands.command(name="humans", description="Add a role to all server humans")
     @app_commands.describe(role="The role to add to all humans.")
     async def add_human_roles(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
 
         guild = interaction.guild
+        do_boilerplate_role_checks(role, guild)
         yielded_users = (
             member 
             for member in guild.members 
             if (not member.bot) and (role not in member.roles)
         )
-        
-        do_boilerplate_role_checks(role, guild)
 
         value = await process_confirmation(
             interaction, 
-            prompt=f"This will add {role.mention} to all humans in this server."
+            prompt=f"This will add {role.name!r} to all humans in this server."
         )
 
         if not value:
             return
         await self.bulk_add_roles(interaction, yielded_users, role)
 
-    @app_commands.command(description="Remove a role from all humans in the server")
+    @app_commands.command(description="Remove a role from all server humans")
     @app_commands.describe(role="The role to remove from all humans.")
     async def removehumans(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
 
         guild = interaction.guild
+        do_boilerplate_role_checks(role, guild)
         yielded_users = (
             member 
             for member in guild.members 
             if (not member.bot) and (role in member.roles)
         )
 
-        do_boilerplate_role_checks(role, guild)
-
         value = await process_confirmation(
             interaction, 
-            prompt=f"This will remove {role.mention} from all humans in this server."
+            prompt=f"This will remove {role.name!r} from all humans in this server."
         )
 
         if not value:
             return
         await self.bulk_remove_roles(interaction, yielded_users, role)
 
-    @app_commands.command(name="in", description="Adds a role to all members currently in a base role")
-    @app_commands.describe(base_role="The role members need to get the new role.", new_role="The new role to add to all members in the base role.")
+    @app_commands.command(name="in", description="Adds a role to all members in a base role")
+    @app_commands.describe(
+        base_role="The role members need to get the new role.", 
+        new_role="The new role to add to all members in the base role."
+    )
     async def add_role_in(self, interaction: discord.Interaction, base_role: discord.Role, new_role: discord.Role):
         await interaction.response.defer(thinking=True)
 
-        yielded_users = (member for member in new_role.members if base_role in member.roles)
-
         do_boilerplate_role_checks(new_role, interaction.guild)
+        yielded_users = (member for member in new_role.members if base_role in member.roles)
         
         value = await process_confirmation(
             interaction, 
-            prompt=f"This will add {new_role.mention} to all server members."
+            prompt=f"This will add {new_role.name!r} to all members with {base_role.name!r}."
         )
 
         if not value:
             return
         await self.bulk_add_roles(interaction, yielded_users, new_role)
 
-    @app_commands.command(name="rin", description="Removes a role from all members currently in a base role")
-    @app_commands.describe(base_role="The role members need to lose a role.", new_role="The role to remove from all members in the base role.")
-    async def remove_role_in(self, interaction: discord.Interaction, base_role: discord.Role, new_role: discord.Role):
+    @app_commands.command(name="rin", description="Removes a role from all members in a base role")
+    @app_commands.describe(
+        base_role="The role members need to lose a role.", 
+        role="The role to remove from all members in the base role."
+    )
+    async def remove_role_in(self, interaction: discord.Interaction, base_role: discord.Role, role: discord.Role):
         await interaction.response.defer(thinking=True)
 
-        yielded_users = (member for member in new_role.members if base_role in member.roles)
-
-        do_boilerplate_role_checks(new_role, interaction.guild)
+        do_boilerplate_role_checks(role, interaction.guild)
+        yielded_users = (member for member in role.members if base_role in member.roles)
 
         value = await process_confirmation(
             interaction, 
-            prompt=f"This will remove {new_role.mention} from all users."
+            prompt=f"This will remove {role.name!r} from all members with {base_role.name!r}."
         )
 
         if not value:
             return
-        await self.bulk_remove_roles(interaction, yielded_users, new_role)
+        await self.bulk_remove_roles(interaction, yielded_users, role)
 
 class Moderation(commands.Cog):
     """Moderation tools for your servers, available to server managers."""
@@ -403,21 +404,17 @@ class Moderation(commands.Cog):
 
     @app_commands.default_permissions(manage_messages=True)
     async def purge_from_here(self, interaction: discord.Interaction, message: discord.Message):
-
         await interaction.response.defer(ephemeral=True)
+        
         try:
             count = await interaction.channel.purge(after=discord.Object(id=message.id))
-            msg: discord.WebhookMessage = await interaction.followup.send(embed=membed(f"Deleted **{len(count)}** messages."))
+            msg = await interaction.followup.send(embed=membed(f"Deleted **{len(count)}** messages."))
         except Exception:
-            msg: discord.WebhookMessage = await interaction.followup.send(
-                embed=membed("Could not purge this channel, this may be a DM or I'm missing permissions.")
-            )
-        finally:
-            await msg.delete(delay=3.0)
+            msg = await interaction.followup.send(embed=membed("Could not purge this channel."))
+        await msg.delete(delay=3.0)
 
     @tasks.loop()
     async def check_for_role(self):
-        # sqlite implicitly orders by end_time in ascending order 
         async with self.bot.pool.acquire() as conn:
             next_task = await conn.fetchone('SELECT * FROM tasks ORDER BY end_time LIMIT 1')
 
@@ -429,14 +426,10 @@ class Moderation(commands.Cog):
         timestamp = datetime.fromtimestamp(end_time, tz=timezone.utc)
         await discord.utils.sleep_until(timestamp)
 
-        guild = self.bot.get_guild(in_guild)
-        mem: discord.Member = guild.get_member(mod_to)
+        mem = self.bot.get_guild(in_guild).get_member(mod_to)
 
         try:
-            guild = await mem.remove_roles(
-                discord.Object(id=role_id),
-                reason="Temporary role has expired"
-            )
+            await mem.remove_roles(discord.Object(id=role_id), reason="Temporary role expiry")
         except discord.HTTPException:
             pass
         finally:
@@ -477,8 +470,8 @@ class Moderation(commands.Cog):
         name="temprole", 
         description="Manage roles containing an expiry attribute.", 
         default_permissions=discord.Permissions(manage_roles=True),
-        allowed_contexts=app_commands.AppCommandContext(guild=True, dm_channel=False, private_channel=False),
-        allowed_installs=app_commands.AppInstallationType(guild=True, user=False)
+        allowed_contexts=app_commands.AppCommandContext(guild=True),
+        allowed_installs=app_commands.AppInstallationType(guild=True)
     )
 
     @temprole.command(name="add", description="Adds a temporary role")

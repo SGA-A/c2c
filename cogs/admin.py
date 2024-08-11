@@ -102,9 +102,8 @@ class Admin(commands.Cog):
             embed.description = f"Set {CURRENCY} **{amount:,}** to {user.mention}!"
             query = f"UPDATE accounts SET {medium} = $0 WHERE userID = $1"
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.bot.pool.acquire() as conn, conn.transaction():
             await conn.execute(query, amount, user.id)
-            await conn.commit()
 
         await interaction.response.send_message(embed=embed, ephemeral=is_private)
 
