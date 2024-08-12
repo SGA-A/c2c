@@ -2376,10 +2376,8 @@ class Economy(commands.Cog):
     # ------------ cooldowns ----------------
 
     @staticmethod
-    def has_cd(cd_timestamp: float) -> None | float:
+    def has_cd(cd_timestamp: float) -> None | datetime:
         """Check if a cooldown has expired. Returns when it will expire if not already."""
-        if not cd_timestamp:
-            return
         current_time = discord.utils.utcnow().timestamp()
         if current_time > cd_timestamp:
             return
@@ -3867,12 +3865,12 @@ class Economy(commands.Cog):
         if cd_timestamp is not None:
             cd_timestamp, = cd_timestamp
 
-        has_cd = self.has_cd(cd_timestamp, recurring_income_type)
-        if isinstance(has_cd, float):
-            r = discord.utils.format_dt(has_cd, style="R")
-            return await interaction.response.send_message(
-                embed=membed(f"You already got your {recurring_income_type} robux this {noun_period}, try again {r}.")
-            )
+            has_cd = self.has_cd(cd_timestamp)
+            if isinstance(has_cd, datetime):
+                r = discord.utils.format_dt(has_cd, style="R")
+                return await interaction.response.send_message(
+                    embed=membed(f"You already got your {recurring_income_type} robux this {noun_period}, try again {r}.")
+                )
 
         # ! Try updating the cooldown, giving robux
         r = discord.utils.utcnow() + timedelta(weeks=weeks_away)
