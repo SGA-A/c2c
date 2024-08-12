@@ -267,7 +267,7 @@ def format_multiplier(multiplier):
     if multiplier[2]:
         expiry_time = datetime.fromtimestamp(multiplier[2], tz=timezone.utc)
         expiry_time = discord.utils.format_dt(expiry_time, style="R")
-        description += f" (expires {expiry_time})"
+        description = f"{description} (expires {expiry_time})"
     return description
 
 
@@ -3844,33 +3844,36 @@ class Economy(commands.Cog):
 
         await interaction.response.send_message(embed=balance, view=balance_view)
 
-    async def do_weekly_or_monthly(
+    async def payout_recurring_income(
         self, 
         interaction: discord.Interaction, 
-        recurring_income_type: str,
+        income_type: str,
         weeks_away: int
     ) -> None:
         multiplier = {
             "weekly": 10_000_000,
             "monthly": 100_000_000,
             "yearly": 1_000_000_000
-        }.get(recurring_income_type)
+        }.get(income_type)
+        em = membed()
 
         # ! Do they have a cooldown?
         async with self.bot.pool.acquire() as conn:
             query = "SELECT until FROM cooldowns WHERE userID = $0 AND cooldown = $1"
-            cd_timestamp = await conn.fetchone(query, interaction.user.id, recurring_income_type)
+            cd_timestamp = await conn.fetchone(query, interaction.user.id, income_type)
 
-        noun_period = recurring_income_type[:-2]
+        noun_period = income_type[:-2]
         if cd_timestamp is not None:
             cd_timestamp, = cd_timestamp
 
             has_cd = self.has_cd(cd_timestamp)
             if isinstance(has_cd, datetime):
                 r = discord.utils.format_dt(has_cd, style="R")
-                return await interaction.response.send_message(
-                    embed=membed(f"You already got your {recurring_income_type} robux this {noun_period}, try again {r}.")
+                em.description = (
+                    f"You already got your {income_type} robux "
+                    f"this {noun_period}, try again {r}."
                 )
+                return await interaction.response.send_message(embed=em)
 
         # ! Try updating the cooldown, giving robux
         r = discord.utils.utcnow() + timedelta(weeks=weeks_away)
@@ -3880,43 +3883,38 @@ class Economy(commands.Cog):
             try:
                 ret = await self.update_account(interaction.user.id, multiplier, conn)
                 assert ret is not None
-                await self.update_cooldown(
-                    conn, 
-                    interaction.user.id, 
-                    recurring_income_type, 
-                    r.timestamp()
-                )
-            except (AssertionError, IntegrityError):
+            except AssertionError:
                 await tr.rollback()
                 return await interaction.response.send_message(embed=self.not_registered)
+            await self.update_cooldown(conn, interaction.user.id, income_type, r.timestamp())
 
-        success = membed(
+        em.description = (
             f"You just got {CURRENCY} **{multiplier:,}** for checking in this {noun_period}.\n"
             f"See you next {noun_period} ({rformatted})!"
         )
 
-        success.title = f"{interaction.user.display_name}'s {recurring_income_type.title()} Robux"
-        success.url = "https://www.youtube.com/watch?v=ue_X8DskUN4"
+        em.title = f"{interaction.user.display_name}'s {income_type.title()} Robux"
+        em.url = "https://www.youtube.com/watch?v=ue_X8DskUN4"
 
-        await interaction.response.send_message(embed=success)
+        await interaction.response.send_message(embed=em)
 
     @app_commands.command(description="Get a weekly injection of robux")
     @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
     @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def weekly(self, interaction: discord.Interaction) -> None:
-        await self.do_weekly_or_monthly(interaction, "weekly", weeks_away=1)
+        await self.payout_recurring_income(interaction, "weekly", weeks_away=1)
 
     @app_commands.command(description="Get a monthly injection of robux")
     @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
     @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def monthly(self, interaction: discord.Interaction) -> None:
-        await self.do_weekly_or_monthly(interaction, "monthly", weeks_away=4)
+        await self.payout_recurring_income(interaction, "monthly", weeks_away=4)
 
     @app_commands.command(description="Get a yearly injection of robux")
     @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
     @app_commands.allowed_contexts(**CONTEXT_AND_INSTALL)
     async def yearly(self, interaction: discord.Interaction) -> None:
-        await self.do_weekly_or_monthly(interaction, "yearly", weeks_away=52)
+        await self.payout_recurring_income(interaction, "yearly", weeks_away=52)
 
     @app_commands.command(description="Opt out of the virtual economy, deleting all of your data")
     @app_commands.describe(member='The player to remove all of the data of. Defaults to you.')
