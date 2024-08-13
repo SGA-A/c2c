@@ -250,44 +250,32 @@ class Admin(commands.Cog):
             self.bot.get_partial_messageable(1254883155882672249)
             .get_partial_message(1254901254530924644)
         )
+
         role_content_pt1 = (
             """
             # Role Guide
             Roles are similar to ranks or accessories that you can add to your profile.
             There are a few self-assignable roles that you can pick up in <id:customize> by clicking on the buttons.
-            
+
             There are also roles that are given out based on how active you are within the server on a weekly basis:
             - <@&1190772029830471781>: Given to users that sent at least 50 messages in the last week.
             - <@&1190772182591209492>: Given to users that sent at least 150 messages in the last week.
 
-            We have a leveling system that gives you roles. These are based on how many messages you send in the server excluding slash commands[**\U000000b9**](<https://discord.com/channels/829053898333225010/1121094935802822768/1166397053329477642>), provided by <@437808476106784770>.
-            Check your rank by calling </rank:873658940360126466> in any bot command channel. At every 20 levels, you get a role that grants a set of unique perks and permissions. If you reached a previous milestone role, it will be replaced with your new one.
-            - <@&923931646783287337>: Granted ability to make public and private threads, also able to become a DJ.
-            - <@&923931729016795266>: Granted ability to use the soundboard, these sounds can be external if you are a Nitro member.
-            - <@&923931772020985866>: Granted access to the audit log, and a 1.2x XP boost.
-            - <@&923931819571810305>: Granted ability to send polls anywhere on the server.
-            - <@&923931862001414284>: Granted either admin permissions, a high value reward in our economy, or a developer voicenote.
-            """
-        )
-        _ = (
-            """
             Other miscellaneous roles for your knowledge:
             - <@&893550756953735278>: The people who manage the server.
-            - <@&1148209142465581098>: The role for a backup account, granted all server permissions.
-            - <@&912057500914843680>: A possible role to obtain when you reach level 100.
+            - <@&1148209142465581098>: The role for a backup account, granted administrator permissions.
+            - <@&912057500914843680>: Grants administrator permissions over the server.
             - <@&1121405863194787851>: Given out to those who abuse the XP system, via spam or other methods.
-            - <@&914565377961369632>: The role only the verified crew have upon joining the server.
+            - <@&914565377961369632>: The role verified server members can obtain.
             - <@&1140197893261758505>: Given to people who had their message on the legacy starboard.
             - <@&1121426143598354452>: Given on a per-user basis, granting certain privileges.
-            - <@&990900517301522432>: Grants access to music commands, unlocked at level 20.
-            - <@&1121405585712234506>: A role obtainable when reaching level 60.
+            - <@&990900517301522432>: Grants access to music commands.
             - <@&1150848144440053780>: Bots that only need read access to bot command channels.
             - <@&1150848206008238151>: Bots that require full read access throughout the server.
             """
         )
         
         await message1.edit(content=dedent(role_content_pt1))
-        # await channel.send(content=dedent(role_content_pt2))
 
     async def send_channel_guide(self):
         message = (
@@ -341,8 +329,7 @@ class Admin(commands.Cog):
     @commands.command(description='Update the information channel for cc', aliases=('ui',))
     async def uinfo(self, _: commands.Context):
         """Push to update the welcome and info embed within its respective channel."""
-        await self.send_channel_guide()
-        await self.send_bot_guide()
+        await self.send_role_guide()
 
     @commands.command(name='quit', description='Quits the bot gracefully', aliases=('q',))
     async def close(self, ctx: commands.Context) -> None:
