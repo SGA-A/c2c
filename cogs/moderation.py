@@ -433,9 +433,8 @@ class Moderation(commands.Cog):
         except discord.HTTPException:
             pass
         finally:
-            async with self.bot.pool.acquire() as conn:
+            async with self.bot.pool.acquire() as conn, conn.transaction():
                 await conn.execute('DELETE FROM tasks WHERE mod_to = $0', mod_to)
-                await conn.commit()
 
     @commands.has_permissions(manage_threads=True)
     @commands.command(description="Close a given thread or invocation thread", aliases=('cl',))
@@ -511,15 +510,13 @@ class Moderation(commands.Cog):
         # Scheduling task
         timestamp = (discord.utils.utcnow() + timedelta(seconds=duration)).timestamp()
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.bot.pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 """
                 INSERT INTO tasks (mod_to, role_id, end_time, in_guild) 
                 VALUES ($0, $1, $2, $3)
                 """, user.id, role.id, timestamp, guild.id
             )
-
-            await conn.commit()
 
         if self.check_for_role.is_running():
             self.check_for_role.restart()

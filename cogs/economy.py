@@ -476,9 +476,8 @@ async def drop_expired(interaction: discord.Interaction) -> None:
     timestamp = datetime.fromtimestamp(expiry, tz=timezone.utc)
     await discord.utils.sleep_until(timestamp)
 
-    async with interaction.client.pool.acquire() as conn:
+    async with interaction.client.pool.acquire() as conn, conn.transaction():
         await conn.execute("DELETE FROM multipliers WHERE rowid = $0", row_id)
-        await conn.commit()
 
 
 def start_drop_expired(interaction: discord.Interaction) -> None:
@@ -561,7 +560,7 @@ class ConfirmResetData(BaseInteractionView):
         except discord.HTTPException:
             pass
         finally:
-            async with self.interaction.client.pool.acquire() as conn:
+            async with self.interaction.client.pool.acquire() as conn, conn.transaction():
                 await end_transaction(conn, user_id=self.interaction.user.id)
 
     @discord.ui.button(label='RESET MY DATA', style=discord.ButtonStyle.danger, emoji=discord.PartialEmoji.from_str("<:rooFire:1263923362154156103>"))
@@ -600,7 +599,7 @@ class ConfirmResetData(BaseInteractionView):
         self.stop()
         await self.interaction.delete_original_response()
 
-        async with interaction.client.pool.acquire() as conn:
+        async with interaction.client.pool.acquire() as conn, conn.transaction():
             await end_transaction(conn, user_id=self.to_remove.id)
 
 
@@ -711,7 +710,7 @@ class BalanceView(discord.ui.View):
             in_tr, = await conn.fetchone(query, interaction.user.id)
             if in_tr:
                 await self.send_failure(interaction)
-            return not in_tr
+        return not in_tr
 
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
         for item in self.children:
@@ -810,9 +809,8 @@ class BlackjackUi(BaseInteractionView):
         if not self.finished:
             del self.interaction.client.games[self.interaction.user.id]
 
-            async with self.interaction.client.pool.acquire() as conn:
+            async with self.interaction.client.pool.acquire() as conn, conn.transaction():
                 await end_transaction(conn, user_id=self.interaction.user.id)
-                await conn.commit()
 
             try:
                 await self.interaction.edit_original_response(
@@ -829,13 +827,8 @@ class BlackjackUi(BaseInteractionView):
         Amount after multiplier effect, New amount balance, Percentage games won, multiplier
         """
 
-        async with self.interaction.client.pool.acquire() as conn:
-
-            their_multi = await Economy.get_multi_of(
-                user_id=self.interaction.user.id, 
-                multi_type="robux", 
-                conn=conn
-            )
+        async with self.interaction.client.pool.acquire() as conn, conn.transaction():
+            their_multi = await Economy.get_multi_of(self.interaction.user.id, "robux", conn)
             multiplied = add_multi_to_original(their_multi, bet_amount)
             await end_transaction(conn, user_id=self.interaction.user.id)
 
@@ -851,8 +844,7 @@ class BlackjackUi(BaseInteractionView):
                 """, multiplied, self.interaction.user.id
             )
 
-            await conn.commit()
-            prctnw = (new_bj_win / (new_bj_win + bj_lose)) * 100
+        prctnw = (new_bj_win / (new_bj_win + bj_lose)) * 100
         return multiplied, new_amount_balance, prctnw, their_multi
 
     async def update_losing_data(self, *, bet_amount: int) -> tuple:
@@ -862,7 +854,7 @@ class BlackjackUi(BaseInteractionView):
         New amount balance, Percentage games lost
         """
 
-        async with self.interaction.client.pool.acquire() as conn:
+        async with self.interaction.client.pool.acquire() as conn, conn.transaction():
             await end_transaction(conn, user_id=self.interaction.user.id)
             bj_win, new_bj_lose, new_amount_balance = await conn.fetchone(
                 """
@@ -875,9 +867,7 @@ class BlackjackUi(BaseInteractionView):
                 RETURNING bjw, bjl, wallet
                 """, bet_amount, self.interaction.user.id
             )
-
-            await conn.commit()
-            prnctl = (new_bj_lose / (new_bj_lose + bj_win)) * 100
+        prnctl = (new_bj_lose / (new_bj_lose + bj_win)) * 100
         return new_amount_balance, prnctl
 
     @discord.ui.button(label='Hit', style=discord.ButtonStyle.primary)
@@ -1068,10 +1058,8 @@ class BlackjackUi(BaseInteractionView):
             ).set_footer(text=f"Multiplier: {new_multi:,}%")
 
         else:
-            async with interaction.client.pool.acquire() as conn:
+            async with interaction.client.pool.acquire() as conn, conn.transaction():
                 await end_transaction(conn, user_id=interaction.user.id)
-                await conn.commit()
-
                 wallet_amt = await Economy.fetch_balance(interaction.user.id, conn)
 
             embed.colour = discord.Colour.yellow()
@@ -1177,9 +1165,8 @@ class HighLow(BaseInteractionView):
             item.style = discord.ButtonStyle.secondary
 
     async def on_timeout(self) -> None:
-        async with self.interaction.client.pool.acquire() as conn:
+        async with self.interaction.client.pool.acquire() as conn, conn.transaction():
             await end_transaction(conn, user_id=self.interaction.user.id)
-            await conn.commit()
 
         for item in self.children:
             item.disabled = True
@@ -1191,12 +1178,11 @@ class HighLow(BaseInteractionView):
 
     async def send_win(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.make_clicked_blurple_only(button)
-        async with interaction.client.pool.acquire() as conn:
+        async with interaction.client.pool.acquire() as conn, conn.transaction():
             new_multi = await Economy.get_multi_of(interaction.user.id, "robux", conn)
             total = add_multi_to_original(new_multi, self.their_bet)
             new_balance = await Economy.update_account(interaction.user.id, total, conn)
             await end_transaction(conn, user_id=self.interaction.user.id)
-            await conn.commit()
 
         win = interaction.message.embeds[0]
         win.colour = discord.Colour.brand_green()
@@ -1216,10 +1202,9 @@ class HighLow(BaseInteractionView):
 
     async def send_loss(self, interaction: discord.Interaction, button: discord.ui.Button):
         await self.make_clicked_blurple_only(button)
-        async with interaction.client.pool.acquire() as conn:
+        async with interaction.client.pool.acquire() as conn, conn.transaction():
             new_amount = await Economy.update_account(interaction.user.id, -self.their_bet, conn)
             await end_transaction(conn, user_id=self.interaction.user.id)
-            await conn.commit()
 
         lose = interaction.message.embeds[0]
         lose.colour = discord.Colour.brand_red()
@@ -1627,7 +1612,7 @@ class SettingsDropdown(discord.ui.Select):
 
         async with interaction.client.pool.acquire() as conn:
             em = await Economy.get_setting_embed(interaction, view=self.view, conn=conn)
-            await interaction.response.edit_message(embed=em, view=self.view)
+        await interaction.response.edit_message(embed=em, view=self.view)
 
 
 class ToggleButton(discord.ui.Button):
@@ -1650,7 +1635,7 @@ class ToggleButton(discord.ui.Button):
 
         await interaction.response.edit_message(embed=em, view=self.view)
 
-        async with interaction.client.pool.acquire() as conn:
+        async with interaction.client.pool.acquire() as conn, conn.transaction():
             await conn.execute(
                 """
                 INSERT INTO settings (userID, setting, value) 
@@ -1661,7 +1646,6 @@ class ToggleButton(discord.ui.Button):
                 self.setting_dropdown.current_setting, 
                 self.setting_dropdown.current_setting_state
             )
-            await conn.commit()
 
 
 class ProfileCustomizeButton(discord.ui.Button):
@@ -1706,7 +1690,7 @@ class ItemQuantityModal(discord.ui.Modal):
         interaction: discord.Interaction, 
         true_qty: int, 
         conn: Connection, 
-        new_price
+        new_price: int
     ) -> None:
 
         await Economy.update_inv_new(interaction.user, true_qty, self.item_name, conn)
@@ -1728,7 +1712,6 @@ class ItemQuantityModal(discord.ui.Modal):
             await Economy.update_inv_new(interaction.user, -1, "Shop Coupon", conn)
             success.description += "\n\n**Additional info:**\n- <:shopCoupon:1263923497323855907> 5% Coupon Discount was applied"
         await respond(interaction, embed=success)
-        await conn.commit()
 
     async def calculate_discounted_price_if_any(
         self, 
@@ -1912,8 +1895,7 @@ class DepositOrWithdraw(discord.ui.Modal):
         await self.update_embed(interaction, wallet, bank, bankspace)
 
     async def update_account(self, interaction: discord.Interaction, val: int) -> tuple:
-        async with interaction.client.pool.acquire() as conn:
-
+        async with interaction.client.pool.acquire() as conn, conn.transaction():
             # ! flip the value of val if it is a withdrawal 
             wallet, bank, bankspace = await conn.fetchone(
                 """
@@ -1925,7 +1907,6 @@ class DepositOrWithdraw(discord.ui.Modal):
                 RETURNING wallet, bank, bankspace
                 """, val, interaction.user.id
             )
-            await conn.commit()
         return wallet, bank, bankspace
 
     async def update_embed(
@@ -1978,21 +1959,21 @@ class Economy(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             data = await conn.fetchone("SELECT userID FROM transactions WHERE userID = $0", interaction.user.id)
 
-            if data is None:
-                return True
+        if data is None:
+            return True
 
-            error_view = discord.ui.View().add_item(
-                discord.ui.Button(
-                    label="Explain This!", 
-                    url="https://dankmemer.lol/tutorial/interaction-locks"
-                )
+        error_view = discord.ui.View().add_item(
+            discord.ui.Button(
+                label="Explain This!", 
+                url="https://dankmemer.lol/tutorial/interaction-locks"
             )
-            await interaction.response.send_message(
-                view=error_view, 
-                ephemeral=True,
-                embed=membed(WARN_FOR_CONCURRENCY)
-            )
-            return False
+        )
+        await interaction.response.send_message(
+            view=error_view, 
+            ephemeral=True,
+            embed=membed(WARN_FOR_CONCURRENCY)
+        )
+        return False
 
     @staticmethod
     def calculate_exp_for(*, level: int) -> int:
@@ -2591,23 +2572,22 @@ class Economy(commands.Cog):
             """
         )
 
-        async with self.bot.pool.acquire() as connection:
-            async with connection.transaction():
-                try:
-                    data = await connection.fetchone(query, interaction.user.id, "xp", f"/{cmd.name}")
-                except IntegrityError:
-                    return
+        async with self.bot.pool.acquire() as connection, connection.transaction():
+            try:
+                data = await connection.fetchone(query, interaction.user.id, "xp", f"/{cmd.name}")
+            except IntegrityError:
+                return
 
-                total, multi = data
-                if not total % 15:
-                    await self.send_tip_if_enabled(interaction, connection)
+            total, multi = data
+            if not total % 15:
+                await self.send_tip_if_enabled(interaction, connection)
 
-                exp_gainable = command.extras.get("exp_gained")
-                if not exp_gainable:
-                    return
+            exp_gainable = command.extras.get("exp_gained")
+            if not exp_gainable:
+                return
 
-                exp_gainable *= (1+(multi/100))
-                await self.add_exp_or_levelup(interaction, connection, int(exp_gainable))
+            exp_gainable *= (1+(multi/100))
+            await self.add_exp_or_levelup(interaction, connection, int(exp_gainable))
 
     @commands.Cog.listener()
     async def on_command(self, ctx: commands.Context) -> None:
@@ -3194,11 +3174,9 @@ class Economy(commands.Cog):
 
     @commands.command(description="Get a free random item.", aliases=('fr',))
     async def freemium(self, ctx: commands.Context) -> None:
-        async with self.bot.pool.acquire() as conn:
-            rQty = randint(1, 5)
-
+        rQty = randint(1, 5)
+        async with self.bot.pool.acquire() as conn, conn.transaction():
             item, emoji = await self.update_user_inventory_with_random_item(ctx.author.id, conn, rQty)
-            await conn.commit()
 
         await ctx.send(embed=membed(f"Success! You just got **{rQty}x** {emoji} {item}!"))
 
@@ -3230,7 +3208,7 @@ class Economy(commands.Cog):
             (
                 f"{item[1]} {item[0]} \U00002500 [{CURRENCY} **{item[2]:,}**](https://youtu.be/dQw4w9WgXcQ)", 
                 ShopItem(item[0], item[2], item[1], row=i % 2)
-            ) 
+            )
             for i, item in enumerate(shop_sorted)
         ]
 
@@ -3426,24 +3404,27 @@ class Economy(commands.Cog):
             )
 
     @register_item('Bank Note')
-    async def increase_bank_space(
-        interaction: discord.Interaction, 
-        quantity: int, 
-        conn: Connection
-    ) -> None:
+    async def increase_bank_space(interaction: discord.Interaction, quantity: int) -> None:
 
         expansion = randint(1_600_000, 6_000_000)
         expansion *= quantity
-        new_bankspace, = await conn.fetchone(
-            """
-            UPDATE accounts 
-            SET bankspace = bankspace + $0 
-            WHERE userID = $1 
-            RETURNING bankspace
-            """, expansion, interaction.user.id
-        )
 
-        new_amt, = await Economy.update_inv_new(interaction.user, -quantity, "Bank Note", conn)
+        async with interaction.client.pool.acquire() as conn, conn.transaction():
+            new_bankspace, = await conn.fetchone(
+                """
+                UPDATE accounts 
+                SET bankspace = bankspace + $0 
+                WHERE userID = $1 
+                RETURNING bankspace
+                """, expansion, interaction.user.id
+            )
+
+            new_amt, = await Economy.update_inv_new(
+                interaction.user, 
+                -quantity, 
+                "Bank Note", 
+                conn
+            )
 
         embed = membed().set_footer(text=f"{new_amt:,}x bank note left")
 
@@ -3458,44 +3439,46 @@ class Economy(commands.Cog):
             value=f"{CURRENCY} {new_bankspace:,}"
         )
 
-        await conn.commit()
         await respond(interaction, embed=embed)
 
     @register_item('Trophy')
-    async def flex_via_trophy(interaction: discord.Interaction, quantity: int, _: Connection) -> None:
-        content = f'\n\nThey have **{quantity}** of them, WHAT A BADASS' if quantity > 1 else ''
-
-        await respond(
-            interaction,
-            embed=membed(
-                f"{interaction.user.name} is flexing on you all "
-                f"with their <:Trophy:1263923814874615930> **~~PEPE~~ TROPHY**{content}"
-            )
+    async def flex_via_trophy(interaction: discord.Interaction, quantity: int) -> None:
+        em = membed(
+            f"{interaction.user.name} is flexing on you all "
+            f"with their <:Trophy:1263923814874615930> **~~PEPE~~ TROPHY**"
         )
+        if quantity > 1:
+            em.description = f'{em.description}\n\nThey have **{quantity}** of them, WHAT A BADASS'
+
+        await respond(interaction, embed=em)
 
     @register_item('Bitcoin')
-    async def gain_bitcoin_multiplier(interaction: discord.Interaction, _: int, conn: Connection) -> None:
+    async def gain_bitcoin_multiplier(interaction: discord.Interaction, _: int) -> None:
         future_expiry = (discord.utils.utcnow() + timedelta(minutes=30)).timestamp()
 
-        applied_successfully = await Economy.add_multiplier(
-            conn, 
-            user_id=interaction.user.id, 
-            multi_amount=500,
-            multi_type="robux",
-            cause="bitcoin",
-            description="Bitcoin Multiplier",
-            expiry=future_expiry,
-            on_conflict="NOTHING"
-        )
+        async with interaction.client.pool.acquire() as conn, conn.transaction():
+            applied_successfully = await Economy.add_multiplier(
+                conn, 
+                user_id=interaction.user.id, 
+                multi_amount=500,
+                multi_type="robux",
+                cause="bitcoin",
+                description="Bitcoin Multiplier",
+                expiry=future_expiry,
+                on_conflict="NOTHING"
+            )
+            await Economy.update_inv_by_id(
+                interaction.user, 
+                amount=-1, 
+                item_id=21, 
+                conn=conn
+            )
 
         if not applied_successfully:
             return await respond(
                 interaction, 
                 embed=membed("You already have a <:Bitcoin:1263919978717908992> Bitcoin multiplier active.")
             )
-
-        await Economy.update_inv_by_id(interaction.user, amount=-1, item_id=21, conn=conn)
-        await conn.commit()
 
         await respond(
             interaction,
@@ -3519,9 +3502,8 @@ class Economy(commands.Cog):
     ) -> discord.WebhookMessage | None:
         """Use a currently owned item."""
 
+        item_id, item_name, ie = item
         async with self.bot.pool.acquire() as conn:
-            item_id, item_name, ie = item
-
             data = await conn.fetchone(
                 """
                 SELECT qty
@@ -3572,7 +3554,7 @@ class Economy(commands.Cog):
         )
         can_proceed = await self.handle_confirm_outcome(interaction, massive_prompt)
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.bot.pool.acquire() as conn, conn.transaction():
             await end_transaction(conn, user_id=interaction.user.id)
             if can_proceed:
                 await conn.execute("DELETE FROM inventory WHERE userID = ?", interaction.user.id)
@@ -3598,7 +3580,6 @@ class Economy(commands.Cog):
                     cause="prestige",
                     description=f"Prestige {prestige+1}"
                 )
-            await conn.commit()
 
     @app_commands.command(description="Sacrifice currency stats in exchange for incremental perks")
     @app_commands.allowed_installs(**CONTEXT_AND_INSTALL)
@@ -3729,7 +3710,7 @@ class Economy(commands.Cog):
         if multiplier:
             amount_after_multi = add_multi_to_original(multiplier, robux)
 
-            async with self.bot.pool.acquire() as conn:
+            async with self.bot.pool.acquire() as conn, conn.transaction():
                 data = await self.update_fields(
                     interaction.user.id, 
                     conn, 
@@ -3737,7 +3718,6 @@ class Economy(commands.Cog):
                     slotw=1, 
                     wallet=amount_after_multi
                 )
-                await conn.commit()
 
             prcntw = ((slot_wins+1) / (slot_losses + (slot_wins+1))) * 100
 
@@ -3750,7 +3730,7 @@ class Economy(commands.Cog):
             )
 
         else:
-            async with self.bot.pool.acquire() as conn:
+            async with self.bot.pool.acquire() as conn, conn.transaction():
                 data = await self.update_fields(
                     interaction.user.id, 
                     conn, 
@@ -3758,7 +3738,6 @@ class Economy(commands.Cog):
                     slotl=1,
                     wallet=-robux
                 )
-                await conn.commit()
 
             prcntl = ((slot_losses+1) / (slot_wins + (slot_losses+1))) * 100
 
@@ -4200,9 +4179,8 @@ class Economy(commands.Cog):
                     f"{host.mention} was also given your bounty of **{CURRENCY} {robber_bounty:,}**."
                 )
 
-            async with self.bot.pool.acquire() as conn:
+            async with self.bot.pool.acquire() as conn, conn.transaction():
                 await self.update_wallet_many(conn, (fine, host.id), (-fine, robber.id))
-                await conn.commit()
 
             return await interaction.response.send_message(embed=embed)
 
@@ -4211,9 +4189,8 @@ class Economy(commands.Cog):
         total = amt_stolen - amt_dropped
         percent_stolen = int((total/amt_stolen) * 100)
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.bot.pool.acquire() as conn, conn.transaction():
             await self.update_wallet_many(conn, (-amt_stolen, host.id), (total, robber.id))
-            await conn.commit()
 
         if percent_stolen <= 25:
             embed.title = "You stole a TINY portion!"
@@ -4339,8 +4316,7 @@ class Economy(commands.Cog):
         query = "SELECT wallet, betw, betl FROM accounts WHERE userID = $0"
 
         async with self.bot.pool.acquire() as conn:
-            data = await conn.fetchone(query, user.id) or (0, 0, 0)
-            wallet_amt, id_won_amount, id_lose_amount = data
+            wallet_amt, id_won_amount, id_lose_amount = await conn.fetchone(query, user.id) or (0, 0, 0)
 
             has_keycard = await self.fetch_item_qty_from_id(user.id, item_id=1, conn=conn)
             robux = self.do_wallet_checks(wallet_amt, robux, has_keycard)
@@ -4379,7 +4355,7 @@ class Economy(commands.Cog):
 
         if their_roll > bot_roll:
             amount_after_multi = add_multi_to_original(pmulti, robux)
-            async with self.bot.pool.acquire() as conn:
+            async with self.bot.pool.acquire() as conn, conn.transaction():
                 updated = await self.update_fields(
                     user.id, 
                     conn, 
@@ -4387,7 +4363,6 @@ class Economy(commands.Cog):
                     betw=1, 
                     wallet=amount_after_multi
                 )
-                await conn.commit()
 
             prcntw = (updated[1] / (id_lose_amount + updated[1])) * 100
 
@@ -4414,7 +4389,7 @@ class Economy(commands.Cog):
             )
 
         else:
-            async with self.bot.pool.acquire() as conn:
+            async with self.bot.pool.acquire() as conn, conn.transaction():
                 updated = await self.update_fields(
                     user.id, 
                     conn, 
@@ -4422,7 +4397,6 @@ class Economy(commands.Cog):
                     betl=1, 
                     wallet=-robux
                 )
-                await conn.commit()
 
             new_total = id_won_amount + updated[1]
             prcntl = (updated[1] / new_total) * 100
