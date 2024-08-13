@@ -325,7 +325,7 @@ async def is_setting_enabled(conn: Connection, user_id: int, setting: str) -> bo
 
 async def handle_confirm_outcome(
     interaction: discord.Interaction, 
-    confirmation_prompt: str,
+    prompt: str,
     view_owner: discord.Member | None = None,
     setting: str | None = None,
     conn: Connection | None = None,
@@ -372,12 +372,7 @@ async def handle_confirm_outcome(
         await interaction.client.pool.release(conn)
         conn = None
 
-        can_proceed = await process_confirmation(
-            interaction, 
-            prompt=confirmation_prompt, 
-            view_owner=view_owner,
-            **kwargs
-        )
+        can_proceed = await process_confirmation(interaction, prompt, view_owner, **kwargs)
     finally:
         if conn:
             await interaction.client.pool.release(conn)

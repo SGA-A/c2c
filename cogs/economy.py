@@ -42,7 +42,8 @@ from .core.helpers import (
     process_confirmation,
     declare_transaction,
     end_transaction,
-    is_setting_enabled
+    is_setting_enabled,
+    handle_confirm_outcome
 )
 
 
@@ -1713,11 +1714,11 @@ class ItemQuantityModal(discord.ui.Modal):
             success.description += "\n\n**Additional info:**\n- <:shopCoupon:1263923497323855907> 5% Coupon Discount was applied"
         await respond(interaction, embed=success)
 
-    async def calculate_discounted_price_if_any(
+    async def calculate_discount_price(
         self, 
-        user: USER_ENTRY, 
-        holder: ConnectionHolder,
         interaction: discord.Interaction, 
+        /,
+        holder: ConnectionHolder,
         current_price: int
     ) -> int:
         """Check if the user is eligible for a discount on the item."""
@@ -1731,7 +1732,7 @@ class ItemQuantityModal(discord.ui.Modal):
             LEFT JOIN settings 
                 ON inventory.userID = settings.userID AND settings.setting = 'always_use_coupon'
             WHERE shop.itemID = $0 AND inventory.userID = $1
-            """, 12, user.id
+            """, 12, interaction.user.id
         )
 
         if not data:
@@ -1777,12 +1778,7 @@ class ItemQuantityModal(discord.ui.Modal):
         current_price = self.item_cost * true_quantity
         conn_holder = ConnectionHolder(await interaction.client.pool.acquire())
 
-        new_price = await self.calculate_discounted_price_if_any(
-            user=interaction.user, 
-            holder=conn_holder, 
-            interaction=interaction, 
-            current_price=current_price
-        )
+        new_price = await self.calculate_discount_price(interaction, conn_holder, current_price)
 
         if new_price is None:
             await interaction.client.pool.release(conn_holder.conn)
@@ -1804,10 +1800,10 @@ class ItemQuantityModal(discord.ui.Modal):
         await interaction.client.pool.release(conn_holder.conn)
         del conn_holder
 
-        can_proceed = await Economy.handle_confirm_outcome(
-            interaction=interaction, 
+        can_proceed = await handle_confirm_outcome(
+            interaction, 
             setting="buying_confirmations",
-            confirmation_prompt=(
+            prompt=(
                 f"Are you sure you want to buy **{true_quantity:,}x {self.ie} "
                 f"{self.item_name}** for **{CURRENCY} {new_price:,}**?"
             )
@@ -2695,9 +2691,9 @@ class Economy(commands.Cog):
                     embed=membed("You don't have that much money to share.")
                 )
 
-            can_proceed = await self.handle_confirm_outcome(
+            can_proceed = await handle_confirm_outcome(
                 interaction, 
-                f"Are you sure you want to share {CURRENCY} **{quantity:,}** with {recipient.mention}?",
+                prompt=f"Are you sure you want to share {CURRENCY} **{quantity:,}** with {recipient.mention}?",
                 setting="share_robux_confirmations",
                 conn=conn
             )
@@ -2758,9 +2754,9 @@ class Economy(commands.Cog):
             if actual_inv_qty < quantity:
                 return await respond(interaction, embed=membed(f"You don't have **{quantity}x {ie} {item_name}**."))
 
-            can_proceed = await self.handle_confirm_outcome(
+            can_proceed = await handle_confirm_outcome(
                 interaction, 
-                f"Are you sure you want to share **{quantity:,} {ie} {item_name}** with {recipient.mention}?",
+                prompt=f"Are you sure you want to share **{quantity:,} {ie} {item_name}** with {recipient.mention}?",
                 setting="share_item_confirmations",
                 conn=conn
             )
@@ -2853,11 +2849,11 @@ class Economy(commands.Cog):
 
         The person that is confirming has to send items, in exchange they get robux.
         """
-        can_continue = await self.handle_confirm_outcome(
+        can_continue = await handle_confirm_outcome(
             interaction,
             view_owner=item_sender,
             content=item_sender.mention,
-            confirmation_prompt=dedent(
+            prompt=dedent(
                 f"""
                 > Are you sure you want to trade with {robux_sender.mention}?
 
@@ -2887,11 +2883,11 @@ class Economy(commands.Cog):
 
         The person that is confirming has to send robux, and they get items in return.
         """
-        can_continue = await self.handle_confirm_outcome(
+        can_continue = await handle_confirm_outcome(
             interaction,
             view_owner=robux_sender,
             content=robux_sender.mention,
-            confirmation_prompt=dedent(
+            prompt=dedent(
                 f"""
                 > Are you sure you want to trade with {item_sender.mention}?
 
@@ -2919,11 +2915,11 @@ class Economy(commands.Cog):
         """
         The person that is confirming has to send items, and they also get items in return.
         """
-        can_continue = await self.handle_confirm_outcome(
+        can_continue = await handle_confirm_outcome(
             interaction,
             view_owner=item_sender,
             content=item_sender.mention,
-            confirmation_prompt=dedent(
+            prompt=dedent(
                 f"""
                 > Are you sure you want to trade with {item_sender2.mention}?
 
@@ -3284,9 +3280,9 @@ class Economy(commands.Cog):
 
             multi = await Economy.get_multi_of(user_id=seller.id, multi_type="robux", conn=conn)
             cost = selling_price_algo((cost / 4) * sell_quantity, multi)
-            can_proceed = await self.handle_confirm_outcome(
+            can_proceed = await handle_confirm_outcome(
                 interaction,
-                f"Are you sure you want to sell **{sell_quantity:,}x {ie} {item_name}** for **{CURRENCY} {cost:,}**?",
+                prompt=f"Are you sure you want to sell **{sell_quantity:,}x {ie} {item_name}** for **{CURRENCY} {cost:,}**?",
                 setting="selling_confirmations",
                 conn=conn
             )
@@ -3552,7 +3548,7 @@ class Economy(commands.Cog):
             Are you sure you want to prestige?
             """
         )
-        can_proceed = await self.handle_confirm_outcome(interaction, massive_prompt)
+        can_proceed = await handle_confirm_outcome(interaction, massive_prompt)
 
         async with self.bot.pool.acquire() as conn, conn.transaction():
             await end_transaction(conn, user_id=interaction.user.id)
