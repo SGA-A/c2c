@@ -1,7 +1,7 @@
 from io import BytesIO
 from unicodedata import name
 from datetime import datetime, timezone
-from typing import Callable, Literal, Generator
+from typing import Callable, Literal
 from xml.etree.ElementTree import fromstring, Element
 
 import discord
