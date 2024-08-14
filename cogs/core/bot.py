@@ -5,6 +5,7 @@ from json import load as json_load
 from logging import error as logging_error
 
 import discord
+from discord import app_commands
 from discord.ext import commands
 from asqlite import create_pool
 
@@ -30,6 +31,8 @@ class C2C(commands.Bot):
 
         super().__init__(
             allowed_mentions=allowed_mentions,
+            allowed_contexts=app_commands.AppCommandContext(guild=True),
+            allowed_installs=app_commands.AppInstallationType(guild=True),
             case_insensitive=True,
             command_prefix=commands.when_mentioned_or(">"),
             intents=intents,

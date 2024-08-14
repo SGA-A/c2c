@@ -74,8 +74,8 @@ class Admin(commands.Cog):
         is_private='Whether or not the response is only visible to you. Defaults to False.',
         medium='The type of balance to modify. Defaults to the wallet.'
     )
-    @app_commands.allowed_contexts(guilds=True)
-    @app_commands.allowed_installs(guilds=True)
+    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
+    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def config(
         self, 
         interaction: discord.Interaction,

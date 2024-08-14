@@ -1,7 +1,7 @@
 import sqlite3
 from asyncio import TimeoutError
 from datetime import datetime, timezone
-from typing import Annotated, Callable, Literal
+from typing import Annotated, Callable
 
 import discord
 from discord import app_commands
@@ -107,103 +107,6 @@ class TagMakeModal(discord.ui.Modal, title='Create New Tag'):
 
         async with interaction.client.pool.acquire() as conn:
             await self.cog.create_tag(interaction, name, content, conn)
-
-
-class TagLeaderboard(PaginationSimple):
-    length = 6
-    options = [
-        discord.SelectOption(label="Tag Usage", description="How much a tag has been used."),
-        discord.SelectOption(label="Tags Created", description="Who creates the most tags."),
-        discord.SelectOption(label="Tags Used", description="Who uses the most tags.")
-    ]
-    podium_pos = {1: "### \U0001f947", 2: "\U0001f948", 3: "\U0001f949"}
-
-    def __init__(self, ctx: commands.Context, chosen_stat: str):
-        super().__init__(ctx, invoker_id=ctx.author.id, get_page=self.get_page_part)
-        self.chosen_stat = chosen_stat
-
-        self.lb = discord.Embed(title=f"Leaderboard: {chosen_stat}", colour=discord.Colour.blurple())
-        self.lb.timestamp = discord.utils.utcnow()
-
-        self.data = []
-
-        for option in self.children[-1].options:
-            option.default = option.value == chosen_stat
-
-    async def get_page_part(self, page: int):
-        offset = (page - 1) * self.length
-
-        if self.chosen_stat == "Tag Usage":
-            data = (
-                f"{self.podium_pos.get(i, '\U0001f539')} ` {tag_usage:,} ` \U00002014 {tag_name}" 
-                for i, (tag_name, tag_usage) in enumerate(self.data[offset:offset+self.length], start=1)
-            )
-        else:
-            data = (
-                f"{self.podium_pos.get(i, '\U0001f539')} ` {metric:,} ` \U00002014 {user.name}"
-                for i, (identifier, metric) in enumerate(self.data[offset:offset+self.length], start=1) 
-                if (user:= self.ctx.bot.get_user(identifier))
-            )
-        
-        self.lb.description = "\n".join(data)
-        n = self.compute_total_pages(len(self.data), self.length)
-        self.lb.set_footer(text=f"Page {page} of {n}")
-        
-        return self.lb, n
-
-    async def create_lb(self) -> None:
-        if self.chosen_stat == "Tag Usage":
-            query = (
-                """
-                SELECT 
-                    name AS identifier,
-                    uses AS metric
-                FROM tags
-                ORDER BY uses DESC
-                """
-            )
-
-        elif self.chosen_stat == "Tags Created":
-
-            query = (
-                """
-                SELECT 
-                    ownerID AS identifier,
-                    COUNT(*) AS metric
-                FROM tags
-                GROUP BY ownerID
-                ORDER BY COUNT(*) DESC
-                """
-            )
-
-        else:  # Tags Used
-
-            query = (
-                """
-                SELECT 
-                    userID AS identifier,
-                    SUM(cmd_count) AS metric
-                FROM command_uses
-                WHERE cmd_name LIKE '%tag%'
-                GROUP BY userID
-                ORDER BY cmd_count DESC
-                """
-            )
-
-        async with self.ctx.bot.pool.acquire() as conn:
-            self.data = await conn.fetchall(query)
-
-    @discord.ui.select(row=0, options=options)
-    async def tag_lb_select(self, interaction: discord.Interaction, select: discord.ui.Select):
-        self.chosen_stat = select.values[0]
-
-        for option in select.options:
-            option.default = option.value == self.chosen_stat
-
-        await self.create_lb()
-        self.index = 1
-
-        await self.edit_page(interaction)
 
 
 class MatchWord(discord.ui.Button):
@@ -1060,16 +963,6 @@ class Tags(commands.Cog):
         if member:
             return await self.member_stats(ctx, member)
         await self.global_stats(ctx)
-
-    @tag.command(description="Rank tags based on various stats", aliases=('lb',))
-    @app_commands.describe(stat="The stat you want to see.")
-    @app_commands.allowed_installs(**LIMITED_INSTALLS)
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    async def leaderboard(self, ctx: commands.Context, stat: Literal["Tag Usage", "Tags Created", "Tags Used"]):
-        lb_view = TagLeaderboard(ctx, stat)
-
-        await lb_view.create_lb()
-        await lb_view.navigate()
 
 
 async def setup(bot: C2C):

@@ -19,7 +19,6 @@ from .core.constants import LIMITED_CONTEXTS, LIMITED_INSTALLS
 
 ARROW = "<:Arrow:1263919893762543717>"
 API_EXCEPTION = "The API fucked up, try again later."
-UPLOAD_FILE_DESCRIPTION = "A file to upload alongside the thread."
 EMBED_TIMEZONES = {
     'Pacific': 'US/Pacific',
     'Mountain': 'US/Mountain',
@@ -731,55 +730,6 @@ class Miscellaneous(commands.Cog):
         img_view = discord.ui.View().add_item(ImageSourceButton(url=embed.image.url))
 
         await interaction.response.send_message(embed=embed, view=img_view)
-
-    @app_commands.command(description='Upload a new forum thread')
-    @app_commands.guild_install()
-    @app_commands.allowed_contexts(guilds=True)
-    @app_commands.describe(
-        name="The name of the thread.",
-        forum="What forum this thread should be in.",
-        description="The content of the message to send with the thread.",
-        tags="The tags to apply to the thread, seperated by speech marks.",
-        file=UPLOAD_FILE_DESCRIPTION,
-        file2=UPLOAD_FILE_DESCRIPTION,
-        file3=UPLOAD_FILE_DESCRIPTION
-    )
-    @app_commands.default_permissions(manage_guild=True)
-    async def post(
-        self, 
-        interaction: discord.Interaction, 
-        forum: discord.ForumChannel,
-        name: str, 
-        tags: str, 
-        description: str | None = None, 
-        file: discord.Attachment | None = None, 
-        file2: discord.Attachment | None = None,
-        file3: discord.Attachment | None = None
-    ) -> None:
-        await interaction.response.defer(thinking=True)
-
-        files = [
-            await param_value.to_file() 
-            for param_name, param_value in iter(interaction.namespace) 
-            if param_name.startswith("fi") and param_value
-        ]
-
-        tag_sep = [s for s in tags.split('"') if s.strip()]
-        applicable_tags = [
-            tag_obj 
-            for tag in tag_sep 
-            if (tag_obj := discord.utils.find(lambda t: t.name.lower() == tag.lower(), forum.available_tags))
-        ]
-
-        thread, _ = await forum.create_thread(
-            name=name,
-            content=description,
-            files=files,
-            applied_tags=applicable_tags
-        )
-
-        await interaction.followup.send(ephemeral=True, embed=membed(f"Created thread: {thread.jump_url}."))
-        del files, tag_sep, applicable_tags
 
     @commands.command(description="See the world clock and the visual sunmap", aliases=('wc',))
     async def worldclock(self, ctx: commands.Context):

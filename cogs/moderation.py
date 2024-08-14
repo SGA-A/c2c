@@ -12,6 +12,9 @@ from .core.paginators import PaginationItem
 from .core.bot import C2C
 
 
+UPLOAD_FILE_DESCRIPTION = "A file to upload alongside the thread."
+
+
 def do_boilerplate_role_checks(r: discord.Role, g: discord.Guild) -> None:
 
     if r.managed:
@@ -381,22 +384,16 @@ class Moderation(commands.Cog):
     """Moderation tools for your servers, available to server managers."""
     def __init__(self, bot: C2C) -> None:
         self.bot = bot
-        mod_context = app_commands.AppCommandContext(guild=True)
-        mod_install = app_commands.AppInstallationType(guild=True)
 
         self.purge_from_here_cmd = app_commands.ContextMenu(
-            name='Purge Up To Here',
-            callback=self.purge_from_here,
-            allowed_contexts=mod_context,
-            allowed_installs=mod_install
+            name='Purge Up To Here', 
+            callback=self.purge_from_here
         )
         
         roles = RoleManagement(
             name="role", 
             description="Role management commands",
-            default_permissions=discord.Permissions(manage_roles=True),
-            allowed_contexts=mod_context,
-            allowed_installs=mod_install
+            default_permissions=discord.Permissions(manage_roles=True)
         )
         
         self.bot.tree.add_command(self.purge_from_here_cmd)
@@ -468,9 +465,7 @@ class Moderation(commands.Cog):
     temprole = app_commands.Group(
         name="temprole", 
         description="Manage roles containing an expiry attribute.", 
-        default_permissions=discord.Permissions(manage_roles=True),
-        allowed_contexts=app_commands.AppCommandContext(guild=True),
-        allowed_installs=app_commands.AppInstallationType(guild=True)
+        default_permissions=discord.Permissions(manage_roles=True)
     )
 
     @temprole.command(name="add", description="Adds a temporary role")
@@ -522,6 +517,53 @@ class Moderation(commands.Cog):
             self.check_for_role.restart()
             return
         self.check_for_role.start()
+
+    @app_commands.command(description='Upload a new forum thread')
+    @app_commands.describe(
+        name="The name of the thread.",
+        forum="What forum this thread should be in.",
+        description="The content of the message to send with the thread.",
+        tags="The tags to apply to the thread, seperated by speech marks.",
+        file=UPLOAD_FILE_DESCRIPTION,
+        file2=UPLOAD_FILE_DESCRIPTION,
+        file3=UPLOAD_FILE_DESCRIPTION
+    )
+    @app_commands.default_permissions(manage_guild=True)
+    async def post(
+        self, 
+        interaction: discord.Interaction, 
+        forum: discord.ForumChannel,
+        name: str, 
+        tags: str, 
+        description: str | None = None, 
+        file: discord.Attachment | None = None, 
+        file2: discord.Attachment | None = None,
+        file3: discord.Attachment | None = None
+    ) -> None:
+        await interaction.response.defer(thinking=True)
+
+        files = [
+            await param_value.to_file() 
+            for param_name, param_value in iter(interaction.namespace) 
+            if param_name.startswith("fi") and param_value
+        ]
+
+        tag_sep = [s for s in tags.split('"') if s.strip()]
+        applicable_tags = [
+            tag_obj 
+            for tag in tag_sep 
+            if (tag_obj := discord.utils.find(lambda t: t.name.lower() == tag.lower(), forum.available_tags))
+        ]
+
+        thread, _ = await forum.create_thread(
+            name=name,
+            content=description,
+            files=files,
+            applied_tags=applicable_tags
+        )
+
+        await interaction.followup.send(ephemeral=True, embed=membed(f"Created thread: {thread.jump_url}."))
+        del files, tag_sep, applicable_tags
 
 
 async def setup(bot: C2C):
