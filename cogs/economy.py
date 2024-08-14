@@ -4228,10 +4228,7 @@ class Economy(commands.Cog):
 
         self.bot.games[interaction.user.id] = (deck, player_hand, dealer_hand, shallow_dv, shallow_pv, robux)
 
-        initial = membed(
-            f"The game has started. "
-            f"**`{CURRENCY} ~{format_number_short(robux)}`** is up for grabs."
-        ).add_field(
+        initial = membed().add_field(
             name=f"{interaction.user.name} (Player)", 
             value=f"**Cards** - {' '.join(shallow_pv)}\n**Total** - `{player_sum}`"
         ).add_field(

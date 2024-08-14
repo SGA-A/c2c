@@ -132,26 +132,24 @@ class TagLeaderboard(PaginationSimple):
 
     async def get_page_part(self, page: int):
         offset = (page - 1) * self.length
-        self.lb.description = "\n".join(self.data[offset:offset + self.length])
-
-        n = self.compute_total_pages(len(self.data), self.length)
-        self.lb.set_footer(text=f"Page {page} of {n}")
-        return self.lb, n
-
-    async def process_data(self, data):
-        self.data = []
-        if not data:
-            return
 
         if self.chosen_stat == "Tag Usage":
-            self.data = [
+            data = (
                 f"{self.podium_pos.get(i, '\U0001f539')} ` {tag_usage:,} ` \U00002014 {tag_name}" 
-                for i, (tag_name, tag_usage) in enumerate(data, start=1)
-            ]
+                for i, (tag_name, tag_usage) in enumerate(self.data[offset:offset+self.length], start=1)
+            )
         else:
-            for i, (identifier, metric) in enumerate(data, start=1):
-                memobj = self.ctx.bot.get_user(identifier) or await self.ctx.bot.fetch_user(identifier)
-                self.data.append(f"{self.podium_pos.get(i, '\U0001f539')} ` {metric:,} ` \U00002014 {memobj.name}")
+            data = (
+                f"{self.podium_pos.get(i, '\U0001f539')} ` {metric:,} ` \U00002014 {user.name}"
+                for i, (identifier, metric) in enumerate(self.data[offset:offset+self.length], start=1) 
+                if (user:= self.ctx.bot.get_user(identifier))
+            )
+        
+        self.lb.description = "\n".join(data)
+        n = self.compute_total_pages(len(self.data), self.length)
+        self.lb.set_footer(text=f"Page {page} of {n}")
+        
+        return self.lb, n
 
     async def create_lb(self) -> None:
         if self.chosen_stat == "Tag Usage":
@@ -193,8 +191,7 @@ class TagLeaderboard(PaginationSimple):
             )
 
         async with self.ctx.bot.pool.acquire() as conn:
-            data = await conn.fetchall(query)
-        await self.process_data(data)
+            self.data = await conn.fetchall(query)
 
     @discord.ui.select(row=0, options=options)
     async def tag_lb_select(self, interaction: discord.Interaction, select: discord.ui.Select):
@@ -205,15 +202,6 @@ class TagLeaderboard(PaginationSimple):
 
         await self.create_lb()
         self.index = 1
-
-        async def get_page_part(page: int):
-            offset = (page - 1) * self.length
-            self.lb.description = "\n".join(self.data[offset:offset + self.length])
-
-            n = self.compute_total_pages(len(self.data), self.length)
-            self.lb.set_footer(text=f"Page {page} of {n}")
-            return self.lb, n
-        self.get_page = get_page_part
 
         await self.edit_page(interaction)
 

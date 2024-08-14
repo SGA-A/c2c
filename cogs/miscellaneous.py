@@ -1,8 +1,8 @@
 from io import BytesIO
 from unicodedata import name
 from datetime import datetime, timezone
-from typing import Callable, Literal
-from xml.etree.ElementTree import fromstring
+from typing import Callable, Literal, Generator
+from xml.etree.ElementTree import fromstring, Element
 
 import discord
 from pytz import timezone as pytz_timezone
@@ -33,17 +33,6 @@ EMBED_TIMEZONES = {
 }
 
 
-def extract_attributes(post_element, mode: Literal["post", "tag"]) -> dict | str:
-    if mode == "post":
-        keys_to_extract = {"created_at", "jpeg_url", "author"}
-        data = {key: post_element.get(key) for key in keys_to_extract}
-    else:
-        data = post_element.get("name")
-
-    del post_element
-    return data
-
-
 def format_dt(dt: datetime, style: str | None = None) -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
@@ -57,11 +46,19 @@ def format_relative(dt: datetime) -> str:
     return format_dt(dt, 'R')
 
 
-def parse_xml(xml_content, mode: Literal["post", "tag"]):
-    result = fromstring(xml_content).findall(f".//{mode}")
+def extract_post_xml(raw_xml: list[Element], offset: int, length: int):
+    return (
+        (
+            img_metadata.get("jpeg_url"),
+            img_metadata.get("author"),
+            img_metadata.get("created_at")
+        )
+        for img_metadata in raw_xml[offset:offset+length]
+    )
 
-    extracted_data = [extract_attributes(res, mode=mode) for res in result]
-    return extracted_data
+
+def parse_xml(xml_content, mode: Literal["post", "tag"]):
+    return fromstring(xml_content).findall(f".//{mode}")
 
 
 class ImageSourceButton(discord.ui.Button):
@@ -196,7 +193,8 @@ class Miscellaneous(commands.Cog):
     async def fetch_commits(self):
         async with self.bot.session.get(
             url="https://api.github.com/repos/SGA-A/c2c/commits",
-            headers={"Authorization": f"token {self.bot.GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}
+            headers={"Authorization": f"token {self.bot.GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"},
+            params={"per_page": 3}
         ) as response:
             if response.status == 200:
                 commits = await response.json()
@@ -217,10 +215,10 @@ class Miscellaneous(commands.Cog):
 
         return [
             app_commands.Choice(name=tag_name, value=tag_name)
-            for tag_name in tags_xml if current.lower() in tag_name.lower()
+            for tag_xml in tags_xml if (tag_name:= tag_xml.get("name"))
         ]
 
-    async def retrieve_via_kona(self, **params) -> int | str:
+    async def retrieve_via_kona(self, **params) -> list[Element] | int:
         """Returns a list of dictionaries for you to iterate through and fetch their attributes"""
         mode = params.pop("mode")
         base_url = f"https://konachan.net/{mode}.xml"
@@ -229,8 +227,7 @@ class Miscellaneous(commands.Cog):
             if response.status != 200:
                 return response.status
 
-            posts_xml = await response.text()
-        return parse_xml(posts_xml, mode=mode)
+            return parse_xml(mode=mode, xml_content=(await response.text()))
 
     async def format_gif_api_response(
         self, 
@@ -458,10 +455,9 @@ class Miscellaneous(commands.Cog):
         page: app_commands.Range[int, 1] = 1
     ) -> None:
 
-        tags = filter(lambda x: isinstance(x[1], str), iter(interaction.namespace))
-        tagviewing = ' '.join(val for _, val in tags)
+        tagviewing = ' '.join(val for _, val in interaction.namespace if isinstance(val, str))
 
-        posts_xml = await self.retrieve_via_kona(
+        posts_xml: list[Element] = await self.retrieve_via_kona(
             tags=tagviewing, 
             limit=maximum, 
             page=page, 
@@ -475,60 +471,30 @@ class Miscellaneous(commands.Cog):
 
         if not len(posts_xml):
             embed = membed(
-                "- There are a few known causes:\n"
-                " - Entering an invalid tag name.\n"
-                " - Accessing some posts under the `copyright` tag.\n"
-                " - There are no posts found under this tag.\n"
-                " - The page requested exceeds the max length.\n"
-                "- You can find a tag by using [the website.](https://konachan.net/tag)"
+                "There are a few known causes:\n"
+                "- Entering an invalid tag name\n"
+                "- Posts aren't available under this tag\n"
+                "- Page number exceeds maximum available under this tag\n"
+                "-# You can find a tag by using the [website.](https://konachan.net/tag)"
             )
             embed.title = "No posts found."
             return await interaction.response.send_message(ephemeral=True, embed=embed)
 
-        additional_notes = [
-            (
-                f"{result['jpeg_url']}",
-                f"{result['author']}",
-                result['created_at']
-            )
-            for result in posts_xml
-        ]
-
+        total_results = len(posts_xml)
         async def get_page_part(page: int):
             embeds = []
-
             offset = (page - 1) * length
 
-            for (jpeg_url, author, created_at) in additional_notes[offset:offset + length]:
+            for (jpeg_url, author, created_at) in extract_post_xml(posts_xml, offset, length):
                 embed = membed().set_image(url=jpeg_url)
                 embed.title, embed.url = author, jpeg_url
                 embed.timestamp = datetime.fromtimestamp(int(created_at), tz=timezone.utc)
                 embeds.append(embed)
 
-            n = Pagination.compute_total_pages(len(additional_notes), length)
+            n = Pagination.compute_total_pages(total_results, length)
             return embeds, n
 
         await Pagination(interaction, get_page=get_page_part).navigate(ephemeral=private)
-
-    @anime.command(name='char', description="Retrieve SFW or NSFW anime images")
-    @app_commands.describe(filter_by='The type of image to retrieve.')
-    async def get_via_nekos(
-        self, 
-        interaction: discord.Interaction, 
-        filter_by: Literal["neko", "kitsune", "waifu", "husbando"] = "neko"
-    ) -> None:
-
-        async with self.bot.session.get(f"https://nekos.best/api/v2/{filter_by}") as resp:
-            if resp.status != 200:
-                return await interaction.response.send_message(embed=membed(API_EXCEPTION))
-            data = await resp.json()
-
-        data = data["results"][0]
-        embed = discord.Embed(colour=0xFF9D2C)
-        embed.set_image(url=data["url"]).set_author(name=f"{data["artist_name"]}")
-
-        img_view = discord.ui.View().add_item(ImageSourceButton(url=data["url"]))
-        await interaction.response.send_message(embed=embed, view=img_view)
 
     @app_commands.command(description='Fetch all the emojis c2c can access')
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
@@ -648,16 +614,16 @@ class Miscellaneous(commands.Cog):
     async def about(self, interaction: discord.Interaction) -> None:
 
         commits = await self.fetch_commits()
-        to_iso = datetime.fromisoformat
-        revision = [
-            f"[`{commit['sha'][:6]}`]({commit['html_url']}) {commit['commit']['message'].splitlines()[0]} "
-            f"({format_relative(to_iso(commit['commit']['author']['date']))})"
+        revision = '\n'.join(
+            f"[`{commit['sha'][:6]}`]({commit['html_url']}) "
+            f"{commit['commit']['message'].splitlines()[0]} "
+            f"({format_relative(datetime.fromisoformat(commit['commit']['author']['date']))})"
             for commit in commits
-        ]
+        )
 
         embed = discord.Embed(
             title='Official Bot Server Invite',
-            description=f"Latest Changes:\n{'\n'.join(revision)}", 
+            description=f"Latest Changes:\n{revision}", 
             url='https://discord.gg/W3DKAbpJ5E'
         ).set_author(name="inter_geo", icon_url="https://tinyurl.com/m1m2m3ma")
         embed.timestamp, embed.colour = discord.utils.utcnow(), discord.Colour.blurple()
