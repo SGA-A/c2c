@@ -265,11 +265,9 @@ class Admin(commands.Cog):
             - <@&893550756953735278>: The people who manage the server.
             - <@&1148209142465581098>: The role for a backup account, granted administrator permissions.
             - <@&912057500914843680>: Grants administrator permissions over the server.
-            - <@&1121405863194787851>: Given out to those who abuse the XP system, via spam or other methods.
             - <@&914565377961369632>: The role verified server members can obtain.
             - <@&1140197893261758505>: Given to people who had their message on the legacy starboard.
             - <@&1121426143598354452>: Given on a per-user basis, granting certain privileges.
-            - <@&990900517301522432>: Grants access to music commands.
             - <@&1150848144440053780>: Bots that only need read access to bot command channels.
             - <@&1150848206008238151>: Bots that require full read access throughout the server.
             """
