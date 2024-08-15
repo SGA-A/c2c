@@ -893,9 +893,10 @@ class BlackjackUi(BaseInteractionView):
 
             embed.colour = discord.Colour.brand_red()
             embed.description = (
-                f"You lost: {CURRENCY} **{namount:,}**\n"
-                f"New Balance: {CURRENCY} **{new_amount_balance:,}**\n"
-                f"-# **{prnctl:.1f}%** of all blackjack games lost."
+                f"**You lost. You went over 21 and busted.**\n"
+                f"You lost {CURRENCY} **{namount:,}**. "
+                f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
+                f"You lost {prnctl:.1f}% of the games."
             )
 
             embed.set_field_at(
@@ -928,10 +929,10 @@ class BlackjackUi(BaseInteractionView):
 
             embed.colour = discord.Colour.brand_green()
             embed.description = (
-                f"Multiplier: **{new_multi}%**"
-                f"Payout: {CURRENCY} **{amount_after_multi:,}**\n"
-                f"New Balance: {CURRENCY} **{new_amount_balance:,}**\n"
-                f"-# **{prctnw:.1f}%** of all blackjack games won."
+                f"**You win! You got to 21**.\n"
+                f"You won {CURRENCY} **{amount_after_multi:,}**. "
+                f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
+                f"You won {prctnw:.1f}% of the games."
             )
 
             embed.set_field_at(
@@ -950,10 +951,15 @@ class BlackjackUi(BaseInteractionView):
                 )
             )
 
+            embed.set_author(
+                name=f"{interaction.user.name}'s winning blackjack game", 
+                icon_url=interaction.user.display_avatar.url
+            ).set_footer(text=f"Multiplier: {new_multi:,}%")
+
             return await interaction.response.edit_message(embed=embed, view=None)
 
         necessary_show = d_fver_d[0]
-        embed.description = "**Your move.**"
+        embed.description = f"**Your move. Your hand is now {player_sum}**."
 
         embed.set_field_at(
             index=0,
@@ -1004,21 +1010,31 @@ class BlackjackUi(BaseInteractionView):
 
             embed.colour = discord.Colour.brand_green()
             embed.description = (
-                f"Multiplier: **{new_multi}%**\n"
-                f"Payout: {CURRENCY} **{amount_after_multi:,}**\n"
-                f"New Balance: {CURRENCY} **{new_amount_balance:,}**\n"
-                f"-# **{prctnw:.1f}%** of all blackjack games won."
+                f"**You win! The dealer went over 21 and busted.**\n"
+                f"You won {CURRENCY} **{amount_after_multi:,}**. "
+                f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
+                f"You won {prctnw:.1f}% of the games."
             )
+
+            embed.set_author(
+                icon_url=interaction.user.display_avatar.url, 
+                name=f"{interaction.user.name}'s winning blackjack game"
+            ).set_footer(text=f"Multiplier: {new_multi:,}%")
 
         elif dealer_total > player_sum:
             new_amount_balance, prnctl = await self.update_losing_data(bet_amount=namount)
 
             embed.colour = discord.Colour.brand_red()
             embed.description = (
-                f"You lost: {CURRENCY} **{namount:,}**\n"
-                f"New Balance: {CURRENCY} **{new_amount_balance:,}**\n"
-                f"-# **{prnctl:.1f}%** of all blackjack games lost."
+                f"**You lost. You stood with a lower score (`{player_sum}`) than the dealer (`{dealer_total}`).**\n"
+                f"You lost {CURRENCY} **{namount:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
+                f"You lost {prnctl:.1f}% of the games."
             )
+
+            embed.set_author(
+                icon_url=interaction.user.display_avatar.url,
+                name=f"{interaction.user.name}'s losing blackjack game"
+            ).remove_footer()
 
         elif dealer_total < player_sum:
             (   amount_after_multi, 
@@ -1029,18 +1045,27 @@ class BlackjackUi(BaseInteractionView):
 
             embed.colour = discord.Colour.brand_green()
             embed.description = (
-                f"Multiplier: **{new_multi}%**\n"
-                f"Payout: {CURRENCY} **{amount_after_multi:,}**\n"
-                f"New Balance: {CURRENCY} **{new_amount_balance:,}**\n"
-                f"-# **{prctnw:.1f}%** of all blackjack games won."
+                f"**You win! You stood with a higher score (`{player_sum}`) than the dealer (`{dealer_total}`).**\n"
+                f"You won {CURRENCY} **{amount_after_multi:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
+                f"You won {prctnw:.1f}% of the games."
             )
+
+            embed.set_author(
+                icon_url=interaction.user.display_avatar.url,
+                name=f"{interaction.user.name}'s winning blackjack game"
+            ).set_footer(text=f"Multiplier: {new_multi:,}%")
 
         else:
             async with interaction.client.pool.acquire() as conn, conn.transaction():
                 await end_transaction(conn, user_id=interaction.user.id)
-
+                wallet_amt = await Economy.fetch_balance(interaction.user.id, conn)
+            
+            embed.remove_footer()
             embed.colour = discord.Colour.yellow()
-            embed.description = "Nothing has changed."
+            embed.description = (
+                f"**Tie! You tied with the dealer.**\n"
+                f"Your wallet hasn't changed! You have {CURRENCY} **{wallet_amt:,}** still."
+            )
 
         embed.set_field_at(
             index=0,
@@ -1056,7 +1081,7 @@ class BlackjackUi(BaseInteractionView):
                 f"**Cards** - {' '.join(d_fver_d)}\n"
                 f"**Total** - `{dealer_total}`"
             )
-        ).remove_footer()
+        )
 
         await interaction.response.edit_message(embed=embed, view=None)
 
@@ -1064,10 +1089,16 @@ class BlackjackUi(BaseInteractionView):
     async def forfeit_bj(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Button for the blackjack interface to forfeit the current match."""
         self.stop()
+        (
+            _, 
+            player_hand, 
+            dealer_hand, 
+            d_fver_d, 
+            d_fver_p, 
+            namount
+        ) = interaction.client.games[interaction.user.id]
 
-        _, player_hand, dealer_hand, d_fver_d, d_fver_p, namount = interaction.client.games[interaction.user.id]
         namount //= 2
-
         dealer_total = calculate_hand(dealer_hand)
         player_sum = calculate_hand(player_hand)
         del interaction.client.games[interaction.user.id]
@@ -1077,10 +1108,9 @@ class BlackjackUi(BaseInteractionView):
         embed = interaction.message.embeds[0]
         embed.colour = discord.Colour.brand_red()
         embed.description = (
-            f"**The dealer took half of your bet for surrendering.**\n"
-            f"You lost: {CURRENCY} **{namount:,}**\n"
-            f"New Balance: {CURRENCY} **{new_amount_balance:,}**\n"
-            f"-# **{prcntl:.1f}%** of all blackjack games lost."
+            f"**You forfeit. The dealer took half of your bet for surrendering.**\n"
+            f"You lost {CURRENCY} **{namount:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
+            f"You lost {prcntl:.1f}% of the games."
         )
 
         embed.set_field_at(
@@ -1097,6 +1127,11 @@ class BlackjackUi(BaseInteractionView):
                 f"**Cards** - {' '.join(d_fver_d)}\n"
                 f"**Total** - `{dealer_total}`"
             )
+        )
+
+        embed.set_author(
+            icon_url=interaction.user.display_avatar.url, 
+            name=f"{interaction.user.name}'s losing blackjack game"
         ).remove_footer()
 
         await interaction.response.edit_message(embed=embed, view=None)
@@ -4183,12 +4218,18 @@ class Economy(commands.Cog):
 
         self.bot.games[interaction.user.id] = (deck, player_hand, dealer_hand, shallow_dv, shallow_pv, robux)
 
-        initial = membed().add_field(
+        initial = membed(
+            f"The game has started. May the best win.\n"
+            f"`{CURRENCY} ~{format_number_short(robux)}` is up for grabs on the table."
+        ).add_field(
             name=f"{interaction.user.name} (Player)", 
             value=f"**Cards** - {' '.join(shallow_pv)}\n**Total** - `{player_sum}`"
         ).add_field(
             name=f"{self.bot.user.name} (Dealer)", 
             value=f"**Cards** - {shallow_dv[0]} `?`\n**Total** - ` ? `"
+        ).set_author(
+            name=f"{interaction.user.name}'s blackjack game",
+            icon_url=interaction.user.display_avatar.url
         ).set_footer(text="K, Q, J = 10  |  A = 1 or 11")
 
         await interaction.response.send_message(embed=initial, view=BlackjackUi(interaction))
