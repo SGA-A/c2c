@@ -3751,12 +3751,13 @@ class Economy(commands.Cog):
 
             owned_items = await conn.fetchall(query, member.id)
 
+        length = 8
+        paginator = RefreshPagination(interaction)
+        paginator.total_pages = paginator.compute_total_pages(len(owned_items), length) or 1
         em = membed().set_author(
-            name=f"{member.display_name}'s Inventory", 
+            name=f"{member.name}'s inventory", 
             icon_url=member.display_avatar.url
         )
-        paginator = RefreshPagination(interaction)
-        paginator.length = 8
 
         async def get_page_part(force_refresh: bool | None = None) -> discord.Embed:
             """Helper function to determine what page of the paginator we're on."""
@@ -3764,20 +3765,18 @@ class Economy(commands.Cog):
             if force_refresh:
                 async with self.bot.pool.acquire() as conn:
                     owned_items = await conn.fetchall(query, member.id)
+                paginator.reset_index(owned_items, length)
 
-            paginator.reset_index(owned_items)
             if not owned_items:
                 em.set_footer(text="Empty")
                 return em
 
-            offset = (paginator.index - 1) * paginator.length
+            offset = (paginator.index - 1) * length
             em.description = "\n".join(
-                f"{item[1]} **{item[0]}** \U00002500 {item[2]:,}" 
-                for item in owned_items[offset:offset + paginator.length]
+                f"{ie} **{item_name}** \U00002500 {qty:,}" 
+                for (item_name, ie, qty) in owned_items[offset:offset+length]
             )
-
-            em.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
-            return em
+            return em.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
 
         paginator.get_page = get_page_part
         await paginator.navigate()

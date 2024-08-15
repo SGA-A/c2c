@@ -377,26 +377,25 @@ class Miscellaneous(commands.Cog):
         message: discord.Message
     ) -> None:
 
-        images = set()
-        counter = 0
+        media = set()
 
         if message.embeds:
             for embed in message.embeds:
                 for asset in (embed.image, embed.thumbnail):
                     if not asset:
                         continue
-                    images.add(f"**{counter}**. [`{embed.image.height}x{embed.image.width}`]({embed.image.url})")
+                    media.add(f"[`{asset.height}x{asset.width}`]({asset.url})")
         
         for attr in message.attachments:
-            images.add(f"**{counter}**. [`{attr.height}x{attr.width}`]({attr.url})")
+            media.add(f"[`{attr.height}x{attr.width}`]({attr.url})")
 
         embed = membed()
-        if not counter:
+        if not media:
             embed.description = "Could not find any attachments."
             return await interaction.response.send_message(embed=embed, ephemeral=True)
         
-        embed.title = f"Found {counter} images from {message.author.name}"
-        embed.description="\n".join(images)
+        embed.title = f"Found {len(media)} images from {message.author.name}"
+        embed.description = "\n".join(media)
         embed.set_thumbnail(url=message.author.display_avatar.url)
         
         await interaction.response.send_message(ephemeral=True, embed=embed)
