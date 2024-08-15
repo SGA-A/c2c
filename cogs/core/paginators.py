@@ -39,7 +39,7 @@ class PaginatorInput(discord.ui.Modal):
 
 class BasePaginator(discord.ui.View):
     def __init__(self, interaction: discord.Interaction, get_page: Callable | None = None):
-        super().__init__()
+        super().__init__(timeout=45.0)
         self.interaction = interaction
         self.get_page = get_page
         self.index = 1
