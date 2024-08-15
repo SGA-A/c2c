@@ -74,25 +74,20 @@ class Pagination(BasePaginator):
 
     async def navigate(self, **kwargs) -> None:
         """Get through the paginator properly."""
-        emb, self.total_pages = await self.get_page(self.index)
-        
-        if not isinstance(emb, list):
-            emb = [emb]
-        
+        embs, self.total_pages = await self.get_page(self.index)
+
         if self.total_pages == 1:
-            await self.interaction.response.send_message(embeds=emb, **kwargs)
+            await self.interaction.response.send_message(embeds=embs, **kwargs)
         elif self.total_pages > 1:
             self.update_buttons()
-            await self.interaction.response.send_message(embeds=emb, view=self, **kwargs)
+            await self.interaction.response.send_message(embeds=embs, view=self, **kwargs)
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
         """Update the page index in response to changes in the current page."""
 
-        emb, self.total_pages = await self.get_page(self.index)
-        if not isinstance(emb, list):
-            emb = [emb]
+        embs, self.total_pages = await self.get_page(self.index)
         self.update_buttons()
-        await button_response(interaction, embeds=emb, view=self)
+        await button_response(interaction, embeds=embs, view=self)
 
     def update_buttons(self) -> None:
         """Disable or re-enable buttons based on position in paginator."""

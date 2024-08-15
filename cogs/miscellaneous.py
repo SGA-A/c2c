@@ -479,18 +479,18 @@ class Miscellaneous(commands.Cog):
             embed.title = "No posts found."
             return await interaction.response.send_message(ephemeral=True, embed=embed)
 
-        total_results = len(posts_xml)
+        n = Pagination.compute_total_pages(len(posts_xml), length)
         async def get_page_part(page: int):
-            embeds = []
             offset = (page - 1) * length
-
-            for (jpeg_url, author, created_at) in extract_post_xml(posts_xml, offset, length):
-                embed = membed().set_image(url=jpeg_url)
-                embed.title, embed.url = author, jpeg_url
-                embed.timestamp = datetime.fromtimestamp(int(created_at), tz=timezone.utc)
-                embeds.append(embed)
-
-            n = Pagination.compute_total_pages(total_results, length)
+            embeds = [
+                discord.Embed(
+                    title=author,
+                    colour=0x2B2D31,
+                    url=jpeg_url,
+                    timestamp=datetime.fromtimestamp(int(created_at), tz=timezone.utc)
+                ).set_image(url=jpeg_url)
+                for (jpeg_url, author, created_at) in extract_post_xml(posts_xml, offset, length)
+            ]
             return embeds, n
 
         await Pagination(interaction, get_page=get_page_part).navigate(ephemeral=private)
@@ -503,15 +503,15 @@ class Miscellaneous(commands.Cog):
         emb = membed()
         emb.title = "Emojis"
 
+        n = Pagination.compute_total_pages(len(self.bot.emojis), length)
         async def get_page_part(page: int):
             offset = (page - 1) * length
 
-            n = Pagination.compute_total_pages(len(self.bot.emojis), length)
             emb.description = "\n".join(
                 f"{emoji} (**{emoji.name}**) \U00002014 `{emoji}`" 
                 for emoji in self.bot.emojis[offset:offset+length]
             )
-            return emb, n
+            return [emb], n
 
         await Pagination(interaction, get_page_part).navigate()
 
