@@ -1233,9 +1233,18 @@ class Leaderboard(RefreshPagination):
     @staticmethod
     def populate_data(bot: C2C, ret: list[Row]) -> list[str]:
         data = []
+        offset = 0
         for i, (identifier, metric) in enumerate(ret, start=1):
             memobj = bot.get_user(identifier)
-            data.append(f"{Leaderboard.podium_pos.get(i, "\U0001f539")} ` {metric:,} ` \U00002014 {memobj.name}{UNIQUE_BADGES.get(memobj.id, '')}")
+            if memobj is None:
+                offset += 1
+                continue
+
+            fmt = (
+                f"{Leaderboard.podium_pos.get(i-offset, "\U0001f539")} ` {metric:,} ` "
+                f"\U00002014 {memobj.name}{UNIQUE_BADGES.get(memobj.id, '')}"
+            )
+            data.append(fmt)
         return data
 
     async def create_lb(self, conn: Connection, item_id: int) -> None:

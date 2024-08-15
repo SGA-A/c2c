@@ -28,7 +28,7 @@ async def economy_check(interaction: discord.Interaction, original_id: int, /) -
     await interaction.response.send_message(
         ephemeral=True,
         delete_after=5.0,
-        embed=membed(f"This menu is controlled by <@{original_id}>.")
+        embed=membed("This menu is not for you")
     )
     return False
 
