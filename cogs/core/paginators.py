@@ -58,12 +58,6 @@ class BasePaginator(discord.ui.View):
         except discord.NotFound:
             pass
 
-    async def navigate(self) -> None:
-        """Get through the paginator properly."""
-        emb = await self.get_page()
-        self.update_buttons()
-        await self.interaction.response.send_message(embed=emb, view=self)
-
     @staticmethod
     def compute_total_pages(total_results: int, results_per_page: int) -> int:
         """
@@ -88,15 +82,16 @@ class Pagination(BasePaginator):
         if self.total_pages == 1:
             await self.interaction.response.send_message(embeds=emb, **kwargs)
         elif self.total_pages > 1:
+            self.update_buttons()
             await self.interaction.response.send_message(embeds=emb, view=self, **kwargs)
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
         """Update the page index in response to changes in the current page."""
 
         emb, self.total_pages = await self.get_page(self.index)
-        self.update_buttons()
         if not isinstance(emb, list):
             emb = [emb]
+        self.update_buttons()
         await button_response(interaction, embeds=emb, view=self)
 
     def update_buttons(self) -> None:
@@ -159,10 +154,7 @@ class PaginationSimple(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         """Make sure only original user that invoked interaction can interact"""
-        if interaction.user.id == self.invoker_id:
-            return True
-        await interaction.response.send_message(embed=NOT_YOUR_MENU, ephemeral=True)
-        return False
+        return await economy_check(interaction, self.invoker_id)
 
     async def on_timeout(self) -> None:
         for item in self.children:
@@ -184,6 +176,7 @@ class PaginationSimple(discord.ui.View):
                 self.stop()
                 return await respond(embed=emb)
             case _:
+                self.update_buttons()
                 self.message = await respond(embed=emb, view=self)
                 if self.message is None:
                     self.message = await self.ctx.original_response()
@@ -232,9 +225,14 @@ class PaginationSimple(discord.ui.View):
 
 
 class RefreshPagination(BasePaginator):
-    """Based on `PaginationSimple`, but with an option to refresh the data being paginated."""
     def __init__(self, interaction: discord.Interaction, get_page: Callable | None = None) -> None:
         super().__init__(interaction, get_page)
+
+    async def navigate(self) -> None:
+        """Get through the paginator properly."""
+        emb = await self.get_page()
+        self.update_buttons()
+        await self.interaction.response.send_message(embed=emb, view=self)
 
     def reset_index(self, refreshed_data: list, length: int | None = None):
         """
@@ -275,7 +273,7 @@ class RefreshPagination(BasePaginator):
         self.index -= 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(emoji="<:refreshPages:1263923160433168414>", row=1)
+    @discord.ui.button(emoji=discord.PartialEmoji.from_str("<:refreshPages:1263923160433168414>"), row=1)
     async def refresh_paginator(self, interaction: discord.Interaction, _: discord.ui.Button):
         await self.edit_page(interaction, force_refresh=True)
 
@@ -299,6 +297,11 @@ class PaginationItem(BasePaginator):
     
     def __init__(self, interaction: discord.Interaction, get_page: Callable | None = None):
         super().__init__(interaction, get_page)
+
+    async def navigate(self) -> None:
+        """Get through the paginator properly."""
+        emb = await self.get_page()
+        await self.interaction.response.send_message(embed=emb, view=self)
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
         """Update the page index in response to changes in the current page."""        
