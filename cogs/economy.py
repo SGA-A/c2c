@@ -2491,11 +2491,11 @@ class Economy(commands.Cog):
         self, 
         interaction: discord.Interaction,
         /, 
-        connection: Connection, 
+        conn: Connection, 
         exp_gainable: int
     ) -> None:
 
-        record = await connection.fetchone(
+        record = await conn.fetchone(
             """
             UPDATE accounts
             SET exp = exp + $0
@@ -2515,7 +2515,7 @@ class Economy(commands.Cog):
         level += 1
 
         await self.add_multiplier(
-            connection,
+            conn,
             user_id=interaction.user.id,
             multi_amount=((level // 3) or 1),
             multi_type="xp",
@@ -2523,7 +2523,7 @@ class Economy(commands.Cog):
             description=f"Level {level}"
         )
 
-        await connection.execute(
+        await conn.execute(
             """
             UPDATE accounts 
             SET 
@@ -2534,7 +2534,7 @@ class Economy(commands.Cog):
             """, randint(50_000, 55_000*level), interaction.user.id
         )
 
-        notifs_enabled = await is_setting_enabled(connection, interaction.user.id, "levelup_notifications")
+        notifs_enabled = await is_setting_enabled(conn, interaction.user.id, "levelup_notifications")
 
         if notifs_enabled:
             rankup = discord.Embed(title="Level Up!", colour=0x55BEFF)
@@ -2579,34 +2579,37 @@ class Economy(commands.Cog):
             """
         )
 
-        async with self.bot.pool.acquire() as connection, connection.transaction():
+        async with self.bot.pool.acquire() as conn, conn.transaction():
             try:
-                data = await connection.fetchone(query, interaction.user.id, "xp", f"/{cmd.name}")
+                data = await conn.fetchone(query, interaction.user.id, "xp", f"/{cmd.name}")
             except IntegrityError:
                 return
 
             total, multi = data
             if not total % 15:
-                await self.send_tip_if_enabled(interaction, connection)
+                await self.send_tip_if_enabled(interaction, conn)
 
             exp_gainable = command.extras.get("exp_gained")
             if not exp_gainable:
                 return
 
             exp_gainable *= (1+(multi/100))
-            await self.add_exp_or_levelup(interaction, connection, int(exp_gainable))
+            await self.add_exp_or_levelup(interaction, conn, int(exp_gainable))
 
     @commands.Cog.listener()
     async def on_command(self, ctx: commands.Context) -> None:
         """Track text commands ran."""
-        cmd = ctx.command.parent or ctx.command
+        if ctx.interaction:
+            return
 
-        async with self.bot.pool.acquire() as connection:
-            async with connection.transaction():
-                try:
-                    await add_command_usage(ctx.author.id, f"@me {cmd.name}", connection)
-                except IntegrityError:
-                    pass
+        cmd = ctx.command.parent or ctx.command
+        async with self.bot.pool.acquire() as conn:
+            try:
+                await add_command_usage(ctx.author.id, f"@me {cmd.name}", conn)
+            except IntegrityError:
+                pass
+            else:
+                await conn.commit()
 
     # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
