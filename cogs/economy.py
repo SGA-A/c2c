@@ -4196,10 +4196,11 @@ class Economy(commands.Cog):
 
         # ------ Game checks ---------
 
-        async with self.bot.pool.acquire() as conn:
+        async with self.bot.pool.acquire() as conn, conn.transaction():
             wallet_amt = await self.fetch_balance(interaction.user.id, conn)
             has_keycard = await self.fetch_item_qty_from_id(interaction.user.id, item_id=1, conn=conn)
-        robux = self.do_wallet_checks(wallet_amt, robux, has_keycard)
+            robux = self.do_wallet_checks(wallet_amt, robux, has_keycard)
+            await declare_transaction(conn, user_id=interaction.user.id)
 
         # ----------------- Game setup ------------------
 
@@ -4211,7 +4212,6 @@ class Economy(commands.Cog):
 
         player_sum = calculate_hand(player_hand)
 
-        await declare_transaction(conn, user_id=interaction.user.id)
         shallow_pv = [display_user_friendly_card_format(number) for number in player_hand]
         shallow_dv = [display_user_friendly_card_format(number) for number in dealer_hand]
 
