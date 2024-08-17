@@ -3733,11 +3733,7 @@ class Economy(commands.Cog):
 
     @app_commands.command(description='View your currently owned items')
     @app_commands.describe(member='The user whose inventory you want to see.')
-    async def inventory(
-        self, 
-        interaction: discord.Interaction, 
-        member: USER_ENTRY | None = None
-    ) -> None:
+    async def inventory(self, interaction: discord.Interaction, member: USER_ENTRY | None = None) -> None:
         """View your inventory or another player's inventory."""
         member = member or interaction.user
 
