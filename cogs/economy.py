@@ -913,7 +913,7 @@ class BlackjackUi(BaseInteractionView):
                     f"**Cards** - {' '.join(d_fver_d)}\n"
                     f"**Total** - `{calculate_hand(dealer_hand)}`"
                 )
-            )
+            ).remove_footer()
 
             return await interaction.response.edit_message(embed=embed, view=None)
 
