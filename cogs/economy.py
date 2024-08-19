@@ -2689,8 +2689,7 @@ class Economy(commands.Cog):
             actual_wallet = await self.fetch_balance(sender.id, conn)
             if isinstance(quantity, str):
                 quantity = actual_wallet
-
-            if quantity > actual_wallet:
+            elif quantity > actual_wallet:
                 return await respond(
                     interaction,
                     embed=membed("You don't have that much money to share.")
@@ -2791,7 +2790,7 @@ class Economy(commands.Cog):
 
     trade = app_commands.Group(name='trade', description='Exchange different assets with others.')
 
-    def default_checks_passing(self, trader: discord.Member, with_who: discord.Member):
+    def default_checks_passing(self, trader: discord.Member, with_who: discord.Member) -> None:
         if with_who.id == trader.id:
             raise FailingConditionalError("You can't trade with yourself.")
         elif with_who.bot:
@@ -2802,14 +2801,13 @@ class Economy(commands.Cog):
         user_checked: discord.Member,
         robux_qty_offered: int,
         actual_wallet_amt: int
-    ) -> bool:
+    ) -> None:
         if actual_wallet_amt < robux_qty_offered:
             resp = (
                 f"{user_checked.mention} only has {CURRENCY} **{actual_wallet_amt:,}**.\n"
                 f"Not the requested {CURRENCY} **{robux_qty_offered:,}**."
             )
             raise FailingConditionalError(resp)
-        return True
 
     async def item_checks_passing(
         self,
@@ -2960,7 +2958,8 @@ class Economy(commands.Cog):
 
         if isinstance(for_robux, str):
             for_robux = wallet_amt
-        self.robux_checks_passing(with_who, for_robux, wallet_amt)
+        else:
+            self.robux_checks_passing(with_who, for_robux, wallet_amt)
 
         # Transaction created inside the function for interaction.user
         can_proceed = await self.prompt_for_robux(
@@ -3036,8 +3035,8 @@ class Economy(commands.Cog):
 
             if isinstance(robux, str):
                 robux = wallet_amt
-
-            self.robux_checks_passing(interaction.user, robux, wallet_amt)
+            else:
+                self.robux_checks_passing(interaction.user, robux, wallet_amt)
             await self.item_checks_passing(conn, with_who, for_item, item_quantity)
 
         can_proceed = await self.prompt_robux_for_items(
@@ -3948,7 +3947,7 @@ class Economy(commands.Cog):
             return await interaction.response.send_message(embed=embed)
 
         if isinstance(robux, str):
-            can_deposit = min(wallet_amt, can_deposit)
+            robux = min(wallet_amt, can_deposit)
         elif robux > wallet_amt:
             embed.description = f"You only have {CURRENCY} **{wallet_amt:,}** in your wallet right now."
             return await interaction.response.send_message(embed=embed)
