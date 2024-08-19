@@ -109,10 +109,8 @@ class Admin(commands.Cog):
 
     @commands.command(description='Sync the bot tree for changes', aliases=("sy",))
     async def sync(self, ctx: commands.Context) -> None:
-        """Sync the bot's tree to either the guild or globally, varies from time to time."""
+        """Sync the bot's tree globally."""
         await self.bot.tree.sync(guild=None)
-
-        self.bot.fetched_tree = True
         await ctx.send("\U00002705")
 
     @commands.command(name='eval', description='Evaluates arbitrary code')
