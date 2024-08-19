@@ -3430,17 +3430,6 @@ class Economy(commands.Cog):
 
         await respond(interaction, embed=embed)
 
-    @register_item('Trophy')
-    async def flex_via_trophy(interaction: discord.Interaction, quantity: int) -> None:
-        em = membed(
-            f"{interaction.user.name} is flexing on you all "
-            f"with their <:Trophy:1263923814874615930> **~~PEPE~~ TROPHY**"
-        )
-        if quantity > 1:
-            em.description = f'{em.description}\n\nThey have **{quantity}** of them, WHAT A BADASS'
-
-        await respond(interaction, embed=em)
-
     @register_item('Bitcoin')
     async def gain_bitcoin_multiplier(interaction: discord.Interaction, _: int) -> None:
         future_expiry = (discord.utils.utcnow() + timedelta(minutes=30)).timestamp()
@@ -3522,8 +3511,7 @@ class Economy(commands.Cog):
                 embed=membed(f"{ie} **{item_name}** does not have a use yet.\nWait until it does!")
             )
 
-        async with self.bot.pool.acquire() as conn:
-            await handler(interaction, quantity, conn)
+        await handler(interaction, quantity, conn)
 
     async def start_prestige(self, interaction: discord.Interaction, prestige: int) -> None:
         massive_prompt = dedent(
@@ -3674,13 +3662,13 @@ class Economy(commands.Cog):
 
         query = "SELECT slotw, slotl, wallet FROM accounts WHERE userID = $0"
 
-        # --------------- Checks before betting i.e. has keycard, meets bet constraints. -------------
+        # Game checks
         async with self.bot.pool.acquire() as conn:
             has_keycard = await self.fetch_item_qty_from_id(interaction.user.id, item_id=1, conn=conn)
             slot_wins, slot_losses, wallet_amt = await conn.fetchone(query, interaction.user.id) or (0, 0, 0)
         robux = self.do_wallet_checks(wallet_amt, robux, has_keycard)
 
-        # ------------------ THE SLOT MACHINE ITESELF ------------------------
+        # The actual slot machine
 
         emoji_1, emoji_2, emoji_3 = generate_slot_combination()
         multiplier = find_slot_matches(emoji_1, emoji_2, emoji_3)
@@ -3902,40 +3890,36 @@ class Economy(commands.Cog):
     @app_commands.describe(robux=ROBUX_DESCRIPTION)
     async def withdraw(self, interaction: discord.Interaction, robux: ROBUX_CONVERTER) -> None:
         """Withdraw a given amount of robux from your bank."""
-        user = interaction.user
 
         async with self.bot.pool.acquire() as conn:
-            bank_amt = await self.fetch_balance(user.id, conn, "bank")
-            embed = membed()
-            if not bank_amt:
-                embed.description = "You have nothing to withdraw."
-                return await interaction.response.send_message(embed=embed)
+            bank_amt = await self.fetch_balance(interaction.user.id, conn, "bank")
 
-            if isinstance(robux, str):
-                robux = bank_amt
-            elif robux > bank_amt:
-                embed.description = f"You only have {CURRENCY} **{bank_amt:,}** in your bank right now."
-                return await interaction.response.send_message(embed=embed, ephemeral=True)
+        embed = membed()
+        if not bank_amt:
+            embed.description = "You have nothing to withdraw."
+            return await interaction.response.send_message(embed=embed)
 
-            query = (
-                """
-                UPDATE accounts
-                SET 
-                    wallet = wallet + $0,
-                    bank = bank - $0
-                WHERE userID = $1
-                RETURNING wallet, bank
-                """
-            )
+        if isinstance(robux, str):
+            robux = bank_amt
+        elif robux > bank_amt:
+            embed.description = f"You only have {CURRENCY} **{bank_amt:,}** in your bank right now."
+            return await interaction.response.send_message(embed=embed, ephemeral=True)
 
-            wallet_new, bank_new = await conn.fetchone(query, robux, user.id)
-            await conn.commit()
-
-        embed.add_field(
-            name="<:withdraw:1263924204986699938> Withdrawn", 
-            value=f"{CURRENCY} {robux:,}", 
-            inline=False
+        query = (
+            """
+            UPDATE accounts
+            SET 
+                wallet = wallet + $0,
+                bank = bank - $0
+            WHERE userID = $1
+            RETURNING wallet, bank
+            """
         )
+
+        async with self.bot.pool.acquire() as conn, conn.transaction():
+            wallet_new, bank_new = await conn.fetchone(query, robux, interaction.user.id)
+
+        embed.add_field(name="Withdrawn", value=f"{CURRENCY} {robux:,}", inline=False)
         embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}")
         embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
 
@@ -3945,22 +3929,21 @@ class Economy(commands.Cog):
     @app_commands.describe(robux=ROBUX_DESCRIPTION)
     async def deposit(self, interaction: discord.Interaction, robux: ROBUX_CONVERTER) -> None:
         """Deposit an amount of robux into your bank."""
-        user = interaction.user
 
         query = "SELECT wallet, bank, bankspace FROM accounts WHERE userID = $0"
         async with self.bot.pool.acquire() as conn:
-            wallet_amt, bank, bankspace = await conn.fetchone(query, user.id) or (0, 0, 0)
-            embed = membed()
+            wallet_amt, bank, bankspace = await conn.fetchone(query, interaction.user.id) or (0, 0, 0)
 
+        embed = membed()
         if not wallet_amt:
             embed.description = "You have nothing to deposit."
             return await interaction.response.send_message(embed=embed)
-        can_deposit = bankspace - bank
 
+        can_deposit = bankspace - bank
         if can_deposit <= 0:
             embed.description = (
-                f"You can only hold **{CURRENCY} {bankspace:,}** in your bank right now.\n"
-                f"To hold more, use currency commands and level up more. Bank notes can aid with this."
+                f"You can only hold {CURRENCY} **{bankspace:,}** in your bank right now.\n"
+                f"To hold more, use currency commands and level up more. Bank Notes can aid with this."
             )
             return await interaction.response.send_message(embed=embed)
 
@@ -3982,13 +3965,9 @@ class Economy(commands.Cog):
         )
 
         async with self.bot.pool.acquire() as conn, conn.transaction():
-            wallet_new, bank_new = await conn.fetchone(query, robux, user.id)
+            wallet_new, bank_new = await conn.fetchone(query, robux, interaction.user.id)
 
-        embed.add_field(
-            name="<:deposit:1263920154648121375> Deposited", 
-            value=f"{CURRENCY} {robux:,}", 
-            inline=False
-        )
+        embed.add_field(name="Deposited", value=f"{CURRENCY} {robux:,}", inline=False)
         embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}")
         embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
 
@@ -4197,7 +4176,7 @@ class Economy(commands.Cog):
         Win by reaching 21 and a higher score than the bot without bust.
         """
 
-        # ------ Game checks ---------
+        # Game checks
 
         async with self.bot.pool.acquire() as conn, conn.transaction():
             wallet_amt = await self.fetch_balance(interaction.user.id, conn)
@@ -4205,7 +4184,7 @@ class Economy(commands.Cog):
             robux = self.do_wallet_checks(wallet_amt, robux, has_keycard)
             await declare_transaction(conn, user_id=interaction.user.id)
 
-        # ----------------- Game setup ------------------
+        # Game setup
 
         deck = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 11] * 4
         shuffle(deck)
@@ -4266,7 +4245,7 @@ class Economy(commands.Cog):
     async def bet(self, interaction: discord.Interaction, robux: ROBUX_CONVERTER) -> None:
         """Bet your robux on a gamble to win or lose robux."""
 
-        # --------------- Contains checks before betting i.e. has keycard, meets bet constraints. -------------
+        # Game checks
         user = interaction.user
         query = "SELECT wallet, betw, betl FROM accounts WHERE userID = $0"
 
@@ -4278,8 +4257,6 @@ class Economy(commands.Cog):
             
             pmulti = await self.get_multi_of(user.id, "robux", conn)
 
-
-        # --------------------------------------------------------
         badges = ""
 
         if has_keycard:
