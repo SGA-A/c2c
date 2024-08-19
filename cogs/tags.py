@@ -18,7 +18,7 @@ MAX_CHARACTERS_EXCEEDED_RESPONSE = "Tag content cannot exceed 2000 characters."
 TIMED_OUT_RESPONSE = "You took too long."
 TAG_NOT_FOUND_SIMPLE_RESPONSE = "Tag not found, it may have been deleted when you called the command."
 TAG_BEING_MADE_RESPONSE = "This tag is already being made by someone right now!"
-TAG_ALREADY_EXISTS_RESPONSE = "A tag with that name already exists.\n-# Restart the process via `>tag make` or the context menu."
+TAG_ALREADY_EXISTS_RESPONSE = "A tag with that name already exists."
 TAG_NOT_FOUND_RESPONSE = (
     "Could not find any tag with these properties.\n"
     "- You can't modify the tag if it doesn't belong to you.\n"
@@ -231,11 +231,11 @@ class Tags(commands.Cog):
         A tuple containing the actual value and the interaction created.
         """
 
-        mv = discord.ui.View(timeout=15.0)
-        mv.interaction = None
+        prompt_view = discord.ui.View(timeout=15.0)
+        prompt_view.interaction = None
 
-        ret = await self.partial_match_for(ctx, word_input, tag_results, mv)
-        return ret, mv.interaction
+        ret = await self.partial_match_for(ctx, word_input, tag_results, prompt_view)
+        return ret, prompt_view.interaction
 
     async def non_owned_partial_matching(
         self, 
@@ -307,7 +307,7 @@ class Tags(commands.Cog):
             await conn.execute(query, name, content, author.id)
         except sqlite3.IntegrityError:
             await tr.rollback()
-            await send_message(ctx, embed=membed(f"A tag named {name!r} already exists."))
+            await send_message(ctx, embed=membed(TAG_ALREADY_EXISTS_RESPONSE))
         except Exception as e:
             self.bot.log_exception(e)
             await tr.rollback()
@@ -467,12 +467,8 @@ class Tags(commands.Cog):
         if content is None:
 
             async with self.bot.pool.acquire() as conn:
-                name, interaction = await self.owned_partial_matching(
-                    ctx, 
-                    name, 
-                    conn, 
-                    self.partial_match_including_interaction
-                )
+                meth = self.partial_match_including_interaction
+                name, interaction = await self.owned_partial_matching(ctx, name, conn, meth)
             if name is None:
                 return
             

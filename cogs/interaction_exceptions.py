@@ -13,7 +13,7 @@ from discord import (
 )
 
 from .core.errors import CustomTransformerError, FailingConditionalError
-from .core.helpers import MessageDevelopers
+from .core.helpers import MessageDevelopers, membed
 from .core.constants import COOLDOWN_PROMPTS
 from .core.bot import C2C
 
@@ -69,7 +69,7 @@ class InteractionExceptions(Cog):
         if not interaction.response.is_done():
             await interaction.response.defer(thinking=True)
 
-        embed = Embed(colour=0x2B2D31)
+        embed = membed()
         error = getattr(error, "original", error)
 
         if isinstance(error, app_commands.TransformerError):

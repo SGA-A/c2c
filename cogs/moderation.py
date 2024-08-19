@@ -401,14 +401,15 @@ class Moderation(commands.Cog):
 
     @app_commands.default_permissions(manage_messages=True)
     async def purge_from_here(self, interaction: discord.Interaction, message: discord.Message):
-        await interaction.response.defer(ephemeral=True)
-        
+        await interaction.response.defer()
+        await interaction.delete_original_response()
+
         try:
             count = await interaction.channel.purge(after=discord.Object(id=message.id))
-            msg = await interaction.followup.send(embed=membed(f"Deleted **{len(count)}** messages."))
+            msg = await interaction.followup.send(embed=membed(f"Deleted **{len(count):,}** messages."))
         except Exception:
             msg = await interaction.followup.send(embed=membed("Could not purge this channel."))
-        await msg.delete(delay=3.0)
+        await msg.delete(delay=5.0)
 
     @tasks.loop()
     async def check_for_role(self):
@@ -458,9 +459,6 @@ class Moderation(commands.Cog):
         """Sets a delay to which users can send messages."""
         slowmode_in_seconds = abs(slowmode_in_seconds)
         await ctx.channel.edit(slowmode_delay=slowmode_in_seconds)
-        if slowmode_in_seconds:
-            return await ctx.send(embed=membed(f'Slowmode set to **{slowmode_in_seconds}** seconds.'))
-        await ctx.send(embed=membed("Disabled slowmode."))
 
     temprole = app_commands.Group(
         name="temprole", 

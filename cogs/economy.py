@@ -48,16 +48,11 @@ from .core.helpers import (
 
 
 USER_ENTRY = discord.Member | discord.User
-POSSIBLE_INTEGER_SHORTHAND = int | str
 MULTIPLIER_TYPES = Literal["xp", "luck", "robux"]
 MIN_BET_KEYCARD = 500_000
 MAX_BET_KEYCARD = 15_000_000
 MIN_BET_WITHOUT = 100_000
 MAX_BET_WITHOUT = 10_000_000
-SHOWCASE_ITEMS_REMOVED = (
-    "Other items were removed from your showcase.\n"
-    "You need to own at least one of every item you showcase."
-)
 WARN_FOR_CONCURRENCY = (
     "You cannot interact with this command because you are in an ongoing command.\n"
     "Finish any commands you are currently using before trying again.\n"
@@ -71,7 +66,6 @@ UNIQUE_BADGES = {
     1154092136115994687: " <:bugHunter:1263920006392188968>",
     1047572530422108311: " <:c2cAvatar:1263920021063733451>",
     1148206353647669298: " <:staffMember:1263921583949480047>",
-    10: " (MAX)"
 }
 RARITY_COLOUR = {
     "Godly": 0xE2104B,
@@ -97,7 +91,7 @@ LEVEL_UP_PROMPTS = (
     "Outstanding",
     "You're doing great"
 )
-NOT_REGISTERED = membed("This user is not registered, so you can't use this command on them.")
+NOT_REGISTERED = "This user is not registered, so you can't use this command on them."
 SLOTS = ('🔥', '😳', '🌟', '💔', '🖕', '🤡', '🍕', '🍆', '🍑')
 BONUS_MULTIPLIERS = {
     "🍕🍕": 30,
@@ -154,31 +148,22 @@ def swap_elements(x, index1, index2) -> None:
     x[index1], x[index2] = x[index2], x[index1]
 
 
-def format_number_short(number: int) -> str:
+def shortern_number(number: int) -> str:
     """
     Format a numerical value in a concise, abbreviated form.
 
-    Parameters:
-    - number (float): The numerical value to be formatted.
+    Uses 'K' for thousands, 'M' for millions, 'B' for billions, and 'T' for trillions.
 
-    Returns:
-    str: The formatted string representing the number in a short, human-readable form.
-
-    Description:
-    This function formats a numerical value in a concise and abbreviated manner,
-    suitable for displaying large or small numbers in a more readable format.
-    The function uses 'K' for thousands, 'M' for millions, 'B' for billions, and 'T' for trillions.
-
-    Example:
-    >>> format_number_short(500)
+    ## Examples
+    >>> shortern_number(500)
     '500'
-    >>> format_number_short(1500)
+    >>> shortern_number(1500)
     '1.5K'
-    >>> format_number_short(1200000)
+    >>> shortern_number(1200000)
     '1.2M'
-    >>> format_number_short(2500000000)
+    >>> shortern_number(2500000000)
     '2.5B'
-    >>> format_number_short(9000000000000)
+    >>> shortern_number(9000000000000)
     '9.0T'
     """
 
@@ -194,31 +179,20 @@ def format_number_short(number: int) -> str:
         return '{:.1f}T'.format(number / 1e12)
 
 
-def reverse_format_number_short(formatted_number: str) -> int:
+def unshortern_number(formatted_number: str) -> int:
     """
-    Reverse the process of formatting a numerical value in a concise, abbreviated form.
+    Inverse function of `shortern_number`
 
-    Parameters:
-    - formatted_number (str): The formatted string representing the number in a short, human-readable form.
-
-    Returns:
-    int: The numerical value represented by the formatted string.
-
-    Description:
-    This function reverses the process of formatting a numerical value in a concise and abbreviated manner.
-    It takes a formatted string, such as '1.2M' or '2.5B', and converts it back to the corresponding numerical value.
-    The function supports values formatted with 'K' for thousands, 'M' for millions, 'B' for billions, and 'T' for trillions.
-
-    Example:
-    >>> reverse_format_number_short('500')
+    ## Examples
+    >>> unshortern_number('500')
     500
-    >>> reverse_format_number_short('1.5K')
+    >>> unshortern_number('1.5K')
     1500
-    >>> reverse_format_number_short('1.2M')
+    >>> unshortern_number('1.2M')
     1200000
-    >>> reverse_format_number_short('2.5B')
+    >>> unshortern_number('2.5B')
     2500000000
-    >>> reverse_format_number_short('9.0T')
+    >>> unshortern_number('9.0T')
     9000000000000
     """
 
@@ -2684,9 +2658,17 @@ class Economy(commands.Cog):
 
         async with self.bot.pool.acquire() as conn:
             if await self.can_call_out(recipient, conn):
-                return await respond(interaction, embed=NOT_REGISTERED)
+                return await interaction.response.send_message(embed=membed(NOT_REGISTERED))
 
             actual_wallet = await self.fetch_balance(sender.id, conn)
+
+            try:
+                assert actual_wallet > 0
+            except AssertionError:
+                return await interaction.response.send_message(
+                    embed=membed("You have nothing to share!")
+                )
+
             if isinstance(quantity, str):
                 quantity = actual_wallet
             elif quantity > actual_wallet:
@@ -2740,7 +2722,7 @@ class Economy(commands.Cog):
 
         async with self.bot.pool.acquire() as conn:
             if await self.can_call_out(recipient, conn):
-                return await respond(interaction, embed=NOT_REGISTERED)
+                return await respond(interaction, embed=membed(NOT_REGISTERED))
 
             item_id, item_name, ie = item
 
@@ -4074,7 +4056,7 @@ class Economy(commands.Cog):
 
         async with self.bot.pool.acquire() as conn:
             if not (await self.can_call_out_either(robber, host, conn)):
-                return await interaction.response.send_message(embed=NOT_REGISTERED)
+                return await interaction.response.send_message(embed=membed(NOT_REGISTERED))
 
             robber_wallet, robber_bounty, robber_passive_mode = await conn.fetchone(query, robber.id)
             host_wallet, host_passive_mode = await conn.fetchone(query2, host.id)
@@ -4200,7 +4182,7 @@ class Economy(commands.Cog):
 
         initial = membed(
             f"The game has started. May the best win.\n"
-            f"`{CURRENCY} ~{format_number_short(robux)}` is up for grabs on the table."
+            f"`{CURRENCY} ~{shortern_number(robux)}` is up for grabs on the table."
         ).add_field(
             name=f"{interaction.user.name} (Player)", 
             value=f"**Cards** - {' '.join(shallow_pv)}\n**Total** - `{player_sum}`"
