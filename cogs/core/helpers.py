@@ -1,5 +1,5 @@
 from re import compile
-from typing import Union, Callable, Any
+from typing import Callable, Any
 from datetime import datetime, timedelta
 
 import discord
@@ -234,19 +234,31 @@ def string_to_datetime(string_obj: str) -> datetime:
 
     date_format = "%Y-%m-%d %H:%M:%S"
     my_datetime = datetime.strptime(string_obj, date_format)
-    my_datetime = my_datetime.replace(tzinfo=timezone("UTC"))
-    return my_datetime
+    return my_datetime.replace(tzinfo=timezone("UTC"))
 
 
-async def respond(interaction: discord.Interaction, /, **kwargs) -> Union[None, discord.WebhookMessage]:
+async def respond(interaction: discord.Interaction, /, **kwargs) -> None | discord.WebhookMessage:
     """
-    Determine if we should respond to the interaction or send followups.
-    
-    When a followup is sent, the message object is returned.
+    Responds to the interaction by sending a message.
+
+    This is a helper function which considers whether or 
+    not this interaction was already responded to before.
     """
     if interaction.response.is_done():
         return await interaction.followup.send(**kwargs)
     await interaction.response.send_message(**kwargs)
+
+
+async def edit_response(interaction: discord.Interaction, /, **kwargs) -> None | discord.InteractionMessage:
+    """
+    Edit an interaction's original response message, which may be a response. 
+    
+    This is a helper function which considers whether or 
+    not this interaction was already responded to before.
+    """
+    if interaction.response.is_done():
+        return await interaction.edit_original_response(**kwargs)
+    await interaction.response.edit_message(**kwargs)
 
 
 async def send_message(invocation: Context | discord.Interaction, /, **kwargs):

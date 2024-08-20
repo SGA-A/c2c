@@ -143,7 +143,7 @@ class Tags(commands.Cog):
         )
         self.bot.tree.add_command(self.create_tag_menu)
 
-    async def cog_unload(self) -> None:
+    def cog_unload(self) -> None:
         self.bot.tree.remove_command(self.create_tag_menu)
 
     async def create_tag_menu_callback(self, interaction: discord.Interaction, message: discord.Message):
@@ -622,9 +622,7 @@ class Tags(commands.Cog):
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def info(self, ctx: commands.Context, *, name: Annotated[str, TagName]):
-        
         async with self.bot.pool.acquire() as conn:
-            
             name = await self.non_owned_partial_matching(ctx, name, conn)
             if not name:
                 return
@@ -668,6 +666,11 @@ class Tags(commands.Cog):
     async def reusable_paginator_via(self, ctx, rows: tuple, em: discord.Embed, length: int = 12):
         """Only use this when you have a tuple containing the tag name and rowid in this order."""
 
+        paginator = PaginationSimple(
+            ctx, 
+            ctx.author.id,
+            PaginationSimple.compute_total_pages(len(rows), length)
+        )
         async def get_page_part(page: int):
             """Helper function to determine what page of the paginator we're on."""
 
@@ -677,11 +680,11 @@ class Tags(commands.Cog):
                 for index, tag in enumerate(rows[offset:offset+length], start=offset+1)
             )
 
-            n = PaginationSimple.compute_total_pages(len(rows), length)
-            em.set_footer(text=f"Page {page} of {n}")
-            return em, n
+            em.set_footer(text=f"Page {page} of {paginator.total_pages}")
+            return em
+        paginator.get_page = get_page_part
 
-        await PaginationSimple(ctx, ctx.author.id, get_page_part).navigate()
+        await paginator.navigate()
 
     @tag.command(description="Search for a tag")
     @app_commands.describe(query='The tag name to search for.')

@@ -18,6 +18,8 @@ class RawIntegerTransformer(app_commands.Transformer):
         self.reject_shorthands = reject_shorthands
 
     def transform(self, _: discord.Interaction, value: str) -> int | str:
+        value = value.translate(str.maketrans('', '', ','))
+
         try:
             converted = int(float(value))
             if converted < 1:

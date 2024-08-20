@@ -1249,11 +1249,10 @@ class Leaderboard(RefreshPagination):
                 offset += 1
                 continue
 
-            fmt = (
+            data.append(
                 f"{Leaderboard.podium_pos.get(i-offset, "\U0001f539")} ` {metric:,} ` "
                 f"\U00002014 {memobj.name}{UNIQUE_BADGES.get(memobj.id, '')}"
             )
-            data.append(fmt)
         return data
 
     async def create_lb(self, conn: Connection, item_id: int) -> None:
@@ -1409,17 +1408,15 @@ class ExtendedLeaderboard(Leaderboard):
     async def get_page_part(self, force_refresh: bool | None = None) -> discord.Embed:
         if force_refresh:
             await self.create_lb()
+            self.reset_index(self.data)
 
-        self.reset_index(self.data)
         if not self.data:
             self.lb.set_footer(text="Empty")
             return self.lb
 
         offset = ((self.index - 1) * self.length)
         self.lb.description = "\n".join(self.data[offset:offset+self.length])
-        self.lb.set_footer(text=f"Page {self.index} of {self.total_pages}")
-
-        return self.lb
+        return self.lb.set_footer(text=f"Page {self.index} of {self.total_pages}")
 
     @discord.ui.select(options=options, placeholder="Select a leaderboard filter", row=0)
     async def lb_stat_select(self, interaction: discord.Interaction, select: discord.ui.Select):
@@ -1427,10 +1424,12 @@ class ExtendedLeaderboard(Leaderboard):
         self.index = 1
         self.lb.title = f"Global Leaderboard: {self.chosen_option}"
 
+        await self.create_lb()
+        self.total_pages = self.compute_total_pages(len(self.data), self.length)
+
         for option in select.options:
             option.default = option.value == self.chosen_option
 
-        await self.create_lb()
         await self.edit_page(interaction)
 
 
@@ -1515,13 +1514,6 @@ class MultiplierView(RefreshPagination):
                 """, self.viewing.id, lowered
             )
 
-    async def navigate(self) -> None:
-        """Get through the paginator properly."""
-        emb = await self.get_page(self.index)
-        self.update_buttons()
-
-        await self.interaction.response.send_message(embed=emb, view=self)
-
     @discord.ui.select(options=multipliers, row=0, placeholder="Select a multiplier to view")
     async def callback(self, interaction: discord.Interaction, select: discord.ui.Select):
 
@@ -1531,6 +1523,7 @@ class MultiplierView(RefreshPagination):
             option.default = option.value == self.chosen_multiplier
 
         await self.format_pages()
+        self.total_pages = self.compute_total_pages(len)
 
         self.embed.colour, thumb_url = self.colour_mapping[self.chosen_multiplier]
         self.embed.set_thumbnail(url=thumb_url)
@@ -1802,6 +1795,15 @@ class ItemQuantityModal(discord.ui.Modal):
 
             await self.begin_purchase(interaction, true_quantity, conn, new_price)
 
+    async def on_error(self, interaction: discord.Interaction, error: Exception):
+        if isinstance(error, CustomTransformerError):
+            return await interaction.response.send_message(error.cause)
+
+        for item in self.children:
+            item.disabled = True
+        await interaction.response.send_message(embed=membed("Something went wrong. Try again later."))
+        await super().on_error(interaction, error)
+
 
 class ShopItem(discord.ui.Button):
     def __init__(self, item_name: str, cost: int, ie: str,**kwargs):
@@ -1915,6 +1917,8 @@ class DepositOrWithdraw(discord.ui.Modal):
                 ephemeral=True,
                 embed=membed(f"You need to provide a real amount to {self.title.lower()}.")
             )
+        elif isinstance(error, CustomTransformerError):
+            return await interaction.response.send_message(embed=membed(error.cause))
 
         await interaction.response.send_message(embed=membed("Something went wrong. Try again later."))
         await super().on_error(interaction, error)
@@ -2129,10 +2133,16 @@ class Economy(commands.Cog):
     @staticmethod
     async def fetch_balance(user_id: int, /, conn: Connection, mode: str = "wallet") -> int:
         """Shorthand to get balance data of a user."""
-        return await Economy.fetch_account_data(user_id, mode, 0, conn)
+        return await Economy.fetch_account_data(user_id, mode, conn, default=0)
 
     @staticmethod
-    async def fetch_account_data(user_id: int, field_name: str, default: Any, conn: Connection) -> Any:
+    async def fetch_account_data(
+        user_id: int, 
+        field_name: str, 
+        conn: Connection, 
+        *,
+        default: Any | None = None
+    ) -> Any:
         """Retrieves a specific field name only from the accounts table."""
         query = f"SELECT {field_name} FROM accounts WHERE userID = $0"
         data, = await conn.fetchone(query, user_id) or (default,)
@@ -2611,27 +2621,27 @@ class Economy(commands.Cog):
         multiplier: Literal["Robux", "XP", "Luck"] = "Robux"
     ) -> None:
 
-        user = user or interaction.user
-        paginator = MultiplierView(interaction, chosen_multiplier=multiplier, viewing=user)
+        paginator = MultiplierView(interaction, chosen_multiplier=multiplier, viewing=(user or interaction.user))
         await paginator.format_pages()
-
+        paginator.total_pages = paginator.compute_total_pages(len(paginator.multiplier_list), paginator.length)
+        
         async def get_page_part(force_refresh: bool = None) -> discord.Embed:
             if force_refresh:
                 await paginator.format_pages()
+                paginator.reset_index(paginator.multiplier_list)
 
-            paginator.reset_index(paginator.multiplier_list).repr_multi()
-            offset = ((paginator.index - 1) * paginator.length)
+            paginator.repr_multi()
 
             if not paginator.total_multi:
                 paginator.embed.set_footer(text="Empty")
                 return paginator.embed
 
+            offset = ((paginator.index - 1) * paginator.length)
             paginator.embed.description += "\n".join(
                 format_multiplier(multi)
                 for multi in paginator.multiplier_list[offset:offset + paginator.length]
             )
-            paginator.embed.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
-            return paginator.embed
+            return paginator.embed.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
 
         paginator.get_page = get_page_part
         await paginator.navigate()
@@ -3178,27 +3188,27 @@ class Economy(commands.Cog):
 
         shop_metadata = [
             (
-                f"{item[1]} {item[0]} \U00002500 [{CURRENCY} **{item[2]:,}**](https://youtu.be/dQw4w9WgXcQ)", 
-                ShopItem(item[0], item[2], item[1], row=i % 2)
+                f"{emote} {name} \U00002500 [{CURRENCY} **{cost:,}**](https://youtu.be/dQw4w9WgXcQ)", 
+                ShopItem(name, cost, emote, row=i % 2)
             )
-            for i, item in enumerate(shop_sorted)
+            for i, (name, emote, cost) in enumerate(shop_sorted)
         ]
 
         emb = membed()
         emb.title = "Shop"
         length = 6
 
+        paginator.total_pages = paginator.compute_total_pages(len(shop_metadata), length)
         async def get_page_part(page: int) -> tuple[discord.Embed, int]:
             async with self.bot.pool.acquire() as conn:
                 wallet = await self.fetch_balance(interaction.user.id, conn)
             emb.description = f"> You have {CURRENCY} **{wallet:,}**.\n\n"
 
-            offset = (page - 1) * length
-
             if len(paginator.children) > 2:
                 backward_btn, forward_btn = paginator.children[:2]
                 paginator.clear_items().add_item(backward_btn).add_item(forward_btn)
 
+            offset = (page - 1) * length
             emb.description += "\n".join(
                 item_metadata[0] 
                 for item_metadata in shop_metadata[offset:offset + length]
@@ -3208,9 +3218,7 @@ class Economy(commands.Cog):
                 item_btn.disabled = wallet < item_btn.cost
                 paginator.add_item(item_btn)
 
-            n = paginator.compute_total_pages(len(shop_metadata), length)
-            emb.set_footer(text=f"Page {page} of {n}")
-            return emb, n
+            return emb.set_footer(text=f"Page {page} of {paginator.total_pages}")
 
         paginator.get_page = get_page_part
         await paginator.navigate()
@@ -3710,6 +3718,11 @@ class Economy(commands.Cog):
         """View your inventory or another player's inventory."""
         member = member or interaction.user
 
+        em = membed().set_author(
+            name=f"{member.name}'s inventory", 
+            icon_url=member.display_avatar.url
+        )
+
         async with self.bot.pool.acquire() as conn:
             query = (
                 """
@@ -3725,11 +3738,7 @@ class Economy(commands.Cog):
 
         length = 8
         paginator = RefreshPagination(interaction)
-        paginator.total_pages = paginator.compute_total_pages(len(owned_items), length) or 1
-        em = membed().set_author(
-            name=f"{member.name}'s inventory", 
-            icon_url=member.display_avatar.url
-        )
+        paginator.total_pages = paginator.compute_total_pages(len(owned_items), length)
 
         async def get_page_part(force_refresh: bool | None = None) -> discord.Embed:
             """Helper function to determine what page of the paginator we're on."""
@@ -3978,24 +3987,23 @@ class Economy(commands.Cog):
         ]
     ) -> None:
         """View the leaderboard and filter the results based on different stats inputted."""
-
         paginator = ExtendedLeaderboard(interaction, chosen_option=stat)
-        await paginator.create_lb()
 
+        await paginator.create_lb()
+        paginator.total_pages = paginator.compute_total_pages(len(paginator.data), paginator.length)
         await paginator.navigate()
 
     @leaderboard.command(name="item", description="Rank users based on an item count")
     @app_commands.describe(item=ITEM_DESCRPTION)
-    async def get_item_lb(
-        self, 
-        interaction: discord.Interaction, 
-        item: ITEM_CONVERTER
-    ):
+    async def get_item_lb(self, interaction: discord.Interaction, item: ITEM_CONVERTER):
+        item_id, item_name, _ = item
+        paginator = Leaderboard(interaction, chosen_option=item_name)
+
         async with self.bot.pool.acquire() as conn:
-            item_id, item_name, _ = item
-            paginator = Leaderboard(interaction, chosen_option=item_name)
             thumb_url, = await conn.fetchone("SELECT image FROM shop WHERE itemID = $0", item_id)
             await paginator.create_lb(conn, item_id)
+
+        paginator.total_pages = paginator.compute_total_pages(len(paginator.data), paginator.length)
 
         lb = membed().set_thumbnail(url=thumb_url)
         lb.timestamp = discord.utils.utcnow()
@@ -4005,16 +4013,15 @@ class Economy(commands.Cog):
             if force_refresh:
                 async with self.bot.pool.acquire() as conn:
                     await paginator.create_lb(conn, item_id)
+                paginator.reset_index(paginator.data)
 
-            paginator.reset_index(paginator.data)
             if not paginator.data:
                 lb.set_footer(text="Empty")
                 return lb
 
             offset = ((paginator.index- 1) * paginator.length)
             lb.description = "\n".join(paginator.data[offset:offset+paginator.length])
-            lb.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
-            return lb
+            return lb.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
 
         paginator.get_page = get_page_part
         await paginator.navigate()

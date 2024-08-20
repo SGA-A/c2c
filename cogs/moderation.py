@@ -242,18 +242,22 @@ class RoleManagement(app_commands.Group):
         guild_roles = sorted(interaction.guild.roles[1:], reverse=True) + [interaction.guild.default_role]
         emb, length = membed(), 12
 
+        paginator = PaginationItem(interaction)
+        paginator.total_pages = paginator.compute_total_pages(len(guild_roles), length)
+
         async def get_page_part(page: int):
             offset = (page - 1) * length
+
             emb.description = "\n".join(
                 f"{role.mention} \U00002014 {role.id}" 
                 for role in guild_roles[offset:offset+length]
             )
 
-            n = PaginationItem.compute_total_pages(len(guild_roles), length)
-            emb.set_footer(text=f"Page {page} of {n}")
-            return emb, n
+            emb.set_footer(text=f"Page {page} of {paginator.total_pages}")
+            return emb
 
-        await PaginationItem(interaction, get_page=get_page_part).navigate()
+        paginator.get_page = get_page_part
+        await paginator.navigate()
     
     @app_commands.command(name="info", description="Check info for a role")
     @app_commands.describe(role="The role to check info for.")

@@ -184,7 +184,7 @@ class Miscellaneous(commands.Cog):
         for context_menu in self.cog_context_menus:
             self.bot.tree.add_command(context_menu)
 
-    async def cog_unload(self) -> None:
+    def cog_unload(self) -> None:
         self.bot.help_command = None
         for context_menu in self.cog_context_menus:
             self.bot.tree.remove_command(context_menu)
@@ -316,11 +316,12 @@ class Miscellaneous(commands.Cog):
         paginator = CommandUsage(interaction, viewing=user)
         await paginator.fetch_data()
 
+        paginator.total_pages = paginator.compute_total_pages(len(paginator.usage_data), paginator.length)
         async def get_page_part(force_refresh: bool = None) -> discord.Embed:
             if force_refresh:
                 await paginator.fetch_data()
+                paginator.reset_index(paginator.usage_data)
 
-            paginator.reset_index(paginator.usage_data)
             if not paginator.usage_data:
                 paginator.usage_embed.set_footer(text="Empty")
                 return paginator.usage_embed
@@ -478,10 +479,9 @@ class Miscellaneous(commands.Cog):
             embed.title = "No posts found."
             return await interaction.response.send_message(ephemeral=True, embed=embed)
 
-        n = Pagination.compute_total_pages(len(posts_xml), length)
         async def get_page_part(page: int):
             offset = (page - 1) * length
-            embeds = [
+            return [
                 discord.Embed(
                     title=author,
                     colour=0x2B2D31,
@@ -490,19 +490,21 @@ class Miscellaneous(commands.Cog):
                 ).set_image(url=jpeg_url)
                 for (jpeg_url, author, created_at) in extract_post_xml(posts_xml, offset, length)
             ]
-            return embeds, n
 
-        await Pagination(interaction, get_page=get_page_part).navigate(ephemeral=private)
+        await Pagination(
+            interaction, 
+            get_page_part, 
+            Pagination.compute_total_pages(len(posts_xml), length)
+        ).navigate(ephemeral=private)
 
+    @app_commands.guild_install()
+    @app_commands.allowed_contexts(guilds=True)
     @app_commands.command(description='Fetch all the emojis c2c can access')
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def emojis(self, interaction: discord.Interaction) -> None:
         length = 8
         emb = membed()
         emb.title = "Emojis"
 
-        n = Pagination.compute_total_pages(len(self.bot.emojis), length)
         async def get_page_part(page: int):
             offset = (page - 1) * length
 
@@ -510,9 +512,13 @@ class Miscellaneous(commands.Cog):
                 f"{emoji} (**{emoji.name}**) \U00002014 `{emoji}`" 
                 for emoji in self.bot.emojis[offset:offset+length]
             )
-            return [emb], n
+            return [emb]
 
-        await Pagination(interaction, get_page_part).navigate()
+        await Pagination(
+            interaction, 
+            get_page_part,
+            Pagination.compute_total_pages(len(self.bot.emojis), length)
+        ).navigate()
 
     @app_commands.command(description='Queries a random fact')
     @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
