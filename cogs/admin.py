@@ -213,7 +213,7 @@ class Admin(commands.Cog):
             \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
             \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
             \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n> Blanked out.
+            \n-# Blanked out the channel.
             """
         )
 

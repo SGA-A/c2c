@@ -3,7 +3,7 @@ from typing import Callable
 import discord
 from discord.ext import commands
 
-from .helpers import membed, economy_check, edit_response
+from .helpers import membed, economy_check, edit_response, respond
 from .transformers import RawIntegerTransformer
 
 
@@ -48,6 +48,18 @@ class BasePaginator(discord.ui.View):
             await self.interaction.edit_original_response(view=self)
         except discord.NotFound:
             pass
+
+    async def on_error(self, interaction: discord.Interaction[discord.Client], error: Exception, item) -> None:
+        if hasattr(error, "cause"):  # CustomTransformerError
+            return await interaction.response.send_message(error.cause)
+        
+        try:
+            await self.interaction.delete_original_response()
+        except discord.HTTPException:
+            pass
+        self.stop()
+        await respond(interaction, embed=membed("Something went wrong."))
+        await super().on_error(interaction, error, item)
 
     @staticmethod
     def compute_total_pages(total_results: int, results_per_page: int) -> int:

@@ -497,8 +497,6 @@ class Miscellaneous(commands.Cog):
             Pagination.compute_total_pages(len(posts_xml), length)
         ).navigate(ephemeral=private)
 
-    @app_commands.guild_install()
-    @app_commands.allowed_contexts(guilds=True)
     @app_commands.command(description='Fetch all the emojis c2c can access')
     async def emojis(self, interaction: discord.Interaction) -> None:
         length = 8

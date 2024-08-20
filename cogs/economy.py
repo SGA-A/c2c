@@ -533,9 +533,9 @@ class ConfirmResetData(BaseInteractionView):
             await self.interaction.delete_original_response()
         except discord.HTTPException:
             pass
-        finally:
-            async with self.interaction.client.pool.acquire() as conn, conn.transaction():
-                await end_transaction(conn, user_id=self.interaction.user.id)
+
+        async with self.interaction.client.pool.acquire() as conn, conn.transaction():
+            await end_transaction(conn, user_id=self.interaction.user.id)
 
     @discord.ui.button(label='RESET MY DATA', style=discord.ButtonStyle.danger, emoji=discord.PartialEmoji.from_str("<:rooFire:1263923362154156103>"))
     async def confirm_button_reset(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -1797,11 +1797,13 @@ class ItemQuantityModal(discord.ui.Modal):
 
     async def on_error(self, interaction: discord.Interaction, error: Exception):
         if isinstance(error, CustomTransformerError):
-            return await interaction.response.send_message(error.cause)
+            return await interaction.response.send_message(embed=membed(error.cause))
 
-        for item in self.children:
-            item.disabled = True
-        await interaction.response.send_message(embed=membed("Something went wrong. Try again later."))
+        self.stop()
+        await interaction.response.edit_message(
+            view=None, 
+            embed=membed("Something went wrong. Try again later.")
+        )
         await super().on_error(interaction, error)
 
 
@@ -1920,7 +1922,14 @@ class DepositOrWithdraw(discord.ui.Modal):
         elif isinstance(error, CustomTransformerError):
             return await interaction.response.send_message(embed=membed(error.cause))
 
-        await interaction.response.send_message(embed=membed("Something went wrong. Try again later."))
+        self.view.stop()
+        
+        try:
+            await self.view.interaction.delete_original_response()
+        except discord.HTTPException:
+            pass
+
+        await respond(interaction, embed=membed("Something went wrong. Try again later."))
         await super().on_error(interaction, error)
 
 
