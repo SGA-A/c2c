@@ -141,7 +141,7 @@ class PaginationSimple(discord.ui.View):
         self.invoker_id = invoker_id
         self.get_page = get_page
         self.index = 1
-        self.total_pages: int | None = None
+        self.total_pages = total_pages
         super().__init__(timeout=45.0)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:

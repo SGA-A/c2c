@@ -671,6 +671,7 @@ class Tags(commands.Cog):
             ctx.author.id,
             PaginationSimple.compute_total_pages(len(rows), length)
         )
+    
         async def get_page_part(page: int):
             """Helper function to determine what page of the paginator we're on."""
 
@@ -680,10 +681,9 @@ class Tags(commands.Cog):
                 for index, tag in enumerate(rows[offset:offset+length], start=offset+1)
             )
 
-            em.set_footer(text=f"Page {page} of {paginator.total_pages}")
-            return em
-        paginator.get_page = get_page_part
+            return em.set_footer(text=f"Page {page} of {paginator.total_pages}")
 
+        paginator.get_page = get_page_part
         await paginator.navigate()
 
     @tag.command(description="Search for a tag")
