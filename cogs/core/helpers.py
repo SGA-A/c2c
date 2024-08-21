@@ -9,7 +9,7 @@ from discord.ext.commands import Context
 
 
 async def declare_transaction(conn: Connection, /, *, user_id: int) -> bool:
-    await conn.execute("INSERT INTO transactions (userID) VALUES ($0)", user_id)
+    await conn.execute("INSERT INTO transactions (userID) VALUES ($0) ON CONFLICT DO NOTHING", user_id)
 
 async def end_transaction(conn: Connection, /, *, user_id: int) -> bool:
     await conn.execute("DELETE FROM transactions WHERE userID = $0", user_id)
@@ -362,8 +362,9 @@ async def handle_confirm_outcome(
 
     ## Notes
 
-    Transactions will now always be created, meaning you should only use this function in the economy system
-    on a user who is registered, since foreign key constraints require you to pass in a valid row of the accounts table.
+    Transactions will now be created if a passed in confirmation is enabled or no confirmation is passed in, 
+    meaning you should only use this function in the economy system on a user who is registered, since 
+    foreign key constraints require you to pass in a valid row of the accounts table.
 
     All connections acquired, whether it be passed into the function or created in the function will also be released 
     in this exact function. Do not handle it yourself outside of the function.
@@ -374,9 +375,8 @@ async def handle_confirm_outcome(
 
     conn = conn or await interaction.client.pool.acquire()  # always hold a connection
     try:
-        enabled = is_setting_enabled
-        can_confirm = setting and not(await enabled(conn, user_id=view_owner.id, setting=setting))
-        if can_confirm:
+        disabled_confirms = setting and not(await is_setting_enabled(conn, view_owner.id, setting))
+        if disabled_confirms:
             return
 
         await declare_transaction(conn, user_id=view_owner.id)

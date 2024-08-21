@@ -1692,12 +1692,7 @@ class ItemQuantityModal(discord.ui.Modal):
             success.description += "\n\n**Additional info:**\n- <:shopCoupon:1263923497323855907> 5% Coupon Discount was applied"
         await respond(interaction, embed=success)
 
-    async def calculate_discount_price(
-        self, 
-        /,
-        interaction: discord.Interaction, 
-        current_price: int
-    ) -> int:
+    async def calculate_discount_price(self, /, interaction: discord.Interaction) -> int:
         """Check if the user is eligible for a discount on the item."""
 
         async with interaction.client.pool.acquire() as conn:
@@ -1713,68 +1708,78 @@ class ItemQuantityModal(discord.ui.Modal):
                 """, 8, interaction.user.id
             )
 
+        # Check the user has the item
         if not qty:
-            return current_price
+            return self.item_cost
 
-        discounted_price = floor((95/100) * current_price)
+        # Calculate discount price
+        discounted_price = floor((95/100) * self.item_cost)
 
+        # Check they have the setting enabled
         if always_use_coupon:
             self.activated_coupon = True
             return discounted_price
-
+        
         async with interaction.client.pool.acquire() as conn, conn.transaction():
             await declare_transaction(conn, user_id=interaction.user.id)
 
-        value = await process_confirmation(
+        # Send a confirmation asking whether or not they wish to apply the coupon.
+        self.activated_coupon = await process_confirmation(
             interaction, 
             prompt=(
                 "Would you like to use your <:shopCoupon:1263923497323855907> "
                 "**Shop Coupon** for an additional **5**% off?\n"
                 f"(You have **{qty:,}** coupons in total)\n\n"
-                f"This will bring your total for this purchase to {CURRENCY} "
+                f"This will bring the __actual price per unit__ down to {CURRENCY} "
                 f"**{discounted_price:,}** if you decide to use the coupon."
             )
         )
 
-        if value is not None:
-            if value:
-                self.activated_coupon = True
-                return discounted_price
-            return current_price  # if user timed out / willingly pressed cancel
+        async with interaction.client.pool.acquire() as conn, conn.transaction():
+            await end_transaction(conn, user_id=interaction.user.id)
+
+        if self.activated_coupon is None:
+            # Transaction ends, no further cleanup needed
+            raise FailingConditionalError("Your purchase was cancelled.")
+        
+        if self.activated_coupon:
+            return discounted_price
+        return self.item_cost
 
     # --------------------------------------------------------------------------------------------
 
     async def on_submit(self, interaction: discord.Interaction):
-        true_quantity = RawIntegerTransformer(reject_shorthands=True).transform(interaction, self.quantity.value)
-
-        current_price = self.item_cost * true_quantity
-        current_price = await self.calculate_discount_price(interaction, current_price)
+        true_quantity = RawIntegerTransformer().transform(interaction, self.quantity.value)
+        
+        # base cost per unit (considering discounts)
+        self.item_cost = await self.calculate_discount_price(interaction)
 
         async with interaction.client.pool.acquire() as conn:
-            async with conn.transaction():
-                await end_transaction(conn, user_id=interaction.user.id)
-            
-            if current_price is None:
-                return await respond(
-                    interaction,
-                    embed=membed("You didn't respond in time so your purchase was cancelled.")
-                )
-            
             current_balance = await Economy.fetch_balance(interaction.user.id, conn)
-            if current_price > current_balance:
+        
+            if isinstance(true_quantity, str):
+                true_quantity = current_balance // self.item_cost
+                if not true_quantity:
+                    return await respond(
+                        interaction, 
+                        embed=membed(f"You can't buy a single {self.ie} {self.item_name}.")
+                    )
+            elif (self.item_cost * true_quantity) > current_balance:
                 error_em = membed(
                     f"You don't have enough robux to"
                     f" buy **{true_quantity:,}x {self.ie} {self.item_name}**."
                 )
                 return await respond(interaction, embed=error_em)
-
+            
+            total_price = self.item_cost * true_quantity
             can_proceed = await handle_confirm_outcome(
                 interaction, 
                 conn=conn,
                 setting="buying_confirmations",
                 prompt=(
                     f"Are you sure you want to buy **{true_quantity:,}x {self.ie} "
-                    f"{self.item_name}** for **{CURRENCY} {current_price:,}**?"
+                    f"{self.item_name}** for **{CURRENCY} {total_price:,}**?\n"
+                    f"-# It is costing you **{CURRENCY} {self.item_cost:,}** per unit."
                 )
             )
 
@@ -1784,11 +1789,13 @@ class ItemQuantityModal(discord.ui.Modal):
                 if can_proceed is False:
                     return
 
-            await self.begin_purchase(interaction, true_quantity, conn, current_price)
+            await self.begin_purchase(interaction, true_quantity, conn, total_price)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception):
-        if isinstance(error, CustomTransformerError):
-            return await interaction.response.send_message(
+        # Catch both custom errors
+        if hasattr(error, "cause"):
+            return await respond(
+                interaction,
                 ephemeral=True,
                 embed=membed(error.cause)
             )
