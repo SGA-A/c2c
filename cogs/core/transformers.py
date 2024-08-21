@@ -11,7 +11,10 @@ class RawIntegerTransformer(app_commands.Transformer):
     You can customize what happens when a shorthand is passed in in places that don't accept them.
     """
     INVALID_ARGUMENT = "You need to provide a real positive number."
-    INVALID_SHORTHAND = "Invalid shorthand for number passed in."
+    INVALID_SHORTHAND = (
+        "Invalid shorthand for number passed in.\n"
+        "-# The shorthand may be invalid in this context only, not elsewhere."
+    )
 
     def __init__(self, reject_shorthands: bool = False) -> None:
         super().__init__()

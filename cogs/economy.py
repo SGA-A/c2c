@@ -1694,59 +1694,53 @@ class ItemQuantityModal(discord.ui.Modal):
 
     async def calculate_discount_price(
         self, 
-        interaction: discord.Interaction, 
         /,
-        holder: ConnectionHolder,
+        interaction: discord.Interaction, 
         current_price: int
     ) -> int:
         """Check if the user is eligible for a discount on the item."""
 
-        data = await holder.conn.fetchone(
-            """
-            SELECT inventory.qty, settings.value
-            FROM shop
-            LEFT JOIN inventory 
-                ON shop.itemID = inventory.itemID
-            LEFT JOIN settings 
-                ON inventory.userID = settings.userID AND settings.setting = 'always_use_coupon'
-            WHERE shop.itemID = $0 AND inventory.userID = $1
-            """, 12, interaction.user.id
-        )
+        async with interaction.client.pool.acquire() as conn:
+            qty, always_use_coupon = await conn.fetchone(
+                """
+                SELECT inventory.qty, settings.value
+                FROM shop
+                LEFT JOIN inventory 
+                    ON shop.itemID = inventory.itemID
+                LEFT JOIN settings 
+                    ON inventory.userID = settings.userID AND settings.setting = 'always_use_coupon'
+                WHERE shop.itemID = $0 AND inventory.userID = $1
+                """, 8, interaction.user.id
+            )
 
-        if not data:
+        if not qty:
             return current_price
 
         discounted_price = floor((95/100) * current_price)
 
-        if data[-1]:
+        if always_use_coupon:
             self.activated_coupon = True
             return discounted_price
 
-        await declare_transaction(holder.conn, user_id=interaction.user.id)
-        await interaction.client.pool.release(holder.conn)
+        async with interaction.client.pool.acquire() as conn, conn.transaction():
+            await declare_transaction(conn, user_id=interaction.user.id)
 
         value = await process_confirmation(
             interaction, 
             prompt=(
                 "Would you like to use your <:shopCoupon:1263923497323855907> "
                 "**Shop Coupon** for an additional **5**% off?\n"
-                f"(You have **{data[0]:,}** coupons in total)\n\n"
+                f"(You have **{qty:,}** coupons in total)\n\n"
                 f"This will bring your total for this purchase to {CURRENCY} "
                 f"**{discounted_price:,}** if you decide to use the coupon."
             )
         )
 
-        holder.conn = await interaction.client.pool.acquire()
-        await end_transaction(holder.conn, user_id=interaction.user.id)
-        await holder.conn.commit()
-
-        if value is None:
-            return value
-
-        if value:
-            self.activated_coupon = True
-            return discounted_price
-        return current_price  # if the view timed out or willingly pressed cancel
+        if value is not None:
+            if value:
+                self.activated_coupon = True
+                return discounted_price
+            return current_price  # if user timed out / willingly pressed cancel
 
     # --------------------------------------------------------------------------------------------
 
@@ -1754,38 +1748,35 @@ class ItemQuantityModal(discord.ui.Modal):
         true_quantity = RawIntegerTransformer(reject_shorthands=True).transform(interaction, self.quantity.value)
 
         current_price = self.item_cost * true_quantity
-        conn_holder = ConnectionHolder(await interaction.client.pool.acquire())
+        current_price = await self.calculate_discount_price(interaction, current_price)
 
-        new_price = await self.calculate_discount_price(interaction, conn_holder, current_price)
+        async with interaction.client.pool.acquire() as conn:
+            async with conn.transaction():
+                await end_transaction(conn, user_id=interaction.user.id)
+            
+            if current_price is None:
+                return await respond(
+                    interaction,
+                    embed=membed("You didn't respond in time so your purchase was cancelled.")
+                )
+            
+            current_balance = await Economy.fetch_balance(interaction.user.id, conn)
+            if current_price > current_balance:
+                error_em = membed(
+                    f"You don't have enough robux to"
+                    f" buy **{true_quantity:,}x {self.ie} {self.item_name}**."
+                )
+                return await respond(interaction, embed=error_em)
 
-        if new_price is None:
-            await interaction.client.pool.release(conn_holder.conn)
-            return await respond(
-                interaction,
-                embed=membed(
-                    "You didn't respond in time so your purchase was cancelled."
+            can_proceed = await handle_confirm_outcome(
+                interaction, 
+                conn=conn,
+                setting="buying_confirmations",
+                prompt=(
+                    f"Are you sure you want to buy **{true_quantity:,}x {self.ie} "
+                    f"{self.item_name}** for **{CURRENCY} {current_price:,}**?"
                 )
             )
-
-        current_balance = await Economy.fetch_balance(interaction.user.id, conn_holder.conn)
-        if new_price > current_balance:
-            await interaction.client.pool.release(conn_holder.conn)
-            return await respond(
-                interaction,
-                embed=membed(f"You don't have enough robux to buy **{true_quantity:,}x {self.ie} {self.item_name}**.")
-            )
-
-        await interaction.client.pool.release(conn_holder.conn)
-        del conn_holder
-
-        can_proceed = await handle_confirm_outcome(
-            interaction, 
-            setting="buying_confirmations",
-            prompt=(
-                f"Are you sure you want to buy **{true_quantity:,}x {self.ie} "
-                f"{self.item_name}** for **{CURRENCY} {new_price:,}**?"
-            )
-        )
 
         async with interaction.client.pool.acquire() as conn, conn.transaction():
             if can_proceed is not None:
@@ -1793,11 +1784,14 @@ class ItemQuantityModal(discord.ui.Modal):
                 if can_proceed is False:
                     return
 
-            await self.begin_purchase(interaction, true_quantity, conn, new_price)
+            await self.begin_purchase(interaction, true_quantity, conn, current_price)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception):
         if isinstance(error, CustomTransformerError):
-            return await interaction.response.send_message(embed=membed(error.cause))
+            return await interaction.response.send_message(
+                ephemeral=True,
+                embed=membed(error.cause)
+            )
 
         self.stop()
         await interaction.response.edit_message(
@@ -1841,14 +1835,7 @@ class DepositOrWithdraw(discord.ui.Modal):
         )
     }
 
-    def __init__(
-        self, 
-        *, 
-        title: str, 
-        default_val: int,
-        view: "BalanceView"
-    ) -> None:
-
+    def __init__(self, *, title: str, default_val: int, view: "BalanceView") -> None:
         self.their_default = default_val
         self.view = view
         self.amount.default = f"{self.their_default:,}"
@@ -1913,22 +1900,18 @@ class DepositOrWithdraw(discord.ui.Modal):
         await interaction.response.edit_message(embed=embed, view=self.view)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception) -> None:
-        if isinstance(error, (ValueError, TypeError)):
+        if isinstance(error, CustomTransformerError):
             return await interaction.response.send_message(
-                delete_after=5.0, 
-                ephemeral=True,
-                embed=membed(f"You need to provide a real amount to {self.title.lower()}.")
+                ephemeral=True, 
+                embed=membed(error.cause)
             )
-        elif isinstance(error, CustomTransformerError):
-            return await interaction.response.send_message(embed=membed(error.cause))
 
-        self.view.stop()
-        
         try:
             await self.view.interaction.delete_original_response()
         except discord.HTTPException:
             pass
 
+        self.view.stop()
         await respond(interaction, embed=membed("Something went wrong. Try again later."))
         await super().on_error(interaction, error)
 
