@@ -63,7 +63,7 @@ class RoleManagement(app_commands.Group):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.guild.me.guild_permissions.manage_roles:
             return True
-        
+
         embed = membed("I'm missing permissions required for this command.")
         embed.add_field(name="Missing Permissions (1)", value="Manage Roles")
         await interaction.response.send_message(embed=embed)
@@ -77,7 +77,7 @@ class RoleManagement(app_commands.Group):
 
         count = 0
         bulk = f"Bulk role-add requested by {interaction.user} (ID: {interaction.user.id})"
-        
+
         try:
             for count, member in enumerate(users_without_it):
                 await member.add_roles(discord.Object(id=role.id), reason=bulk, atomic=True)
@@ -96,7 +96,7 @@ class RoleManagement(app_commands.Group):
     ) -> None:
         count = 0
         bulk = f"Bulk role-remove requested by {interaction.user} (ID: {interaction.user.id})"
-        
+
         try:
             for count, member in enumerate(targets, start=1):
                 await member.remove_roles(discord.Object(id=new_role.id), reason=bulk, atomic=True)
@@ -135,7 +135,7 @@ class RoleManagement(app_commands.Group):
         role="The role to remove from this user."
     )
     async def remove_role(self, interaction: discord.Interaction, member: discord.Member, role: discord.Role):
-        
+
         if role not in member.roles:
             return await interaction.response.send_message(
                 embed=membed(f"{member.display_name} does not have {role.name!r}.")
@@ -205,10 +205,9 @@ class RoleManagement(app_commands.Group):
     @app_commands.describe(role="The role to add to all members.")
     async def add_role_to_all(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
-        
-        guild = interaction.guild
-        do_boilerplate_role_checks(role, guild)
-        yielded_users = (member for member in guild.members if role not in member.roles)
+
+        do_boilerplate_role_checks(role, interaction.guild)
+        yielded_users = (member for member in interaction.guild.members if role not in member.roles)
 
         value = await process_confirmation(
             interaction, 
@@ -218,15 +217,14 @@ class RoleManagement(app_commands.Group):
         if not value:
             return
         await self.bulk_add_roles(interaction, yielded_users, role)
-    
+
     @app_commands.command(name="rall", description="Removes a role from all members")
     @app_commands.describe(role="The role to remove from all members.")
     async def remove_roles_all(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
 
-        guild = interaction.guild
-        do_boilerplate_role_checks(role, guild)
-        yielded_users = (member for member in guild.members if role in member.roles)
+        do_boilerplate_role_checks(role, interaction.guild)
+        yielded_users = (member for member in interaction.guild.members if role in member.roles)
 
         value = await process_confirmation(
             interaction, 
@@ -258,7 +256,7 @@ class RoleManagement(app_commands.Group):
 
         paginator.get_page = get_page_part
         await paginator.navigate()
-    
+
     @app_commands.command(name="info", description="Check info for a role")
     @app_commands.describe(role="The role to check info for.")
     async def role_info(self, interaction: discord.Interaction, role: discord.Role):
@@ -283,11 +281,10 @@ class RoleManagement(app_commands.Group):
     async def remove_bot_roles(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
 
-        guild = interaction.guild
-        do_boilerplate_role_checks(role, guild)
+        do_boilerplate_role_checks(role, interaction.guild)
         yielded_users = (
             member 
-            for member in guild.members 
+            for member in interaction.guild.members 
             if (member.bot) and (role in member.roles)
         )
 
@@ -305,11 +302,10 @@ class RoleManagement(app_commands.Group):
     async def add_human_roles(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
 
-        guild = interaction.guild
-        do_boilerplate_role_checks(role, guild)
+        do_boilerplate_role_checks(role, interaction.guild)
         yielded_users = (
             member 
-            for member in guild.members 
+            for member in interaction.guild.members 
             if (not member.bot) and (role not in member.roles)
         )
 
@@ -327,11 +323,10 @@ class RoleManagement(app_commands.Group):
     async def removehumans(self, interaction: discord.Interaction, role: discord.Role):
         await interaction.response.defer(thinking=True)
 
-        guild = interaction.guild
-        do_boilerplate_role_checks(role, guild)
+        do_boilerplate_role_checks(role, interaction.guild)
         yielded_users = (
             member 
-            for member in guild.members 
+            for member in interaction.guild.members 
             if (not member.bot) and (role in member.roles)
         )
 
@@ -354,7 +349,7 @@ class RoleManagement(app_commands.Group):
 
         do_boilerplate_role_checks(new_role, interaction.guild)
         yielded_users = (member for member in new_role.members if base_role in member.roles)
-        
+
         value = await process_confirmation(
             interaction, 
             prompt=f"This will add {new_role.name!r} to all members with {base_role.name!r}."
@@ -393,13 +388,13 @@ class Moderation(commands.Cog):
             name='Purge Up To Here', 
             callback=self.purge_from_here
         )
-        
+
         roles = RoleManagement(
             name="role", 
             description="Role management commands",
             default_permissions=discord.Permissions(manage_roles=True)
         )
-        
+
         self.bot.tree.add_command(self.purge_from_here_cmd)
         self.bot.tree.add_command(roles)
 
@@ -423,7 +418,7 @@ class Moderation(commands.Cog):
         if next_task is None:
             self.check_for_role.cancel()
             return
-        
+
         mod_to, role_id, end_time, in_guild = next_task
         timestamp = datetime.fromtimestamp(end_time, tz=timezone.utc)
         await discord.utils.sleep_until(timestamp)
@@ -480,8 +475,7 @@ class Moderation(commands.Cog):
         if role in user.roles:
             return await interaction.response.send_message(embed=membed("That member already has this role."))
 
-        guild = interaction.guild
-        do_boilerplate_role_checks(role, guild)
+        do_boilerplate_role_checks(role, interaction.guild)
 
         minutes, seconds = divmod(duration, 60)
         hours, minutes = divmod(minutes, 60)
@@ -512,7 +506,7 @@ class Moderation(commands.Cog):
                 """
                 INSERT INTO tasks (mod_to, role_id, end_time, in_guild) 
                 VALUES ($0, $1, $2, $3)
-                """, user.id, role.id, timestamp, guild.id
+                """, user.id, role.id, timestamp, interaction.guild.id
             )
 
         if self.check_for_role.is_running():

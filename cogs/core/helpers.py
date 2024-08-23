@@ -38,7 +38,7 @@ class BaseInteractionView(discord.ui.View):
     A view that ensures that only the interaction creator can make use of this view.
 
     It also destroys the view if an exception is raised.
-    
+
     This view has no items, you'll need to add them in manually.
     """
     def __init__(
@@ -177,7 +177,6 @@ async def format_timeout_view(embed: discord.Embed, view: discord.ui.View, edit_
 
 # ! Existing function that may be used sometime in the future
 def parse_duration(input_duration: str) -> datetime:
-    
     # Define regular expression pattern to extract days and hours
     pattern = compile(r'(?:(\d+)d)? ?(?:(\d+)h)?')
 
@@ -195,7 +194,7 @@ def parse_duration(input_duration: str) -> datetime:
     # Check if the duration exceeds 14 days
     if duration.days > 14:
         raise ValueError("Duration cannot exceed 14 days.")
-    
+
     return discord.utils.utcnow() + duration
 
 
@@ -252,7 +251,7 @@ async def respond(interaction: discord.Interaction, /, **kwargs) -> None | disco
 async def edit_response(interaction: discord.Interaction, /, **kwargs) -> None | discord.InteractionMessage:
     """
     Edit an interaction's original response message, which may be a response. 
-    
+
     This is a helper function which considers whether or 
     not this interaction was already responded to before.
     """
@@ -281,7 +280,7 @@ async def process_confirmation(
 ) -> bool:
     """
     Process a confirmation. This only updates the view.
-    
+
     The actual action is done in the command itself.
 
     This returns a boolean indicating whether the user confirmed the action or not, or None if the user timed out.

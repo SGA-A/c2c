@@ -1,11 +1,6 @@
-from logging import error as log_error
-from traceback import format_exception
-
-from discord import Embed
 from discord.ext import commands
 
-from .core.helpers import MessageDevelopers
-
+from .core.helpers import membed, MessageDevelopers
 from .core.bot import C2C
 
 
@@ -23,7 +18,7 @@ class ContextExceptions(commands.Cog):
         if isinstance(err, commands.CommandNotFound):
             return
 
-        embed = Embed(colour=0x2B2D31)
+        embed = membed()
         if isinstance(err, commands.UserInputError):
 
             if isinstance(err, commands.MissingRequiredArgument):
@@ -50,9 +45,7 @@ class ContextExceptions(commands.Cog):
             "please let us know about it. We're always here to help!"
         )
         await ctx.send(embed=embed, view=self.view)
-
-        formatted_traceback = ''.join(format_exception(type(err), err, err.__traceback__))
-        log_error(formatted_traceback)
+        self.bot.log_exception(err)
 
 
 async def setup(bot: C2C):

@@ -156,12 +156,6 @@ class Miscellaneous(commands.Cog):
 
         self.cog_context_menus = {
             app_commands.ContextMenu(
-                name='Extract Image Source',
-                callback=self.extract_source,
-                allowed_contexts=contexts,
-                allowed_installs=installs
-            ),
-            app_commands.ContextMenu(
                 name='Extract Embed Colour',
                 callback=self.embed_colour,
                 allowed_contexts=contexts,
@@ -372,35 +366,6 @@ class Miscellaneous(commands.Cog):
         msg_content += f" `{self.bot.latency * 1000:.0f}ms`"
         await msg.edit(content=msg_content)
 
-    async def extract_source(
-        self, 
-        interaction: discord.Interaction, 
-        message: discord.Message
-    ) -> None:
-
-        media = set()
-
-        if message.embeds:
-            for embed in message.embeds:
-                for asset in (embed.image, embed.thumbnail):
-                    if not asset:
-                        continue
-                    media.add(f"[`{asset.height}x{asset.width}`]({asset.url})")
-        
-        for attr in message.attachments:
-            media.add(f"[`{attr.height}x{attr.width}`]({attr.url})")
-
-        embed = membed()
-        if not media:
-            embed.description = "Could not find any attachments."
-            return await interaction.response.send_message(embed=embed, ephemeral=True)
-        
-        embed.title = f"Found {len(media)} images from {message.author.name}"
-        embed.description = "\n".join(media)
-        embed.set_thumbnail(url=message.author.display_avatar.url)
-        
-        await interaction.response.send_message(ephemeral=True, embed=embed)
-
     async def embed_colour(self, interaction: discord.Interaction, message: discord.Message) -> None:
 
         all_embeds = [
@@ -426,7 +391,7 @@ class Miscellaneous(commands.Cog):
         allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
     )
 
-    @anime.command(name='kona', description='Retrieve NSFW posts from Konachan')
+    @anime.command(name='kona', description='Retrieve posts from Konachan')
     @app_commands.rename(length="max_images")
     @app_commands.describe(
         tag1='A tag to base your search on.', 

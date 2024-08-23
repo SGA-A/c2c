@@ -3,8 +3,6 @@ from sqlite3 import Row, IntegrityError
 from math import floor, ceil
 from re import search
 from textwrap import dedent
-from string import ascii_letters, digits
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from random import (
@@ -137,17 +135,6 @@ def register_item(item):
     return decorator
 
 
-def swap_elements(x, index1, index2) -> None:
-    """Swap two elements in place given their indices, return None.
-    
-    lst: the list to swap elements in
-    index1: the index of the element you want to swap
-    index2: the index of the element you want to swap it with
-    """
-
-    x[index1], x[index2] = x[index2], x[index1]
-
-
 def shortern_number(number: int) -> str:
     """
     Format a numerical value in a concise, abbreviated form.
@@ -177,58 +164,6 @@ def shortern_number(number: int) -> str:
         return '{:.1f}B'.format(number / 1e9)
     else:
         return '{:.1f}T'.format(number / 1e12)
-
-
-def unshortern_number(formatted_number: str) -> int:
-    """
-    Inverse function of `shortern_number`
-
-    ## Examples
-    >>> unshortern_number('500')
-    500
-    >>> unshortern_number('1.5K')
-    1500
-    >>> unshortern_number('1.2M')
-    1200000
-    >>> unshortern_number('2.5B')
-    2500000000
-    >>> unshortern_number('9.0T')
-    9000000000000
-    """
-
-    suffixes = {'K': 1e3, 'M': 1e6, 'B': 1e9, 'T': 1e12}
-
-    for suffix, value in suffixes.items():
-        if formatted_number.endswith(suffix):
-            number_part = formatted_number[:-1]
-            return int(float(number_part) * value)
-
-    return int(formatted_number)
-
-
-def generateID() -> str:
-    """
-    Generate a random string of alphanumeric characters.
-
-    Returns:
-    str: A randomly generated string consisting of letters (both cases) and digits.
-
-    Description:
-    This function generates a random string by combining uppercase letters, lowercase letters,
-    and digits. The length of the generated string is determined randomly within the range
-    of 10 to 11 characters. This can be used, for example, for generating random passwords
-    or unique identifiers.
-
-    Example:
-    >>> generateID()
-    'kR3Gx9pYsZ'
-    >>> generateID()
-    '2hL7NQv6IzE'
-    """
-
-    all_char = ascii_letters + digits
-    id_u = "".join(choice(all_char) for _ in range(randint(10, 11)))
-    return id_u
 
 
 def add_multi_to_original(multi: int, original: int) -> int:
@@ -277,9 +212,9 @@ def find_slot_matches(*args) -> None | int:
     Find any suitable matches in a slot outcome.
 
     The function takes in multiple arguments, each being the individual emoji.
-    
+
     If there is a match, return the outcome's associated multiplier.
-    
+
     Return `None` if no match found.
 
     This only checks the first two elements, but you must provide all three.
@@ -311,7 +246,7 @@ def generate_progress_bar(percentage: float | int) -> str:
 
     percentage = round(percentage, -1)
     percentage = min(percentage, 100)
-    
+
     progress_bar = {
         0: "<:pb1e:1263922730588311582><:pb2e:1263922807293612042>"
            "<:pb2e:1263922807293612042><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
@@ -341,28 +276,6 @@ def generate_progress_bar(percentage: float | int) -> str:
     return progress_bar
 
 
-def display_user_friendly_deck_format(deck: list, /) -> str:
-    """Convert a deck view into a more user-friendly view of the deck."""
-    remade = list()
-    suits = ["\U00002665", "\U00002666", "\U00002663", "\U00002660"]
-    ranks = {10: ["K", "Q", "J"], 11: "A"}
-
-    chosen_suit = choice(suits)
-    for number in deck:
-        conversion_letter = ranks.get(number)
-        if conversion_letter:
-            unfmt = choice(conversion_letter)
-            fmt = f"[`{chosen_suit} {unfmt}`](https://www.youtube.com)"
-            remade.append(fmt)
-            continue
-        unfmt = number
-        fmt = f"[`{chosen_suit} {unfmt}`](https://www.youtube.com)"
-        remade.append(fmt)
-        continue
-    remade = ' '.join(remade)
-    return remade
-
-
 def display_user_friendly_card_format(number: int, /) -> str:
     """Convert a single card into the user-friendly card version linked and ranked."""
     suits = ["\U00002665", "\U00002666", "\U00002663", "\U00002660"]
@@ -380,9 +293,7 @@ def display_user_friendly_card_format(number: int, /) -> str:
 
 
 async def add_command_usage(user_id: int, command_name: str, conn) -> int:
-    """Add command usage to db. Only include the parent name if it is a subcommand."""
-    
-    value = await conn.fetchone(
+    value, = await conn.fetchone(
         """
         INSERT INTO command_uses (userID, cmd_name, cmd_count)
         VALUES ($0, $1, 1)
@@ -391,16 +302,10 @@ async def add_command_usage(user_id: int, command_name: str, conn) -> int:
         """, user_id, command_name
     )
 
-    return value[0]
+    return value
 
 
 async def total_commands_used_by_user(user_id: int, conn: Connection) -> int:
-    """
-    Select all records for the given user_id and sum up the command_count.
-
-    This will always return a value.
-    """
-
     total, = await conn.fetchone(
         """
         SELECT CAST(TOTAL(cmd_count) AS INTEGER) 
@@ -413,19 +318,16 @@ async def total_commands_used_by_user(user_id: int, conn: Connection) -> int:
 
 
 async def find_fav_cmd_for(user_id, conn: Connection) -> str:
-    """Select the command with the highest command_count for the given user id."""
-
-    fav = await conn.fetchone(
+    fav, = await conn.fetchone(
         """
         SELECT cmd_name FROM command_uses
         WHERE userID = $0
         ORDER BY cmd_count DESC
         LIMIT 1
         """, user_id
-    )
+    ) or ("-",)
 
-    fav = fav or "-"
-    return fav[0]
+    return fav
 
 
 @tasks.loop()
@@ -461,12 +363,6 @@ def start_drop_expired(interaction: discord.Interaction) -> None:
         drop_expired.start(interaction)
 
 
-class MatchView(BaseInteractionView):
-    def __init__(self, interaction: discord.Interaction, /) -> None:
-        self.chosen_item = 0
-        super().__init__(interaction)
-
-
 class ItemInputTransformer(app_commands.Transformer):
     """Transforms an item name into a row containing the item's ID, name, and emoji."""
     ITEM_NOT_FOUND = "No items found with that name pattern."
@@ -489,7 +385,8 @@ class ItemInputTransformer(app_commands.Transformer):
         if len(res) == 1:
             return res[0]
 
-        match_view = MatchView(interaction)
+        match_view = BaseInteractionView(interaction)
+        match_view.chosen_item = None
 
         for (item_id, item_name, item_emoji) in res:
             match_view.add_item(MatchItem(item_id, item_name, item_emoji))
@@ -501,8 +398,8 @@ class ItemInputTransformer(app_commands.Transformer):
 
         await respond(interaction, view=match_view, embed=prompt_embed)
 
-        not_pressed = await match_view.wait()
-        if not_pressed:
+        await match_view.wait()
+        if match_view.chosen_item is None:
             raise CustomTransformerError(value, self.type, self, self.TIMED_OUT)
         return match_view.chosen_item
 
@@ -520,6 +417,15 @@ class UserSettings(BaseInteractionView):
         self.setting_dropdown = SettingsDropdown(data=data, default_setting=chosen_setting)
         self.disable_button = ToggleButton(self.setting_dropdown, label="Disable", style=discord.ButtonStyle.danger, row=1)
         self.enable_button = ToggleButton(self.setting_dropdown, label="Enable", style=discord.ButtonStyle.success, row=1)
+
+    async def on_timeout(self) -> Coroutine[Any, Any, None]:
+        for item in self.children:
+            item.disabled = True
+
+        try:
+            await self.interaction.edit_original_response(view=self)
+        except discord.HTTPException:
+            pass
 
 
 class ConfirmResetData(BaseInteractionView):
@@ -586,6 +492,33 @@ class BalanceView(discord.ui.View):
         self.viewing = viewing
         super().__init__(timeout=120.0)
         self.children[2].default_values = [discord.Object(id=self.viewing.id)]
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        #! Check it's the author of the original interaction running this
+
+        value = await economy_check(interaction, self.interaction.user.id)
+        if not value:
+            return False
+        del value
+
+        #! Check if they're already in a transaction
+        #! Check if they exist in the database
+        #! Ensure connections are carried into item callbacks when prerequisites are met
+
+        async with interaction.client.pool.acquire() as conn:
+            query = "SELECT EXISTS (SELECT 1 FROM transactions WHERE userID = $0)"
+            in_tr, = await conn.fetchone(query, interaction.user.id)
+            if in_tr:
+                await self.send_failure(interaction)
+        return not in_tr
+
+    async def on_timeout(self) -> Coroutine[Any, Any, None]:
+        for item in self.children:
+            item.disabled = True
+        try:
+            await self.interaction.edit_original_response(view=self)
+        except discord.HTTPException:
+            pass
 
     async def fetch_balance(self, interaction: discord.Interaction) -> discord.Embed:
         """
@@ -666,33 +599,6 @@ class BalanceView(discord.ui.View):
                 "commands before using this one."
             )
         )
-
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        #! Check it's the author of the original interaction running this
-
-        value = await economy_check(interaction, self.interaction.user.id)
-        if not value:
-            return False
-        del value
-
-        #! Check if they're already in a transaction
-        #! Check if they exist in the database
-        #! Ensure connections are carried into item callbacks when prerequisites are met
-
-        async with interaction.client.pool.acquire() as conn:
-            query = "SELECT EXISTS (SELECT 1 FROM transactions WHERE userID = $0)"
-            in_tr, = await conn.fetchone(query, interaction.user.id)
-            if in_tr:
-                await self.send_failure(interaction)
-        return not in_tr
-
-    async def on_timeout(self) -> Coroutine[Any, Any, None]:
-        for item in self.children:
-            item.disabled = True
-        try:
-            await self.interaction.edit_original_response(view=self)
-        except discord.HTTPException:
-            pass
 
     @discord.ui.button(label="Withdraw", row=1)
     async def withdraw_money_btn(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -875,7 +781,7 @@ class BlackjackUi(BaseInteractionView):
 
             embed.set_field_at(
                 index=0,
-                name=f"{interaction.user.name} (Player)",  
+                name=f"{interaction.user.name} (Player)", 
                 value=(
                     f"**Cards** - {' '.join(d_fver_p)}\n"
                     f"**Total** - `{player_sum}`"
@@ -1033,7 +939,7 @@ class BlackjackUi(BaseInteractionView):
             async with interaction.client.pool.acquire() as conn, conn.transaction():
                 await end_transaction(conn, user_id=interaction.user.id)
                 wallet_amt = await Economy.fetch_balance(interaction.user.id, conn)
-            
+
             embed.remove_footer()
             embed.colour = discord.Colour.yellow()
             embed.description = (
@@ -1532,11 +1438,6 @@ class MultiplierView(RefreshPagination):
         await self.edit_page(interaction)
 
 
-@dataclass(slots=True, repr=False)
-class ConnectionHolder:
-    conn: Connection
-
-
 class MatchItem(discord.ui.Button):
     """
     A menu to select an item from a list of items provided. 
@@ -1719,7 +1620,7 @@ class ItemQuantityModal(discord.ui.Modal):
         if always_use_coupon:
             self.activated_coupon = True
             return discounted_price
-        
+
         async with interaction.client.pool.acquire() as conn, conn.transaction():
             await declare_transaction(conn, user_id=interaction.user.id)
 
@@ -1741,7 +1642,7 @@ class ItemQuantityModal(discord.ui.Modal):
         if self.activated_coupon is None:
             # Transaction ends, no further cleanup needed
             raise FailingConditionalError("Your purchase was cancelled.")
-        
+
         if self.activated_coupon:
             return discounted_price
         return self.item_cost
@@ -1750,13 +1651,13 @@ class ItemQuantityModal(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         true_quantity = RawIntegerTransformer().transform(interaction, self.quantity.value)
-        
+
         # base cost per unit (considering discounts)
         self.item_cost = await self.calculate_discount_price(interaction)
 
         async with interaction.client.pool.acquire() as conn:
             current_balance = await Economy.fetch_balance(interaction.user.id, conn)
-        
+
             if isinstance(true_quantity, str):
                 true_quantity = current_balance // self.item_cost
                 if not true_quantity:
@@ -1770,7 +1671,7 @@ class ItemQuantityModal(discord.ui.Modal):
                     f" buy **{true_quantity:,}x {self.ie} {self.item_name}**."
                 )
                 return await respond(interaction, embed=error_em)
-            
+
             total_price = self.item_cost * true_quantity
             can_proceed = await handle_confirm_outcome(
                 interaction, 
@@ -1857,7 +1758,7 @@ class DepositOrWithdraw(discord.ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         val = RawIntegerTransformer().transform(interaction, self.amount.value)
-        
+
         if isinstance(val, str):
             val = self.their_default
         elif val > self.their_default:
@@ -2168,7 +2069,7 @@ class Economy(commands.Cog):
     ) -> Any | None:
         """
         Modifies any number of fields at once by their respective amounts. 
-        
+
         Returns the values of the updated fields.
 
         All fields passed in must be of type `int` or `float`.
@@ -2195,7 +2096,7 @@ class Economy(commands.Cog):
     async def update_wallet_many(conn: Connection, *params_users) -> list[Row]:
         """
         Update the bank of two users at once. Useful to transfer money between multiple users at once.
-        
+
         The parameters are tuples, each tuple containing the amount to be added to the wallet and the user ID.
 
         Example:
@@ -2623,7 +2524,7 @@ class Economy(commands.Cog):
         paginator = MultiplierView(interaction, chosen_multiplier=multiplier, viewing=(user or interaction.user))
         await paginator.format_pages()
         paginator.total_pages = paginator.compute_total_pages(len(paginator.multiplier_list), paginator.length)
-        
+
         async def get_page_part(force_refresh: bool = None) -> discord.Embed:
             if force_refresh:
                 await paginator.format_pages()
@@ -2809,7 +2710,7 @@ class Economy(commands.Cog):
     ) -> None:
         """
         Basic trading item checks. 
-        
+
         If checks fail, it is your responsibility to respond and close transactions.
         """
         item_id, item_name, ie = item_data
@@ -2963,7 +2864,7 @@ class Economy(commands.Cog):
         )
 
         async with self.bot.pool.acquire() as conn:
-            if not can_proceed:  
+            if not can_proceed:
                 await end_transaction(conn, user_id=interaction.user.id)
                 await conn.commit()
                 return
@@ -3095,7 +2996,6 @@ class Economy(commands.Cog):
         for_item: ITEM_CONVERTER,
         for_quantity: int
     ) -> None:
-        
         self.default_checks_passing(interaction.user, with_who)
 
         if item[0] == for_item[0]:
@@ -3865,7 +3765,7 @@ class Economy(commands.Cog):
 
         view = ConfirmResetData(interaction, member)
 
-        link = "https://www.youtube.com/shorts/vTrH4paRl90"            
+        link = "https://www.youtube.com/shorts/vTrH4paRl90"
         await interaction.response.send_message(
             view=view,
             embed=membed(
@@ -4032,7 +3932,7 @@ class Economy(commands.Cog):
         """Rob someone else."""
         robber = interaction.user
         embed = membed()
-        
+
         if robber.id == host.id:
             embed.description = 'Seems pretty foolish to steal from yourself'
             return await interaction.response.send_message(embed=embed)
@@ -4163,15 +4063,11 @@ class Economy(commands.Cog):
         Win by reaching 21 and a higher score than the bot without bust.
         """
 
-        # Game checks
-
         async with self.bot.pool.acquire() as conn, conn.transaction():
             wallet_amt = await self.fetch_balance(interaction.user.id, conn)
             has_keycard = await self.fetch_item_qty_from_id(interaction.user.id, item_id=1, conn=conn)
             robux = self.do_wallet_checks(wallet_amt, robux, has_keycard)
             await declare_transaction(conn, user_id=interaction.user.id)
-
-        # Game setup
 
         deck = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 11] * 4
         shuffle(deck)
@@ -4212,7 +4108,7 @@ class Economy(commands.Cog):
 
         if isinstance(bet, str):
             bet = min(MAX_BET_KEYCARD, wallet) if keycard else min(MAX_BET_WITHOUT, wallet)
-        
+
         if keycard:
             if (bet < MIN_BET_KEYCARD) or (bet > MAX_BET_KEYCARD):
                 raise FailingConditionalError(
@@ -4241,7 +4137,7 @@ class Economy(commands.Cog):
 
             has_keycard = await self.fetch_item_qty_from_id(user.id, item_id=1, conn=conn)
             robux = self.do_wallet_checks(wallet_amt, robux, has_keycard)
-            
+
             pmulti = await self.get_multi_of(user.id, "robux", conn)
 
         badges = ""
@@ -4397,7 +4293,6 @@ class Economy(commands.Cog):
             app_commands.Choice(name=formatted_setting.title(), value=setting)
             for (setting, formatted_setting) in results
         ]
-
 
 
 async def setup(bot: C2C) -> None:

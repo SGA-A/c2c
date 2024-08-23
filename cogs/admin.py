@@ -1,4 +1,3 @@
-"""The administrative cog. Only for use by the bot owners."""
 from re import findall
 from io import StringIO
 from traceback import format_exc
@@ -168,54 +167,7 @@ class Admin(commands.Cog):
     @commands.command(description='Sends newlines to clear a channel', aliases=('b',))
     async def blank(self, ctx: commands.Context):
         """Clear out the channel."""
-        await ctx.send(
-            """
-            .
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n
-            \n-# Blanked out the channel.
-            """
-        )
+        await ctx.send(f".{'\n'*1900}-# Blanked out the channel.")
 
     @commands.command(description='Update the rules channel for cc', aliases=('ur',))
     async def urules(self, _: commands.Context):
@@ -237,7 +189,7 @@ class Admin(commands.Cog):
             "Any form of content that suggests normalization or justification of NSFW content should not escape the "
             "boundaries of <#1160547937420582942>, sanctions will be upheld for such cases.\n"
             "5. <:discordThinking:1263921476369645609> **Adhere to the Terms of Service.** "
-            "Abide by Discord\'s [terms of service](<https://discord.com/terms>) and [community guidelines](<https://discord.com/guidelines/>) at all times.\n\n"
+            "Abide by Discord's [terms of service](<https://discord.com/terms>) and [community guidelines](<https://discord.com/guidelines/>) at all times.\n\n"
             "**That's all.** Thanks for reading, now go have fun!"
         )
 
@@ -270,7 +222,7 @@ class Admin(commands.Cog):
             - <@&1150848206008238151>: Bots that require full read access throughout the server.
             """
         )
-        
+
         await message1.edit(content=dedent(role_content_pt1))
 
     async def send_channel_guide(self):
@@ -294,7 +246,7 @@ class Admin(commands.Cog):
         )
 
         await message.edit(content=dedent(channel_content_pt1))
-    
+
     async def send_bot_guide(self):
         message = (
             self.bot.get_partial_messageable(1254883337386852503)

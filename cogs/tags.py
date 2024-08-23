@@ -73,7 +73,7 @@ class TagEditModal(discord.ui.Modal, title='Edit Tag'):
 
 class TagMakeModal(discord.ui.Modal, title='Create New Tag'):
     name = discord.ui.TextInput(
-        label='Name',  
+        label='Name', 
         max_length=80, 
         min_length=1, 
         placeholder="The name of this tag."
@@ -191,7 +191,7 @@ class Tags(commands.Cog):
                 embed=membed("No tag found with this pattern. Check the spelling.")
             )
             return
-        
+
         if length == 1:
             return tag_results[0][0]
 
@@ -200,7 +200,7 @@ class Tags(commands.Cog):
 
         for resulting_word in tag_results:
             match_view.add_item(MatchWord(word=resulting_word[0]))
-        
+
         msg = await ctx.send(
             view=match_view,
             embed=membed(
@@ -276,7 +276,7 @@ class Tags(commands.Cog):
         async with self.bot.pool.acquire() as conn:
             rows = await conn.fetchall(query, (current.lower(),))
         return [app_commands.Choice(name=row, value=row) for row, in rows]
-        
+
     async def owned_non_aliased_tag_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         query = "SELECT name FROM tags WHERE ownerID = ? AND LOWER(name) LIKE '%' || ? || '%' LIMIT 12"
         async with self.bot.pool.acquire() as conn:
@@ -345,7 +345,7 @@ class Tags(commands.Cog):
 
             # update the usage
             await conn.execute("UPDATE tags SET uses = uses + 1 WHERE name = $0", name)
-    
+
     @tag.command(description="Create a new tag owned by you", aliases=('add',))
     @app_commands.describe(name='The tag name.', content='The tag content.')
     @app_commands.allowed_installs(**LIMITED_INSTALLS)
@@ -471,7 +471,7 @@ class Tags(commands.Cog):
                 name, interaction = await self.owned_partial_matching(ctx, name, conn, meth)
             if name is None:
                 return
-            
+
             interaction = interaction or ctx.interaction
             if interaction is None:
                 return await ctx.send(
@@ -501,7 +501,6 @@ class Tags(commands.Cog):
             return await ctx.send(ephemeral=True, embed=membed(MAX_CHARACTERS_EXCEEDED_RESPONSE))
 
         async with self.bot.pool.acquire() as conn:
-            
             val = await conn.fetchone(
                 """
                 UPDATE tags 
@@ -537,7 +536,7 @@ class Tags(commands.Cog):
                 name = await self.non_owned_partial_matching(ctx, name, conn)
                 if name is None:
                     return
-                
+
                 args = (name, ctx.author.id)
                 clause = f"{clause} AND ownerID = $1"
 
@@ -626,7 +625,7 @@ class Tags(commands.Cog):
             name = await self.non_owned_partial_matching(ctx, name, conn)
             if not name:
                 return
-            
+
             record = await conn.fetchone(
                 """
                 SELECT rowid, uses, ownerID, time_created
@@ -634,7 +633,7 @@ class Tags(commands.Cog):
                 WHERE name = $0
                 """, name
             )
-            
+
         if record is None:
             return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
 
@@ -671,7 +670,7 @@ class Tags(commands.Cog):
             ctx.author.id,
             PaginationSimple.compute_total_pages(len(rows), length)
         )
-    
+
         async def get_page_part(page: int):
             """Helper function to determine what page of the paginator we're on."""
 

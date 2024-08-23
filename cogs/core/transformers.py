@@ -7,7 +7,7 @@ from .errors import CustomTransformerError
 class RawIntegerTransformer(app_commands.Transformer):
     """
     Transforms a string into an integer, but only if it's a valid integer or shorthand for one.
-    
+
     You can customize what happens when a shorthand is passed in in places that don't accept them.
     """
     INVALID_ARGUMENT = "You need to provide a real positive number."

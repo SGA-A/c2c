@@ -52,7 +52,7 @@ class BasePaginator(discord.ui.View):
     async def on_error(self, interaction: discord.Interaction[discord.Client], error: Exception, item) -> None:
         if hasattr(error, "cause"):  # CustomTransformerError
             return await interaction.response.send_message(error.cause)
-        
+
         try:
             await self.interaction.delete_original_response()
         except discord.HTTPException:
@@ -133,7 +133,7 @@ class Pagination(BasePaginator):
 class PaginationSimple(discord.ui.View):
     """
     A regular pagination menu with no extra features. 
-    
+
     Supports hybrids and everything in between.
     """
     def __init__(self, ctx, invoker_id: int, total_pages: int, get_page: Callable | None = None) -> None:
@@ -241,7 +241,7 @@ class RefreshPagination(BasePaginator):
     def update_buttons(self) -> None:
         is_first_page_check = self.index == 1
         is_last_page_check = self.index == self.total_pages
-        
+
         self.children[0].disabled = is_first_page_check
         self.children[1].disabled = is_first_page_check
         self.children[3].disabled = is_last_page_check
@@ -275,7 +275,7 @@ class RefreshPagination(BasePaginator):
 class PaginationItem(BasePaginator):
     """
     Pagination menu with forward and backward buttons only.
-    
+
     Disabling logic has been stripped away.
     """
     def __init__(self, interaction: discord.Interaction, get_page: Callable | None = None):

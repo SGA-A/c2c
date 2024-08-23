@@ -1,7 +1,5 @@
 from random import choice
 from datetime import timedelta
-from traceback import format_exception
-from logging import error as log_error
 
 from discord.ext.commands import Cog
 from discord.utils import format_dt, utcnow
@@ -34,10 +32,7 @@ class InteractionExceptions(Cog):
     def cog_unload(self):
         self.bot.tree.on_error = self._old_tree_error
 
-    def handle_unknown_exception(self, error: BASE_ERROR, embed: Embed):
-        formatted_traceback = ''.join(format_exception(type(error), error, error.__traceback__))
-        log_error(formatted_traceback)
-
+    def handle_unknown_exception(embed: Embed):
         embed.title = "Something went wrong"
         embed.description = (
             "Seems like the bot has stumbled upon an unexpected error.\n"
@@ -50,7 +45,7 @@ class InteractionExceptions(Cog):
             embed.description = error.cause
         elif error.type.value == AppCommandOptionType.user.value:
             embed.description = f"{error.value} is not a member of this server."
-        elif error.type.value == AppCommandOptionType.integer.value:
+        elif error.type.value == AppCommandOptionType.string.value:
             embed.description = "You need to provide a valid number."
         else:
             embed.description = "An error occurred while processing your input."
@@ -81,7 +76,8 @@ class InteractionExceptions(Cog):
         elif isinstance(error, app_commands.CommandNotFound):
             embed.description = "This command no longer exists!"
         else:
-            self.handle_unknown_exception(error, embed)
+            self.handle_unknown_exception(embed)
+            self.bot.log_exception(error)
         await interaction.followup.send(embed=embed, view=self.view)
 
 
