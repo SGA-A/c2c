@@ -29,10 +29,17 @@ class C2C(commands.Bot):
             for k, v in config.items():
                 setattr(self, k, v)
 
+        all_contexts = app_commands.AppCommandContext(
+            guild=True, 
+            dm_channel=True, 
+            private_channel=True
+        )
+        all_installs = app_commands.AppInstallationType(guild=True, user=True)
+
         super().__init__(
             allowed_mentions=allowed_mentions,
-            allowed_contexts=app_commands.AppCommandContext(guild=True),
-            allowed_installs=app_commands.AppInstallationType(guild=True),
+            allowed_contexts=all_contexts,
+            allowed_installs=all_installs,
             case_insensitive=True,
             command_prefix=commands.when_mentioned_or(">"),
             intents=intents,
@@ -48,7 +55,6 @@ class C2C(commands.Bot):
         self.session = None
 
         # Misc
-        self.games = dict()
         self.time_launch = discord.utils.utcnow()
 
     def log_exception(self, error: Exception):

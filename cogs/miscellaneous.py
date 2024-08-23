@@ -14,7 +14,6 @@ from cogs.economy import total_commands_used_by_user, USER_ENTRY
 from .core.bot import C2C
 from .core.helpers import membed, number_to_ordinal
 from .core.paginators import Pagination, RefreshPagination
-from .core.constants import LIMITED_CONTEXTS, LIMITED_INSTALLS
 
 
 ARROW = "<:Arrow:1263919893762543717>"
@@ -98,16 +97,16 @@ class CommandUsage(RefreshPagination):
                 return
 
             self.total = await total_commands_used_by_user(self.viewing.id, conn)
+        self.total_pages = self.compute_total_pages(len(self.usage_data), self.length)
 
     @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a registered user", row=0)
     async def user_select(self, interaction: discord.Interaction, select: discord.ui.UserSelect):
+        self.usage_embed.title = f"{self.viewing.display_name}'s Command Usage"
         self.viewing = select.values[0]
         self.index = 1
         select.default_values = [discord.Object(id=self.viewing.id)]
 
         await self.fetch_data()
-        self.usage_embed.title = f"{self.viewing.display_name}'s Command Usage"
-
         await self.edit_page(interaction)
 
 
@@ -151,27 +150,18 @@ class Miscellaneous(commands.Cog):
         bot.help_command = MyHelp()
         bot.help_command.cog = self
 
-        contexts = app_commands.AppCommandContext(guild=True, private_channel=True)
-        installs = app_commands.AppInstallationType(guild=True, user=True)
-
         self.cog_context_menus = {
             app_commands.ContextMenu(
                 name='Extract Embed Colour',
-                callback=self.embed_colour,
-                allowed_contexts=contexts,
-                allowed_installs=installs
+                callback=self.embed_colour
             ),
             app_commands.ContextMenu(
                 name="View User Avatar",
-                callback=self.view_avatar,
-                allowed_contexts=contexts,
-                allowed_installs=installs
+                callback=self.view_avatar
             ),
             app_commands.ContextMenu(
                 name="View User Banner",
-                callback=self.view_banner,
-                allowed_contexts=contexts,
-                allowed_installs=installs
+                callback=self.view_banner
             )
         }
 
@@ -236,9 +226,9 @@ class Miscellaneous(commands.Cog):
             buffer = BytesIO(await response.read())
         await interaction.followup.send(file=discord.File(buffer, 'clip.gif'))
 
-    @app_commands.command(description="Show information about the server and its members")
     @app_commands.guild_install()
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+    @app_commands.command(description="Show information about the server and its members")
     async def serverinfo(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(thinking=True)
 
@@ -302,19 +292,16 @@ class Miscellaneous(commands.Cog):
 
     @app_commands.command(description="See your total command usage")
     @app_commands.describe(user="Whose command usage to display. Defaults to you.")
-    @app_commands.allowed_installs(**LIMITED_INSTALLS)
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def usage(self, interaction: discord.Interaction, user: USER_ENTRY | None = None):
         user = user or interaction.user
 
         paginator = CommandUsage(interaction, viewing=user)
         await paginator.fetch_data()
 
-        paginator.total_pages = paginator.compute_total_pages(len(paginator.usage_data), paginator.length)
         async def get_page_part(force_refresh: bool = None) -> discord.Embed:
             if force_refresh:
                 await paginator.fetch_data()
-                paginator.reset_index(paginator.usage_data)
+                paginator.index = min(paginator.index, paginator.total_pages)
 
             if not paginator.usage_data:
                 paginator.usage_embed.set_footer(text="Empty")
@@ -334,8 +321,6 @@ class Miscellaneous(commands.Cog):
 
     @app_commands.command(description='Calculate an expression')
     @app_commands.describe(expression='The expression to evaluate.')
-    @app_commands.allowed_installs(**LIMITED_INSTALLS)
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     async def calc(self, interaction: discord.Interaction, expression: str) -> None:
         try:
             expression = expression.replace('^', '**').replace(',', '_')
@@ -383,13 +368,7 @@ class Miscellaneous(commands.Cog):
             embed=membed("No embeds were found within this message.")
         )
 
-    anime = app_commands.Group(
-        name='anime', 
-        description="Surf through anime images and posts.", 
-        nsfw=False,
-        allowed_contexts=app_commands.AppCommandContext(guild=True, private_channel=True),
-        allowed_installs=app_commands.AppInstallationType(guild=True, user=True)
-    )
+    anime = app_commands.Group(name='anime', description="Surf through anime images and posts.")
 
     @anime.command(name='kona', description='Retrieve posts from Konachan')
     @app_commands.rename(length="max_images")
@@ -484,8 +463,6 @@ class Miscellaneous(commands.Cog):
         ).navigate()
 
     @app_commands.command(description='Queries a random fact')
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def randomfact(self, interaction: discord.Interaction) -> None:
         async with self.bot.session.get(
             url='https://api.api-ninjas.com/v1/facts', 
@@ -501,8 +478,6 @@ class Miscellaneous(commands.Cog):
         user="The user to apply the manipulation to. Defaults to you.", 
         endpoint="What kind of manipulation sorcery to use."
     )
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def image(
         self, 
         interaction: discord.Interaction, 
@@ -527,8 +502,6 @@ class Miscellaneous(commands.Cog):
         user="The user to apply the manipulation to. Defaults to you.",
         endpoint="What kind of manipulation sorcery to use."
     )
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def image2(
         self, 
         interaction: discord.Interaction,
@@ -549,8 +522,6 @@ class Miscellaneous(commands.Cog):
         await self.format_gif_api_response(interaction, api_url, params, headers)
 
     @app_commands.command(description='Show information about characters')
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     @app_commands.describe(characters='Any written letters or symbols.')
     async def charinfo(self, interaction: discord.Interaction, characters: str) -> None:
         """
@@ -576,8 +547,6 @@ class Miscellaneous(commands.Cog):
         await interaction.response.send_message(msg, suppress_embeds=True)
 
     @app_commands.command(description='Learn more about the bot')
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    @app_commands.allowed_installs(**LIMITED_INSTALLS)
     async def about(self, interaction: discord.Interaction) -> None:
 
         commits = await self.fetch_commits()

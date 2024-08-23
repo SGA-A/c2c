@@ -3,6 +3,7 @@ from sqlite3 import Row, IntegrityError
 from math import floor, ceil
 from re import search
 from textwrap import dedent
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from random import (
@@ -228,24 +229,9 @@ def find_slot_matches(*args) -> None | int:
 
 
 def generate_progress_bar(percentage: float | int) -> str:
-    """
-    Generate a visual representation of a progress bar based on the given percentage.
+    """Generate a visual representation of a progress bar based on the given percentage."""
 
-    Parameters:
-    percentage (float): The completion percentage of a task.
-
-    Returns:
-    str: A string representing a progress bar with visual indicators.
-
-    Description:
-    This function generates a visual representation of a progress bar using custom emojis
-    for different completion levels. The progress bar is determined based on the provided
-    percentage value, rounding it to the nearest multiple of 10. The function returns a string
-    with visual indicators corresponding to the completion level.
-    """
-
-    percentage = round(percentage, -1)
-    percentage = min(percentage, 100)
+    percentage = min(round(percentage, -1), 100)
 
     progress_bar = {
         0: "<:pb1e:1263922730588311582><:pb2e:1263922807293612042>"
@@ -277,19 +263,13 @@ def generate_progress_bar(percentage: float | int) -> str:
 
 
 def display_user_friendly_card_format(number: int, /) -> str:
-    """Convert a single card into the user-friendly card version linked and ranked."""
-    suits = ["\U00002665", "\U00002666", "\U00002663", "\U00002660"]
-    ranks = {10: ["K", "Q", "J"], 11: "A"}
+    """Convert a card number into a user-friendly format with a suit and rank."""
+    ranks = {10: ("K", "Q", "J"), 11: ("A",)}
 
-    chosen_suit = choice(suits)
-    conversion_letter = ranks.get(number)
-    if conversion_letter:
-        unfmt = choice(conversion_letter)
-        fmt = f"[`{chosen_suit} {unfmt}`](https://www.youtube.com)"
-        return fmt
-    unfmt = number
-    fmt = f"[`{chosen_suit} {unfmt}`](https://www.youtube.com)"
-    return fmt
+    chosen_suit = choice(("\U00002665", "\U00002666", "\U00002663", "\U00002660"))
+    rank = choice(ranks.get(number, (number,)))
+
+    return f"[`{chosen_suit} {rank}`](https://www.youtube.com)"
 
 
 async def add_command_usage(user_id: int, command_name: str, conn) -> int:
@@ -678,15 +658,24 @@ class BalanceView(discord.ui.View):
         await interaction.response.edit_message(view=self)
 
 
+@dataclass(slots=True, repr=False, eq=False)
+class BlackjackGame:
+    deck: list[int]
+    player_hand: list[int]
+    dealer_hand: list[int]
+    player_hand_ui: list[str]
+    dealer_hand_ui: list[str]
+    bet: int
+
+
 class BlackjackUi(BaseInteractionView):
     """View for the blackjack command and its associated functions."""
 
-    def __init__(self, interaction: discord.Interaction):
+    def __init__(self, interaction: discord.Interaction, metadata: BlackjackGame):
         super().__init__(interaction)
+        self.metadata = metadata
 
     async def on_timeout(self) -> None:
-        del self.interaction.client.games[self.interaction.user.id]
-
         async with self.interaction.client.pool.acquire() as conn, conn.transaction():
             await end_transaction(conn, user_id=self.interaction.user.id)
 
@@ -751,30 +740,20 @@ class BlackjackUi(BaseInteractionView):
 
     @discord.ui.button(label='Hit', style=discord.ButtonStyle.primary)
     async def hit_bj(self, interaction: discord.Interaction, _: discord.ui.Button):
-        (
-            deck, 
-            player_hand, 
-            dealer_hand, 
-            d_fver_d, 
-            d_fver_p, 
-            namount
-        ) = interaction.client.games[interaction.user.id]
 
-        player_hand.append(deck.pop())
-        d_fver_p.append(display_user_friendly_card_format(player_hand[-1]))
-        player_sum = calculate_hand(player_hand)
+        self.metadata.player_hand.append(self.metadata.deck.pop())
+        self.metadata.player_hand_ui.append(display_user_friendly_card_format(self.metadata.player_hand[-1]))
+        player_sum = calculate_hand(self.metadata.player_hand)
 
         embed = interaction.message.embeds[0]
         if player_sum > 21:
             self.stop()
-            del interaction.client.games[interaction.user.id]
-
-            new_amount_balance, prnctl = await self.update_losing_data(bet_amount=namount)
+            new_amount_balance, prnctl = await self.update_losing_data(bet_amount=self.metadata.bet)
 
             embed.colour = discord.Colour.brand_red()
             embed.description = (
                 f"**You lost. You went over 21 and busted.**\n"
-                f"You lost {CURRENCY} **{namount:,}**. "
+                f"You lost {CURRENCY} **{self.metadata.bet:,}**. "
                 f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
                 f"You lost {prnctl:.1f}% of the games."
             )
@@ -783,15 +762,15 @@ class BlackjackUi(BaseInteractionView):
                 index=0,
                 name=f"{interaction.user.name} (Player)", 
                 value=(
-                    f"**Cards** - {' '.join(d_fver_p)}\n"
+                    f"**Cards** - {' '.join(self.metadata.player_hand_ui)}\n"
                     f"**Total** - `{player_sum}`"
                 )
             ).set_field_at(
                 index=1,
                 name=f"{interaction.client.user.name} (Dealer)", 
                 value=(
-                    f"**Cards** - {' '.join(d_fver_d)}\n"
-                    f"**Total** - `{calculate_hand(dealer_hand)}`"
+                    f"**Cards** - {' '.join(self.metadata.dealer_hand_ui)}\n"
+                    f"**Total** - `{calculate_hand(self.metadata.dealer_hand)}`"
                 )
             ).remove_footer()
 
@@ -799,13 +778,12 @@ class BlackjackUi(BaseInteractionView):
 
         elif player_sum == 21:
             self.stop()
-            del interaction.client.games[interaction.user.id]
 
             (   amount_after_multi, 
                 new_amount_balance, 
                 prctnw, 
                 new_multi 
-            ) = await self.update_winning_data(bet_amount=namount)
+            ) = await self.update_winning_data(bet_amount=self.metadata.bet)
 
             embed.colour = discord.Colour.brand_green()
             embed.description = (
@@ -819,15 +797,15 @@ class BlackjackUi(BaseInteractionView):
                 index=0,
                 name=f"{interaction.user.name} (Player)", 
                 value=(
-                    f"**Cards** - {' '.join(d_fver_p)}\n"
+                    f"**Cards** - {' '.join(self.metadata.player_hand_ui)}\n"
                     f"**Total** - `{player_sum}`"
                 )
             ).set_field_at(
                 index=1,
                 name=f"{interaction.client.user.name} (Dealer)", 
                 value=(
-                    f"**Cards** - {' '.join(d_fver_d)}\n"
-                    f"**Total** - `{calculate_hand(dealer_hand)}`"
+                    f"**Cards** - {' '.join(self.metadata.dealer_hand_ui)}\n"
+                    f"**Total** - `{calculate_hand(self.metadata.dealer_hand)}`"
                 )
             )
 
@@ -838,14 +816,14 @@ class BlackjackUi(BaseInteractionView):
 
             return await interaction.response.edit_message(embed=embed, view=None)
 
-        necessary_show = d_fver_d[0]
+        necessary_show = self.metadata.dealer_hand_ui[0]
         embed.description = f"**Your move. Your hand is now {player_sum}**."
 
         embed.set_field_at(
             index=0,
             name=f"{interaction.user.name} (Player)", 
             value=(
-                f"**Cards** - {' '.join(d_fver_p)}\n"
+                f"**Cards** - {' '.join(self.metadata.player_hand_ui)}\n"
                 f"**Total** - `{player_sum}`"
             )
         ).set_field_at(
@@ -863,22 +841,15 @@ class BlackjackUi(BaseInteractionView):
     async def stand_bj(self, interaction: discord.Interaction, _: discord.ui.Button):
         self.stop()
 
-        (
-            deck, 
-            player_hand, 
-            dealer_hand, 
-            d_fver_d, 
-            d_fver_p, 
-            namount
-        ) = interaction.client.games[interaction.user.id]
-
-        dealer_total = calculate_hand(dealer_hand)
-        player_sum = calculate_hand(player_hand)
+        dealer_total = calculate_hand(self.metadata.dealer_hand)
+        player_sum = calculate_hand(self.metadata.player_hand)
 
         while dealer_total < 17:
-            dealer_hand.append(deck.pop())
-            d_fver_d.append(display_user_friendly_card_format(dealer_hand[-1]))
-            dealer_total = calculate_hand(dealer_hand)
+            self.metadata.dealer_hand.append(self.metadata.deck.pop())
+            self.metadata.dealer_hand_ui.append(
+                display_user_friendly_card_format(self.metadata.dealer_hand[-1])
+            )
+            dealer_total = calculate_hand(self.metadata.dealer_hand)
 
         embed = interaction.message.embeds[0]
         if dealer_total > 21:
@@ -886,7 +857,7 @@ class BlackjackUi(BaseInteractionView):
                 new_amount_balance, 
                 prctnw, 
                 new_multi 
-            ) = await self.update_winning_data(bet_amount=namount)
+            ) = await self.update_winning_data(bet_amount=self.metadata.bet)
 
             embed.colour = discord.Colour.brand_green()
             embed.description = (
@@ -902,12 +873,12 @@ class BlackjackUi(BaseInteractionView):
             ).set_footer(text=f"Multiplier: {new_multi:,}%")
 
         elif dealer_total > player_sum:
-            new_amount_balance, prnctl = await self.update_losing_data(bet_amount=namount)
+            new_amount_balance, prnctl = await self.update_losing_data(bet_amount=self.metadata.bet)
 
             embed.colour = discord.Colour.brand_red()
             embed.description = (
                 f"**You lost. You stood with a lower score (`{player_sum}`) than the dealer (`{dealer_total}`).**\n"
-                f"You lost {CURRENCY} **{namount:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
+                f"You lost {CURRENCY} **{self.metadata.bet:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
                 f"You lost {prnctl:.1f}% of the games."
             )
 
@@ -921,7 +892,7 @@ class BlackjackUi(BaseInteractionView):
                 new_amount_balance, 
                 prctnw, 
                 new_multi 
-            ) = await self.update_winning_data(bet_amount=namount)
+            ) = await self.update_winning_data(bet_amount=self.metadata.bet)
 
             embed.colour = discord.Colour.brand_green()
             embed.description = (
@@ -951,14 +922,14 @@ class BlackjackUi(BaseInteractionView):
             index=0,
             name=f"{interaction.user.name} (Player)", 
             value=(
-                f"**Cards** - {' '.join(d_fver_p)}\n"
+                f"**Cards** - {' '.join(self.metadata.player_hand_ui)}\n"
                 f"**Total** - `{player_sum}`"
             )
         ).set_field_at(
             index=1,
             name=f"{interaction.client.user.name} (Dealer)", 
             value=(
-                f"**Cards** - {' '.join(d_fver_d)}\n"
+                f"**Cards** - {' '.join(self.metadata.dealer_hand_ui)}\n"
                 f"**Total** - `{dealer_total}`"
             )
         )
@@ -969,27 +940,19 @@ class BlackjackUi(BaseInteractionView):
     async def forfeit_bj(self, interaction: discord.Interaction, _: discord.ui.Button):
         """Button for the blackjack interface to forfeit the current match."""
         self.stop()
-        (
-            _, 
-            player_hand, 
-            dealer_hand, 
-            d_fver_d, 
-            d_fver_p, 
-            namount
-        ) = interaction.client.games[interaction.user.id]
 
-        namount //= 2
-        dealer_total = calculate_hand(dealer_hand)
-        player_sum = calculate_hand(player_hand)
-        del interaction.client.games[interaction.user.id]
+        self.metadata.bet //= 2
+        dealer_total = calculate_hand(self.metadata.dealer_hand)
+        player_sum = calculate_hand(self.metadata.player_hand)
 
-        new_amount_balance, prcntl = await self.update_losing_data(bet_amount=namount)
+        new_amount_balance, prcntl = await self.update_losing_data(bet_amount=self.metadata.bet)
 
         embed = interaction.message.embeds[0]
         embed.colour = discord.Colour.brand_red()
         embed.description = (
             f"**You forfeit. The dealer took half of your bet for surrendering.**\n"
-            f"You lost {CURRENCY} **{namount:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
+            f"You lost {CURRENCY} **{self.metadata.bet:,}**. "
+            f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
             f"You lost {prcntl:.1f}% of the games."
         )
 
@@ -997,14 +960,14 @@ class BlackjackUi(BaseInteractionView):
             index=0,
             name=f"{interaction.user.name} (Player)", 
             value=(
-                f"**Cards** - {' '.join(d_fver_p)}\n"
+                f"**Cards** - {' '.join(self.metadata.player_hand_ui)}\n"
                 f"**Total** - `{player_sum}`"
             )
         ).set_field_at(
             index=1,
             name=f"{interaction.client.user.name} (Dealer)", 
             value=(
-                f"**Cards** - {' '.join(d_fver_d)}\n"
+                f"**Cards** - {' '.join(self.metadata.dealer_hand_ui)}\n"
                 f"**Total** - `{dealer_total}`"
             )
         )
@@ -1131,37 +1094,34 @@ class HighLow(BaseInteractionView):
         await self.send_loss(interaction, button)
 
 
-class Leaderboard(RefreshPagination):
+class ItemLeaderboard(BaseInteractionView):
     podium_pos = {1: "### \U0001f947", 2: "\U0001f948", 3: "\U0001f949"}
-    length = 6
 
-    def __init__(
-        self, 
-        interaction: discord.Interaction, 
-        chosen_option: str, 
-        get_page: Callable | None = None
-    ) -> None:
-        self.chosen_option = chosen_option
-        self.data = []
-        super().__init__(interaction, get_page)
+    def __init__(self, interaction: discord.Interaction, chosen_item_id: int) -> None:
+        super().__init__(interaction)
+        self.chosen_item_id = chosen_item_id
+
+    async def on_timeout(self) -> None:
+        try:
+            await self.interaction.edit_original_response(view=None)
+        except discord.HTTPException:
+            pass
 
     @staticmethod
-    def populate_data(bot: C2C, ret: list[Row]) -> list[str]:
-        data = []
-        offset = 0
-        for i, (identifier, metric) in enumerate(ret, start=1):
-            memobj = bot.get_user(identifier)
-            if memobj is None:
-                offset += 1
-                continue
+    async def populate_data(interaction: discord.Interaction, ret: list[Row]) -> list[str]:
+        return [
+            f"{ItemLeaderboard.podium_pos.get(i, '\U0001f539')} ` {metric:,} ` "
+            f"\U00002014 {memobj.name}{UNIQUE_BADGES.get(identifier, '')}"
+            for i, (identifier, metric) in enumerate(ret, start=1)
+            if (memobj:=interaction.client.get_user(identifier) or await interaction.client.fetch_user(identifier))
+        ]
 
-            data.append(
-                f"{Leaderboard.podium_pos.get(i-offset, "\U0001f539")} ` {metric:,} ` "
-                f"\U00002014 {memobj.name}{UNIQUE_BADGES.get(memobj.id, '')}"
-            )
-        return data
+    async def fetch_thumbnail(self, conn: Connection) -> str:
+        query = "SELECT image FROM shop WHERE itemID = $0"
+        ret, = await conn.fetchone(query, self.chosen_item_id)
+        return ret
 
-    async def create_lb(self, conn: Connection, item_id: int) -> None:
+    async def create_lb(self, conn: Connection, /) -> list[str]:
         data = await conn.fetchall(
             """
             SELECT 
@@ -1171,14 +1131,25 @@ class Leaderboard(RefreshPagination):
             WHERE itemID = $0
             GROUP BY userID
             ORDER BY SUM(qty) DESC
-            """, item_id
+            LIMIT 10
+            """, self.chosen_item_id
         )
 
-        self.data = self.populate_data(bot=self.interaction.client, ret=data)
+        return (
+            await self.populate_data(self.interaction, data)
+        ) or "Looks like nobody has this item."
+
+    @discord.ui.button(emoji="<:refreshPages:1263923160433168414>", row=0)
+    async def refresh_lb_button(self, interaction: discord.Interaction, _: discord.ui.Button):
+        lb = interaction.message.embeds[0]
+        lb.timestamp = discord.utils.utcnow()
+
+        async with interaction.client.pool.acquire() as conn:
+            lb.description = "\n".join(await self.create_lb(conn))
+        await interaction.response.edit_message(embed=lb, view=self)
 
 
-class ExtendedLeaderboard(Leaderboard):
-    """A paginated leaderboard, but with a dropdown that displays a list of other filters you can sort by."""
+class StatLeaderboard(BaseInteractionView):
     options = [
         discord.SelectOption(label='Money Net', description='The sum of wallet and bank.'),
         discord.SelectOption(label='Wallet', description='The wallet amount only.'),
@@ -1199,6 +1170,7 @@ class ExtendedLeaderboard(Leaderboard):
             FROM accounts 
             GROUP BY userID 
             ORDER BY total_balance DESC
+            LIMIT 10
             """
         ),
         'Wallet': (
@@ -1209,6 +1181,7 @@ class ExtendedLeaderboard(Leaderboard):
             FROM accounts 
             GROUP BY userID 
             ORDER BY total_wallet DESC
+            LIMIT 10
             """
         ),
         'Bank': (
@@ -1219,6 +1192,7 @@ class ExtendedLeaderboard(Leaderboard):
             FROM accounts 
             GROUP BY userID 
             ORDER BY total_bank DESC
+            LIMIT 10
             """
         ),
         'Inventory Net': (
@@ -1231,6 +1205,7 @@ class ExtendedLeaderboard(Leaderboard):
                 ON shop.itemID = inventory.itemID
             GROUP BY inventory.userID
             ORDER BY NetValue DESC
+            LIMIT 10
             """
         ),
         'Bounty': (
@@ -1242,6 +1217,7 @@ class ExtendedLeaderboard(Leaderboard):
             GROUP BY userID 
             HAVING total_bounty > 0
             ORDER BY total_bounty DESC
+            LIMIT 10
             """
         ),
         'Commands': (
@@ -1253,6 +1229,7 @@ class ExtendedLeaderboard(Leaderboard):
             GROUP BY userID
             HAVING total_commands > 0
             ORDER BY total_commands DESC
+            LIMIT 10
             """
         ),
         'Level': (
@@ -1262,6 +1239,7 @@ class ExtendedLeaderboard(Leaderboard):
             GROUP BY userID 
             HAVING level > 0
             ORDER BY level DESC
+            LIMIT 10
             """
         ),
         'Net Worth': (
@@ -1287,56 +1265,52 @@ class ExtendedLeaderboard(Leaderboard):
                 COALESCE(inventory.userID, money.userID)
             ORDER BY 
                 TotalNetWorth DESC
+            LIMIT 10
             """
         )
     }
 
     def __init__(self, interaction: discord.Interaction, chosen_option: str):
-        super().__init__(interaction, chosen_option=chosen_option, get_page=self.get_page_part)
+        super().__init__(interaction)
+        self.chosen_option = chosen_option
 
-        self.lb = discord.Embed(
-            title=f"Global Leaderboard: {chosen_option}",
-            color=0x2B2D31,
-            timestamp=discord.utils.utcnow()
-        )
-
-        for option in self.children[-1].options:
+        select: discord.ui.Select = self.children[0]
+        for option in select.options:
             option.default = option.value == chosen_option
 
-    async def create_lb(self) -> None:
-        self.lb.timestamp = discord.utils.utcnow()
+    async def on_timeout(self) -> None:
+        try:
+            await self.interaction.edit_original_response(view=None)
+        except discord.HTTPException:
+            pass
 
+    async def create_lb(self) -> list[str]:
         async with self.interaction.client.pool.acquire() as conn:
             data = await conn.fetchall(self.query_dict[self.chosen_option])
 
-        self.data = self.populate_data(self.interaction.client, data)
+        return (
+            await ItemLeaderboard.populate_data(self.interaction, data)
+        ) or "Nobody has earnt this stat yet."
 
-    async def get_page_part(self, force_refresh: bool | None = None) -> discord.Embed:
-        if force_refresh:
-            await self.create_lb()
-            self.reset_index(self.data)
+    async def refresh_lb(self, interaction: discord.Interaction, /):
+        lb = interaction.message.embeds[0]
+        lb.timestamp = discord.utils.utcnow()
+        lb.description = "\n".join(await self.create_lb())
 
-        if not self.data:
-            self.lb.set_footer(text="Empty")
-            return self.lb
-
-        offset = ((self.index - 1) * self.length)
-        self.lb.description = "\n".join(self.data[offset:offset+self.length])
-        return self.lb.set_footer(text=f"Page {self.index} of {self.total_pages}")
+        await interaction.response.edit_message(embed=lb, view=self)
 
     @discord.ui.select(options=options, placeholder="Select a leaderboard filter", row=0)
     async def lb_stat_select(self, interaction: discord.Interaction, select: discord.ui.Select):
         self.chosen_option = select.values[0]
-        self.index = 1
-        self.lb.title = f"Global Leaderboard: {self.chosen_option}"
-
-        await self.create_lb()
-        self.total_pages = self.compute_total_pages(len(self.data), self.length)
 
         for option in select.options:
             option.default = option.value == self.chosen_option
 
-        await self.edit_page(interaction)
+        await self.refresh_lb(interaction)
+
+    @discord.ui.button(emoji="<:refreshPages:1263923160433168414>", row=1)
+    async def refresh_lb_button(self, interaction: discord.Interaction, _: discord.ui.Button):
+        await self.refresh_lb(interaction)
 
 
 class MultiplierView(RefreshPagination):
@@ -1398,7 +1372,6 @@ class MultiplierView(RefreshPagination):
         self.embed.description = f"> {self.chosen_multiplier}: **{amount:.2f}{unit}**\n\n"
 
     async def format_pages(self) -> None:
-
         lowered = self.chosen_multiplier.lower()
         async with self.interaction.client.pool.acquire() as conn:
             self.total_multi, = await conn.fetchone(
@@ -1419,21 +1392,19 @@ class MultiplierView(RefreshPagination):
                 ORDER BY amount DESC
                 """, self.viewing.id, lowered
             )
+        self.total_pages = self.compute_total_pages(len(self.multiplier_list), self.length)
 
     @discord.ui.select(options=multipliers, row=0, placeholder="Select a multiplier to view")
     async def callback(self, interaction: discord.Interaction, select: discord.ui.Select):
-
-        self.chosen_multiplier: str = select.values[0]
-
         for option in select.options:
             option.default = option.value == self.chosen_multiplier
 
+        self.chosen_multiplier: str = select.values[0]
+        self.index = 1
         await self.format_pages()
-        self.total_pages = self.compute_total_pages(len)
 
         self.embed.colour, thumb_url = self.colour_mapping[self.chosen_multiplier]
         self.embed.set_thumbnail(url=thumb_url)
-        self.index = 1
 
         await self.edit_page(interaction)
 
@@ -2523,12 +2494,11 @@ class Economy(commands.Cog):
 
         paginator = MultiplierView(interaction, chosen_multiplier=multiplier, viewing=(user or interaction.user))
         await paginator.format_pages()
-        paginator.total_pages = paginator.compute_total_pages(len(paginator.multiplier_list), paginator.length)
 
         async def get_page_part(force_refresh: bool = None) -> discord.Embed:
             if force_refresh:
                 await paginator.format_pages()
-                paginator.reset_index(paginator.multiplier_list)
+                self.index = min(paginator.index, paginator.total_pages)
 
             paginator.repr_multi()
 
@@ -3862,12 +3832,7 @@ class Economy(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    leaderboard = app_commands.Group(
-        name="leaderboard",
-        description="Rank users in various different ways.",
-        allowed_contexts=app_commands.AppCommandContext(guild=True),
-        allowed_installs=app_commands.AppInstallationType(guild=True)
-    )
+    leaderboard = app_commands.Group(name="leaderboard", description="Rank users in various different ways.")
 
     @leaderboard.command(name='stats', description='Rank users based on various stats')
     @app_commands.describe(stat="The stat you want to see.")
@@ -3885,51 +3850,34 @@ class Economy(commands.Cog):
             "Net Worth"
         ]
     ) -> None:
-        """View the leaderboard and filter the results based on different stats inputted."""
-        paginator = ExtendedLeaderboard(interaction, chosen_option=stat)
+        view = StatLeaderboard(interaction, chosen_option=stat)
 
-        await paginator.create_lb()
-        paginator.total_pages = paginator.compute_total_pages(len(paginator.data), paginator.length)
-        await paginator.navigate()
+        lb = membed("\n".join(await view.create_lb()))
+        lb.title = f"Global Leaderboard: {stat}"
+        lb.timestamp = discord.utils.utcnow()
+
+        await interaction.response.send_message(embed=lb, view=view)
 
     @leaderboard.command(name="item", description="Rank users based on an item count")
     @app_commands.describe(item=ITEM_DESCRPTION)
     async def get_item_lb(self, interaction: discord.Interaction, item: ITEM_CONVERTER):
-        item_id, item_name, _ = item
-        paginator = Leaderboard(interaction, chosen_option=item_name)
+        item_id = item[0]
+        view = ItemLeaderboard(interaction, chosen_item_id=item_id)
 
         async with self.bot.pool.acquire() as conn:
-            thumb_url, = await conn.fetchone("SELECT image FROM shop WHERE itemID = $0", item_id)
-            await paginator.create_lb(conn, item_id)
+            thumb_url = await view.fetch_thumbnail(conn)
+            lb = membed("\n".join(await view.create_lb(conn))).set_thumbnail(url=thumb_url)
 
-        paginator.total_pages = paginator.compute_total_pages(len(paginator.data), paginator.length)
-
-        lb = membed().set_thumbnail(url=thumb_url)
         lb.timestamp = discord.utils.utcnow()
-        lb.title = f"{item_name} Global Leaderboard"
 
-        async def get_page_part(force_refresh: bool | None = None) -> discord.Embed:
-            if force_refresh:
-                async with self.bot.pool.acquire() as conn:
-                    await paginator.create_lb(conn, item_id)
-                paginator.reset_index(paginator.data)
+        await interaction.response.send_message(embed=lb, view=view)
 
-            if not paginator.data:
-                lb.set_footer(text="Empty")
-                return lb
-
-            offset = ((paginator.index- 1) * paginator.length)
-            lb.description = "\n".join(paginator.data[offset:offset+paginator.length])
-            return lb.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
-
-        paginator.get_page = get_page_part
-        await paginator.navigate()
-
-    @app_commands.command(description="Attempt to steal from someone's pocket", extras={"exp_gained": 4})
+    @app_commands.guild_install()
     @app_commands.rename(host='user')
     @app_commands.describe(host='The user you want to rob money from.')
+    @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+    @app_commands.command(description="Attempt to steal from someone's pocket", extras={"exp_gained": 4})
     async def rob(self, interaction: discord.Interaction, host: discord.Member) -> None:
-        """Rob someone else."""
         robber = interaction.user
         embed = membed()
 
@@ -4080,7 +4028,7 @@ class Economy(commands.Cog):
         shallow_pv = [display_user_friendly_card_format(number) for number in player_hand]
         shallow_dv = [display_user_friendly_card_format(number) for number in dealer_hand]
 
-        self.bot.games[interaction.user.id] = (deck, player_hand, dealer_hand, shallow_dv, shallow_pv, robux)
+        game = BlackjackGame(deck, player_hand, dealer_hand, shallow_pv, shallow_dv, robux)
 
         initial = membed(
             f"The game has started. May the best win.\n"
@@ -4096,7 +4044,7 @@ class Economy(commands.Cog):
             icon_url=interaction.user.display_avatar.url
         ).set_footer(text="K, Q, J = 10  |  A = 1 or 11")
 
-        await interaction.response.send_message(embed=initial, view=BlackjackUi(interaction))
+        await interaction.response.send_message(embed=initial, view=BlackjackUi(interaction, game))
 
     def do_wallet_checks(self, wallet: int, bet : str | int, keycard: bool = False) -> int:
         """

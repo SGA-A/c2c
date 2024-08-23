@@ -3,7 +3,7 @@ from io import StringIO
 from traceback import format_exc
 from textwrap import indent, dedent
 from contextlib import redirect_stdout
-from typing import Any, Literal
+from typing import Any
 
 import asyncio
 import discord
@@ -13,7 +13,7 @@ from discord.ext import commands
 
 from .core.bot import C2C
 from .core.helpers import membed
-from .core.constants import CURRENCY, LIMITED_CONTEXTS, LIMITED_INSTALLS
+from .core.constants import CURRENCY
 
 
 GUILD_MESSAGEABLE = (
@@ -65,46 +65,33 @@ class Admin(commands.Cog):
         )
         await ctx.reply(content=uptime)
 
-    @app_commands.command(description="Adjust a user's robux directly")
-    @app_commands.describe(
-        configuration='Whether to add, remove, or specify robux.',
-        amount='The amount of robux to modify. Supports Shortcuts (exponents only).',
-        user='The member to modify the balance of. Defaults to you.',
-        is_private='Whether or not the response is only visible to you. Defaults to False.',
-        medium='The type of balance to modify. Defaults to the wallet.'
-    )
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
-    @app_commands.allowed_installs(**LIMITED_INSTALLS)
+    @commands.command(description="Adjust a user's robux directly")
     async def config(
         self, 
-        interaction: discord.Interaction,
-        configuration: Literal["add", "remove", "make"], 
+        ctx: commands.Context,
+        configuration: str, 
         amount: int,
-        user: discord.User | None = None,
-        is_private: bool = False,
-        medium: Literal["wallet", "bank"] = "wallet"
+        user: discord.User | discord.Member = commands.Author,
+        medium: str = "wallet"
     ) -> None:
-        """Generates or deducts a given amount of robux to the mentioned user."""
-
-        user = user or interaction.user
         embed = membed()
 
         if configuration.startswith("a"):
-            embed.description = f"Added {CURRENCY} **{amount:,}** to {user.mention}!"
+            embed.description = f"Added {CURRENCY} **{amount:,}** to {user.name}!"
             query = f"UPDATE accounts SET {medium} = {medium} + $0 WHERE userID = $1"
 
         elif configuration.startswith("r"):
-            embed.description = f"Deducted {CURRENCY} **{amount:,}** from {user.mention}!"
+            embed.description = f"Deducted {CURRENCY} **{amount:,}** from {user.name}!"
             query = f"UPDATE accounts SET {medium} = {medium} - $0 WHERE userID = $1"
 
         else:
-            embed.description = f"Set {CURRENCY} **{amount:,}** to {user.mention}!"
+            embed.description = f"Set {CURRENCY} **{amount:,}** to {user.name}!"
             query = f"UPDATE accounts SET {medium} = $0 WHERE userID = $1"
 
         async with self.bot.pool.acquire() as conn, conn.transaction():
             await conn.execute(query, amount, user.id)
 
-        await interaction.response.send_message(embed=embed, ephemeral=is_private)
+        await ctx.send(embed=embed)
 
     @commands.command(description='Sync the bot tree for changes', aliases=("sy",))
     async def sync(self, ctx: commands.Context) -> None:
@@ -286,8 +273,6 @@ class Admin(commands.Cog):
         await self.bot.close()
 
     @app_commands.command(description='Repeat what you typed')
-    @app_commands.allowed_installs(**LIMITED_INSTALLS)
-    @app_commands.allowed_contexts(**LIMITED_CONTEXTS)
     @app_commands.describe(
         message='What you want me to say.', 
         channel='What channel to send it in.'

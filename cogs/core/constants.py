@@ -1,8 +1,6 @@
 __all__ = (
     "CURRENCY",
-    "COOLDOWN_PROMPTS",
-    "LIMITED_CONTEXTS",
-    "LIMITED_INSTALLS"
+    "COOLDOWN_PROMPTS"
 )
 
 CURRENCY = '\U000023e3'
@@ -22,5 +20,3 @@ COOLDOWN_PROMPTS = (
     "Cool your jets, space cadet",
     "Easy does it, turbo"
 )
-LIMITED_CONTEXTS = {"guilds": True, "private_channels": True}
-LIMITED_INSTALLS = {"guilds": True, "users": True}

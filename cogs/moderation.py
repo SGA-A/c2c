@@ -381,18 +381,29 @@ class RoleManagement(app_commands.Group):
 
 class Moderation(commands.Cog):
     """Moderation tools for your servers, available to server managers."""
+    GUILD_CONTEXT = app_commands.AppCommandContext(
+        guild=True, 
+        private_channel=False, 
+        dm_channel=False
+    )
+    GUILD_INSTALL = app_commands.AppInstallationType(guild=True, user=False)
+
     def __init__(self, bot: C2C) -> None:
         self.bot = bot
 
         self.purge_from_here_cmd = app_commands.ContextMenu(
             name='Purge Up To Here', 
-            callback=self.purge_from_here
+            callback=self.purge_from_here,
+            allowed_contexts=self.GUILD_CONTEXT,
+            allowed_installs=self.GUILD_INSTALL
         )
 
         roles = RoleManagement(
             name="role", 
             description="Role management commands",
-            default_permissions=discord.Permissions(manage_roles=True)
+            default_permissions=discord.Permissions(manage_roles=True),
+            allowed_contexts=self.GUILD_CONTEXT,
+            allowed_installs=self.GUILD_INSTALL
         )
 
         self.bot.tree.add_command(self.purge_from_here_cmd)
@@ -462,7 +473,9 @@ class Moderation(commands.Cog):
     temprole = app_commands.Group(
         name="temprole", 
         description="Manage roles containing an expiry attribute.", 
-        default_permissions=discord.Permissions(manage_roles=True)
+        default_permissions=discord.Permissions(manage_roles=True),
+        allowed_contexts=GUILD_CONTEXT,
+        allowed_installs=GUILD_INSTALL
     )
 
     @temprole.command(name="add", description="Adds a temporary role")
