@@ -3606,7 +3606,7 @@ class Economy(commands.Cog):
             owned_items = await conn.fetchall(query, member.id)
 
         length = 8
-        paginator = RefreshPagination(intersaction)
+        paginator = RefreshPagination(interaction)
         paginator.total_pages = paginator.compute_total_pages(len(owned_items), length)
 
         async def get_page_part(force_refresh: bool | None = None) -> discord.Embed:
