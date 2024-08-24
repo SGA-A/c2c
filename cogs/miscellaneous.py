@@ -74,7 +74,10 @@ class CommandUsage(RefreshPagination):
     ) -> None:
         super().__init__(interaction, get_page)
         self.viewing = viewing
-        self.usage_embed = discord.Embed(title=f"{viewing.display_name}'s Command Usage", colour=0x2B2D31)
+        self.usage_embed = discord.Embed(
+            title=f"{viewing.display_name}'s Command Usage", 
+            colour=0x2B2D31
+        )
         self.usage_data = []  # commands list
         self.children[-1].default_values = [discord.Object(id=self.viewing.id)]
 
@@ -89,11 +92,8 @@ class CommandUsage(RefreshPagination):
                 """, self.viewing.id
             )
             if not self.usage_data:
-                self.usage_embed.description = (
-                    "This user has never used any bot commands before.\n"
-                    "Or, they have not used the bot since the rewrite (<t:1712935339:R>)."
-                )
-                self.total = 0
+                self.usage_embed.description = None
+                self.total, self.total_pages = 0, 1
                 return
 
             self.total = await total_commands_used_by_user(self.viewing.id, conn)
@@ -101,9 +101,10 @@ class CommandUsage(RefreshPagination):
 
     @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a registered user", row=0)
     async def user_select(self, interaction: discord.Interaction, select: discord.ui.UserSelect):
-        self.usage_embed.title = f"{self.viewing.display_name}'s Command Usage"
         self.viewing = select.values[0]
         self.index = 1
+
+        self.usage_embed.title = f"{self.viewing.display_name}'s Command Usage"
         select.default_values = [discord.Object(id=self.viewing.id)]
 
         await self.fetch_data()

@@ -32,6 +32,7 @@ class InteractionExceptions(Cog):
     def cog_unload(self):
         self.bot.tree.on_error = self._old_tree_error
 
+    @staticmethod
     def handle_unknown_exception(embed: Embed):
         embed.title = "Something went wrong"
         embed.description = (
@@ -40,7 +41,8 @@ class InteractionExceptions(Cog):
             "please let us know about it. We're always here to help!"
         )
 
-    def handle_transformer_error(self, error: BASE_ERROR, embed: Embed):
+    @staticmethod
+    def handle_transformer_error(error: BASE_ERROR, embed: Embed):
         if isinstance(error, CustomTransformerError):
             embed.description = error.cause
         elif error.type.value == AppCommandOptionType.user.value:
@@ -50,7 +52,8 @@ class InteractionExceptions(Cog):
         else:
             embed.description = "An error occurred while processing your input."
 
-    def handle_check_failure(self, error: BASE_ERROR, embed: Embed):
+    @staticmethod
+    def handle_check_failure(error: BASE_ERROR, embed: Embed):
         try:
             embed.description = error.cause
         except AttributeError:

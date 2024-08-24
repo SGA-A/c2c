@@ -1382,16 +1382,17 @@ class MultiplierView(RefreshPagination):
                 AND multi_type = $1
                 """, self.viewing.id, lowered
             )
-
-            self.multiplier_list = await conn.fetchall(
-                """
-                SELECT amount, description, expiry_timestamp
-                FROM multipliers
-                WHERE (userID IS NULL OR userID = $0)
-                AND multi_type = $1
-                ORDER BY amount DESC
-                """, self.viewing.id, lowered
-            )
+            self.multiplier_list = []
+            if self.total_multi:
+                self.multiplier_list = await conn.fetchall(
+                    """
+                    SELECT amount, description, expiry_timestamp
+                    FROM multipliers
+                    WHERE (userID IS NULL OR userID = $0)
+                    AND multi_type = $1
+                    ORDER BY amount DESC
+                    """, self.viewing.id, lowered
+                )
         self.total_pages = self.compute_total_pages(len(self.multiplier_list), self.length)
 
     @discord.ui.select(options=multipliers, row=0, placeholder="Select a multiplier to view")
