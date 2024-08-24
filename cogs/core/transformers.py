@@ -31,4 +31,6 @@ class RawIntegerTransformer(app_commands.Transformer):
             if self.reject_shorthands or value.lower() not in ("max", "all"):
                 raise CustomTransformerError(value, self.type, self, self.INVALID_SHORTHAND)
             converted = value
+        except OverflowError:
+            raise CustomTransformerError(value, self.type, self, self.INVALID_ARGUMENT)
         return converted

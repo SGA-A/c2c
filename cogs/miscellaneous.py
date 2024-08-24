@@ -395,10 +395,10 @@ class Miscellaneous(commands.Cog):
         tag3: str = None,
         private: bool = True,
         length: app_commands.Range[int, 1, 10] = 3,
-        maximum: app_commands.Range[int, 1, 9999] = 30,
+        maximum: app_commands.Range[int, 1, 1000] = 30,
         page: app_commands.Range[int, 1] = 1
     ) -> None:
-
+        await interaction.response.defer(thinking=True, ephemeral=private)
         tagviewing = ' '.join(val for _, val in interaction.namespace if isinstance(val, str))
 
         posts_xml: list[Element] = await self.retrieve_via_kona(
@@ -411,7 +411,7 @@ class Miscellaneous(commands.Cog):
         if isinstance(posts_xml, int):
             embed = membed("Failed to make this request.")
             embed.title = f"{posts_xml}. That's an error."
-            return await interaction.response.send_message(embed=embed)
+            return await interaction.followup.send(embed=embed)
 
         if not len(posts_xml):
             embed = membed(
@@ -422,7 +422,7 @@ class Miscellaneous(commands.Cog):
                 "-# You can find a tag by using the [website.](https://konachan.net/tag)"
             )
             embed.title = "No posts found."
-            return await interaction.response.send_message(ephemeral=True, embed=embed)
+            return await interaction.followup.send(ephemeral=True, embed=embed)
 
         async def get_page_part(page: int):
             offset = (page - 1) * length
@@ -441,27 +441,6 @@ class Miscellaneous(commands.Cog):
             get_page_part, 
             Pagination.compute_total_pages(len(posts_xml), length)
         ).navigate(ephemeral=private)
-
-    @app_commands.command(description='Fetch all the emojis c2c can access')
-    async def emojis(self, interaction: discord.Interaction) -> None:
-        length = 8
-        emb = membed()
-        emb.title = "Emojis"
-
-        async def get_page_part(page: int):
-            offset = (page - 1) * length
-
-            emb.description = "\n".join(
-                f"{emoji} (**{emoji.name}**) \U00002014 `{emoji}`" 
-                for emoji in self.bot.emojis[offset:offset+length]
-            )
-            return [emb]
-
-        await Pagination(
-            interaction, 
-            get_page_part,
-            Pagination.compute_total_pages(len(self.bot.emojis), length)
-        ).navigate()
 
     @app_commands.command(description='Queries a random fact')
     async def randomfact(self, interaction: discord.Interaction) -> None:

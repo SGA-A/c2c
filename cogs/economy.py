@@ -27,7 +27,6 @@ from discord.ext import commands, tasks
 from discord import app_commands
 from asqlite import Connection
 
-
 from .core.bot import C2C
 from .core.paginators import PaginationItem, RefreshPagination
 from .core.errors import CustomTransformerError, FailingConditionalError
@@ -89,6 +88,13 @@ LEVEL_UP_PROMPTS = (
     "Brilliant job",
     "Outstanding",
     "You're doing great"
+)
+INVOKER_NOT_REGISTERED = (
+    "## <:notFound:1263922668823122075> You are not registered.\n"
+    "You'll need to register first before you can use this command.\n"
+    "### Already Registered?\n"
+    "Find out what could've happened by calling "
+    "[`@me reasons`](https://www.google.com/)."
 )
 NOT_REGISTERED = "This user is not registered, so you can't use this command on them."
 SLOTS = ('🔥', '😳', '🌟', '💔', '🖕', '🤡', '🍕', '🍆', '🍑')
@@ -407,6 +413,18 @@ class UserSettings(BaseInteractionView):
         except discord.HTTPException:
             pass
 
+    async def on_error(
+        self, 
+        interaction: discord.Interaction, 
+        error: Exception, 
+        item: discord.ui.Item[Any]
+    ) -> None:
+        if isinstance(error, IntegrityError):
+            if not self.is_finished():
+                self.stop()
+            await interaction.delete_original_response()
+            return await respond(interaction, embed=membed(INVOKER_NOT_REGISTERED))
+        await super().on_error(interaction, error, item)
 
 class ConfirmResetData(BaseInteractionView):
     def __init__(self, interaction: discord.Interaction, /, to_remove: USER_ENTRY) -> None:
@@ -442,12 +460,12 @@ class ConfirmResetData(BaseInteractionView):
 
                 return await interaction.response.send_message(
                     embed=membed(
-                        "Failed to wipe user data.\n"
-                        "Report this to the developers so they can get it fixed."
+                        f"Failed to wipe {self.to_remove.name}'s data.\n"
+                        "-# Report this to the developers so they can get it fixed."
                     )
                 )
 
-        whose = "your" if interaction.user.id == self.to_remove.id else f"{self.to_remove.mention}'s"
+        whose = "your" if interaction.user.id == self.to_remove.id else f"{self.to_remove.name}'s"
         end_note = " Thanks for using the bot." if whose == "your" else ""
 
         await interaction.response.send_message(
@@ -1100,10 +1118,17 @@ class ItemLeaderboard(BaseInteractionView):
     def __init__(self, interaction: discord.Interaction, chosen_item_id: int) -> None:
         super().__init__(interaction)
         self.chosen_item_id = chosen_item_id
+        self.message: discord.WebhookMessage | None = None
 
     async def on_timeout(self) -> None:
+        edit_meth = getattr(
+            self.message, 
+            "edit", 
+            self.interaction.edit_original_response
+        )
+
         try:
-            await self.interaction.edit_original_response(view=None)
+            await edit_meth(view=None)
         except discord.HTTPException:
             pass
 
@@ -1292,8 +1317,12 @@ class StatLeaderboard(BaseInteractionView):
             await ItemLeaderboard.populate_data(self.interaction, data)
         ) or "Nobody has earnt this stat yet."
 
-    async def refresh_lb(self, interaction: discord.Interaction, /):
-        lb = interaction.message.embeds[0]
+    async def refresh_lb(
+        self, 
+        interaction: discord.Interaction, 
+        lb: discord.Embed | None = None
+    ) -> None:
+        lb = lb or interaction.message.embeds[0]
         lb.timestamp = discord.utils.utcnow()
         lb.description = "\n".join(await self.create_lb())
 
@@ -1302,11 +1331,13 @@ class StatLeaderboard(BaseInteractionView):
     @discord.ui.select(options=options, placeholder="Select a leaderboard filter", row=0)
     async def lb_stat_select(self, interaction: discord.Interaction, select: discord.ui.Select):
         self.chosen_option = select.values[0]
+        lb = interaction.message.embeds[0]
+        lb.title = f"Global Leaderboard: {self.chosen_option}"
 
         for option in select.options:
             option.default = option.value == self.chosen_option
 
-        await self.refresh_lb(interaction)
+        await self.refresh_lb(interaction, lb)
 
     @discord.ui.button(emoji="<:refreshPages:1263923160433168414>", row=1)
     async def refresh_lb_button(self, interaction: discord.Interaction, _: discord.ui.Button):
@@ -1457,7 +1488,6 @@ class SettingsDropdown(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
         self.current_setting = self.values[0]
-        self.view.first_pass_complete = True
 
         for option in self.options:
             option.default = option.value == self.current_setting
@@ -1804,14 +1834,6 @@ class Economy(commands.Cog):
     def __init__(self, bot: C2C) -> None:
         self.bot = bot
 
-        self.not_registered = membed(
-            "## <:notFound:1263922668823122075> You are not registered.\n"
-            "You'll need to register first before you can use this command.\n"
-            "### Already Registered?\n"
-            "Find out what could've happened by calling "
-            "[`@me reasons`](https://www.google.com/)."
-        )
-
     async def interaction_check(self, interaction: discord.Interaction):
         async with self.bot.pool.acquire() as conn:
             data = await conn.fetchone("SELECT userID FROM transactions WHERE userID = $0", interaction.user.id)
@@ -1961,46 +1983,6 @@ class Economy(commands.Cog):
         ranumber = randint(10_000_000, 20_000_000)
         query = "INSERT INTO accounts (userID, wallet) VALUES ($0, $1)"
         await conn_input.execute(query, user.id, ranumber)
-
-    @staticmethod
-    async def can_call_out(user: USER_ENTRY, conn_input: Connection) -> bool:
-        """
-        Check if the user is NOT in the database and therefore not registered (evaluates True if not in db).
-
-        Example usage:
-        if await self.can_call_out(interaction.user, conn):
-            await interaction.response.send_message(embed=self.not_registered)
-
-        This is what should be done all the time to check if a user IS NOT REGISTERED.
-        """
-
-        has_account_column, = await conn_input.fetchone(
-            "SELECT EXISTS (SELECT 1 FROM accounts WHERE userID = $0)", 
-            user.id
-        )
-        return not has_account_column
-
-    @staticmethod
-    async def can_call_out_either(user1: USER_ENTRY, user2: USER_ENTRY, conn_input: Connection) -> bool:
-        """
-        Check if both users are in the database. (evaluates True if both users are in db.)
-        Example usage:
-
-        if not(await self.can_call_out_either(interaction.user, username, conn)):
-            do something
-
-        This is what should be done all the time to check if both users are not registereed.
-        """
-
-        rows_present, = await conn_input.fetchone(
-            """
-            SELECT COUNT(*) 
-            FROM accounts 
-            WHERE userID IN (?, ?)
-            """, (user1.id, user2.id)
-        )
-
-        return rows_present == 2
 
     @staticmethod
     async def fetch_balance(user_id: int, /, conn: Connection, mode: str = "wallet") -> int:
@@ -2538,9 +2520,6 @@ class Economy(commands.Cog):
             return await interaction.response.send_message(embed=membed("You can't share with yourself."))
 
         async with self.bot.pool.acquire() as conn:
-            if await self.can_call_out(recipient, conn):
-                return await interaction.response.send_message(embed=membed(NOT_REGISTERED))
-
             actual_wallet = await self.fetch_balance(sender.id, conn)
 
             try:
@@ -2601,13 +2580,9 @@ class Economy(commands.Cog):
         if sender.id == recipient.id:
             return await interaction.response.send_message(embed=membed("You can't share with yourself."))
 
+        item_id, item_name, ie = item
         async with self.bot.pool.acquire() as conn:
-            if await self.can_call_out(recipient, conn):
-                return await respond(interaction, embed=membed(NOT_REGISTERED))
-
-            item_id, item_name, ie = item
-
-            attrs = await conn.fetchone(
+            actual_inv_qty, item_rarity = await conn.fetchone(
                 """
                 SELECT COALESCE(inventory.qty, 0), rarity
                 FROM shop
@@ -2617,7 +2592,6 @@ class Economy(commands.Cog):
                 """, sender.id, item_id
             )
 
-            actual_inv_qty, item_rarity = attrs
             if actual_inv_qty < quantity:
                 return await respond(interaction, embed=membed(f"You don't have **{quantity}x {ie} {item_name}**."))
 
@@ -3419,26 +3393,19 @@ class Economy(commands.Cog):
     async def prestige(self, interaction: discord.Interaction) -> None:
         """Sacrifice a portion of your currency stats in exchange for incremental perks."""
 
-        conn = await self.bot.pool.acquire()
-        data = await conn.fetchone(
-            """
-            SELECT 
-                prestige, 
-                level, 
-                (wallet + bank) AS total_robux 
-            FROM accounts 
-            WHERE userID = $0
-            """, interaction.user.id
-        )
-
-        if data is None:
-            await self.bot.pool.release(conn)
-            return await interaction.response.send_message(embed=self.not_registered, ephemeral=True)
-
-        prestige, actual_level, actual_robux = data
+        async with self.bot.pool.acquire() as conn:
+            prestige, actual_level, actual_robux = await conn.fetchone(
+                """
+                SELECT 
+                    prestige, 
+                    level, 
+                    (wallet + bank) AS total_robux 
+                FROM accounts 
+                WHERE userID = $0
+                """, interaction.user.id
+            ) or (0, 0, 0)
 
         if prestige == 10:
-            await self.bot.pool.release(conn)
             return await interaction.response.send_message(
                 ephemeral=True,
                 embed=membed(
@@ -3452,13 +3419,9 @@ class Economy(commands.Cog):
         met_check = (actual_robux >= req_robux) and (actual_level >= req_level)
 
         if met_check:
-            await self.bot.pool.release(conn)
             return await self.start_prestige(interaction, prestige)
-        await self.bot.pool.release(conn)
 
-        emoji = PRESTIGE_EMOTES.get(prestige + 1)
-        emoji = search(r':(\d+)>', emoji)
-        emoji = self.bot.get_emoji(int(emoji.group(1)))
+        emote_id = search(r':(\d+)>', PRESTIGE_EMOTES[prestige+1]).group(1)
 
         actual_robux_progress = (actual_robux / req_robux) * 100
         actual_level_progress = (actual_level / req_level) * 100
@@ -3476,7 +3439,9 @@ class Economy(commands.Cog):
                 f"<:replyBranch:1263923209921757224> {generate_progress_bar(actual_level_progress)} "
                 f"` {int(actual_level_progress):,}% `"
             )
-        ).set_thumbnail(url=emoji.url).set_footer(text="Imagine thinking you can prestige already.")
+        ).set_thumbnail(
+            url=f"https://cdn.discordapp.com/emojis/{emote_id}.png?size=240&quality=lossless"
+        ).set_footer(text="Imagine thinking you can prestige already.")
 
         await interaction.response.send_message(embed=embed)
 
@@ -3687,7 +3652,7 @@ class Economy(commands.Cog):
                 assert ret is not None
             except AssertionError:
                 await tr.rollback()
-                return await interaction.response.send_message(embed=self.not_registered)
+                return await interaction.response.send_message(embed=membed(INVOKER_NOT_REGISTERED))
             await self.update_cooldown(conn, interaction.user.id, income_type, r.timestamp())
 
         em.description = (
@@ -3726,13 +3691,19 @@ class Economy(commands.Cog):
             )
 
         async with self.bot.pool.acquire() as conn:
-            if await self.can_call_out(member, conn):
+            tr = conn.transaction()
+            await tr.start()
+
+            try:
+                await declare_transaction(conn, user_id=member.id)
+            except IntegrityError:
+                await tr.rollback()
+                who_is = "You are" if member.id == interaction.user.id else f"{member.name} is"
                 return await interaction.response.send_message(
-                    ephemeral=True,
-                    embed=membed(f"{member.mention} isn't registered.")
+                    embed=membed(f"{who_is} not registered.")
                 )
-            await declare_transaction(conn, user_id=member.id)
-            await conn.commit()
+            else:
+                await tr.commit()
 
         view = ConfirmResetData(interaction, member)
 
@@ -3872,7 +3843,7 @@ class Economy(commands.Cog):
         lb.timestamp = discord.utils.utcnow()
         lb.title = f"{item_name} Global Leaderboard"
 
-        await interaction.response.send_message(embed=lb, view=view)
+        view.message = await respond(interaction, embed=lb, view=view)
 
     @app_commands.guild_install()
     @app_commands.rename(host='user')
@@ -3911,11 +3882,8 @@ class Economy(commands.Cog):
         )
 
         async with self.bot.pool.acquire() as conn:
-            if not (await self.can_call_out_either(robber, host, conn)):
-                return await interaction.response.send_message(embed=membed(NOT_REGISTERED))
-
-            robber_wallet, robber_bounty, robber_passive_mode = await conn.fetchone(query, robber.id)
-            host_wallet, host_passive_mode = await conn.fetchone(query2, host.id)
+            robber_wallet, robber_bounty, robber_passive_mode = await conn.fetchone(query, robber.id) or (0, 0, 0)
+            host_wallet, host_passive_mode = await conn.fetchone(query2, host.id) or (0, 0)
 
         if robber_passive_mode:
             embed.description = "You are in passive mode! If you want to rob, turn that off!"

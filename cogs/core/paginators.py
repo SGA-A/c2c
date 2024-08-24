@@ -21,7 +21,7 @@ class PaginatorInput(discord.ui.Modal):
         self.page_num.placeholder = f"A number between 1 and {their_view.total_pages}."
         super().__init__(title="Input a Page", timeout=45.0)
 
-    page_num = discord.ui.TextInput(label='Page', min_length=1, max_length=4)
+    page_num = discord.ui.TextInput(label='Page', min_length=1, max_length=5)
 
     async def on_submit(self, interaction: discord.Interaction):
         self.interaction = interaction
@@ -31,7 +31,7 @@ class PaginatorInput(discord.ui.Modal):
 class BasePaginator(discord.ui.View):
     """The base paginator which (most) paginators inherit properties from."""
     def __init__(self, interaction: discord.Interaction, get_page: Callable | None = None):
-        super().__init__(timeout=45.0)
+        super().__init__(timeout=90.0)
         self.interaction = interaction
         self.get_page = get_page
         self.index = 1
@@ -46,10 +46,10 @@ class BasePaginator(discord.ui.View):
 
         try:
             await self.interaction.edit_original_response(view=self)
-        except discord.NotFound:
+        except discord.HTTPException:
             pass
 
-    async def on_error(self, interaction: discord.Interaction[discord.Client], error: Exception, item) -> None:
+    async def on_error(self, interaction: discord.Interaction, error: Exception, item: discord.ui.Item) -> None:
         if hasattr(error, "cause"):  # CustomTransformerError
             return await interaction.response.send_message(error.cause)
 
@@ -57,6 +57,7 @@ class BasePaginator(discord.ui.View):
             await self.interaction.delete_original_response()
         except discord.HTTPException:
             pass
+
         self.stop()
         await respond(interaction, embed=membed("Something went wrong."))
         await super().on_error(interaction, error, item)
@@ -76,9 +77,9 @@ class Pagination(BasePaginator):
         embs = await self.get_page(self.index)
 
         if self.total_pages == 1:
-            return await self.interaction.response.send_message(embeds=embs, **kwargs)
+            return await respond(self.interaction, embeds=embs, **kwargs)
         self.update_buttons()
-        await self.interaction.response.send_message(embeds=embs, view=self, **kwargs)
+        await respond(self.interaction, embeds=embs, view=self, **kwargs)
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
         embs  = await self.get_page(self.index)
@@ -93,8 +94,8 @@ class Pagination(BasePaginator):
 
         self.children[0].disabled = is_first_page_check
         self.children[1].disabled = is_first_page_check
-        self.children[-2].disabled = is_last_page_check
-        self.children[-1].disabled = is_last_page_check
+        self.children[3].disabled = is_last_page_check
+        self.children[4].disabled = is_last_page_check
 
     @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_FIRST_PAGE_EMOJI, row=1)
     async def first(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
@@ -148,19 +149,19 @@ class PaginationSimple(discord.ui.View):
         return await economy_check(interaction, self.invoker_id)
 
     async def on_timeout(self) -> None:
+        edit_meth = getattr(self.message, "edit", None) or self.ctx.edit_original_response
+
         for item in self.children:
             item.disabled = True
 
-        edit_meth = getattr(self, "message", None) or self.ctx.edit_original_response
-
         try:
             await edit_meth(view=self)
-        except discord.NotFound:
+        except discord.HTTPException:
             pass
 
     async def navigate(self):
         emb = await self.get_page(self.index)
-        respond_meth = getattr(self.ctx, "response", None) or self.ctx.send
+        respond_meth = getattr(self.ctx, "send", None) or self.ctx.response.send_message
 
         if self.total_pages == 1:
             self.stop()

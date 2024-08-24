@@ -64,9 +64,8 @@ class BaseInteractionView(discord.ui.View):
             await self.interaction.edit_original_response(view=None)
         except discord.HTTPException:
             pass
-        if self.is_finished():
-            return
-        self.stop()
+        if not self.is_finished():
+            self.stop()
         await super().on_error(interaction, error, item)
 
 
@@ -95,9 +94,8 @@ class BaseContextView(discord.ui.View):
             await self.interaction.edit_original_response(view=None)
         except discord.HTTPException:
             pass
-        if self.is_finished():
-            return
-        self.stop()
+        if not self.is_finished():
+            self.stop()
         await super().on_error(interaction, error, item)
 
 

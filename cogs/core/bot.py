@@ -46,8 +46,7 @@ class C2C(commands.Bot):
             max_messages=None,
             member_cache_flags=flags,
             owner_ids={992152414566232139, 546086191414509599},
-            status=discord.Status.idle,
-            strip_after_prefix=True
+            status=discord.Status.idle
         )
 
         # Database and HTTP Connection

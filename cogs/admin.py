@@ -16,14 +16,6 @@ from .core.helpers import membed
 from .core.constants import CURRENCY
 
 
-GUILD_MESSAGEABLE = (
-    discord.ForumChannel | 
-    discord.TextChannel | 
-    discord.VoiceChannel | 
-    discord.StageChannel
-)
-
-
 class Admin(commands.Cog):
     """Developer tools relevant to maintainence of the bot. Only available for use by the bot developers."""
     def __init__(self, bot: C2C):
@@ -272,17 +264,9 @@ class Admin(commands.Cog):
         await ctx.send("\U00002705")
         await self.bot.close()
 
-    @app_commands.command(description='Repeat what you typed')
-    @app_commands.describe(
-        message='What you want me to say.', 
-        channel='What channel to send it in.'
-    )
-    async def repeat(
-        self, 
-        interaction: discord.Interaction, 
-        message: str,
-        channel: GUILD_MESSAGEABLE | None = None
-    ) -> None:
+    @app_commands.command(description='Repeat what you typed and mask this command use')
+    @app_commands.describe(message='What you want me to say.')
+    async def repeat(self, interaction: discord.Interaction, message: app_commands.Range[str, 1, 2000]) -> None:
         """Repeat what you typed, also converting emojis based on whats inside two equalities."""
 
         matches = findall(r'<(.*?)>', message)
@@ -297,15 +281,16 @@ class Admin(commands.Cog):
                 embed=membed("Could not find that emoji.")
             )
 
+        await interaction.channel.send(message)
         await interaction.response.send_message(
             ephemeral=True, 
             delete_after=3.0, 
-            embed=membed(f"Sent this message to {channel.mention}.")
+            embed=membed(f"Sent this message to {interaction.channel.mention}.")
         )
 
     @commands.command(description="Dispatch customizable quarterly updates")
-    async def hook(self, _: commands.Context):
-        pass  # custom command logic goes here
+    async def hook(self, ctx: commands.Context):
+        await ctx.send("Nothing here yet.")
 
 
 async def setup(bot: C2C):
