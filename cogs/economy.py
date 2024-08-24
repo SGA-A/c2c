@@ -1396,11 +1396,12 @@ class MultiplierView(RefreshPagination):
 
     @discord.ui.select(options=multipliers, row=0, placeholder="Select a multiplier to view")
     async def callback(self, interaction: discord.Interaction, select: discord.ui.Select):
+        self.chosen_multiplier: str = select.values[0]
+        self.index = 1
+
         for option in select.options:
             option.default = option.value == self.chosen_multiplier
 
-        self.chosen_multiplier: str = select.values[0]
-        self.index = 1
         await self.format_pages()
 
         self.embed.colour, thumb_url = self.colour_mapping[self.chosen_multiplier]
@@ -1429,12 +1430,11 @@ class MatchItem(discord.ui.Button):
         super().__init__(
             label=item_name, 
             emoji=ie, 
-            custom_id=f"{item_id}", 
             **kwargs
         )
 
     async def callback(self, interaction: discord.Interaction):
-        self.view.chosen_item = (int(self.custom_id), self.label, self.emoji)
+        self.view.chosen_item = (self.item_id, self.label, self.emoji)
         self.view.stop()
 
         await interaction.response.edit_message(view=self.view)
