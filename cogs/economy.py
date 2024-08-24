@@ -3861,7 +3861,7 @@ class Economy(commands.Cog):
     @leaderboard.command(name="item", description="Rank users based on an item count")
     @app_commands.describe(item=ITEM_DESCRPTION)
     async def get_item_lb(self, interaction: discord.Interaction, item: ITEM_CONVERTER):
-        item_id = item[0]
+        item_id, item_name = item[:2]
         view = ItemLeaderboard(interaction, chosen_item_id=item_id)
 
         async with self.bot.pool.acquire() as conn:
@@ -3869,6 +3869,7 @@ class Economy(commands.Cog):
             lb = membed("\n".join(await view.create_lb(conn))).set_thumbnail(url=thumb_url)
 
         lb.timestamp = discord.utils.utcnow()
+        lb.title = f"{item_name} Global Leaderboard"
 
         await interaction.response.send_message(embed=lb, view=view)
 
