@@ -825,11 +825,6 @@ class BlackjackUi(BaseInteractionView):
                     f"**Cards** - {' '.join(self.metadata.dealer_hand_ui)}\n"
                     f"**Total** - `{calculate_hand(self.metadata.dealer_hand)}`"
                 )
-            )
-
-            embed.set_author(
-                name=f"{interaction.user.name}'s winning blackjack game", 
-                icon_url=interaction.user.display_avatar.url
             ).set_footer(text=f"Multiplier: {new_multi:,}%")
 
             return await interaction.response.edit_message(embed=embed, view=None)
@@ -877,6 +872,7 @@ class BlackjackUi(BaseInteractionView):
                 new_multi 
             ) = await self.update_winning_data(bet_amount=self.metadata.bet)
 
+            embed.set_footer(text=f"Multiplier: {new_multi:,}%")
             embed.colour = discord.Colour.brand_green()
             embed.description = (
                 f"**You win! The dealer went over 21 and busted.**\n"
@@ -885,25 +881,16 @@ class BlackjackUi(BaseInteractionView):
                 f"You won {prctnw:.1f}% of the games."
             )
 
-            embed.set_author(
-                icon_url=interaction.user.display_avatar.url, 
-                name=f"{interaction.user.name}'s winning blackjack game"
-            ).set_footer(text=f"Multiplier: {new_multi:,}%")
-
         elif dealer_total > player_sum:
             new_amount_balance, prnctl = await self.update_losing_data(bet_amount=self.metadata.bet)
 
+            embed.remove_footer()
             embed.colour = discord.Colour.brand_red()
             embed.description = (
                 f"**You lost. You stood with a lower score (`{player_sum}`) than the dealer (`{dealer_total}`).**\n"
                 f"You lost {CURRENCY} **{self.metadata.bet:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
                 f"You lost {prnctl:.1f}% of the games."
             )
-
-            embed.set_author(
-                icon_url=interaction.user.display_avatar.url,
-                name=f"{interaction.user.name}'s losing blackjack game"
-            ).remove_footer()
 
         elif dealer_total < player_sum:
             (   amount_after_multi, 
@@ -912,17 +899,13 @@ class BlackjackUi(BaseInteractionView):
                 new_multi 
             ) = await self.update_winning_data(bet_amount=self.metadata.bet)
 
+            embed.set_footer(text=f"Multiplier: {new_multi:,}%")
             embed.colour = discord.Colour.brand_green()
             embed.description = (
                 f"**You win! You stood with a higher score (`{player_sum}`) than the dealer (`{dealer_total}`).**\n"
                 f"You won {CURRENCY} **{amount_after_multi:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
                 f"You won {prctnw:.1f}% of the games."
             )
-
-            embed.set_author(
-                icon_url=interaction.user.display_avatar.url,
-                name=f"{interaction.user.name}'s winning blackjack game"
-            ).set_footer(text=f"Multiplier: {new_multi:,}%")
 
         else:
             async with interaction.client.pool.acquire() as conn, conn.transaction():
@@ -988,11 +971,6 @@ class BlackjackUi(BaseInteractionView):
                 f"**Cards** - {' '.join(self.metadata.dealer_hand_ui)}\n"
                 f"**Total** - `{dealer_total}`"
             )
-        )
-
-        embed.set_author(
-            icon_url=interaction.user.display_avatar.url, 
-            name=f"{interaction.user.name}'s losing blackjack game"
         ).remove_footer()
 
         await interaction.response.edit_message(embed=embed, view=None)
@@ -1057,10 +1035,7 @@ class HighLow(BaseInteractionView):
             f'Your new balance is {CURRENCY} **{new_balance[0]:,}**.'
         )
 
-        win.set_author(
-            name=f"{interaction.user.name}'s winning high-low game", 
-            icon_url=interaction.user.display_avatar.url
-        ).set_footer(text=f"Multiplier: {new_multi:,}%")
+        win.set_footer(text=f"Multiplier: {new_multi:,}%")
 
         await interaction.response.edit_message(embed=win, view=self)
 
@@ -1079,10 +1054,7 @@ class HighLow(BaseInteractionView):
             f'Your new balance is {CURRENCY} **{new_amount[0]:,}**.'
         )
 
-        lose.set_author(
-            name=f"{interaction.user.name}'s losing high-low game", 
-            icon_url=interaction.user.display_avatar.url
-        ).remove_footer()
+        lose.remove_footer()
 
         await interaction.response.edit_message(embed=lose, view=self)
 
@@ -3486,17 +3458,17 @@ class Economy(commands.Cog):
 
         query = "SELECT slotw, slotl, wallet FROM accounts WHERE userID = $0"
 
-        # Game checks
         async with self.bot.pool.acquire() as conn:
             has_keycard = await self.fetch_item_qty_from_id(interaction.user.id, item_id=1, conn=conn)
             slot_wins, slot_losses, wallet_amt = await conn.fetchone(query, interaction.user.id) or (0, 0, 0)
         robux = self.do_wallet_checks(wallet_amt, robux, has_keycard)
 
-        # The actual slot machine
-
         emoji_1, emoji_2, emoji_3 = generate_slot_combination()
         multiplier = find_slot_matches(emoji_1, emoji_2, emoji_3)
-        slot_machine = discord.Embed()
+        slot_machine = discord.Embed().set_author(
+            name=f"{interaction.user.name}'s slot machine",
+            icon_url=interaction.user.display_avatar.url
+        )
 
         if multiplier:
             amount_after_multi = add_multi_to_original(multiplier, robux)
@@ -4046,43 +4018,55 @@ class Economy(commands.Cog):
     async def bet(self, interaction: discord.Interaction, robux: ROBUX_CONVERTER) -> None:
         """Bet your robux on a gamble to win or lose robux."""
 
-        # Game checks
+        query = (
+            """
+            WITH inv AS (
+                SELECT qty
+                FROM inventory 
+                WHERE userID = $0 AND itemID = 1
+            ),
+            account AS (
+                SELECT 
+                    wallet, 
+                    betw, 
+                    betl 
+                FROM accounts 
+                WHERE userID = $0
+            )
+            SELECT
+                inv.qty,
+                account.wallet,
+                account.betw,
+                account.betl,
+                CAST(TOTAL(amount) AS INTEGER)
+            FROM multipliers
+            CROSS JOIN inv
+            CROSS JOIN account
+            WHERE (multipliers.userID IS NULL OR multipliers.userID = $0) AND multi_type = 'robux'
+            """
+        )
+
         user = interaction.user
-        query = "SELECT wallet, betw, betl FROM accounts WHERE userID = $0"
-
         async with self.bot.pool.acquire() as conn:
-            wallet_amt, id_won_amount, id_lose_amount = await conn.fetchone(query, user.id) or (0, 0, 0)
+            (
+                keycard_qty,
+                wallet_amt, 
+                id_won_amount, 
+                id_lose_amount,
+                pmulti
+            ) = await conn.fetchone(query, user.id) or (0, 0, 0, 0, 0)
 
-            has_keycard = await self.fetch_item_qty_from_id(user.id, item_id=1, conn=conn)
-            robux = self.do_wallet_checks(wallet_amt, robux, has_keycard)
+        robux = self.do_wallet_checks(wallet_amt, robux, keycard_qty)
 
-            pmulti = await self.get_multi_of(user.id, "robux", conn)
+        their_roll, = choices(
+            population=(1, 2, 3, 4, 5, 6), 
+            weights=(37 / 3, 37 / 3, 37 / 3, 63 / 3, 63 / 3, 63 / 3)
+        )
 
-        badges = ""
-
-        if has_keycard:
-            badges = "<:Keycard:1263922058220408872>"
-
-            their_roll, = choices(
-                population=(1, 2, 3, 4, 5, 6), 
-                weights=(37 / 3, 37 / 3, 37 / 3, 63 / 3, 63 / 3, 63 / 3)
-            )
-
-            bot_roll, = choices(
-                population=(1, 2, 3, 4, 5, 6), 
-                weights=(65 / 4, 65 / 4, 65 / 4, 65 / 4, 35 / 2, 35 / 2)
-            )
-
-        else:
-            their_roll, = choices(
-                population=(1, 2, 3, 4, 5, 6), 
-                weights=(10, 10, 15, 27, 15, 23)
-            )
-
-            bot_roll, = choices(
-                population=(1, 2, 3, 4, 5, 6), 
-                weights=(55 / 3, 55 / 3, 55 / 3, 45 / 3, 45 / 3, 45 / 3)
-            )
+        bot_roll, = choices(
+            population=(1, 2, 3, 4, 5, 6), 
+            weights=(65 / 4, 65 / 4, 65 / 4, 65 / 4, 35 / 2, 35 / 2)
+        )
 
         embed = discord.Embed()
 
@@ -4099,6 +4083,7 @@ class Economy(commands.Cog):
 
             prcntw = (updated[1] / (id_lose_amount + updated[1])) * 100
 
+            embed.set_footer(text=f"Multiplier: {pmulti:,}%")
             embed.colour = discord.Color.brand_green()
             embed.description=(
                 f"**You've rolled higher!**\n"
@@ -4107,19 +4092,9 @@ class Economy(commands.Cog):
                 f"You've won {prcntw:.1f}% of all games."
             )
 
-            embed.set_author(
-                name=f"{user.name}'s winning gambling game", 
-                icon_url=user.display_avatar.url
-            ).set_footer(text=f"Multiplier: {pmulti:,}%")
-
         elif their_roll == bot_roll:
             embed.colour = discord.Color.yellow()
             embed.description = "**Tie.** You lost nothing nor gained anything!"
-
-            embed.set_author(
-                name=f"{user.name}'s gambling game", 
-                icon_url=user.display_avatar.url
-            )
 
         else:
             async with self.bot.pool.acquire() as conn, conn.transaction():
@@ -4142,12 +4117,12 @@ class Economy(commands.Cog):
                 f"You've lost {prcntl:.1f}% of all games."
             )
 
-            embed.set_author(
-                name=f"{user.name}'s losing gambling game", 
-                icon_url=user.display_avatar.url
-            )
+        embed.set_author(
+            name=f"{user.name}'s gambling game", 
+            icon_url=user.display_avatar.url
+        )
 
-        embed.add_field(name=user.name, value=f"Rolled `{their_roll}` {''.join(badges)}")
+        embed.add_field(name=user.name, value=f"Rolled `{their_roll}`")
         embed.add_field(name=self.bot.user.name, value=f"Rolled `{bot_roll}`")
 
         await interaction.response.send_message(embed=embed)

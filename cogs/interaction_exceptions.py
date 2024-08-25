@@ -7,7 +7,8 @@ from discord import (
     app_commands, 
     AppCommandOptionType,
     Embed,
-    Interaction
+    Interaction,
+    HTTPException
 )
 
 from .core.errors import CustomTransformerError, FailingConditionalError
@@ -63,9 +64,12 @@ class InteractionExceptions(Cog):
             embed.description = f"You can run this command again {after_cd}."
 
     async def on_app_command_error(self, interaction: Interaction, error: BASE_ERROR) -> None:
-
-        if not interaction.response.is_done():
-            await interaction.response.defer(thinking=True)
+        try:
+            if not interaction.response.is_done():
+                await interaction.response.defer(thinking=True)
+            meth = interaction.followup.send
+        except HTTPException:
+            meth = interaction.channel.send
 
         embed = membed()
         error = getattr(error, "original", error)
@@ -81,7 +85,7 @@ class InteractionExceptions(Cog):
         else:
             self.handle_unknown_exception(embed)
             self.bot.log_exception(error)
-        await interaction.followup.send(embed=embed, view=self.view)
+        await meth(embed=embed, view=self.view)
 
 
 async def setup(bot: C2C):
