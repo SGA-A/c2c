@@ -16,6 +16,7 @@ GO_LAST_PAGE_EMOJI = discord.PartialEmoji.from_str("<:finalPage:1263921799633047
 
 class PaginatorInput(discord.ui.Modal):
     """Modal for users to pass in a valid page number."""
+
     def __init__(self, their_view: 'Pagination'):
         self.interaction: discord.Interaction | None = None
         self.page_num.placeholder = f"A number between 1 and {their_view.total_pages}."
@@ -30,6 +31,7 @@ class PaginatorInput(discord.ui.Modal):
 
 class BasePaginator(discord.ui.View):
     """The base paginator which (most) paginators inherit properties from."""
+
     def __init__(self, interaction: discord.Interaction, get_page: Callable | None = None):
         super().__init__(timeout=90.0)
         self.interaction = interaction
@@ -69,6 +71,7 @@ class BasePaginator(discord.ui.View):
 
 class Pagination(BasePaginator):
     """Pagination menu with support for direct queries to a specific page."""
+
     def __init__(self, interaction, get_page, total_pages: int) -> None:
         super().__init__(interaction, get_page)
         self.total_pages = total_pages
@@ -133,10 +136,11 @@ class Pagination(BasePaginator):
 
 class PaginationSimple(discord.ui.View):
     """
-    A regular pagination menu with no extra features. 
+    A regular pagination menu with no extra features.
 
     Supports hybrids and everything in between.
     """
+
     def __init__(self, ctx, invoker_id: int, total_pages: int, get_page: Callable | None = None) -> None:
         self.ctx: commands.Context | discord.Interaction = ctx
         self.invoker_id = invoker_id
@@ -211,6 +215,7 @@ class PaginationSimple(discord.ui.View):
 
 class RefreshPagination(BasePaginator):
     """Paginator with support for refreshing data, containing it's own refresh button."""
+
     def __init__(self, interaction: discord.Interaction, get_page: Callable | None = None) -> None:
         super().__init__(interaction, get_page)
 
@@ -279,6 +284,7 @@ class PaginationItem(BasePaginator):
 
     Disabling logic has been stripped away.
     """
+
     def __init__(self, interaction: discord.Interaction, get_page: Callable | None = None):
         super().__init__(interaction, get_page)
 

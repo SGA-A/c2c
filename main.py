@@ -1,9 +1,6 @@
 import asyncio
 from sys import version, platform
-from logging import (
-    FileHandler, 
-    info as log_info
-)
+from logging import FileHandler, info as log_info
 
 from discord.ext import commands
 from discord.utils import setup_logging
@@ -15,19 +12,19 @@ from cogs.core.bot import C2C
 bot = C2C()
 
 
-# If you're on Windows, starting in aiohttp >3.10, 
+# If you're on Windows, starting in aiohttp >3.10,
 # you need to need to override the event loop policy as shown
-if platform == 'win32':
+if platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 cogs = {
-    "admin", 
-    "context_exceptions", 
-    "economy", 
-    "interaction_exceptions", 
-    "miscellaneous", 
-    "moderation", 
+    "admin",
+    "context_exceptions",
+    "economy",
+    "interaction_exceptions",
+    "miscellaneous",
+    "moderation",
     "tags"
 }
 
@@ -42,7 +39,9 @@ def get_cog_name(cog_input: str) -> str:
 async def handle_extension(ctx: commands.Context, cog_input: str, action: str):
     cog_name = get_cog_name(cog_input)
     if not cog_name:
-        em = membed("Invalid cog name.").add_field(name="Cogs", value=f"{', '.join(cogs)}")
+        em = membed("Invalid cog name.").add_field(
+            name="Cogs", value=f"{', '.join(cogs)}"
+        )
         return await ctx.reply(embed=em)
 
     embed = membed()
@@ -61,7 +60,7 @@ async def handle_extension(ctx: commands.Context, cog_input: str, action: str):
 
 
 @commands.is_owner()
-@bot.command(aliases=("rl",)) 
+@bot.command(aliases=("rl",))
 async def reload(ctx: commands.Context, cog_input: str) -> None:
     await handle_extension(ctx, cog_input, "reload")
 
@@ -77,9 +76,10 @@ async def unload(ctx: commands.Context, cog_input: str) -> None:
 async def load(ctx: commands.Context, cog_input: str) -> None:
     await handle_extension(ctx, cog_input, "load")
 
-async def main():
 
-    setup_logging(handler=FileHandler(filename='discord.log', encoding='utf-8', mode='w'))
+async def main():
+    file_handler = FileHandler(filename="discord.log", encoding="utf-8", mode="w")
+    setup_logging(handler=file_handler)
     log_info(version)
 
     await bot.start(bot.TOKEN)

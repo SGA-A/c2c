@@ -42,8 +42,8 @@ class BaseInteractionView(discord.ui.View):
     This view has no items, you'll need to add them in manually.
     """
     def __init__(
-        self, 
-        interaction: discord.Interaction, 
+        self,
+        interaction: discord.Interaction,
         controlling_user: discord.User | None = None
     ) -> None:
         self.interaction = interaction
@@ -54,10 +54,10 @@ class BaseInteractionView(discord.ui.View):
         return await economy_check(interaction, self.controlling_user.id)
 
     async def on_error(
-        self, 
-        interaction: discord.Interaction, 
-        error: Exception, 
-        item: discord.ui.Item[Any], 
+        self,
+        interaction: discord.Interaction,
+        error: Exception,
+        item: discord.ui.Item[Any],
         /
     ) -> None:
         try:
@@ -84,10 +84,10 @@ class BaseContextView(discord.ui.View):
         return await economy_check(interaction, self.controlling_user.id)
 
     async def on_error(
-        self, 
-        interaction: discord.Interaction, 
-        error: Exception, 
-        item: discord.ui.Item[Any], 
+        self,
+        interaction: discord.Interaction,
+        error: Exception,
+        item: discord.ui.Item[Any],
         /
     ) -> None:
         try:
@@ -105,7 +105,7 @@ class MessageDevelopers(discord.ui.View):
 
         self.add_item(
             discord.ui.Button(
-                label="Contact a developer", 
+                label="Contact a developer",
                 url="https://www.discordapp.com/users/546086191414509599"
             )
         )
@@ -152,7 +152,7 @@ class GenericModal(discord.ui.Modal):
 
 async def format_timeout_view(embed: discord.Embed, view: discord.ui.View, edit_meth: Callable):
     """
-    Edits to the view and embed are in-place. 
+    Edits to the view and embed are in-place.
 
     `edit_meth` is the method to use when editing a message, since it's so variable between different contexts.
     """
@@ -214,22 +214,9 @@ def number_to_ordinal(n: int) -> str:
     return f"{n}{suffix}"
 
 
-def string_to_datetime(string_obj: str) -> datetime:
-    """
-    Convert a string object to a datetime object.
+def string_to_datetime(string_obj: str, date_format = "%Y-%m-%d %H:%M:%S") -> datetime:
+    """Convert a string into a datetime object, using format specifiers in `date_format`"""
 
-    String must be in this format: %Y-%m-%d %H:%M:%S
-
-    ## Parameters
-    string_obj 
-        the input string representing a date and time.
-    timezone 
-        the timezone to attach to the datetime object.
-    ## Returns 
-        A datetime object.
-    """
-
-    date_format = "%Y-%m-%d %H:%M:%S"
     my_datetime = datetime.strptime(string_obj, date_format)
     return my_datetime.replace(tzinfo=timezone("UTC"))
 
@@ -238,8 +225,7 @@ async def respond(interaction: discord.Interaction, /, **kwargs) -> None | disco
     """
     Responds to the interaction by sending a message.
 
-    This is a helper function which considers whether or 
-    not this interaction was already responded to before.
+    Considers whether or not this interaction was already responded to before.
     """
     if interaction.response.is_done():
         return await interaction.followup.send(**kwargs)
@@ -248,10 +234,9 @@ async def respond(interaction: discord.Interaction, /, **kwargs) -> None | disco
 
 async def edit_response(interaction: discord.Interaction, /, **kwargs) -> None | discord.InteractionMessage:
     """
-    Edit an interaction's original response message, which may be a response. 
+    Edit an interaction's original response message, which may be a response.
 
-    This is a helper function which considers whether or 
-    not this interaction was already responded to before.
+    Considers whether or not this interaction was already responded to before.
     """
     if interaction.response.is_done():
         return await interaction.edit_original_response(**kwargs)
@@ -260,9 +245,9 @@ async def edit_response(interaction: discord.Interaction, /, **kwargs) -> None |
 
 async def send_message(invocation: Context | discord.Interaction, /, **kwargs):
     """
-    Only for use when sending messages needs to be done 
-    either via a `discord.Interaction` or a `commands.Context` 
-    and is not invoked from a hybrid command.
+    For use when using a `discord.Interaction` or a `commands.Context`
+
+    Hybrid commands should not be invoked this way.
     """
     if isinstance(invocation, discord.Interaction):
         return await respond(invocation, **kwargs)
@@ -270,10 +255,10 @@ async def send_message(invocation: Context | discord.Interaction, /, **kwargs):
 
 
 async def process_confirmation(
-    interaction: discord.Interaction, 
+    interaction: discord.Interaction,
     /,
-    prompt: str, 
-    view_owner: discord.Member | None = None, 
+    prompt: str,
+    view_owner: discord.Member | None = None,
     **kwargs
 ) -> bool:
     """
@@ -322,8 +307,8 @@ async def is_setting_enabled(conn: Connection, user_id: int, setting: str) -> bo
 
     result = await conn.fetchone(
         """
-        SELECT value 
-        FROM settings 
+        SELECT value
+        FROM settings
         WHERE userID = $0 AND setting = $1
         """, user_id, setting
     )
@@ -333,7 +318,7 @@ async def is_setting_enabled(conn: Connection, user_id: int, setting: str) -> bo
 
 
 async def handle_confirm_outcome(
-    interaction: discord.Interaction, 
+    interaction: discord.Interaction,
     prompt: str,
     view_owner: discord.Member | None = None,
     setting: str | None = None,
@@ -343,28 +328,31 @@ async def handle_confirm_outcome(
     """
     Handle a confirmation outcome correctly, accounting for whether or not a specific confirmation is enabled.
 
-    The `setting` passed in should be lowercased, since all toggleable confirmation settings are lowercased.
+    Setting names should be lowercase.
 
     ## Returns
-    `None` to indicate that the user doesn't have the specified confirmation enabled. 
-    It's only returned when you specify a specific confirmation setting to check but that user doesn't have it enabled.
+    ### `None`
+    - When the user doesn't have the specified confirmation enabled.
+    - When you specify a specific confirmation setting to check but that user doesn't have it enabled.
+    - if a specific confirmation was passed in and the user has it disabled.
 
-    `None` will only be returned if a specific confirmation was passed in and the user has it disabled.
+    ### `True`
+    - When the user has confirmed, either by confirming on a specific confirmation you passed in to check
+    - When enabled specific setting, or through a generic confirmation that the user confirmed on.
 
-    `True` to indicate the user has confirmed, either by confirming on a specific confirmation you passed in to check 
-    if it is enabled, or through a generic confirmation that the user confirmed on.
-
-    `False` to indicate that the user has not confirmed (the confirmation timed out or they explicitly denied), which 
-    again can be called by the default confirmation or a specific confirmation you passed in to check for.
+    ### `False`
+    - When user has not confirmed (the confirmation timed out or they explicitly denied)
+    - Applicable for both specific and generic confirmations
 
     ## Notes
 
-    Transactions will now be created if a passed in confirmation is enabled or no confirmation is passed in, 
-    meaning you should only use this function in the economy system on a user who is registered, since 
-    foreign key constraints require you to pass in a valid row of the accounts table.
+    Transactions will now be created if a passed in confirmation is enabled or no confirmation is passed in.
 
-    All connections acquired, whether it be passed into the function or created in the function will also be released 
-    in this exact function. Do not handle it yourself outside of the function.
+    Thus, only use this function in the economy system on a user who is registered.
+
+    Because foreign key constraints require you to pass in a valid row of the accounts table.
+
+    All connections acquired by or in the function will also be released in this function. Do not handle it yourself.
     """
 
     can_proceed = None

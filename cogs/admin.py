@@ -3,7 +3,7 @@ from io import StringIO
 from traceback import format_exc
 from textwrap import indent, dedent
 from contextlib import redirect_stdout
-from typing import Any
+from typing import Any, Optional
 
 import asyncio
 import discord
@@ -18,9 +18,10 @@ from .core.constants import CURRENCY
 
 class Admin(commands.Cog):
     """Developer tools relevant to maintainence of the bot. Only available for use by the bot developers."""
+
     def __init__(self, bot: C2C):
         self.bot = bot
-        self._last_result: Any | None = None
+        self._last_result: Optional[Any] = None
 
     async def cog_check(self, ctx: commands.Context) -> bool:
         if ctx.author.id in self.bot.owner_ids:
@@ -30,20 +31,26 @@ class Admin(commands.Cog):
     async def interaction_check(self, interaction: discord.Interaction):
         if interaction.user.id in self.bot.owner_ids:
             return True
-        await interaction.response.send_message(embed=membed("You do not own this bot."))
+        await interaction.response.send_message(
+            embed=membed("You do not own this bot.")
+        )
         return False
 
     @staticmethod
     def cleanup_code(content: str) -> str:
         """Automatically removes code blocks from the code."""
         # remove ```py\n```
-        if content.startswith('```') and content.endswith('```'):
-            return '\n'.join(content.split('\n')[1:-1])
+        if content.startswith("```") and content.endswith("```"):
+            return "\n".join(content.split("\n")[1:-1])
 
         # remove `foo`
-        return content.strip('` \n')
+        return content.strip("` \n")
 
-    @commands.command(name='uptime', description='Returns the time the bot has been active for', aliases=('u',))
+    @commands.command(
+        name="uptime",
+        description="Returns the time the bot has been active for",
+        aliases=("u",)
+    )
     async def uptime(self, ctx: commands.Context):
         """Returns uptime in terms of days, hours, minutes and seconds"""
         diff = discord.utils.utcnow() - self.bot.time_launch
@@ -59,9 +66,9 @@ class Admin(commands.Cog):
 
     @commands.command(description="Adjust a user's robux directly")
     async def config(
-        self, 
+        self,
         ctx: commands.Context,
-        configuration: str, 
+        configuration: str,
         amount: int,
         user: discord.User | discord.Member = commands.Author,
         medium: str = "wallet"
@@ -70,41 +77,43 @@ class Admin(commands.Cog):
 
         if configuration.startswith("a"):
             embed.description = f"Added {CURRENCY} **{amount:,}** to {user.name}!"
-            query = f"UPDATE accounts SET {medium} = {medium} + $0 WHERE userID = $1"
+            query = f"UPDATE accounts SET {medium} = {medium} + ? WHERE userID = ?"
 
         elif configuration.startswith("r"):
             embed.description = f"Deducted {CURRENCY} **{amount:,}** from {user.name}!"
-            query = f"UPDATE accounts SET {medium} = {medium} - $0 WHERE userID = $1"
+            query = f"UPDATE accounts SET {medium} = {medium} - ? WHERE userID = ?"
 
         else:
             embed.description = f"Set {CURRENCY} **{amount:,}** to {user.name}!"
-            query = f"UPDATE accounts SET {medium} = $0 WHERE userID = $1"
+            query = f"UPDATE accounts SET {medium} = ? WHERE userID = ?"
 
         async with self.bot.pool.acquire() as conn, conn.transaction():
-            await conn.execute(query, amount, user.id)
+            await conn.execute(query, (amount, user.id))
 
         await ctx.send(embed=embed)
 
-    @commands.command(description='Sync the bot tree for changes', aliases=("sy",))
+    @commands.command(description="Sync the bot tree for changes", aliases=("sy",))
     async def sync(self, ctx: commands.Context) -> None:
         """Sync the bot's tree globally."""
         await self.bot.tree.sync(guild=None)
         await ctx.send("\U00002705")
 
-    @commands.command(name='eval', description='Evaluates arbitrary code')
-    async def evaluate(self, ctx: commands.Context, *, script_body: str) -> None | discord.Message:
+    @commands.command(name="eval", description="Evaluates arbitrary code")
+    async def evaluate(
+        self, ctx: commands.Context, *, script_body: str
+    ) -> None | discord.Message:
         """Evaluates arbitrary code."""
 
         env = {
-            'bot': self.bot,
-            'ctx': ctx,
-            'channel': ctx.channel,
-            'author': ctx.author,
-            'guild': ctx.guild,
-            'message': ctx.message,
-            '_': self._last_result,
-            'discord': discord,
-            'asyncio': asyncio
+            "bot": self.bot,
+            "ctx": ctx,
+            "channel": ctx.channel,
+            "author": ctx.author,
+            "guild": ctx.guild,
+            "message": ctx.message,
+            "_": self._last_result,
+            "discord": discord,
+            "asyncio": asyncio,
         }
 
         env.update(globals())
@@ -117,44 +126,44 @@ class Admin(commands.Cog):
         try:
             exec(to_compile, env)
         except Exception as e:
-            return await ctx.send(f'```py\n{e.__class__.__name__}: {e}\n```')
+            return await ctx.send(f"```py\n{e.__class__.__name__}: {e}\n```")
 
-        func = env['func']
+        func = env["func"]
         try:
             with redirect_stdout(stdout):
                 ret = await func()  # return value
         except Exception:
             value = stdout.getvalue()
-            await ctx.send(f'```py\n{value}{format_exc()}\n```')
+            await ctx.send(f"```py\n{value}{format_exc()}\n```")
         else:
             value = stdout.getvalue()
             try:
-                await ctx.message.add_reaction('\U00002705')
+                await ctx.message.add_reaction("\U00002705")
             except discord.HTTPException:
                 pass
 
-            if ret is None:  # if nothing is returned
+            if ret is None:
                 if value:
                     try:
-                        await ctx.send(f'```py\n{value}\n```')
+                        await ctx.send(f"```py\n{value}\n```")
                     except discord.HTTPException:
-                        return await ctx.send(embed=membed("Output too long to display."))
+                        return await ctx.send(
+                            embed=membed("Output too long to display.")
+                        )
             else:
                 self._last_result = ret
-                await ctx.send(f'```py\n{value}{ret}\n```')
+                await ctx.send(f"```py\n{value}{ret}\n```")
 
-    @commands.command(description='Sends newlines to clear a channel', aliases=('b',))
+    @commands.command(description="Sends newlines to clear a channel", aliases=("b",))
     async def blank(self, ctx: commands.Context):
         """Clear out the channel."""
         await ctx.send(f".{'\n'*1900}-# Blanked out the channel.")
 
-    @commands.command(description='Update the rules channel for cc', aliases=('ur',))
+    @commands.command(description="Update the rules channel for cc", aliases=("ur",))
     async def urules(self, _: commands.Context):
         """Push an update to the rules channel."""
-        original = (
-            self.bot.get_partial_messageable(902138223571116052)
-            .get_partial_message(1245691538319736863)
-        )
+        channel = self.bot.get_partial_messageable(902138223571116052)
+        original = channel.get_partial_message(1245691538319736863)
 
         rule_content = (
             "1. <:comfyCat:1263920108015849593> **Be Respectful!** "
@@ -175,13 +184,10 @@ class Admin(commands.Cog):
         await original.edit(content=rule_content)
 
     async def send_role_guide(self):
-        message1 = (
-            self.bot.get_partial_messageable(1254883155882672249)
-            .get_partial_message(1254901254530924644)
-        )
+        channel = self.bot.get_partial_messageable(1254883155882672249)
+        original = channel.get_partial_message(1254901254530924644)
 
-        role_content_pt1 = (
-            """
+        role_content_pt1 = """
             # Role Guide
             Roles are similar to ranks or accessories that you can add to your profile.
             There are a few self-assignable roles that you can pick up in <id:customize> by clicking on the buttons.
@@ -200,92 +206,45 @@ class Admin(commands.Cog):
             - <@&1150848144440053780>: Bots that only need read access to bot command channels.
             - <@&1150848206008238151>: Bots that require full read access throughout the server.
             """
-        )
 
-        await message1.edit(content=dedent(role_content_pt1))
+        await original.edit(content=dedent(role_content_pt1))
 
-    async def send_channel_guide(self):
-        message = (
-            self.bot.get_partial_messageable(1254882974327898192)
-            .get_partial_message(1254901539898921093)
-        )
-        channel_content_pt1 = (
-            """
-            # Channel Guide
-            We made this because there are some channels that may cause confusion.
-            To start, all of the channels that contain the word "theory" in them can be read as a "general" channel:
-            > <#1119991877010202744> is equivalent to general
-            > <#1145008097300066336> is equivalent to general-2
-            > <#1160547937420582942> is equivalent to general-nsfw
-            And so on. The theme of the server is "theorized", which is why channels follow this naming convention.
-
-            Apart from these three, most of the channels should be straightforward to understand.
-            -# Still lost? Any other queries? Let a <@&893550756953735278> know.
-            """
-        )
-
-        await message.edit(content=dedent(channel_content_pt1))
-
-    async def send_bot_guide(self):
-        message = (
-            self.bot.get_partial_messageable(1254883337386852503)
-            .get_partial_message(1254900969033175072)
-        )
-        channel_content_pt1 = (
-            f"""
-            # Meet c2c ({self.bot.user.mention})
-            c2c is a private custom bot, exclusive to this server.
-            We recently verified the bot meaning it is public, anyone can add it. However, we won't expose the bot to the app directory or bot listing sites.
-            Since it's got no other public server, we've decided to drop all internal cooldowns when you run commands. So while every other popular bots cool down, you just get hotter.
-            ## What's it all about?
-            Here are some of the things that make c2c great.
-            - Vast economy system: make money in a simulated game of life, made personalized to your liking
-            - Utility functions: a world clock (`@me wc`) and searching images across the internet
-            - Fun comamnds: image manipulation on any user, or even ship yourself with another potential partner
-            - Global tag system: tag text important to you for later retrieval anywhere on the platform
-            - Miscellaneous functionality: anime related commands amongst other useful developer tools
-            ## Our mission
-            We're always finding new things to add to our bot, to make it better for every single one of you. 
-            It's a bespoke bot, tailored to your needs. Anyone in this server can request a feature for the bot and it will get implemented if there's a genuine desire and valid reason behind it.
-            -# Message a director for feedback. Your bot, your rules.
-            """
-        )
-
-        await message.edit(content=dedent(channel_content_pt1))
-
-    @commands.command(description='Update the information channel for cc', aliases=('ui',))
+    @commands.command(description="Update the information channel for cc", aliases=("ui",))
     async def uinfo(self, _: commands.Context):
         """Push to update the welcome and info embed within its respective channel."""
         await self.send_role_guide()
 
-    @commands.command(name='quit', description='Quits the bot gracefully', aliases=('q',))
+    @commands.command(name="quit", description="Quits the bot gracefully", aliases=("q",))
     async def close(self, ctx: commands.Context) -> None:
         """Quits the bot gracefully."""
         await ctx.send("\U00002705")
         await self.bot.close()
 
-    @app_commands.command(description='Repeat what you typed and mask this command use')
-    @app_commands.describe(message='What you want me to say.')
-    async def repeat(self, interaction: discord.Interaction, message: app_commands.Range[str, 1, 2000]) -> None:
+    @app_commands.command(description="Repeat what you typed and mask this command use")
+    @app_commands.describe(message="What you want me to say.")
+    async def repeat(
+        self,
+        interaction: discord.Interaction,
+        message: app_commands.Range[str, 1, 2000]
+    ) -> None:
         """Repeat what you typed, also converting emojis based on whats inside two equalities."""
 
-        matches = findall(r'<(.*?)>', message)
+        matches = findall(r"<(.*?)>", message)
 
         for match in matches:
             emoji = discord.utils.get(self.bot.emojis, name=match)
             if emoji:
-                message = message.replace(f'<{match}>', f"{emoji}")
+                message = message.replace(f"<{match}>", f"{emoji}")
                 continue
             return await interaction.response.send_message(
-                ephemeral=True, 
-                embed=membed("Could not find that emoji.")
+                ephemeral=True, embed=membed("Could not find that emoji.")
             )
 
         await interaction.channel.send(message)
         await interaction.response.send_message(
-            ephemeral=True, 
-            delete_after=3.0, 
-            embed=membed(f"Sent this message to {interaction.channel.mention}.")
+            ephemeral=True,
+            delete_after=3.0,
+            embed=membed(f"Sent this message to {interaction.channel.mention}."),
         )
 
     @commands.command(description="Dispatch customizable quarterly updates")

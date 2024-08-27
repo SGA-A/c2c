@@ -6,6 +6,7 @@ from .core.bot import C2C
 
 class ContextExceptions(commands.Cog):
     """The error handler for text-based commands that are called."""
+
     def __init__(self, bot: C2C) -> None:
         self.bot = bot
         self.view = MessageDevelopers()
@@ -20,7 +21,6 @@ class ContextExceptions(commands.Cog):
 
         embed = membed()
         if isinstance(err, commands.UserInputError):
-
             if isinstance(err, commands.MissingRequiredArgument):
                 embed.description = "Some required arguments are missing."
                 return await ctx.send(embed=embed, view=self.view)
@@ -30,10 +30,14 @@ class ContextExceptions(commands.Cog):
 
         if isinstance(err, commands.CheckFailure):
             if isinstance(err, commands.MissingPermissions):
-                embed.description = "You're missing permissions required to use this command."
+                embed.description = (
+                    "You're missing permissions required to use this command."
+                )
                 embed.add_field(
-                    name=f"Missing Permissions ({len(err.missing_permissions)})", 
-                    value="\n".join(err.replace('_', ' ').title() for err in err.missing_permissions)
+                    name=f"Missing Permissions ({len(err.missing_permissions)})",
+                    value="\n".join(
+                        err.replace("_", " ").title() for err in err.missing_permissions
+                    )
                 )
                 return await ctx.send(embed=embed, view=self.view)
             return

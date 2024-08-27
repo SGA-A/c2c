@@ -4,7 +4,7 @@ from datetime import timedelta
 from discord.ext.commands import Cog
 from discord.utils import format_dt, utcnow
 from discord import (
-    app_commands, 
+    app_commands,
     AppCommandOptionType,
     Embed,
     Interaction,
@@ -63,7 +63,11 @@ class InteractionExceptions(Cog):
             after_cd = format_dt(cooldown_resets, style="R")
             embed.description = f"You can run this command again {after_cd}."
 
-    async def on_app_command_error(self, interaction: Interaction, error: BASE_ERROR) -> None:
+    async def on_app_command_error(
+        self,
+        interaction: Interaction,
+        error: BASE_ERROR
+    ) -> None:
         try:
             if not interaction.response.is_done():
                 await interaction.response.defer(thinking=True)

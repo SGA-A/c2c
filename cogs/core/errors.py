@@ -11,9 +11,9 @@ class CustomTransformerError(app_commands.TransformerError):
     Contains an additional attribute `cause` that describes the cause of the error.
     """
     def __init__(
-        self, 
-        value: Any, 
-        opt_type: discord.AppCommandOptionType, 
+        self,
+        value: Any,
+        opt_type: discord.AppCommandOptionType,
         transformer: app_commands.Transformer,
         cause: str
     ) -> None:

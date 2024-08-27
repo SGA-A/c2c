@@ -30,8 +30,8 @@ class C2C(commands.Bot):
                 setattr(self, k, v)
 
         all_contexts = app_commands.AppCommandContext(
-            guild=True, 
-            dm_channel=True, 
+            guild=True,
+            dm_channel=True,
             private_channel=True
         )
         all_installs = app_commands.AppInstallationType(guild=True, user=True)
@@ -78,6 +78,6 @@ class C2C(commands.Bot):
 
         self.pool = await create_pool(".\\database\\economy.db")
         self.session = ClientSession(
-            connector=TCPConnector(limit=30, loop=self.loop, limit_per_host=5), 
+            connector=TCPConnector(limit=30, loop=self.loop, limit_per_host=5),
             cookie_jar=DummyCookieJar(loop=self.loop)
         )
