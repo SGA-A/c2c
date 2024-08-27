@@ -4110,7 +4110,6 @@ class Economy(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @sell.autocomplete('item')
-    @item.autocomplete('item')
     @share_items.autocomplete('item')
     @trade_items_for_robux.autocomplete('item')
     @trade_items_for_items.autocomplete('item')
@@ -4130,6 +4129,7 @@ class Economy(commands.Cog):
 
         return [app_commands.Choice(name=option, value=option) for (option,) in options]
 
+    @use.autocomplete('item')
     @item.autocomplete('item')
     @get_item_lb.autocomplete('item')
     @trade_robux_for_items.autocomplete('for_item')
