@@ -3514,16 +3514,16 @@ class Economy(commands.Cog):
             icon_url=member.display_avatar.url
         )
 
+        query = (
+            """
+            SELECT shop.itemName, shop.emoji, inventory.qty
+            FROM shop
+            INNER JOIN inventory
+                ON shop.itemID = inventory.itemID
+            WHERE inventory.userID = $0
+            """
+        )
         async with self.bot.pool.acquire() as conn:
-            query = (
-                """
-                SELECT shop.itemName, shop.emoji, inventory.qty
-                FROM shop
-                INNER JOIN inventory
-                    ON shop.itemID = inventory.itemID
-                WHERE inventory.userID = $0
-                """
-            )
 
             owned_items = await conn.fetchall(query, member.id)
 
