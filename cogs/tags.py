@@ -161,10 +161,6 @@ class Tags(commands.Cog):
         interaction: discord.Interaction,
         message: discord.Message
     ) -> None:
-        if not message.content:
-            return await interaction.response.send_message(
-                embed=membed("This message has no content to tag.")
-            )
 
         interaction.message = message
         clean_content = await commands.clean_content().convert(interaction, message.content)
@@ -174,6 +170,11 @@ class Tags(commands.Cog):
                 attachment.url for attachment in message.attachments
             )
             clean_content = f"{clean_content}\n{attachments_refs}"
+
+        if not clean_content:
+            return await interaction.response.send_message(
+                embed=membed("This message has no content to tag.")
+            )
 
         if len(clean_content) > 2000:
             return await interaction.response.send_message(

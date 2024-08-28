@@ -261,18 +261,17 @@ class RoleManagement(app_commands.Group):
 
     @app_commands.command(name="allroles", description="Lists all roles in the server")
     async def all_roles(self, interaction: discord.Interaction) -> None:
-        guild_roles = sorted(interaction.guild.roles[1:], reverse=True) + [interaction.guild.default_role]
         emb, length = membed(), 12
 
         paginator = PaginationItem(interaction)
-        paginator.total_pages = paginator.compute_total_pages(len(guild_roles), length)
+        paginator.total_pages = paginator.compute_total_pages(len(interaction.guild.roles), length)
 
         async def get_page_part(page: int) -> discord.Embed:
-            offset = (page - 1) * length
+            offset = length - (page * length) - 1
 
             emb.description = "\n".join(
                 f"<@&{role.id}> \U00002014 {role.id}"
-                for role in guild_roles[offset:offset+length]
+                for role in interaction.guild.roles[offset:offset-length:-1]
             )
 
             return emb.set_footer(text=f"Page {page} of {paginator.total_pages}")
