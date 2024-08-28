@@ -271,7 +271,7 @@ class RoleManagement(app_commands.Group):
             offset = (page - 1) * length
 
             emb.description = "\n".join(
-                f"{role.mention} \U00002014 {role.id}"
+                f"<@&{role.id}> \U00002014 {role.id}"
                 for role in guild_roles[offset:offset+length]
             )
 
