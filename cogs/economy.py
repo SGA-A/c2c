@@ -3523,8 +3523,8 @@ class Economy(commands.Cog):
             WHERE inventory.userID = $0
             """
         )
-        async with self.bot.pool.acquire() as conn:
 
+        async with self.bot.pool.acquire() as conn:
             owned_items = await conn.fetchall(query, member.id)
 
         length = 8

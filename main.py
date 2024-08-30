@@ -1,5 +1,5 @@
 import asyncio
-from sys import version, platform
+from sys import version
 from logging import FileHandler, info as log_info
 
 from discord.ext import commands
@@ -10,12 +10,6 @@ from cogs.core.bot import C2C
 
 
 bot = C2C()
-
-
-# If you're on Windows, starting in aiohttp >3.10,
-# you need to need to override the event loop policy as shown
-if platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 cogs = {
