@@ -310,8 +310,7 @@ class Miscellaneous(commands.Cog):
                 paginator.index = min(paginator.index, paginator.total_pages)
 
             if not paginator.usage_data:
-                paginator.usage_embed.set_footer(text="Empty")
-                return paginator.usage_embed
+                return paginator.usage_embed.set_footer(text="Empty")
 
             offset = (paginator.index - 1) * paginator.length
             paginator.usage_embed.description = f"> Total: {paginator.total:,}\n\n"
@@ -319,8 +318,8 @@ class Miscellaneous(commands.Cog):
                 f"` {cmd_data[1]:,} ` \U00002014 {cmd_data[0]}"
                 for cmd_data in paginator.usage_data[offset:offset + paginator.length]
             )
-            paginator.usage_embed.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
-            return paginator.usage_embed
+
+            return paginator.usage_embed.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
 
         paginator.get_page = get_page_part
         await paginator.navigate()

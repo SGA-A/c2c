@@ -1,5 +1,5 @@
 aiofiles==24.1.0
 asqlite==2.0.0
-discord.py[speed] @ git+https://github.com/Rapptz/discord.py.git@dee5bf65c63fc2feca00d32e5f4a9fa293636291
+discord.py[speed] @ git+https://github.com/Rapptz/discord.py.git@df4b1c88df741b439e97049e5c92feb969bdd5d3
 psutil==6.0.0
 pytz==2024.1

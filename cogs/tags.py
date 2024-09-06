@@ -8,10 +8,10 @@ from discord import app_commands
 from discord.ext import commands
 from asqlite import Connection
 
-from .core.helpers import membed, send_message, send_boilerplate_confirm
-from .core.paginators import PaginationSimple
 from .core.bot import C2C
+from .core.paginators import PaginationSimple
 from .core.errors import FailingConditionalError
+from .core.helpers import membed, send_message, send_boilerplate_confirm
 
 
 MAX_CHARACTERS_EXCEEDED_RESPONSE = "Tag content cannot exceed 2000 characters."
@@ -257,9 +257,16 @@ class Tags(commands.Cog):
         conn: Connection,
         meth: Optional[Callable] = None
     ) -> str | tuple[str, discord.Interaction]:
-
-        query = "SELECT name FROM tags WHERE LOWER(name) LIKE '%' || ? || '%' LIMIT 10"
-        tag_names = await conn.fetchall(query, (word_input.lower(),))
+        query = (
+            """
+            SELECT name
+            FROM tags
+            WHERE LOWER(name) LIKE '%' || ? || '%'
+            COLLATE NOCASE ORDER BY INSTR(name, ?)
+            LIMIT 10
+            """
+        )
+        tag_names = await conn.fetchall(query, (word_input.lower(), word_input.lower()))
 
         meth = meth or self.partial_match_for
         return await meth(ctx, word_input, tag_results=tag_names)
@@ -271,8 +278,17 @@ class Tags(commands.Cog):
         conn: Connection,
         meth: Optional[Callable] = None
     ) -> tuple | str | None:
-        query = "SELECT name FROM tags WHERE ownerID = ? AND LOWER(name) LIKE '%' || ? || '%' LIMIT 10"
-        tag_names = await conn.fetchall(query, (ctx.author.id, word_input.lower()))
+        query = (
+            """
+            SELECT name
+            FROM tags
+            WHERE ownerID = ?
+            AND LOWER(name) LIKE '%' || ? || '%'
+            COLLATE NOCASE ORDER BY INSTR(name, ?)
+            LIMIT 10
+            """
+        )
+        tag_names = await conn.fetchall(query, (ctx.author.id, word_input.lower(), word_input.lower()))
 
         meth = meth or self.partial_match_for
         return await meth(ctx, word_input, tag_results=tag_names)
@@ -282,9 +298,18 @@ class Tags(commands.Cog):
         _: discord.Interaction,
         current: str
     ) -> list[app_commands.Choice[str]]:
-        query = "SELECT name FROM tags WHERE LOWER(name) LIKE '%' || ? || '%' LIMIT 25"
+        query = (
+            """
+            SELECT name
+            FROM tags
+            WHERE name LIKE '%' || ? || '%'
+            COLLATE NOCASE ORDER BY INSTR(name, ?)
+            LIMIT 25
+            """
+        )
+
         async with self.bot.pool.acquire() as conn:
-            rows = await conn.fetchall(query, (current.lower(),))
+            rows = await conn.fetchall(query, (current.lower(), current.lower()))
         return [app_commands.Choice(name=row, value=row) for (row,) in rows]
 
     async def owned_non_aliased_tag_autocomplete(
@@ -292,10 +317,19 @@ class Tags(commands.Cog):
         interaction: discord.Interaction,
         current: str
     ) -> list[app_commands.Choice[str]]:
-        query = "SELECT name FROM tags WHERE ownerID = ? AND LOWER(name) LIKE '%' || ? || '%' LIMIT 25"
+        query = (
+            """
+            SELECT name
+            FROM tags
+            WHERE ownerID = ?
+            AND LOWER(name) LIKE '%' || ? || '%'
+            COLLATE NOCASE ORDER BY INSTR(name, ?)
+            LIMIT 25
+            """
+        )
 
         async with self.bot.pool.acquire() as conn:
-            all_tags = await conn.fetchall(query, (interaction.user.id, current.lower()))
+            all_tags = await conn.fetchall(query, (interaction.user.id, current.lower(), current.lower()))
 
         return [app_commands.Choice(name=tag, value=tag) for (tag,) in all_tags]
 
@@ -686,9 +720,18 @@ class Tags(commands.Cog):
         query: Annotated[str, commands.clean_content]
     ) -> Optional[discord.Message]:
 
-        sql = "SELECT name, rowid FROM tags WHERE LOWER(name) LIKE '%' || ? || '%' LIMIT 60"
+        sql = (
+            """
+            SELECT name, rowid
+            FROM tags
+            WHERE name LIKE '%' || ? || '%'
+            COLLATE NOCASE ORDER BY INSTR(name, ?)
+            LIMIT 60
+            """
+        )
+
         async with self.bot.pool.acquire() as conn:
-            rows = await conn.fetchall(sql, (query.lower(),))
+            rows = await conn.fetchall(sql, (query.lower(), query.lower()))
 
         if not rows:
             return await ctx.send(embed=membed("No tags found."))
