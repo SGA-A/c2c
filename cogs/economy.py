@@ -207,7 +207,7 @@ def generate_slot_combination() -> str:
     return slot_combination
 
 
-def find_slot_matches(*args) -> None | int:
+def find_slot_matches(*args) -> Optional[int]:
     """
     Find any suitable matches in a slot outcome.
 
@@ -342,7 +342,7 @@ def start_drop_expired(interaction: discord.Interaction[C2C]) -> None:
         drop_expired.start(interaction)
 
 
-class ItemInputTransformer(app_commands.Transformer[C2C]):
+class ItemInputTransformer(app_commands.Transformer):
     """Transforms an item name into a row containing the item's ID, name, and emoji."""
     ITEM_NOT_FOUND = "No items found with that name pattern."
     TIMED_OUT = "Timed out waiting for a response."
@@ -676,10 +676,7 @@ class BlackjackUi(BaseInteractionView):
             await end_transaction(conn, user_id=self.interaction.user.id)
 
         try:
-            await self.interaction.edit_original_response(
-                view=None,
-                embed=membed("You backed off so the game ended.")
-            )
+            await self.interaction.delete_original_response()
         except discord.HTTPException:
             pass
 
@@ -693,37 +690,16 @@ class BlackjackUi(BaseInteractionView):
         async with self.interaction.client.pool.acquire() as conn, conn.transaction():
             await end_transaction(conn, user_id=self.interaction.user.id)
 
-            new_balance, multiplied, their_multi = await conn.fetchone(
-                """
-                WITH multi AS (
-                    SELECT 
-                        CAST(TOTAL(amount) AS INTEGER) AS value,
-                        ((CAST(TOTAL(amount) AS INTEGER) / 100.0) * accounts.wallet) AS multiplied
-                    FROM multipliers
-                    CROSS JOIN accounts
-                    WHERE (multipliers.userID IS NULL OR multipliers.userID = $1)
-                    AND multipliers.multi_type = 'robux' AND accounts.userID = $1
-                )
-                UPDATE accounts
-                SET wallet = wallet + multi.multiplied
-                CROSS JOIN multi
-                WHERE userID = $1
-                RETURNING wallet, multi.multiplied, multi.value
-                """, self.interaction.user.id, bet_amount
-            )
+            their_multi = await Economy.get_multi_of(self.interaction.user.id, "robux", conn)
+            multiplied = add_multi_to_original(their_multi, bet_amount)
+            new_balance, = await Economy.update_account(self.interaction.user.id, multiplied, conn)
 
-            bj_lose, new_bj_win = await conn.fetchone(
-                """
-                WITH bjl AS (
-                    SELECT value FROM games WHERE state = 6
-                )
-                INSERT INTO games VALUES ($0, 5, 1, $1)
-                ON CONFLICT(userID, state)
-                DO UPDATE SET 
-                    value = excluded.value + 1,
-                    amount = excluded.amount + $1
-                RETURNING COALESCE(bjl.value, 0), value, acc.wallet
-                """, self.interaction.user.id
+            bj_lose, new_bj_win = await Economy.update_games(
+                self.interaction.user.id,
+                game_id=5,
+                game_amt=multiplied,
+                returning_game_id=6,
+                conn=conn
             )
 
         prctnw = (new_bj_win / (new_bj_win + bj_lose)) * 100
@@ -738,19 +714,13 @@ class BlackjackUi(BaseInteractionView):
 
         async with self.interaction.client.pool.acquire() as conn, conn.transaction():
             await end_transaction(conn, user_id=self.interaction.user.id)
-            new_amount_balance = await Economy.update_account(self.interaction.user.id, -bet_amount, conn)
-            bj_win, new_bj_lose, new_amount_balance = await conn.fetchone(
-                """
-                WITH bjw AS (
-                    SELECT value FROM games WHERE state = 5
-                )
-                INSERT INTO games VALUES ($0, 6, 1, $1)
-                ON CONFLICT(userID, state) 
-                    DO UPDATE SET
-                    value = excluded.value + 1,
-                    amount = excluded.amount + $1
-                RETURNING (SELECT COALESCE(value, 0) FROM bjw), games.value, acc.wallet
-                """, self.interaction.user.id, bet_amount
+            new_amount_balance, = await Economy.update_account(self.interaction.user.id, -bet_amount, conn)
+            new_bj_lose, bj_win = await Economy.update_games(
+                self.interaction.user.id,
+                game_id=6,
+                game_amt=bet_amount,
+                returning_game_id=5,
+                conn=conn
             )
 
         prnctl = (new_bj_lose / (new_bj_lose + bj_win)) * 100
@@ -773,7 +743,7 @@ class BlackjackUi(BaseInteractionView):
                 f"**You lost. You went over 21 and busted.**\n"
                 f"You lost {CURRENCY} **{self.metadata.bet:,}**. "
                 f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-                f"You lost {prnctl:.1f}% of the games."
+                f"-# {prnctl:.1f}% of blackjack games lost."
             )
 
             embed.set_field_at(
@@ -808,7 +778,7 @@ class BlackjackUi(BaseInteractionView):
                 f"**You win! You got to 21**.\n"
                 f"You won {CURRENCY} **{amount_after_multi:,}**. "
                 f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-                f"You won {prctnw:.1f}% of the games."
+                f"-# {prctnw:.1f}% of blackjack games won."
             )
 
             embed.set_field_at(
@@ -878,7 +848,7 @@ class BlackjackUi(BaseInteractionView):
                 f"**You win! The dealer went over 21 and busted.**\n"
                 f"You won {CURRENCY} **{amount_after_multi:,}**. "
                 f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-                f"You won {prctnw:.1f}% of the games."
+                f"-# {prctnw:.1f}% of blackjack games won."
             )
 
         elif dealer_total > player_sum:
@@ -889,7 +859,7 @@ class BlackjackUi(BaseInteractionView):
             embed.description = (
                 f"**You lost. You stood with a lower score (`{player_sum}`) than the dealer (`{dealer_total}`).**\n"
                 f"You lost {CURRENCY} **{self.metadata.bet:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-                f"You lost {prnctl:.1f}% of the games."
+                f"-# {prnctl:.1f}% of blackjack games lost."
             )
 
         elif dealer_total < player_sum:
@@ -904,7 +874,7 @@ class BlackjackUi(BaseInteractionView):
             embed.description = (
                 f"**You win! You stood with a higher score (`{player_sum}`) than the dealer (`{dealer_total}`).**\n"
                 f"You won {CURRENCY} **{amount_after_multi:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-                f"You won {prctnw:.1f}% of the games."
+                f"-# {prctnw:.1f}% of blackjack games won."
             )
 
         else:
@@ -954,7 +924,7 @@ class BlackjackUi(BaseInteractionView):
             f"**You forfeit. The dealer took half of your bet for surrendering.**\n"
             f"You lost {CURRENCY} **{self.metadata.bet:,}**. "
             f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-            f"You lost {prcntl:.1f}% of the games."
+            f"-# {prcntl:.1f}% of blackjack games lost."
         )
 
         embed.set_field_at(
@@ -1008,21 +978,30 @@ class HighLow(BaseInteractionView):
         async with self.interaction.client.pool.acquire() as conn, conn.transaction():
             await end_transaction(conn, user_id=self.interaction.user.id)
 
-        for item in self.children:
-            item.disabled = True
-
-        await self.interaction.edit_original_response(
-            view=None,
-            embed=membed("The game ended because you didn't answer in time.")
-        )
+        try:
+            await self.interaction.delete_original_response()
+        except discord.HTTPException:
+            pass
 
     async def send_win(self, interaction: discord.Interaction[C2C], button: discord.ui.Button):
         await self.make_clicked_blurple_only(button)
+
         async with interaction.client.pool.acquire() as conn, conn.transaction():
+            await end_transaction(conn, user_id=self.interaction.user.id)
+
             new_multi = await Economy.get_multi_of(interaction.user.id, "robux", conn)
             total = add_multi_to_original(new_multi, self.their_bet)
-            new_balance = await Economy.update_account(interaction.user.id, total, conn)
-            await end_transaction(conn, user_id=self.interaction.user.id)
+
+            new_balance, = await Economy.update_account(interaction.user.id, total, conn)
+            hl_win, hl_loss = await Economy.update_games(
+                interaction.user.id,
+                game_id=7,
+                game_amt=total,
+                returning_game_id=8,
+                conn=conn
+            )
+
+        win_rate = (hl_win / (hl_win + hl_loss)) * 100
 
         win = interaction.message.embeds[0]
         win.colour = discord.Colour.brand_green()
@@ -1030,7 +1009,8 @@ class HighLow(BaseInteractionView):
             f'**You won {CURRENCY} {total:,}!**\n'
             f'Your hint was **{self.hint_provided}**. '
             f'The hidden number was **{self.true_value}**.\n'
-            f'Your new balance is {CURRENCY} **{new_balance[0]:,}**.'
+            f'Your new balance is {CURRENCY} **{new_balance:,}**.\n'
+            f'-# {win_rate:.1f}% of highlow games won.'
         )
 
         win.set_footer(text=f"Multiplier: {new_multi:,}%")
@@ -1039,9 +1019,20 @@ class HighLow(BaseInteractionView):
 
     async def send_loss(self, interaction: discord.Interaction[C2C], button: discord.ui.Button):
         await self.make_clicked_blurple_only(button)
+
         async with interaction.client.pool.acquire() as conn, conn.transaction():
-            new_amount = await Economy.update_account(interaction.user.id, -self.their_bet, conn)
             await end_transaction(conn, user_id=self.interaction.user.id)
+
+            new_amount, = await Economy.update_account(interaction.user.id, -self.their_bet, conn)
+            hl_loss, hl_win = await Economy.update_games(
+                interaction.user.id,
+                game_id=8,
+                game_amt=self.their_bet,
+                returning_game_id=7,
+                conn=conn
+            )
+
+        loss_rate = (hl_loss / (hl_loss + hl_win)) * 100
 
         lose = interaction.message.embeds[0]
         lose.colour = discord.Colour.brand_red()
@@ -1049,7 +1040,8 @@ class HighLow(BaseInteractionView):
             f'**You lost {CURRENCY} {self.their_bet:,}!**\n'
             f'Your hint was **{self.hint_provided}**. '
             f'The hidden number was **{self.true_value}**.\n'
-            f'Your new balance is {CURRENCY} **{new_amount[0]:,}**.'
+            f'Your new balance is {CURRENCY} **{new_amount:,}**.\n'
+            f'-# {loss_rate:.1f}% of highlow games lost.'
         )
 
         lose.remove_footer()
@@ -1835,6 +1827,40 @@ class Economy(commands.Cog):
     def calculate_exp_for(*, level: int) -> int:
         """Calculate the experience points required for a given level."""
         return ceil((level/0.3)**1.3)
+
+    @staticmethod
+    async def update_games(
+        user_id: int,
+        game_id: int,
+        game_amt: int,
+        returning_game_id: int,
+        conn: Connection
+    ) -> tuple:
+        """
+        Update the games table with the specified parameters.
+        ## Parameters
+        - user_id (int): The ID of the user.
+        - game_id (int): The ID of the game type to increment.
+        - game_amt (int): The monetary amount (not count) to increment by.
+        - returning_game_id (int): The ID of the returning game.
+        - conn (Connection): The database connection.
+        ## Returns:
+        - tuple: A tuple containing the count of the current and returning game ID in this order.
+        """
+
+        return await conn.fetchone(
+            """
+            INSERT INTO games (userID, state, value, amount)
+            VALUES ($0, $1, 1, $2)
+            ON CONFLICT(userID, state)
+            DO UPDATE SET
+                value = value + excluded.value,
+                amount = amount + excluded.amount
+            RETURNING
+                games.value,
+                COALESCE((SELECT value FROM games WHERE state = $3 AND userID = $0), 0)
+            """, user_id, game_id, game_amt, returning_game_id
+        )
 
     @staticmethod
     async def get_setting_embed(view: UserSettings, conn: Connection) -> discord.Embed:
@@ -3474,11 +3500,17 @@ class Economy(commands.Cog):
     async def slots(self, interaction: discord.Interaction[C2C], robux: ROBUX_CONVERTER) -> None:
         """Play a round of slots. At least one matching combination is required to win."""
 
-        query = "SELECT slotw, slotl, wallet FROM accounts WHERE userID = $0"
-
+        query = (
+            """
+            SELECT accounts.wallet, COALESCE(inventory.qty, 0)
+            FROM accounts
+            LEFT JOIN inventory
+                ON (accounts.userID = inventory.userID) AND inventory.itemID = 1
+            WHERE accounts.userID = $0
+            """
+        )
         async with self.bot.pool.acquire() as conn:
-            has_keycard = await self.fetch_item_qty_from_id(interaction.user.id, item_id=1, conn=conn)
-            slot_wins, slot_losses, wallet_amt = await conn.fetchone(query, interaction.user.id) or (0, 0, 0)
+            wallet_amt, has_keycard = await conn.fetchone(query, interaction.user.id) or (0, 0)
         robux = self.do_wallet_checks(wallet_amt, robux, has_keycard)
 
         emoji_1, emoji_2, emoji_3 = generate_slot_combination()
@@ -3489,46 +3521,48 @@ class Economy(commands.Cog):
         )
 
         if multiplier:
-            amount_after_multi = add_multi_to_original(multiplier, robux)
+            scaled_bet = add_multi_to_original(multiplier, robux)
 
             async with self.bot.pool.acquire() as conn, conn.transaction():
-                data = await self.update_fields(
+                new_wallet, = await Economy.update_account(interaction.user.id, scaled_bet, conn)
+                slot_win, slot_loss = await self.update_games(
                     interaction.user.id,
-                    conn,
-                    slotwa=amount_after_multi,
-                    slotw=1,
-                    wallet=amount_after_multi
+                    game_id=3,
+                    game_amt=scaled_bet,
+                    returning_game_id=4,
+                    conn=conn
                 )
 
-            prcntw = ((slot_wins+1) / (slot_losses + (slot_wins+1))) * 100
+            win_rate = (slot_win / (slot_win + slot_loss)) * 100
 
             slot_machine.colour = discord.Color.brand_green()
             slot_machine.description = (
                 f"**\U0000003e** {emoji_1} {emoji_2} {emoji_3} **\U0000003c**\n\n"
                 f"Multiplier: **{multiplier}%**\n"
-                f"Payout: {CURRENCY} **{amount_after_multi:,}**.\n"
-                f"New Balance: {CURRENCY} **{data[-1]:,}**.\n"
-                f"-# **{prcntw:.1f}%** of all slots games won."
+                f"Payout: {CURRENCY} **{scaled_bet:,}**.\n"
+                f"New Balance: {CURRENCY} **{new_wallet:,}**.\n"
+                f"-# {win_rate:.1f}% of slots games won."
             )
 
         else:
             async with self.bot.pool.acquire() as conn, conn.transaction():
-                data = await self.update_fields(
+                new_wallet, = await Economy.update_account(interaction.user.id, -robux, conn)
+                slot_loss, slot_win = await self.update_games(
                     interaction.user.id,
-                    conn,
-                    slotla=robux,
-                    slotl=1,
-                    wallet=-robux
+                    game_id=4,
+                    game_amt=robux,
+                    returning_game_id=3,
+                    conn=conn
                 )
 
-            prcntl = ((slot_losses+1) / (slot_wins + (slot_losses+1))) * 100
+            prcntl = (slot_loss / (slot_loss + slot_win)) * 100
 
             slot_machine.colour = discord.Color.brand_red()
             slot_machine.description = (
                 f"**\U0000003e** {emoji_1} {emoji_2} {emoji_3} **\U0000003c**\n\n"
                 f"You lost: {CURRENCY} **{robux:,}**.\n"
-                f"New Balance: {CURRENCY} **{data[-1]:,}**.\n"
-                f"-# {prcntl:.1f}% of all slots games lost."
+                f"New Balance: {CURRENCY} **{new_wallet:,}**.\n"
+                f"-# {prcntl:.1f}% of slots games lost."
             )
 
         await interaction.response.send_message(embed=slot_machine)
@@ -3947,7 +3981,7 @@ class Economy(commands.Cog):
 
     @app_commands.rename(host='user')
     @app_commands.command(description="Gather people to rob someone's bank")
-    @app_commands.describe(user='The user to attempt to bankrob.')
+    @app_commands.describe(host='The user to attempt to bankrob.')
     async def bankrob(self, interaction: discord.Interaction[C2C], host: discord.Member) -> None:
         """Rob someone else's bank."""
         heist_starter = interaction.user
@@ -4040,18 +4074,13 @@ class Economy(commands.Cog):
                 WHERE userID = $0 AND itemID = 1
             ),
             account AS (
-                SELECT
-                    wallet,
-                    betw,
-                    betl
+                SELECT wallet
                 FROM accounts
                 WHERE userID = $0
             )
             SELECT
                 inv.qty,
                 account.wallet,
-                account.betw,
-                account.betl,
                 CAST(TOTAL(amount) AS INTEGER)
             FROM multipliers
             CROSS JOIN inv
@@ -4062,13 +4091,7 @@ class Economy(commands.Cog):
 
         user = interaction.user
         async with self.bot.pool.acquire() as conn:
-            (
-                keycard_qty,
-                wallet_amt,
-                id_won_amount,
-                id_lose_amount,
-                pmulti
-            ) = await conn.fetchone(query, user.id) or (0, 0, 0, 0, 0)
+            keycard_qty, wallet_amt, pmulti = await conn.fetchone(query, user.id) or (0, 0, 0, 0, 0)
 
         robux = self.do_wallet_checks(wallet_amt, robux, keycard_qty)
 
@@ -4082,28 +4105,32 @@ class Economy(commands.Cog):
             weights=(65 / 4, 65 / 4, 65 / 4, 65 / 4, 35 / 2, 35 / 2)
         )
 
-        embed = discord.Embed()
+        embed = discord.Embed().set_author(
+            name=f"{user.name}'s gambling game",
+            icon_url=user.display_avatar.url
+        )
 
         if their_roll > bot_roll:
-            amount_after_multi = add_multi_to_original(pmulti, robux)
+            scaled_bet = add_multi_to_original(pmulti, robux)
             async with self.bot.pool.acquire() as conn, conn.transaction():
-                updated = await self.update_fields(
+                new_balance, = await Economy.update_account(user.id, scaled_bet, conn)
+                bet_win, bet_loss = await self.update_games(
                     user.id,
-                    conn,
-                    betwa=amount_after_multi,
-                    betw=1,
-                    wallet=amount_after_multi
+                    game_id=1,
+                    game_amt=scaled_bet,
+                    returning_game_id=2,
+                    conn=conn
                 )
 
-            prcntw = (updated[1] / (id_lose_amount + updated[1])) * 100
+            win_rate = (bet_win / (bet_win + bet_loss)) * 100
 
             embed.set_footer(text=f"Multiplier: {pmulti:,}%")
             embed.colour = discord.Color.brand_green()
             embed.description=(
                 f"**You've rolled higher!**\n"
-                f"You won {CURRENCY} **{amount_after_multi:,}**.\n"
-                f"You now have {CURRENCY} **{updated[2]:,}**.\n"
-                f"You've won {prcntw:.1f}% of all games."
+                f"You won {CURRENCY} **{scaled_bet:,}**.\n"
+                f"You now have {CURRENCY} **{new_balance:,}**.\n"
+                f"-# {win_rate:.1f}% of bet games won."
             )
 
         elif their_roll == bot_roll:
@@ -4112,29 +4139,24 @@ class Economy(commands.Cog):
 
         else:
             async with self.bot.pool.acquire() as conn, conn.transaction():
-                updated = await self.update_fields(
+                new_wallet, = await Economy.update_account(user.id, -robux, conn)
+                bet_loss, bet_win = await self.update_games(
                     user.id,
-                    conn,
-                    betla=robux,
-                    betl=1,
-                    wallet=-robux
+                    game_id=2,
+                    game_amt=robux,
+                    returning_game_id=1,
+                    conn=conn
                 )
 
-            new_total = id_won_amount + updated[1]
-            prcntl = (updated[1] / new_total) * 100
+            loss_rate = (bet_loss / (bet_loss + bet_win)) * 100
 
             embed.colour = discord.Color.brand_red()
             embed.description=(
                 f"**You've rolled lower!**\n"
                 f"You lost {CURRENCY} **{robux:,}**.\n"
-                f"You now have {CURRENCY} **{updated[2]:,}**.\n"
-                f"You've lost {prcntl:.1f}% of all games."
+                f"You now have {CURRENCY} **{new_wallet:,}**.\n"
+                f"-# {loss_rate:.1f}% of bet games lost."
             )
-
-        embed.set_author(
-            name=f"{user.name}'s gambling game",
-            icon_url=user.display_avatar.url
-        )
 
         embed.add_field(name=user.name, value=f"Rolled `{their_roll}`")
         embed.add_field(name=self.bot.user.name, value=f"Rolled `{bot_roll}`")
