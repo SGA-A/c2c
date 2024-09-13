@@ -122,8 +122,16 @@ class ConfirmButton(discord.ui.Button):
         embed = interaction.message.embeds[0]
         embed.title = "Action Confirmed"
         embed.colour = discord.Colour.brand_green()
+        
+        for item in self.view.children:
+            item.disabled = True
 
-        await interaction.response.edit_message(embed=embed, view=self.disable_items(self.view, self))
+        cancel, confirm = self.view.children[0], self
+
+        confirm.disabled, cancel.disabled = True, True
+        confirm.style, cancel.style = discord.ButtonStyle.success, discord.ButtonStyle.secondary
+
+        await interaction.response.edit_message(embed=embed, view=self.view)
 
 
 class CancelButton(discord.ui.Button):
@@ -138,7 +146,12 @@ class CancelButton(discord.ui.Button):
         embed.title = "Action Cancelled"
         embed.colour = discord.Colour.brand_red()
 
-        await interaction.response.edit_message(embed=embed, view=self.disable_items(self.view, self))
+        confirm, cancel = self.view.children[-1], self
+
+        cancel.disabled, confirm.disabled = True, True
+        cancel.style, confirm.style = discord.ButtonStyle.success, discord.ButtonStyle.secondary
+
+        await interaction.response.edit_message(embed=embed, view=self.view)
 
 
 class GenericModal(discord.ui.Modal):

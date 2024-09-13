@@ -1102,10 +1102,11 @@ class ItemLeaderboard(BaseInteractionView):
             if (memobj:=interaction.client.get_user(identifier) or await interaction.client.fetch_user(identifier))
         ]
 
-    async def fetch_thumbnail(self, conn: Connection) -> str:
-        query = "SELECT image FROM shop WHERE itemID = $0"
+    async def fetch_emoji(self, conn: Connection) -> str:
+        query = "SELECT emoji FROM shop WHERE itemID = $0"
         ret, = await conn.fetchone(query, self.chosen_item_id)
-        return ret
+        emote_id = search(r':(\d+)>', ret).group(1)
+        return f"https://cdn.discordapp.com/emojis/{emote_id}.png?size=240&quality=lossless"
 
     async def create_lb(self, conn: Connection, /) -> list[str]:
         data = await conn.fetchall(
@@ -3736,22 +3737,10 @@ class Economy(commands.Cog):
         user: Optional[USER_ENTRY]
     ) -> None:
         """View your inventory or another player's inventory."""
-        if interaction.user.id not in self.bot.owner_ids:
-            return await interaction.response.send_message(
-                embed=membed(
-                    "This command is under maintenance.\n"
-                    "-# We're working on bringing great things for this command to you!"
-                )
-            )
 
         user = user or interaction.user
-        paginator = InventoryPaginator(
-            interaction,
-            membed().set_author(
-                name=f"{user.name}'s inventory",
-                icon_url=user.display_avatar.url
-            ), user
-        )
+        embed = membed().set_author(name=f"{user.name}'s inventory", icon_url=user.display_avatar.url)
+        paginator = InventoryPaginator(interaction, embed, user)
 
         await paginator.fetch_data()
         async def get_page_part(force_refresh: Optional[bool] = None) -> discord.Embed:
@@ -4013,7 +4002,7 @@ class Economy(commands.Cog):
         view = ItemLeaderboard(interaction, chosen_item_id=item_id)
 
         async with self.bot.pool.acquire() as conn:
-            thumb_url = await view.fetch_thumbnail(conn)
+            thumb_url = await view.fetch_emoji(conn)
             lb = membed("\n".join(await view.create_lb(conn))).set_thumbnail(url=thumb_url)
 
         lb.timestamp = discord.utils.utcnow()
