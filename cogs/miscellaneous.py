@@ -428,7 +428,10 @@ class Miscellaneous(commands.Cog):
             embed.title = "No posts found."
             return await interaction.followup.send(ephemeral=True, embed=embed)
 
-        async def get_page_part(page: int) -> list[discord.Embed]:
+        total_pages = Pagination.compute_total_pages(len(posts_xml), length)
+        paginator = await Pagination(interaction, total_pages=total_pages)
+
+        async def get_page_part() -> list[discord.Embed]:
             offset = (page - 1) * length
             return [
                 discord.Embed(
@@ -440,11 +443,8 @@ class Miscellaneous(commands.Cog):
                 for (jpeg_url, author, created_at) in extract_post_xml(posts_xml, offset, length)
             ]
 
-        await Pagination(
-            interaction,
-            get_page_part,
-            Pagination.compute_total_pages(len(posts_xml), length)
-        ).navigate(ephemeral=private)
+        paginator.get_page = get_page_part
+        await paginator.navigate(ephemeral=private)
 
     @app_commands.command(description='Queries a random fact')
     async def randomfact(self, interaction: discord.Interaction) -> None:

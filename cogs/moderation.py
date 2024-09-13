@@ -278,15 +278,15 @@ class RoleManagement(app_commands.Group):
         paginator = PaginationItem(interaction)
         paginator.total_pages = paginator.compute_total_pages(len(interaction.guild.roles), length)
 
-        async def get_page_part(page: int) -> discord.Embed:
-            offset = length - (page * length) - 1
+        async def get_page_part() -> discord.Embed:
+            offset = length - (paginator.index * length) - 1
 
             emb.description = "\n".join(
                 f"<@&{role.id}> \U00002014 {role.id}"
                 for role in interaction.guild.roles[offset:offset-length:-1]
             )
 
-            return emb.set_footer(text=f"Page {page} of {paginator.total_pages}")
+            return emb.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
 
         paginator.get_page = get_page_part
         await paginator.navigate()

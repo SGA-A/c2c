@@ -46,6 +46,7 @@ from .core.helpers import (
 )
 
 
+NO_FILTER = "0"
 USER_ENTRY = discord.Member | discord.User
 MULTIPLIER_TYPES = Literal["xp", "luck", "robux"]
 MIN_BET_KEYCARD = 500_000
@@ -495,12 +496,12 @@ class BalanceView(discord.ui.View):
         #! Check if they exist in the database
         #! Ensure connections are carried into item callbacks when prerequisites are met
 
+        query = "SELECT EXISTS (SELECT 1 FROM transactions WHERE userID = $0)"
         async with interaction.client.pool.acquire() as conn:
-            query = "SELECT EXISTS (SELECT 1 FROM transactions WHERE userID = $0)"
-            in_tr, = await conn.fetchone(query, interaction.user.id)
-            if in_tr:
-                await self.send_failure(interaction)
-        return not in_tr
+            in_transaction, = await conn.fetchone(query, interaction.user.id)
+        if in_transaction:
+            await self.send_failure(interaction)
+        return not in_transaction
 
     async def on_timeout(self) -> Coroutine[Any, Any, None]:
         for item in self.children:
@@ -510,7 +511,7 @@ class BalanceView(discord.ui.View):
         except discord.HTTPException:
             pass
 
-    async def fetch_balance(self, interaction: discord.Interaction[C2C]) -> discord.Embed:
+    async def fetch_balance(self, interaction: discord.Interaction[C2C]) -> Optional[discord.Embed]:
         """
         Fetch the user's balance, format it into an embed.
 
@@ -522,23 +523,24 @@ class BalanceView(discord.ui.View):
         balance.title = f"{self.viewing.display_name}'s Balances"
         balance.timestamp = discord.utils.utcnow()
 
+        query = "SELECT wallet, bank, bankspace FROM accounts WHERE userID = $0"
         async with interaction.client.pool.acquire() as conn:
-            query = "SELECT wallet, bank, bankspace FROM accounts WHERE userID = $0"
-
             nd = await conn.fetchone(query, self.viewing.id)
-            if nd is None:
-                if interaction.user.id != self.viewing.id:
-                    balance.description = "This user is not registered."
-                    self.children[0].disabled, self.children[1].disabled = True, True
-                    return balance
 
-                await Economy.open_bank_new(self.viewing, conn)
-                nd = await conn.fetchone(query, self.viewing.id)
+        if nd is None:
+            if interaction.user.id != self.viewing.id:
+                balance.description = "This user is not registered."
+                self.children[0].disabled, self.children[1].disabled = True, True
+                return balance
 
-            inv = await Economy.calculate_inventory_value(self.viewing, conn)
+        async with interaction.client.pool.acquire() as conn:
+            inserted = await Economy.open_bank_new(self.viewing, conn)
+            if inserted:
+                await conn.commit()
+
             rank = await Economy.calculate_net_ranking_for(self.viewing, conn)
-
-        wallet, bank, bankspace = nd
+            inv = await Economy.calculate_inventory_value(self.viewing, conn) if nd else 0
+            wallet, bank, bankspace = nd or await conn.fetchone(query, self.viewing.id)
 
         space = (bank / bankspace) * 100
         money = wallet + bank
@@ -588,7 +590,7 @@ class BalanceView(discord.ui.View):
         """Withdraw money from the bank."""
 
         async with interaction.client.pool.acquire() as conn:
-            bank_amt = await Economy.fetch_account_data(interaction.user.id, "bank", conn)
+            bank_amt = await Economy.fetch_account_data(interaction.user.id, "bank", conn, default=0)
 
         if not bank_amt:
             return await interaction.response.send_message(
@@ -606,7 +608,7 @@ class BalanceView(discord.ui.View):
 
         async with interaction.client.pool.acquire() as conn:
             query = "SELECT wallet, bank, bankspace FROM accounts WHERE userID = $0"
-            wallet, bank, bankspace = await conn.fetchone(query, interaction.user.id)
+            wallet, bank, bankspace = await conn.fetchone(query, interaction.user.id) or (0, 0, 0)
 
         if not wallet:
             return await interaction.response.send_message(
@@ -694,7 +696,7 @@ class BlackjackUi(BaseInteractionView):
             multiplied = add_multi_to_original(their_multi, bet_amount)
             new_balance, = await Economy.update_account(self.interaction.user.id, multiplied, conn)
 
-            bj_lose, new_bj_win = await Economy.update_games(
+            new_bj_win, bj_lose = await Economy.update_games(
                 self.interaction.user.id,
                 game_id=5,
                 game_amt=multiplied,
@@ -1791,8 +1793,166 @@ class DepositOrWithdraw(discord.ui.Modal):
         await super().on_error(interaction, error)
 
 
+class InventoryPaginator(RefreshPagination):
+    length = 8
+    options = (
+        "All",
+        "Collectible",
+        "Trinket",
+        "Sellable",
+        "Equipment",
+        "Buff",
+        "Debuff",
+        "Lootbox",
+        "Pack"
+    )
+
+    descriptions = (
+        "All items that exist so far.",
+        "Items that are collected and have no functionality.",
+        "Items that have some functionality for fun.",
+        "Items that are meant to be sold to the shop.",
+        "Items that give you access to other systems.",
+        "Items that buff you or someone else.",
+        "Items that debuff you or someone else.",
+        "Items to open that involve chances/odds.",
+        "Items to open containing static rewards."
+    )
+
+    options = [
+        discord.SelectOption(label=opt_name, description=opt_desc, value=str(i))
+        for i, (opt_name, opt_desc) in enumerate(zip(options, descriptions))
+    ]
+
+    def __init__(
+        self,
+        interaction: discord.Interaction[C2C],
+        embed: discord.Embed,
+        viewing: discord.Member | discord.User,
+        get_page: Optional[Callable[..., Any]] = None,
+    ) -> None:
+        super().__init__(interaction, get_page)
+        self.embed = embed
+        self.viewing = viewing
+        self.data: list[Row] = []
+
+        self.children[-2].default_values = [discord.Object(id=viewing.id)]
+        self.applied_filters = [NO_FILTER]
+
+        for option in self.children[-1].options:
+            option.default = option.value == "0"
+
+    async def fetch_data(self):
+        if NO_FILTER not in self.applied_filters:
+            placeholders = ','.join(("?",)*len(self.applied_filters))
+            args = (self.viewing.id, *map(int, self.applied_filters))
+
+            query = (
+                f"""
+                SELECT shop.itemName, shop.emoji, inventory.qty
+                FROM shop
+                INNER JOIN inventory
+                    ON shop.itemID = inventory.itemID
+                LEFT JOIN item_types
+                    ON shop.itemType = item_types.id
+                WHERE inventory.userID = ? AND shop.itemType IN ({placeholders})
+                """
+            )
+
+        else:
+            args = (self.viewing.id,)
+            query = (
+                """
+                SELECT shop.itemName, shop.emoji, inventory.qty
+                FROM shop
+                INNER JOIN inventory
+                    ON shop.itemID = inventory.itemID
+                WHERE inventory.userID = ?
+                """
+            )
+
+        async with self.interaction.client.pool.acquire() as conn:
+            self.data = await conn.fetchall(query, args)
+        self.total_pages = self.compute_total_pages(len(self.data), self.length)
+
+    def set_all(self, select: discord.ui.Select):
+        self.applied_filters = [NO_FILTER]
+        for option in select.options:
+            option.default = option.value == "0"
+
+    def set_values(self, select: discord.ui.Select):
+        self.applied_filters = select.values
+        for option in select.options:
+            option.default = option.value in self.applied_filters
+
+    @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a user to view inventory of", row=0)
+    async def inventory_member_select(self, interaction: discord.Interaction, select: discord.ui.UserSelect):
+        self.viewing = select.values[0]
+        self.index = 1
+        select.default_values = [discord.Object(id=self.viewing.id)]
+
+        self.embed.set_author(
+            name=f"{self.viewing.name}'s inventory",
+            icon_url=self.viewing.display_avatar.url
+        )
+
+        await self.fetch_data()
+        await self.edit_page(interaction)
+
+    @discord.ui.select(
+        placeholder="Only display these types of items in inventory:",
+        max_values=len(options),
+        options=options,
+        row=1
+    )
+    async def item_filter_select(self, interaction: discord.Interaction, select: discord.ui.Select):  #! only what they select
+        self.index = 1
+
+        # this is in the order of item type IDs
+        defaults = {option.value for option in select.options if option.default}
+
+        no_filter_default = NO_FILTER in defaults
+        no_filter_selected = NO_FILTER in select.values
+
+        len_defaults, len_selected = len(defaults), len(select.values)
+
+        if no_filter_default:
+
+            # ! All is in default and select
+            if no_filter_selected:
+                # ! Nothing changes when default is same as select
+
+                if not (len_defaults == len_selected == 1):
+                    self.applied_filters = select.values.copy()
+
+                    try:
+                        self.applied_filters.remove("0")
+                    except ValueError:
+                        pass
+
+                    select.options[0].default = False
+                    for option in select.options[1:]:
+                        option.default = option.value in select.values
+
+            # ! All is in default but not in select
+            else:
+                self.set_values(select)
+
+        # ! All is in select but not default?
+        elif no_filter_selected:
+            self.set_all(select)
+
+        # ! All is nowhere to be seen
+        else:
+            self.set_values(select)
+
+        await self.fetch_data()
+        await self.edit_page(interaction)
+
+
 class Economy(commands.Cog):
     """Advanced economy system to simulate a real world economy, available for everyone."""
+    all_mentions = discord.AllowedMentions.all()
     ITEM_CONVERTER = app_commands.Transform[Row, ItemInputTransformer]
     ROBUX_CONVERTER = app_commands.Transform[int | str, RawIntegerTransformer]
 
@@ -1800,10 +1960,6 @@ class Economy(commands.Cog):
         self.bot = bot
 
     async def interaction_check(self, interaction: discord.Interaction[C2C]):
-        if interaction.user.id not in self.bot.owner_ids:
-            await interaction.response.send_message(embed=membed("The economy system is currently under maintenance."))
-            return False
-
         async with self.bot.pool.acquire() as conn:
             data = await conn.fetchone("SELECT userID FROM transactions WHERE userID = $0", interaction.user.id)
 
@@ -1977,10 +2133,12 @@ class Economy(commands.Cog):
         return val
 
     @staticmethod
-    async def open_bank_new(user: USER_ENTRY, conn_input: Connection) -> None:
-        ranumber = randint(10_000_000, 20_000_000)
-        query = "INSERT INTO accounts (userID, wallet) VALUES ($0, $1)"
-        await conn_input.execute(query, user.id, ranumber)
+    async def open_bank_new(user: USER_ENTRY, conn: Connection) -> bool:
+        """Register a new user. On success, return `True`. Otherwise, return `False`."""
+
+        query = "INSERT INTO accounts (userID, wallet) VALUES ($0, $1) ON CONFLICT DO NOTHING RETURNING userID"
+        ret = await conn.fetchone(query, user.id, randint(10_000_000, 20_000_000))
+        return ret is not None
 
     @staticmethod
     async def fetch_balance(user_id: int, /, conn: Connection, mode: str = "wallet") -> int:
@@ -2695,6 +2853,7 @@ class Economy(commands.Cog):
             interaction,
             view_owner=item_sender,
             content=item_sender.mention,
+            allowed_mentions=Economy.all_mentions,
             prompt=dedent(
                 f"""
                 > Are you sure you want to trade with {robux_sender.mention}?
@@ -2729,6 +2888,7 @@ class Economy(commands.Cog):
             interaction,
             view_owner=robux_sender,
             content=robux_sender.mention,
+            allowed_mentions=Economy.all_mentions,
             prompt=dedent(
                 f"""
                 > Are you sure you want to trade with {item_sender.mention}?
@@ -2758,6 +2918,7 @@ class Economy(commands.Cog):
             interaction,
             view_owner=item_sender,
             content=item_sender.mention,
+            allowed_mentions=Economy.all_mentions,
             prompt=dedent(
                 f"""
                 > Are you sure you want to trade with {item_sender2.mention}?
@@ -3048,7 +3209,7 @@ class Economy(commands.Cog):
 
         paginator.total_pages = paginator.compute_total_pages(len(shop_metadata), length)
 
-        async def get_page_part(page: int) -> discord.Embed:
+        async def get_page_part() -> discord.Embed:
             async with self.bot.pool.acquire() as conn:
                 wallet = await self.fetch_balance(interaction.user.id, conn)
             emb.description = f"> You have {CURRENCY} **{wallet:,}**.\n\n"
@@ -3057,7 +3218,7 @@ class Economy(commands.Cog):
                 backward_btn, forward_btn = paginator.children[:2]
                 paginator.clear_items().add_item(backward_btn).add_item(forward_btn)
 
-            offset = (page - 1) * length
+            offset = (paginator.index - 1) * length
             emb.description += "\n".join(
                 item_metadata[0]
                 for item_metadata in shop_metadata[offset:offset + length]
@@ -3067,7 +3228,7 @@ class Economy(commands.Cog):
                 item_btn.disabled = wallet < item_btn.cost
                 paginator.add_item(item_btn)
 
-            return emb.set_footer(text=f"Page {page} of {paginator.total_pages}")
+            return emb.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
 
         paginator.get_page = get_page_part
         await paginator.navigate()
@@ -3568,53 +3729,46 @@ class Economy(commands.Cog):
         await interaction.response.send_message(embed=slot_machine)
 
     @app_commands.command(description='View your currently owned items')
-    @app_commands.describe(member='The user whose inventory you want to see.')
+    @app_commands.describe(user='The user whose inventory you want to see.')
     async def inventory(
         self,
         interaction: discord.Interaction[C2C],
-        member: Optional[USER_ENTRY]
+        user: Optional[USER_ENTRY]
     ) -> None:
         """View your inventory or another player's inventory."""
-        member = member or interaction.user
-
-        em = membed().set_author(
-            name=f"{member.name}'s inventory",
-            icon_url=member.display_avatar.url
-        )
-
-        query = (
-            """
-            SELECT shop.itemName, shop.emoji, inventory.qty
-            FROM shop
-            INNER JOIN inventory
-                ON shop.itemID = inventory.itemID
-            WHERE inventory.userID = $0
-            """
-        )
-
-        async with self.bot.pool.acquire() as conn:
-            owned_items = await conn.fetchall(query, member.id)
-
-        length = 8
-        paginator = RefreshPagination(interaction)
-        paginator.total_pages = paginator.compute_total_pages(len(owned_items), length)
-
-        async def get_page_part(force_refresh: Optional[bool] = None) -> discord.Embed:
-            nonlocal owned_items
-            if force_refresh:
-                async with self.bot.pool.acquire() as conn:
-                    owned_items = await conn.fetchall(query, member.id)
-                paginator.reset_index(owned_items, length)
-
-            if not owned_items:
-                return em.set_footer(text="Empty")
-
-            offset = (paginator.index - 1) * length
-            em.description = "\n".join(
-                f"{ie} **{item_name}** \U00002500 {qty:,}"
-                for (item_name, ie, qty) in owned_items[offset:offset+length]
+        if interaction.user.id not in self.bot.owner_ids:
+            return await interaction.response.send_message(
+                embed=membed(
+                    "This command is under maintenance.\n"
+                    "-# We're working on bringing great things for this command to you!"
+                )
             )
-            return em.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
+
+        user = user or interaction.user
+        paginator = InventoryPaginator(
+            interaction,
+            membed().set_author(
+                name=f"{user.name}'s inventory",
+                icon_url=user.display_avatar.url
+            ), user
+        )
+
+        await paginator.fetch_data()
+        async def get_page_part(force_refresh: Optional[bool] = None) -> discord.Embed:
+            if force_refresh:
+                await paginator.fetch_data()
+                paginator.index = min(paginator.index, paginator.total_pages)
+
+            if not paginator.data:
+                paginator.embed.description = None
+                return paginator.embed.set_footer(text="Empty")
+
+            offset = (paginator.index - 1) * paginator.length
+            paginator.embed.description = "\n".join(
+                f"{ie} **{item_name}** \U00002500 {qty:,}"
+                for (item_name, ie, qty) in paginator.data[offset:offset+paginator.length]
+            )
+            return paginator.embed.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
 
         paginator.get_page = get_page_part
         await paginator.navigate()
@@ -3628,11 +3782,12 @@ class Economy(commands.Cog):
     ) -> None:
         user = user or interaction.user
 
-        balance_view = BalanceView(interaction, viewing=user)
+        balance_view = BalanceView(interaction, user)
         balance = await balance_view.fetch_balance(interaction)
 
         await interaction.response.send_message(embed=balance, view=balance_view)
 
+    @staticmethod
     async def payout_recurring_income(
         interaction: discord.Interaction[C2C],
         income_type: str,
@@ -4068,31 +4223,22 @@ class Economy(commands.Cog):
 
         query = (
             """
-            WITH inv AS (
-                SELECT qty
-                FROM inventory
-                WHERE userID = $0 AND itemID = 1
-            ),
-            account AS (
-                SELECT wallet
-                FROM accounts
-                WHERE userID = $0
-            )
             SELECT
-                inv.qty,
-                account.wallet,
-                CAST(TOTAL(amount) AS INTEGER)
-            FROM multipliers
-            CROSS JOIN inv
-            CROSS JOIN account
-            WHERE (multipliers.userID IS NULL OR multipliers.userID = $0) AND multi_type = 'robux'
+                COALESCE(inventory.qty, 0),
+                COALESCE(accounts.wallet, 0),
+                CAST(TOTAL(multipliers.amount) AS INTEGER)
+            FROM accounts
+            INNER JOIN multipliers
+                ON (accounts.userID = multipliers.userID) OR multipliers.userID IS NULL
+            INNER JOIN inventory
+                ON accounts.userID = inventory.userID AND inventory.itemID = 1
+            WHERE accounts.userID = $0 AND multipliers.multi_type = 'robux'
             """
         )
 
         user = interaction.user
         async with self.bot.pool.acquire() as conn:
-            keycard_qty, wallet_amt, pmulti = await conn.fetchone(query, user.id) or (0, 0, 0, 0, 0)
-
+            keycard_qty, wallet_amt, pmulti = await conn.fetchone(query, user.id)
         robux = self.do_wallet_checks(wallet_amt, robux, keycard_qty)
 
         their_roll, = choices(

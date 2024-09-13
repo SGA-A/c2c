@@ -77,7 +77,7 @@ class Pagination(BasePaginator):
         self.total_pages = total_pages
 
     async def navigate(self, **kwargs) -> None:
-        embs = await self.get_page(self.index)
+        embs = await self.get_page()
 
         if self.total_pages == 1:
             return await respond(self.interaction, embeds=embs, **kwargs)
@@ -85,7 +85,7 @@ class Pagination(BasePaginator):
         await respond(self.interaction, embeds=embs, view=self, **kwargs)
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
-        embs  = await self.get_page(self.index)
+        embs  = await self.get_page()
         self.update_buttons()
         await edit_response(interaction, embeds=embs, view=self)
 
@@ -164,7 +164,7 @@ class PaginationSimple(discord.ui.View):
             pass
 
     async def navigate(self):
-        emb = await self.get_page(self.index)
+        emb = await self.get_page()
         respond_meth = getattr(self.ctx, "send", None) or self.ctx.response.send_message
 
         if self.total_pages == 1:
@@ -175,7 +175,7 @@ class PaginationSimple(discord.ui.View):
         self.message = await respond_meth(embed=emb, view=self)
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
-        emb = await self.get_page(self.index)
+        emb = await self.get_page()
         self.update_buttons()
         await edit_response(interaction, embed=emb, view=self)
 
@@ -220,7 +220,7 @@ class RefreshPagination(BasePaginator):
         super().__init__(interaction, get_page)
 
     async def navigate(self) -> None:
-        emb = await self.get_page(self.index)
+        emb = await self.get_page()
         self.update_buttons()
         await self.interaction.response.send_message(embed=emb, view=self)
 
@@ -289,11 +289,11 @@ class PaginationItem(BasePaginator):
         super().__init__(interaction, get_page)
 
     async def navigate(self) -> None:
-        emb = await self.get_page(self.index)
+        emb = await self.get_page()
         await self.interaction.response.send_message(embed=emb, view=self)
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
-        emb = await self.get_page(self.index)
+        emb = await self.get_page()
         await edit_response(interaction, embed=emb, view=self)
 
     @discord.ui.button(style=discord.ButtonStyle.grey, emoji=MOVE_LEFT_EMOJI, row=2)

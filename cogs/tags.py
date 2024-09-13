@@ -697,8 +697,8 @@ class Tags(commands.Cog):
             PaginationSimple.compute_total_pages(len(rows), length)
         )
 
-        async def get_page_part(page: int) -> discord.Embed:
-            offset = (page - 1) * length
+        async def get_page_part() -> discord.Embed:
+            offset = (paginator.index - 1) * length
             em.description = "\n".join(
                 f"{index}. {tag[0]} (ID: {tag[1]})"
                 for index, tag in enumerate(
@@ -706,7 +706,7 @@ class Tags(commands.Cog):
                 )
             )
 
-            return em.set_footer(text=f"Page {page} of {paginator.total_pages}")
+            return em.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
 
         paginator.get_page = get_page_part
         await paginator.navigate()
