@@ -78,6 +78,6 @@ class C2C(commands.Bot):
 
         self.pool = await create_pool(".\\database\\economy.db")
         self.session = ClientSession(
-            connector=TCPConnector(limit=30, loop=self.loop, limit_per_host=5),
-            cookie_jar=DummyCookieJar(loop=self.loop)
+            connector=TCPConnector(),
+            cookie_jar=DummyCookieJar()
         )

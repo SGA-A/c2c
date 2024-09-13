@@ -77,7 +77,7 @@ class Pagination(BasePaginator):
         self.total_pages = total_pages
 
     async def navigate(self, **kwargs) -> None:
-        embs = await self.get_page(self.index)
+        embs = await self.get_page()
 
         if self.total_pages == 1:
             return await respond(self.interaction, embeds=embs, **kwargs)
@@ -85,7 +85,7 @@ class Pagination(BasePaginator):
         await respond(self.interaction, embeds=embs, view=self, **kwargs)
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
-        embs  = await self.get_page(self.index)
+        embs  = await self.get_page()
         self.update_buttons()
         await edit_response(interaction, embeds=embs, view=self)
 
@@ -164,7 +164,7 @@ class PaginationSimple(discord.ui.View):
             pass
 
     async def navigate(self):
-        emb = await self.get_page(self.index)
+        emb = await self.get_page()
         respond_meth = getattr(self.ctx, "send", None) or self.ctx.response.send_message
 
         if self.total_pages == 1:
@@ -175,7 +175,7 @@ class PaginationSimple(discord.ui.View):
         self.message = await respond_meth(embed=emb, view=self)
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
-        emb = await self.get_page(self.index)
+        emb = await self.get_page()
         self.update_buttons()
         await edit_response(interaction, embed=emb, view=self)
 
@@ -220,7 +220,7 @@ class RefreshPagination(BasePaginator):
         super().__init__(interaction, get_page)
 
     async def navigate(self) -> None:
-        emb = await self.get_page(self.index)
+        emb = await self.get_page()
         self.update_buttons()
         await self.interaction.response.send_message(embed=emb, view=self)
 
@@ -253,26 +253,26 @@ class RefreshPagination(BasePaginator):
         self.children[3].disabled = is_last_page_check
         self.children[4].disabled = is_last_page_check
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_FIRST_PAGE_EMOJI, row=1)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_FIRST_PAGE_EMOJI, row=2)
     async def first(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index = 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_LEFT_EMOJI, row=1)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_LEFT_EMOJI, row=2)
     async def previous(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index -= 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(emoji=discord.PartialEmoji.from_str("<:refreshPages:1263923160433168414>"), row=1)
+    @discord.ui.button(emoji=discord.PartialEmoji.from_str("<:refreshPages:1263923160433168414>"), row=2)
     async def refresh_paginator(self, interaction: discord.Interaction, _: discord.ui.Button):
         await self.edit_page(interaction, force_refresh=True)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_RIGHT_EMOJI, row=1)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=MOVE_RIGHT_EMOJI, row=2)
     async def next_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index += 1
         await self.edit_page(interaction)
 
-    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_LAST_PAGE_EMOJI, row=1)
+    @discord.ui.button(style=discord.ButtonStyle.blurple, emoji=GO_LAST_PAGE_EMOJI, row=2)
     async def last_page(self, interaction: discord.Interaction, _: discord.ui.Button) -> None:
         self.index = self.total_pages
         await self.edit_page(interaction)
@@ -289,11 +289,11 @@ class PaginationItem(BasePaginator):
         super().__init__(interaction, get_page)
 
     async def navigate(self) -> None:
-        emb = await self.get_page(self.index)
+        emb = await self.get_page()
         await self.interaction.response.send_message(embed=emb, view=self)
 
     async def edit_page(self, interaction: discord.Interaction) -> None:
-        emb = await self.get_page(self.index)
+        emb = await self.get_page()
         await edit_response(interaction, embed=emb, view=self)
 
     @discord.ui.button(style=discord.ButtonStyle.grey, emoji=MOVE_LEFT_EMOJI, row=2)

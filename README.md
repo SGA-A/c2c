@@ -16,8 +16,13 @@
     <img alt="Python Compatible Versions" src="https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue"></a>
 </p>
 
+> [!NOTE]
+> I've not got much time as I used to work on this for now.
+> 
+> Most issues and pull requests submitted will not be receiving much attention until the next semester.
+
 ## Installation
-Not supported currently because of the evolving database schema. This will be made when the schema is made final, i.e., all the incomplete issues in the `Projects` tab in this repo are implemented (roughly around 2030).
+Not supported currently because of the evolving database schema. This will be made when the schema is made final when all the incomplete issues in the `Projects` tab in this repository are implemented.
 
 We are not responsible for any errors that may occur when running this bot on your own. It is also **not** production-ready.
 

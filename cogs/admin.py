@@ -28,7 +28,7 @@ class Admin(commands.Cog):
             return True
         return False
 
-    async def interaction_check(self, interaction: discord.Interaction):
+    async def interaction_check(self, interaction: discord.Interaction[C2C]):
         if interaction.user.id in self.bot.owner_ids:
             return True
         await interaction.response.send_message(
@@ -101,7 +101,7 @@ class Admin(commands.Cog):
     @commands.command(name="eval", description="Evaluates arbitrary code")
     async def evaluate(
         self, ctx: commands.Context, *, script_body: str
-    ) -> None | discord.Message:
+    ) -> Optional[discord.Message]:
         """Evaluates arbitrary code."""
 
         env = {
@@ -224,7 +224,7 @@ class Admin(commands.Cog):
     @app_commands.describe(message="What you want me to say.")
     async def repeat(
         self,
-        interaction: discord.Interaction,
+        interaction: discord.Interaction[C2C],
         message: app_commands.Range[str, 1, 2000]
     ) -> None:
         """Repeat what you typed, also converting emojis based on whats inside two equalities."""

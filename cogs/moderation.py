@@ -6,7 +6,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from .core.errors import FailingConditionalError
+from .core.errors import FailingConditionalError, CustomTransformerError
 from .core.helpers import membed, process_confirmation
 from .core.paginators import PaginationItem
 from .core.bot import C2C
@@ -45,7 +45,7 @@ def do_boilerplate_role_checks(r: discord.Role, g: discord.Guild) -> None:
 
 class TimeConverter(app_commands.Transformer):
     time_regex = compile(r"(\d{1,5}(?:[.,]?\d{1,5})?)([smhd])")
-    time_dict = {"h": 3600, "s": 1, "m": 60, "d": 86400}
+    time_dict = {"h": 3600, "s": 1, "m": 60, "d": 86_400}
 
     async def transform(self, _: discord.Interaction, argument: str) -> int:
         matches = self.time_regex.findall(argument.lower())
@@ -53,8 +53,20 @@ class TimeConverter(app_commands.Transformer):
         for v, k in matches:
             try:
                 time += self.time_dict[k]*float(v)
-            except (KeyError, ValueError):
-                continue
+            except KeyError:
+                raise CustomTransformerError(
+                    argument,
+                    self.type,
+                    self,
+                    f"{k} is an invalid time-key! d/h/m/s are valid."
+                )
+            except ValueError:
+                raise CustomTransformerError(
+                    argument,
+                    self.type,
+                    self,
+                    f"{v} is not a number."
+                )
         return time
 
 
@@ -266,15 +278,15 @@ class RoleManagement(app_commands.Group):
         paginator = PaginationItem(interaction)
         paginator.total_pages = paginator.compute_total_pages(len(interaction.guild.roles), length)
 
-        async def get_page_part(page: int) -> discord.Embed:
-            offset = length - (page * length) - 1
+        async def get_page_part() -> discord.Embed:
+            offset = length - (paginator.index * length) - 1
 
             emb.description = "\n".join(
                 f"<@&{role.id}> \U00002014 {role.id}"
                 for role in interaction.guild.roles[offset:offset-length:-1]
             )
 
-            return emb.set_footer(text=f"Page {page} of {paginator.total_pages}")
+            return emb.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
 
         paginator.get_page = get_page_part
         await paginator.navigate()
@@ -543,9 +555,6 @@ class Moderation(commands.Cog):
         role: discord.Role
     ) -> None:
 
-        if not duration:
-            return await interaction.response.send_message(embed=membed("Use a valid duration format e.g. 1d 7h 19m 4s."))
-
         if role in user.roles:
             return await interaction.response.send_message(embed=membed("That member already has this role."))
 
@@ -562,15 +571,19 @@ class Moderation(commands.Cog):
             (int(seconds), "seconds")
         )
 
-        # Sending message
-        success = discord.Embed(colour=role.colour)
-        success.title = "Temporary role added"
-        success.description = f"Granted {user.mention} the {role.mention} role for "
-        success.description += " and ".join(f"{quantity} {unit}" for quantity, unit in time_components if quantity)
-
         temprole_reason = f"Temporary role requested by {interaction.user} (ID: {interaction.user.id})"
-        await user.add_roles(discord.Object(id=role.id), reason=temprole_reason)
-        await interaction.response.send_message(embed=success)
+        try:
+            await user.add_roles(discord.Object(id=role.id), reason=temprole_reason)
+        except discord.Forbidden:
+            embed = membed("I'm missing permissions required for this command.")
+            embed.add_field(name="Missing Permissions (1)", value="Manage Roles")
+            return await interaction.response.send_message(embed=embed)
+
+        embed = discord.Embed(colour=role.colour)
+        embed.title = "Temporary role added"
+        embed.description = f"Granted {user.mention} the {role.mention} role for "
+        embed.description += " and ".join(f"{quantity} {unit}" for quantity, unit in time_components if quantity)
+        await interaction.response.send_message(embed=embed)
 
         # Scheduling task
         timestamp = (discord.utils.utcnow() + timedelta(seconds=duration)).timestamp()
@@ -580,8 +593,7 @@ class Moderation(commands.Cog):
             await conn.execute(query, user.id, role.id, timestamp, interaction.guild.id)
 
         if self.check_for_role.is_running():
-            self.check_for_role.restart()
-            return
+            return self.check_for_role.restart()
         self.check_for_role.start()
 
     @app_commands.command(description='Upload a new forum thread')

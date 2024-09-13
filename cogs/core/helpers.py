@@ -1,5 +1,5 @@
 from re import compile
-from typing import Callable, Any
+from typing import Callable, Any, Optional
 from datetime import datetime, timedelta
 
 import discord
@@ -15,7 +15,7 @@ async def end_transaction(conn: Connection, /, *, user_id: int) -> bool:
     await conn.execute("DELETE FROM transactions WHERE userID = $0", user_id)
 
 
-def membed(custom_description: str | None = None, /) -> discord.Embed:
+def membed(custom_description: Optional[str] = None, /) -> discord.Embed:
     """Quickly construct an embed with an optional description."""
     membedder = discord.Embed(colour=0x2B2D31, description=custom_description)
     return membedder
@@ -44,7 +44,7 @@ class BaseInteractionView(discord.ui.View):
     def __init__(
         self,
         interaction: discord.Interaction,
-        controlling_user: discord.User | None = None
+        controlling_user: Optional[discord.User] = None
     ) -> None:
         self.interaction = interaction
         self.controlling_user = controlling_user or interaction.user
@@ -75,7 +75,7 @@ class BaseContextView(discord.ui.View):
 
     This view has no items, you'll need to add them in manually.
     """
-    def __init__(self, ctx, /, controlling_user: discord.User | None = None) -> None:
+    def __init__(self, ctx, /, controlling_user: Optional[discord.User] = None) -> None:
         self.ctx = ctx
         self.controlling_user = controlling_user or ctx.author
         super().__init__(timeout=45.0)
@@ -111,26 +111,34 @@ class MessageDevelopers(discord.ui.View):
         )
 
 
-class ConfirmationButton(discord.ui.Button):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+class ConfirmButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(style=discord.ButtonStyle.success, label="Confirm")
 
     async def callback(self, interaction: discord.Interaction) -> None:
-        self.view.value = self.style == discord.ButtonStyle.success
+        self.view.value = True
         self.view.stop()
 
         embed = interaction.message.embeds[0]
-        embed.title = f"Action {self.custom_id}"
-        embed.colour = discord.Colour.brand_green() if self.view.value else discord.Colour.brand_red()
+        embed.title = "Action Confirmed"
+        embed.colour = discord.Colour.brand_green()
 
-        for item in self.view.children:
-            item.disabled = True
-            if item.label == self.label:
-                item.style = discord.ButtonStyle.success
-                continue
-            item.style = discord.ButtonStyle.secondary
+        await interaction.response.edit_message(embed=embed, view=self.disable_items(self.view, self))
 
-        await interaction.response.edit_message(embed=embed, view=self.view)
+
+class CancelButton(discord.ui.Button):
+    def __init__(self):
+        super().__init__(style=discord.ButtonStyle.danger, label="Cancel")
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        self.view.value = False
+        self.view.stop()
+
+        embed = interaction.message.embeds[0]
+        embed.title = "Action Cancelled"
+        embed.colour = discord.Colour.brand_red()
+
+        await interaction.response.edit_message(embed=embed, view=self.disable_items(self.view, self))
 
 
 class GenericModal(discord.ui.Modal):
@@ -221,7 +229,7 @@ def string_to_datetime(string_obj: str, date_format = "%Y-%m-%d %H:%M:%S") -> da
     return my_datetime.replace(tzinfo=timezone("UTC"))
 
 
-async def respond(interaction: discord.Interaction, /, **kwargs) -> None | discord.WebhookMessage:
+async def respond(interaction: discord.Interaction, /, **kwargs) -> Optional[discord.WebhookMessage]:
     """
     Responds to the interaction by sending a message.
 
@@ -232,7 +240,7 @@ async def respond(interaction: discord.Interaction, /, **kwargs) -> None | disco
     await interaction.response.send_message(**kwargs)
 
 
-async def edit_response(interaction: discord.Interaction, /, **kwargs) -> None | discord.InteractionMessage:
+async def edit_response(interaction: discord.Interaction, /, **kwargs) -> Optional[discord.InteractionMessage]:
     """
     Edit an interaction's original response message, which may be a response.
 
@@ -243,7 +251,7 @@ async def edit_response(interaction: discord.Interaction, /, **kwargs) -> None |
     await interaction.response.edit_message(**kwargs)
 
 
-async def send_message(invocation: Context | discord.Interaction, /, **kwargs):
+async def send_message(invocation: Context | discord.Interaction, /, **kwargs) -> Optional[discord.WebhookMessage]:
     """
     For use when using a `discord.Interaction` or a `commands.Context`
 
@@ -269,16 +277,13 @@ async def process_confirmation(
     This returns a boolean indicating whether the user confirmed the action or not, or None if the user timed out.
     """
 
-    confirm_view = (
-        BaseInteractionView(interaction, view_owner)
-        .add_item(ConfirmationButton(label="Cancel", style=discord.ButtonStyle.danger, custom_id="Cancelled"))
-        .add_item(ConfirmationButton(label="Confirm", style=discord.ButtonStyle.success, custom_id="Confirmed"))
-    )
+    confirm_view = BaseInteractionView(interaction, view_owner).add_item(CancelButton()).add_item(ConfirmButton())
     confirm_view.value = None
     confirm_embed = membed(prompt)
     confirm_embed.title = "Pending Confirmation"
-
+    
     await respond(interaction, embed=confirm_embed, view=confirm_view, **kwargs)
+
     await confirm_view.wait()
     if confirm_view.value is None:
         await format_timeout_view(confirm_embed, confirm_view, confirm_view.interaction.edit_original_response)
@@ -286,11 +291,7 @@ async def process_confirmation(
 
 
 async def send_boilerplate_confirm(ctx, /, prompt: str) -> bool:
-    confirm_view = (
-        BaseContextView(ctx, timeout=30.0)
-        .add_item(ConfirmationButton(label="Cancel", style=discord.ButtonStyle.danger, custom_id="Cancelled"))
-        .add_item(ConfirmationButton(label="Confirm", style=discord.ButtonStyle.success, custom_id="Confirmed"))
-    )
+    confirm_view = BaseContextView(ctx).add_item(CancelButton()).add_item(ConfirmButton())
     confirm_view.value = None
     confirm_embed = membed(prompt)
     confirm_embed.title = "Pending Confirmation"
@@ -305,26 +306,19 @@ async def send_boilerplate_confirm(ctx, /, prompt: str) -> bool:
 async def is_setting_enabled(conn: Connection, user_id: int, setting: str) -> bool:
     """Check if a user has a setting enabled."""
 
-    result = await conn.fetchone(
-        """
-        SELECT value
-        FROM settings
-        WHERE userID = $0 AND setting = $1
-        """, user_id, setting
-    )
-    if result is None:
-        return False
-    return bool(result[0])
+    query = "SELECT value FROM settings WHERE userID = $0 AND setting = $1"
+    result, = await conn.fetchone(query, user_id, setting) or (0,)
+    return bool(result)
 
 
 async def handle_confirm_outcome(
     interaction: discord.Interaction,
     prompt: str,
-    view_owner: discord.Member | None = None,
-    setting: str | None = None,
-    conn: Connection | None = None,
+    view_owner: Optional[discord.User] = None,
+    setting: Optional[str] = None,
+    conn: Optional[Connection] = None,
     **kwargs
-) -> None | bool:
+) -> Optional[bool]:
     """
     Handle a confirmation outcome correctly, accounting for whether or not a specific confirmation is enabled.
 
