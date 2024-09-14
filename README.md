@@ -17,12 +17,12 @@
 </p>
 
 > [!NOTE]
-> I've not got much time as I used to work on this for now.
+> I have limited time available to dedicate to this project.
 > 
 > Most issues and pull requests submitted will not be receiving much attention until the next semester.
 
 ## Installation
-Not supported currently because of the evolving database schema. This will be made when the schema is made final when all the incomplete issues in the `Projects` tab in this repository are implemented.
+Not supported currently because of the evolving database schema. This will be available when it is made final.
 
 We are not responsible for any errors that may occur when running this bot on your own. It is also **not** production-ready.
 
