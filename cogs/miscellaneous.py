@@ -226,10 +226,11 @@ class Miscellaneous(commands.Cog):
     ) -> None:
         async with self.bot.session.get(api_url, params=params, headers=headers) as response:
             if response.status != 200:
-                await interaction.followup.send(embed=membed(API_EXCEPTION))
+                await interaction.followup.send(API_EXCEPTION)
                 return
+            initial_bytes = await response.read()
 
-            buffer = BytesIO(await response.read())
+        buffer = BytesIO(initial_bytes)
         await interaction.followup.send(file=discord.File(buffer, 'clip.gif'))
 
     @app_commands.guild_install()
@@ -351,10 +352,9 @@ class Miscellaneous(commands.Cog):
 
     @commands.command(description='Checks latency of the bot')
     async def ping(self, ctx: commands.Context) -> None:
-        msg_content = "Pong!"
-        msg = await ctx.send(msg_content)
-        msg_content += f" `{self.bot.latency * 1000:.0f}ms`"
-        await msg.edit(content=msg_content)
+        msg = await ctx.send("Pong!")
+        msg.content += f" `{self.bot.latency * 1000:.0f}ms`"
+        await msg.edit(content=msg.content)
 
     async def embed_colour(self, interaction: discord.Interaction, message: discord.Message) -> None:
 
@@ -453,9 +453,9 @@ class Miscellaneous(commands.Cog):
             params={'X-Api-Key': self.bot.NINJAS_API_KEY}
         ) as resp:
             if resp.status != 200:
-                return await interaction.response.send_message(embed=membed(API_EXCEPTION))
+                return await interaction.response.send_message(API_EXCEPTION)
             text = await resp.json()
-        await interaction.response.send_message(embed=membed(f"{text[0]['fact']}."))
+        await interaction.response.send_message(text[0]['fact'])
 
     @app_commands.command(description="Manipulate a user's avatar")
     @app_commands.describe(
@@ -528,10 +528,7 @@ class Miscellaneous(commands.Cog):
 
         msg = '\n'.join(map(to_string, characters))
         if len(msg) > 2000:
-            return await interaction.response.send_message(
-                ephemeral=True,
-                embed=membed('Output too long to display.')
-            )
+            return await interaction.response.send_message('Output too long to display.', ephemeral=True)
         await interaction.response.send_message(msg, suppress_embeds=True)
 
     @app_commands.command(description='Learn more about the bot')

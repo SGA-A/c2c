@@ -4104,7 +4104,7 @@ class Economy(commands.Cog):
 
         if percent_stolen <= 25:
             embed.title = "You stole a TINY portion!"
-            embed.set_thumbnail(url="https://i.imgur.com/nZmHhJX.png")
+            embed.set_thumbnail(url="https://i.imgur.com/TA5j8d8.png")
         elif percent_stolen <= 50:
             embed.title = "You stole a small portion!"
             embed.set_thumbnail(url="https://i.imgur.com/148ClcS.png")

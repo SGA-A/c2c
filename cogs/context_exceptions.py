@@ -40,6 +40,7 @@ class ContextExceptions(commands.Cog):
                 )
             )
         else:
+            self.bot.log_exception(err)
             embed.title = "Something went wrong"
             embed.description = (
                 "Seems like the bot has stumbled upon an unexpected error. "
@@ -47,7 +48,6 @@ class ContextExceptions(commands.Cog):
                 "please let us know about it. We're always here to help!"
             )
         await ctx.send(embed=embed, view=self.view)
-        self.bot.log_exception(err)
 
 
 async def setup(bot: C2C):

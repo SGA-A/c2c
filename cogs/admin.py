@@ -73,24 +73,22 @@ class Admin(commands.Cog):
         user: discord.User | discord.Member = commands.Author,
         medium: str = "wallet"
     ) -> None:
-        embed = membed()
-
         if configuration.startswith("a"):
-            embed.description = f"Added {CURRENCY} **{amount:,}** to {user.name}!"
+            output = f"Added {CURRENCY} **{amount:,}** to {user.name}!"
             query = f"UPDATE accounts SET {medium} = {medium} + ? WHERE userID = ?"
 
         elif configuration.startswith("r"):
-            embed.description = f"Deducted {CURRENCY} **{amount:,}** from {user.name}!"
+            output = f"Deducted {CURRENCY} **{amount:,}** from {user.name}!"
             query = f"UPDATE accounts SET {medium} = {medium} - ? WHERE userID = ?"
 
         else:
-            embed.description = f"Set {CURRENCY} **{amount:,}** to {user.name}!"
+            output = f"Set {CURRENCY} **{amount:,}** to {user.name}!"
             query = f"UPDATE accounts SET {medium} = ? WHERE userID = ?"
 
         async with self.bot.pool.acquire() as conn, conn.transaction():
             await conn.execute(query, (amount, user.id))
 
-        await ctx.send(embed=embed)
+        await ctx.send(output)
 
     @commands.command(description="Sync the bot tree for changes", aliases=("sy",))
     async def sync(self, ctx: commands.Context) -> None:
@@ -236,20 +234,10 @@ class Admin(commands.Cog):
             if emoji:
                 message = message.replace(f"<{match}>", f"{emoji}")
                 continue
-            return await interaction.response.send_message(
-                ephemeral=True, embed=membed("Could not find that emoji.")
-            )
+            return await interaction.response.send_message("Emoji not found.", ephemeral=True)
 
         await interaction.channel.send(message)
-        await interaction.response.send_message(
-            ephemeral=True,
-            delete_after=3.0,
-            embed=membed(f"Sent this message to {interaction.channel.mention}."),
-        )
-
-    @commands.command(description="Dispatch customizable quarterly updates")
-    async def hook(self, ctx: commands.Context):
-        await ctx.send("Nothing here yet.")
+        await interaction.response.send_message("\U00002705", ephemeral=True)
 
 
 async def setup(bot: C2C):
