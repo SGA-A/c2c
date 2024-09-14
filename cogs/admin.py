@@ -185,7 +185,8 @@ class Admin(commands.Cog):
         channel = self.bot.get_partial_messageable(1254883155882672249)
         original = channel.get_partial_message(1254901254530924644)
 
-        role_content_pt1 = """
+        role_content_pt1 = (
+            """
             # Role Guide
             Roles are similar to ranks or accessories that you can add to your profile.
             There are a few self-assignable roles that you can pick up in <id:customize> by clicking on the buttons.
@@ -197,13 +198,13 @@ class Admin(commands.Cog):
             Other miscellaneous roles for your knowledge:
             - <@&893550756953735278>: The people who manage the server.
             - <@&1148209142465581098>: The role for a backup account, granted administrator permissions.
-            - <@&912057500914843680>: Grants administrator permissions over the server.
-            - <@&914565377961369632>: The role verified server members can obtain.
+            - <@&1273655614085664828>: The role verified server members can obtain.
             - <@&1140197893261758505>: Given to people who had their message on the legacy starboard.
             - <@&1121426143598354452>: Given on a per-user basis, granting certain privileges.
             - <@&1150848144440053780>: Bots that only need read access to bot command channels.
             - <@&1150848206008238151>: Bots that require full read access throughout the server.
             """
+        )
 
         await original.edit(content=dedent(role_content_pt1))
 

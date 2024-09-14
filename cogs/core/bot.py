@@ -1,6 +1,6 @@
 from pathlib import Path
 from traceback import format_exception
-from aiohttp import ClientSession, TCPConnector, DummyCookieJar
+from aiohttp import ClientSession, DummyCookieJar
 from json import load as json_load
 from logging import error as logging_error
 
@@ -22,7 +22,7 @@ class C2C(commands.Bot):
         intents.guilds = True
         intents.members = True
 
-        allowed_mentions = discord.AllowedMentions.none()
+        no_mentions = discord.AllowedMentions.none()
 
         with open('.\\config.json', 'r') as file:
             config: dict = json_load(file)
@@ -37,7 +37,7 @@ class C2C(commands.Bot):
         all_installs = app_commands.AppInstallationType(guild=True, user=True)
 
         super().__init__(
-            allowed_mentions=allowed_mentions,
+            allowed_mentions=no_mentions,
             allowed_contexts=all_contexts,
             allowed_installs=all_installs,
             case_insensitive=True,
@@ -77,7 +77,4 @@ class C2C(commands.Bot):
                 self.log_exception(e)
 
         self.pool = await create_pool(".\\database\\economy.db")
-        self.session = ClientSession(
-            connector=TCPConnector(),
-            cookie_jar=DummyCookieJar()
-        )
+        self.session = ClientSession(cookie_jar=DummyCookieJar())
