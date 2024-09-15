@@ -155,14 +155,6 @@ class Miscellaneous(commands.Cog):
             app_commands.ContextMenu(
                 name='Extract Embed Colour',
                 callback=self.embed_colour
-            ),
-            app_commands.ContextMenu(
-                name="View User Avatar",
-                callback=self.view_avatar
-            ),
-            app_commands.ContextMenu(
-                name="View User Banner",
-                callback=self.view_banner
             )
         }
 
@@ -626,40 +618,6 @@ class Miscellaneous(commands.Cog):
         )
 
         await interaction.response.send_message(embed=embed)
-
-    async def view_avatar(
-        self,
-        interaction: discord.Interaction,
-        username: discord.User
-    ) -> None:
-        avatar_url = username.display_avatar.with_static_format('png').url
-        embed = membed().set_image(url=avatar_url).set_author(
-            name=username.display_name,
-            icon_url=avatar_url
-        )
-
-        img_view = discord.ui.View().add_item(ImageSourceButton(url=embed.author.icon_url))
-        await interaction.response.send_message(ephemeral=True, embed=embed, view=img_view)
-
-    async def view_banner(
-        self,
-        interaction: discord.Interaction,
-        user: discord.User
-    ) -> None:
-        user = await self.bot.fetch_user(user.id)
-        embed = membed().set_author(
-            name=user.display_name,
-            icon_url=user.display_avatar.url
-        )
-
-        if not user.banner:
-            embed.description = "This user does not have a banner."
-            return await interaction.response.send_message(ephemeral=True, embed=embed)
-
-        embed.set_image(url=user.banner.with_static_format('png'))
-        img_view = discord.ui.View().add_item(ImageSourceButton(url=embed.image.url))
-
-        await interaction.response.send_message(ephemeral=True, embed=embed, view=img_view)
 
     @commands.command(description="Display a visual sunmap of the world", aliases=('wc',))
     async def worldclock(self, ctx: commands.Context) -> None:

@@ -476,11 +476,9 @@ class Moderation(commands.Cog):
         await interaction.delete_original_response()
 
         try:
-            count = len(await interaction.channel.purge(after=discord.Object(id=message.id)))
-            msg = await interaction.followup.send(embed=membed(f"Deleted **{count:,}** messages."))
+            await interaction.channel.purge(after=discord.Object(id=message.id))
         except discord.HTTPException:
-            msg = await interaction.followup.send(embed=membed("Could not purge this channel."))
-        await msg.delete(delay=5.0)
+            await interaction.followup.send(embed=membed("Could not purge this channel."))
 
     @tasks.loop()
     async def check_for_role(self) -> None:
@@ -504,35 +502,6 @@ class Moderation(commands.Cog):
         finally:
             async with self.bot.pool.acquire() as conn, conn.transaction():
                 await conn.execute('DELETE FROM tasks WHERE mod_to = $0', mod_to)
-
-    @commands.has_permissions(manage_threads=True)
-    @commands.command(description="Close a given thread or invocation thread", aliases=('cl',))
-    async def close(
-        self,
-        ctx: commands.Context,
-        thread_id: int
-    ) -> None:
-        thread = ctx.guild.get_thread(thread_id) or (await ctx.guild.fetch_channel(thread_id))
-
-        message = membed("This is now closed due to lack of use.").add_field(
-            name="Want to re-open this thread?",
-            value="Contact any human with the <@&893550756953735278> role."
-        )
-
-        try:
-            await thread.send(embed=message)
-        except AttributeError:
-            await ctx.send(embed=membed("You need to pass in a valid thread ID."))
-
-        close_reason = f'Marked as closed by {ctx.author} (ID: {ctx.author.id})'
-        await thread.edit(locked=True, archived=True, reason=close_reason)
-
-    @commands.has_permissions(manage_channels=True)
-    @commands.command(description='Sets a slowmode for the invoker channel', aliases=('d',))
-    async def delay(self, ctx: commands.Context, slowmode_in_seconds: int) -> None:
-        """Sets a delay to which users can send messages."""
-        slowmode_in_seconds = abs(slowmode_in_seconds)
-        await ctx.channel.edit(slowmode_delay=slowmode_in_seconds)
 
     temprole = app_commands.Group(
         name="temprole",
