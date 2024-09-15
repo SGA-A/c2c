@@ -4297,12 +4297,15 @@ class Economy(commands.Cog):
             FROM shop
             INNER JOIN inventory ON shop.itemID = inventory.itemID
             WHERE LOWER(itemName) LIKE '%' || ? || '%' AND userID = ?
+            COLLATE NOCASE
+            ORDER BY INSTR(itemName, ?)
             LIMIT 25
             """
         )
 
+        current = current.lower()
         async with self.bot.pool.acquire() as conn:
-            options = await conn.fetchall(query, (f'%{current.lower()}%', interaction.user.id))
+            options = await conn.fetchall(query, (current, interaction.user.id, current))
 
         return [app_commands.Choice(name=option, value=option) for (option,) in options]
 
@@ -4321,12 +4324,15 @@ class Economy(commands.Cog):
             SELECT itemName
             FROM shop
             WHERE LOWER(itemName) LIKE '%' || ? || '%'
+            COLLATE NOCASE
+            ORDER BY INSTR(itemName, ?)
             LIMIT 25
             """
         )
 
+        current = current.lower()
         async with self.bot.pool.acquire() as conn:
-            options = await conn.fetchall(query, (f'%{current.lower()}%',))
+            options = await conn.fetchall(query, (current, current))
 
         return [app_commands.Choice(name=option, value=option) for (option,) in options]
 
@@ -4343,11 +4349,14 @@ class Economy(commands.Cog):
                 REPLACE(setting, '_', ' ') AS formatted_setting
             FROM settings_descriptions
             WHERE LOWER(setting) LIKE '%' || ? || '%'
+            COLLATE NOCASE
+            ORDER BY INSTR(formatted_setting, ?)
             """
         )
 
+        current = current.lower()
         async with self.bot.pool.acquire() as conn:
-            results = await conn.fetchall(query, (f'%{current.lower()}%',))
+            results = await conn.fetchall(query, (current, current))
 
         return [
             app_commands.Choice(name=formatted_setting.title(), value=setting)

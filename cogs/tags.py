@@ -262,12 +262,14 @@ class Tags(commands.Cog):
             SELECT name
             FROM tags
             WHERE LOWER(name) LIKE '%' || ? || '%'
-            COLLATE NOCASE ORDER BY INSTR(name, ?)
+            COLLATE NOCASE
+            ORDER BY INSTR(name, ?)
             LIMIT 10
             """
         )
-        tag_names = await conn.fetchall(query, (word_input.lower(), word_input.lower()))
 
+        word_input = word_input.lower()
+        tag_names = await conn.fetchall(query, (word_input, word_input))
         meth = meth or self.partial_match_for
         return await meth(ctx, word_input, tag_results=tag_names)
 
@@ -282,14 +284,15 @@ class Tags(commands.Cog):
             """
             SELECT name
             FROM tags
-            WHERE ownerID = ?
-            AND LOWER(name) LIKE '%' || ? || '%'
-            COLLATE NOCASE ORDER BY INSTR(name, ?)
+            WHERE ownerID = ? AND LOWER(name) LIKE '%' || ? || '%'
+            COLLATE NOCASE
+            ORDER BY INSTR(name, ?)
             LIMIT 10
             """
         )
-        tag_names = await conn.fetchall(query, (ctx.author.id, word_input.lower(), word_input.lower()))
 
+        word_input = word_input.lower()
+        tag_names = await conn.fetchall(query, (ctx.author.id, word_input, word_input))
         meth = meth or self.partial_match_for
         return await meth(ctx, word_input, tag_results=tag_names)
 
@@ -303,13 +306,15 @@ class Tags(commands.Cog):
             SELECT name
             FROM tags
             WHERE name LIKE '%' || ? || '%'
-            COLLATE NOCASE ORDER BY INSTR(name, ?)
+            COLLATE NOCASE
+            ORDER BY INSTR(name, ?)
             LIMIT 25
             """
         )
 
+        current = current.lower()
         async with self.bot.pool.acquire() as conn:
-            rows = await conn.fetchall(query, (current.lower(), current.lower()))
+            rows = await conn.fetchall(query, (current, current))
         return [app_commands.Choice(name=row, value=row) for (row,) in rows]
 
     async def owned_non_aliased_tag_autocomplete(
@@ -321,15 +326,16 @@ class Tags(commands.Cog):
             """
             SELECT name
             FROM tags
-            WHERE ownerID = ?
-            AND LOWER(name) LIKE '%' || ? || '%'
-            COLLATE NOCASE ORDER BY INSTR(name, ?)
+            WHERE ownerID = ? AND LOWER(name) LIKE '%' || ? || '%'
+            COLLATE NOCASE
+            ORDER BY INSTR(name, ?)
             LIMIT 25
             """
         )
 
+        current = current.lower()
         async with self.bot.pool.acquire() as conn:
-            all_tags = await conn.fetchall(query, (interaction.user.id, current.lower(), current.lower()))
+            all_tags = await conn.fetchall(query, (interaction.user.id, current, current))
 
         return [app_commands.Choice(name=tag, value=tag) for (tag,) in all_tags]
 
@@ -725,13 +731,15 @@ class Tags(commands.Cog):
             SELECT name, rowid
             FROM tags
             WHERE name LIKE '%' || ? || '%'
-            COLLATE NOCASE ORDER BY INSTR(name, ?)
+            COLLATE NOCASE
+            ORDER BY INSTR(name, ?)
             LIMIT 60
             """
         )
 
+        query = query.lower()
         async with self.bot.pool.acquire() as conn:
-            rows = await conn.fetchall(sql, (query.lower(), query.lower()))
+            rows = await conn.fetchall(sql, (query, query))
 
         if not rows:
             return await ctx.send(embed=membed("No tags found."))
