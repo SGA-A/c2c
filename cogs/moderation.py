@@ -510,22 +510,19 @@ class Moderation(commands.Cog):
     async def close(
         self,
         ctx: commands.Context,
-        thread: discord.abc.GuildChannel = commands.CurrentChannel
+        thread_id: int
     ) -> None:
+        thread = ctx.guild.get_thread(thread_id) or (await ctx.guild.fetch_channel(thread_id))
 
-        try:
-            assert isinstance(thread, discord.Thread)
-        except AssertionError:
-            raise FailingConditionalError("This is not a thread.")
-
-        await ctx.message.delete()
-
-        message = membed("This thread is now closed due to lack of use.").add_field(
+        message = membed("This is now closed due to lack of use.").add_field(
             name="Want to re-open this thread?",
             value="Contact any human with the <@&893550756953735278> role."
         )
 
-        await thread.send(embed=message)
+        try:
+            await thread.send(embed=message)
+        except AttributeError:
+            await ctx.send(embed=membed("You need to pass in a valid thread ID."))
 
         close_reason = f'Marked as closed by {ctx.author} (ID: {ctx.author.id})'
         await thread.edit(locked=True, archived=True, reason=close_reason)

@@ -1388,7 +1388,7 @@ class MultiplierView(RefreshPagination):
                 )
         self.total_pages = self.compute_total_pages(len(self.multiplier_list), self.length)
 
-    @discord.ui.select(options=multipliers, row=0, placeholder="Select a multiplier to view")
+    @discord.ui.select(options=multipliers, row=0, placeholder="Select a multiplier")
     async def callback(self, interaction: discord.Interaction[C2C], select: discord.ui.Select):
         self.chosen_multiplier: str = select.values[0]
         self.index = 1
@@ -1808,21 +1808,9 @@ class InventoryPaginator(RefreshPagination):
         "Pack"
     )
 
-    descriptions = (
-        "All items that exist so far.",
-        "Items that are collected and have no functionality.",
-        "Items that have some functionality for fun.",
-        "Items that are meant to be sold to the shop.",
-        "Items that give you access to other systems.",
-        "Items that buff you or someone else.",
-        "Items that debuff you or someone else.",
-        "Items to open that involve chances/odds.",
-        "Items to open containing static rewards."
-    )
-
     options = [
-        discord.SelectOption(label=opt_name, description=opt_desc, value=str(i))
-        for i, (opt_name, opt_desc) in enumerate(zip(options, descriptions))
+        discord.SelectOption(label=opt_name, value=str(i))
+        for i, opt_name in enumerate(options)
     ]
 
     def __init__(
@@ -1886,7 +1874,7 @@ class InventoryPaginator(RefreshPagination):
         for option in select.options:
             option.default = option.value in self.applied_filters
 
-    @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a user to view inventory of", row=0)
+    @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a registered user", row=0)
     async def inventory_member_select(self, interaction: discord.Interaction, select: discord.ui.UserSelect):
         self.viewing = select.values[0]
         self.index = 1
@@ -1900,12 +1888,7 @@ class InventoryPaginator(RefreshPagination):
         await self.fetch_data()
         await self.edit_page(interaction)
 
-    @discord.ui.select(
-        placeholder="Only display these types of items in inventory:",
-        max_values=len(options),
-        options=options,
-        row=1
-    )
+    @discord.ui.select(placeholder="Select a filter", max_values=len(options), options=options, row=1)
     async def item_filter_select(self, interaction: discord.Interaction, select: discord.ui.Select):  #! only what they select
         self.index = 1
 
@@ -3324,7 +3307,7 @@ class Economy(commands.Cog):
                 item_types.type_name,
                 shop.cost,
                 shop.description,
-                shop.instruction,
+                item_instructions.value,
                 shop.emoji,
                 item_rarities.colour,
                 item_rarities.name,
@@ -3335,6 +3318,7 @@ class Economy(commands.Cog):
             LEFT JOIN inventory_data ON shop.itemID = inventory_data.itemID
             LEFT JOIN item_types ON shop.itemType = item_types.id
             LEFT JOIN item_rarities ON shop.rarity = item_rarities.rarityID
+            LEFT JOIN item_instructions ON shop.itemID = item_instructions.itemID
             CROSS JOIN multiplier_data
             WHERE shop.itemID = $1
             """
@@ -3364,17 +3348,17 @@ class Economy(commands.Cog):
             if amt >= 0.1:
                 dynamic_text += f" ({amt:.1f}% of your net worth)"
 
-        if instruction:
-            dynamic_text += f"\n\n{instruction}"
+        instruction = (instruction or '').replace("\\n", "\n", 2)
+        dynamic_text = f"{dynamic_text}{instruction}"
 
-        emote_url = f"https://cdn.discordapp.com/emojis/{search(r':(\d+)>', emote).group(1)}.png?size=128&quality=lossless"
+        emote = discord.PartialEmoji.from_str(emote)
 
         em = discord.Embed(
             title=item_name,
             description=dynamic_text,
             url="https://www.youtube.com",
             colour=int(item_hex, 16)
-        ).set_thumbnail(url=emote_url).set_footer(text=f"{item_rarity} {item_type}")
+        ).set_thumbnail(url=emote.url).set_footer(text=f"{item_rarity} {item_type}")
 
         em.add_field(name="Net Value", inline=False, value=f"{CURRENCY} {cost:,}")
         
