@@ -3152,14 +3152,6 @@ class Economy(commands.Cog):
         )
         await interaction.followup.send(embed=embed)
 
-    @commands.command(description="Get a free random item.", aliases=('fr',))
-    async def freemium(self, ctx: commands.Context) -> None:
-        rQty = randint(1, 5)
-        async with self.bot.pool.acquire() as conn, conn.transaction():
-            item, emoji = await self.update_user_inventory_with_random_item(ctx.author.id, conn, rQty)
-
-        await ctx.send(embed=membed(f"Success! You just got **{rQty}x** {emoji} {item}!"))
-
     shop = app_commands.Group(name='shop', description='View items available for purchase.')
 
     @shop.command(name='view', description='View all the shop items')
@@ -3369,25 +3361,6 @@ class Economy(commands.Cog):
 
         em.add_field(name="Additional Info", value=dynamic_text, inline=False)
         await respond(interaction, embed=em)
-
-    @commands.command(description='Identify causes of registration errors', aliases=('rs',))
-    async def reasons(self, ctx: commands.Context) -> None:
-        """Display all the possible causes of a not registered check failure."""
-
-        async with ctx.typing():
-            await ctx.send(
-                embed=discord.Embed(
-                    colour=0x2B2D31,
-                    title="Not registered? But why?",
-                    description=(
-                        'This list is not exhaustive, all known causes will be displayed:\n'
-                        '- You were removed by the c2c developers.\n'
-                        '- You opted out of the economy.\n'
-                        '- The pool connection is outdated and hasn\'t been released yet.\n\n'
-                        'Found an unusual bug on a command? **Report it now to prevent further issues.**'
-                    )
-                )
-            )
 
     @register_item('Bank Note')
     async def increase_bank_space(interaction: discord.Interaction[C2C], quantity: int) -> None:

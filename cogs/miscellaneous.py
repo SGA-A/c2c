@@ -342,11 +342,9 @@ class Miscellaneous(commands.Cog):
 
         await interaction.response.send_message(embed=output)
 
-    @commands.command(description='Checks latency of the bot')
-    async def ping(self, ctx: commands.Context) -> None:
-        msg = await ctx.send("Pong!")
-        msg.content += f" `{self.bot.latency * 1000:.0f}ms`"
-        await msg.edit(content=msg.content)
+    @app_commands.command(description='Checks latency of the bot')
+    async def ping(self, interaction: discord.Interaction) -> None:
+        await interaction.response.send_message(f"{self.bot.latency * 1000:.0f}ms")
 
     async def embed_colour(self, interaction: discord.Interaction, message: discord.Message) -> None:
 
@@ -619,40 +617,41 @@ class Miscellaneous(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @commands.command(description="Display a visual sunmap of the world", aliases=('wc',))
-    async def worldclock(self, ctx: commands.Context) -> None:
-        async with ctx.typing():
-            clock = discord.Embed(
-                title="UTC",
-                colour=0x2AA198,
-                timestamp=discord.utils.utcnow()
+    @app_commands.command(description="Display a visual sunmap of the world", aliases=('wc',))
+    async def worldclock(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(thinking=True)
+
+        clock = discord.Embed(
+            title="UTC",
+            colour=0x2AA198,
+            timestamp=discord.utils.utcnow()
+        )
+
+        for location, tz in EMBED_TIMEZONES.items():
+            time_there = datetime.now(tz=pytz_timezone(tz))
+            clock.add_field(name=location, value=f"```prolog\n{time_there:%I:%M %p}```")
+
+        sunmap = (
+            f"https://www.timeanddate.com/scripts/sunmap.php?iso={clock.timestamp:'%Y%m%dT%H%M'}"
+        )
+
+        clock.description = (
+            f"```prolog\n{clock.timestamp:%I:%M %p, %A} "
+            f"{number_to_ordinal(int(f"{clock.timestamp:%d}"))} {clock.timestamp:%Y}```"
+        )
+        clock.add_field(
+            name="Legend",
+            inline=False,
+            value=(
+                "☀️ = The Sun's position directly overhead in relation to an observer.\n"
+                "🌕 = The Moon's position at its zenith in relation to an observer."
             )
+        ).set_image(url=sunmap).set_author(
+            icon_url="https://i.imgur.com/CIl9Dyp.png",
+            name="All formats given in 12h notation"
+        ).set_footer(text="Sunmap image courtesy of timeanddate.com")
 
-            for location, tz in EMBED_TIMEZONES.items():
-                time_there = datetime.now(tz=pytz_timezone(tz))
-                clock.add_field(name=location, value=f"```prolog\n{time_there:%I:%M %p}```")
-
-            sunmap = (
-                f"https://www.timeanddate.com/scripts/sunmap.php?iso={clock.timestamp:'%Y%m%dT%H%M'}"
-            )
-
-            clock.description = (
-                f"```prolog\n{clock.timestamp:%I:%M %p, %A} "
-                f"{number_to_ordinal(int(f"{clock.timestamp:%d}"))} {clock.timestamp:%Y}```"
-            )
-            clock.add_field(
-                name="Legend",
-                inline=False,
-                value=(
-                    "☀️ = The Sun's position directly overhead in relation to an observer.\n"
-                    "🌕 = The Moon's position at its zenith in relation to an observer."
-                )
-            ).set_image(url=sunmap).set_author(
-                icon_url="https://i.imgur.com/CIl9Dyp.png",
-                name="All formats given in 12h notation"
-            ).set_footer(text="Sunmap image courtesy of timeanddate.com")
-
-        await ctx.send(embed=clock)
+        await interaction.followup.send(embed=clock)
 
 
 async def setup(bot: C2C):

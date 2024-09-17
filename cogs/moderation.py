@@ -584,7 +584,7 @@ class Moderation(commands.Cog):
         file2: Optional[discord.Attachment],
         file3: Optional[discord.Attachment]
     ) -> None:
-        await interaction.response.defer(thinking=True)
+        await interaction.response.defer(thinking=True, ephemeral=True)
 
         files = [
             await param_value.to_file()
@@ -606,7 +606,7 @@ class Moderation(commands.Cog):
             applied_tags=applicable_tags
         )
 
-        await interaction.followup.send(ephemeral=True, embed=membed(f"Created thread: {thread.jump_url}."))
+        await interaction.followup.send(thread.jump_url)
 
 
 async def setup(bot: C2C):

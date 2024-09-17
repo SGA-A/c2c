@@ -1,4 +1,3 @@
-from re import findall
 from io import StringIO
 from traceback import format_exc
 from textwrap import indent, dedent
@@ -8,7 +7,6 @@ from typing import Any, Optional
 import asyncio
 import discord
 
-from discord import app_commands
 from discord.ext import commands
 
 from .core.bot import C2C
@@ -24,9 +22,7 @@ class Admin(commands.Cog):
         self._last_result: Optional[Any] = None
 
     async def cog_check(self, ctx: commands.Context) -> bool:
-        if ctx.author.id in self.bot.owner_ids:
-            return True
-        return False
+        return ctx.author.id in self.bot.owner_ids
 
     async def interaction_check(self, interaction: discord.Interaction[C2C]):
         if interaction.user.id in self.bot.owner_ids:
@@ -45,24 +41,6 @@ class Admin(commands.Cog):
 
         # remove `foo`
         return content.strip("` \n")
-
-    @commands.command(
-        name="uptime",
-        description="Returns the time the bot has been active for",
-        aliases=("u",)
-    )
-    async def uptime(self, ctx: commands.Context):
-        """Returns uptime in terms of days, hours, minutes and seconds"""
-        diff = discord.utils.utcnow() - self.bot.time_launch
-        minutes, seconds = divmod(diff.total_seconds(), 60)
-        hours, minutes = divmod(minutes, 60)
-        days, hours = divmod(hours, 24)
-
-        uptime = (
-            f"{int(days)} days, {int(hours)} hours, "
-            f"{int(minutes)} minutes and {int(seconds)} seconds."
-        )
-        await ctx.reply(content=uptime)
 
     @commands.command(description="Adjust a user's robux directly")
     async def config(
@@ -157,30 +135,6 @@ class Admin(commands.Cog):
         """Clear out the channel."""
         await ctx.send(f".{'\n'*1900}-# Blanked out the channel.")
 
-    @commands.command(description="Update the rules channel for cc", aliases=("ur",))
-    async def urules(self, _: commands.Context):
-        """Push an update to the rules channel."""
-        channel = self.bot.get_partial_messageable(902138223571116052)
-        original = channel.get_partial_message(1245691538319736863)
-
-        rule_content = (
-            "1. <:comfyCat:1263920108015849593> **Be Respectful!** "
-            "Treat others the way you would want to be treated, and avoid offensive language or behaviour.\n"
-            "2. <:pepeBlanket:1263926092465573939> **Be mindful of others!** "
-            "Refrain from excessive messages, links, or images that disrupt the flow of conversation.\n"
-            "3. <:Thread:1263923709203320955> **Stay on topic.** "
-            "Keep discussions relevant to the designated channels to maintain a focused "
-            "and organized environment. Innapropriate content is subject to removal!\n"
-            "4. <:Polarizer:1263922970095784007> **Keep our server safe.** "
-            "Any form of content that suggests normalization or justification of NSFW content should not escape the "
-            "boundaries of <#1160547937420582942>, sanctions will be upheld for such cases.\n"
-            "5. <:discordThinking:1263921476369645609> **Adhere to the Terms of Service.** "
-            "Abide by Discord's [terms of service](<https://discord.com/terms>) and [community guidelines](<https://discord.com/guidelines/>) at all times.\n\n"
-            "**That's all.** Thanks for reading, now go have fun!"
-        )
-
-        await original.edit(content=rule_content)
-
     async def send_role_guide(self):
         channel = self.bot.get_partial_messageable(1254883155882672249)
         original = channel.get_partial_message(1254901254530924644)
@@ -208,37 +162,11 @@ class Admin(commands.Cog):
 
         await original.edit(content=dedent(role_content_pt1))
 
-    @commands.command(description="Update the information channel for cc", aliases=("ui",))
-    async def uinfo(self, _: commands.Context):
-        """Push to update the welcome and info embed within its respective channel."""
-        await self.send_role_guide()
-
     @commands.command(name="quit", description="Quits the bot gracefully", aliases=("q",))
     async def close(self, ctx: commands.Context) -> None:
         """Quits the bot gracefully."""
         await ctx.send("\U00002705")
         await self.bot.close()
-
-    @app_commands.command(description="Repeat what you typed and mask this command use")
-    @app_commands.describe(message="What you want me to say.")
-    async def repeat(
-        self,
-        interaction: discord.Interaction[C2C],
-        message: app_commands.Range[str, 1, 2000]
-    ) -> None:
-        """Repeat what you typed, also converting emojis based on whats inside two equalities."""
-
-        matches = findall(r"<(.*?)>", message)
-
-        for match in matches:
-            emoji = discord.utils.get(self.bot.emojis, name=match)
-            if emoji:
-                message = message.replace(f"<{match}>", f"{emoji}")
-                continue
-            return await interaction.response.send_message("Emoji not found.", ephemeral=True)
-
-        await interaction.channel.send(message)
-        await interaction.response.send_message("\U00002705", ephemeral=True)
 
 
 async def setup(bot: C2C):

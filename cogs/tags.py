@@ -483,7 +483,7 @@ class Tags(commands.Cog):
 
         if msg.attachments:
             attachments_refs = "\n".join(attachment.url for attachment in msg.attachments)
-            clean_content = f"{clean_content}\n{attachments_refs}"
+            clean_content = f"{clean_content}\n{attachments_refs}" if clean_content else attachments_refs
 
         if len(clean_content) > 2000:
             self.remove_in_progress_tag(name)
@@ -649,9 +649,8 @@ class Tags(commands.Cog):
         )
 
         async with self.bot.pool.acquire() as conn:
-            rank = await conn.fetchone(query, rowid)
-        if rank is not None:
-            embed.add_field(name="Rank", value=f"{rank[0]:,} / {rank[1]:,}")
+            rank, total_tags = await conn.fetchone(query, rowid)
+        embed.add_field(name="Rank", value=f"{rank:,} / {total_tags:,}")
 
         await ctx.send(embed=embed)
 
@@ -775,10 +774,7 @@ class Tags(commands.Cog):
             ret = await conn.fetchone(query, (member.id, tag.id, ctx.author.id))
 
             if ret is None:
-                return await ctx.send(
-                    ephemeral=True,
-                    embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE)
-                )
+                return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
             await conn.commit()
         await ctx.send(
             embed=membed(f"Successfully transferred tag ownership to {member.name}.")
