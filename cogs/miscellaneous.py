@@ -381,13 +381,13 @@ class Miscellaneous(commands.Cog):
                 "-# You can find a tag by using the [website.](https://konachan.net/tag)"
             )
             embed.title = "No posts found."
-            return await interaction.followup.send(ephemeral=True, embed=embed)
+            return await interaction.followup.send(embed=embed)
 
         total_pages = Pagination.compute_total_pages(len(posts_xml), length)
-        paginator = await Pagination(interaction, total_pages=total_pages)
+        paginator = Pagination(interaction, total_pages)
 
         async def get_page_part() -> list[discord.Embed]:
-            offset = (page - 1) * length
+            offset = (paginator.index - 1) * length
             return [
                 discord.Embed(
                     title=author,
@@ -582,7 +582,7 @@ class Miscellaneous(commands.Cog):
 
         await interaction.response.send_message(embed=embed)
 
-    @app_commands.command(description="Display a visual sunmap of the world", aliases=('wc',))
+    @app_commands.command(description="Display a visual sunmap of the world")
     async def worldclock(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(thinking=True)
 

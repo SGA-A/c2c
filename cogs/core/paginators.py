@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Optional, Callable
 
 import discord
 from discord.ext import commands
@@ -18,7 +18,7 @@ class PaginatorInput(discord.ui.Modal):
     """Modal for users to pass in a valid page number."""
 
     def __init__(self, their_view: 'Pagination'):
-        self.interaction: discord.Interaction | None = None
+        self.interaction = None
         self.page_num.placeholder = f"A number between 1 and {their_view.total_pages}."
         super().__init__(title="Input a Page", timeout=45.0)
 
@@ -32,12 +32,12 @@ class PaginatorInput(discord.ui.Modal):
 class BasePaginator(discord.ui.View):
     """The base paginator which (most) paginators inherit properties from."""
 
-    def __init__(self, interaction: discord.Interaction, get_page: Callable | None = None):
+    def __init__(self, interaction: discord.Interaction, get_page: Optional[Callable] = None):
         super().__init__(timeout=90.0)
         self.interaction = interaction
         self.get_page = get_page
         self.index = 1
-        self.total_pages: int | None = None
+        self.total_pages: Optional[int] = None
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return await economy_check(interaction, self.interaction.user.id)
@@ -70,9 +70,19 @@ class BasePaginator(discord.ui.View):
 
 
 class Pagination(BasePaginator):
-    """Pagination menu with support for direct queries to a specific page."""
+    """
+    Pagination menu with support for direct queries to a specific page.
+    
+    You are expected to return a list of embeds even
+    if you only return one embed in your custom function.
+    """
 
-    def __init__(self, interaction, get_page, total_pages: int) -> None:
+    def __init__(
+        self,
+        interaction: discord.Interaction,
+        total_pages: int,
+        get_page: Optional[Callable] = None
+    ) -> None:
         super().__init__(interaction, get_page)
         self.total_pages = total_pages
 
@@ -138,10 +148,16 @@ class PaginationSimple(discord.ui.View):
     """
     A regular pagination menu with no extra features.
 
-    Supports hybrids and everything in between.
+    Supports slash, prefix and everything in between.
     """
 
-    def __init__(self, ctx, invoker_id: int, total_pages: int, get_page: Callable | None = None) -> None:
+    def __init__(
+        self,
+        ctx,
+        invoker_id: int,
+        total_pages: int,
+        get_page: Optional[Callable] = None
+    ) -> None:
         self.ctx: commands.Context | discord.Interaction = ctx
         self.invoker_id = invoker_id
         self.get_page = get_page
@@ -216,7 +232,7 @@ class PaginationSimple(discord.ui.View):
 class RefreshPagination(BasePaginator):
     """Paginator with support for refreshing data, containing it's own refresh button."""
 
-    def __init__(self, interaction: discord.Interaction, get_page: Callable | None = None) -> None:
+    def __init__(self, interaction: discord.Interaction, get_page: Optional[Callable] = None) -> None:
         super().__init__(interaction, get_page)
 
     async def navigate(self) -> None:
@@ -224,7 +240,7 @@ class RefreshPagination(BasePaginator):
         self.update_buttons()
         await self.interaction.response.send_message(embed=emb, view=self)
 
-    def reset_index(self, refreshed_data: list, length: int | None = None):
+    def reset_index(self, refreshed_data: list, length: Optional[int] = None):
         """
         Set the minimum page length in refresh pagination classes.
 
@@ -239,7 +255,7 @@ class RefreshPagination(BasePaginator):
         self.index = min(self.index, self.total_pages)
         return self
 
-    async def edit_page(self, interaction: discord.Interaction, force_refresh: bool | None = False) -> None:
+    async def edit_page(self, interaction: discord.Interaction, force_refresh: Optional[bool] = False) -> None:
         emb = await self.get_page(force_refresh)
         self.update_buttons()
         await edit_response(interaction, embed=emb, view=self)
@@ -285,7 +301,7 @@ class PaginationItem(BasePaginator):
     Disabling logic has been stripped away.
     """
 
-    def __init__(self, interaction: discord.Interaction, get_page: Callable | None = None):
+    def __init__(self, interaction: discord.Interaction, get_page: Optional[Callable] = None):
         super().__init__(interaction, get_page)
 
     async def navigate(self) -> None:

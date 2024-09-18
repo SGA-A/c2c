@@ -670,19 +670,14 @@ class Tags(commands.Cog):
     ) -> None:
         """Only use this when you have a tuple containing the tag name and rowid in this order."""
 
-        paginator = PaginationSimple(
-            ctx,
-            ctx.author.id,
-            PaginationSimple.compute_total_pages(len(rows), length)
-        )
+        total_pages = PaginationSimple.compute_total_pages(len(rows), length)
+        paginator = PaginationSimple(ctx, ctx.author.id, total_pages)
 
         async def get_page_part() -> discord.Embed:
             offset = (paginator.index - 1) * length
             em.description = "\n".join(
                 f"{index}. {tag[0]} (ID: {tag[1]})"
-                for index, tag in enumerate(
-                    rows[offset : offset + length], start=offset + 1
-                )
+                for index, tag in enumerate(rows[offset:offset+length], start=offset+1)
             )
 
             return em.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
