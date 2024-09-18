@@ -42,6 +42,7 @@ class C2C(commands.Bot):
             allowed_installs=all_installs,
             case_insensitive=True,
             command_prefix=commands.when_mentioned_or(">"),
+            help_command=None,
             intents=intents,
             max_messages=None,
             member_cache_flags=flags,

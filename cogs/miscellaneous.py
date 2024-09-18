@@ -111,45 +111,11 @@ class CommandUsage(RefreshPagination):
         await self.edit_page(interaction)
 
 
-class MyHelp(commands.MinimalHelpCommand):
-
-    def __init__(self) -> None:
-        super().__init__()
-
-    async def command_callback(self, ctx: commands.Context, /, *, command: Optional[str] = None) -> None:
-        """Shows help about the bot, a command, or a category"""
-        async with ctx.typing():
-            return await super().command_callback(ctx, command=command)
-
-    async def send_command_help(self, command: commands.Command):
-        docstring = command.callback.__doc__ or 'No explanation found for this command.'
-        embed = membed(f"## {self.cog.bot.user.mention} {command.qualified_name}\n```Syntax: {self.get_command_signature(command)}```\n{docstring}")
-
-        alias = command.aliases
-        if alias:
-            embed.add_field(name="Aliases", value=', '.join(alias))
-        embed.set_footer(text="Usage Syntax: <required> [optional]")
-        await self.context.send(embed=embed)
-
-    def add_subcommand_formatting(self, command: commands.Command) -> None:
-        fmt = '{0} {1} \N{EN DASH} {2}' if command.description else '{0} {1}'
-        self.paginator.add_line(fmt.format(self.cog.bot.user.mention, command.qualified_name, command.description))
-
-    async def send_pages(self):
-        await self.context.send(embed=membed(self.paginator.pages[0]))
-
-    async def on_help_command_error(self, ctx: commands.Context, error: commands.CommandError) -> None:
-        await ctx.send(str(error.original))
-
-
 class Miscellaneous(commands.Cog):
     """Helpful commands to ease the experience on Discord, available for everyone."""
     def __init__(self, bot: C2C) -> None:
         self.bot = bot
         self.process = Process()
-
-        bot.help_command = MyHelp()
-        bot.help_command.cog = self
 
         self.cog_context_menus = {
             app_commands.ContextMenu(
@@ -162,7 +128,6 @@ class Miscellaneous(commands.Cog):
             self.bot.tree.add_command(context_menu)
 
     def cog_unload(self) -> None:
-        self.bot.help_command = None
         for context_menu in self.cog_context_menus:
             self.bot.tree.remove_command(context_menu)
 

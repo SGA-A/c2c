@@ -14,14 +14,12 @@ from .core.errors import FailingConditionalError
 from .core.helpers import membed, send_message, send_boilerplate_confirm
 
 
-MAX_CHARACTERS_EXCEEDED_RESPONSE = "Tag content cannot exceed 2000 characters."
-TIMED_OUT_RESPONSE = "You took too long."
-TAG_NOT_FOUND_SIMPLE_RESPONSE = (
-    "Tag not found, it may have been deleted when you called the command."
-)
-TAG_BEING_MADE_RESPONSE = "This tag is already being made by someone right now!"
-TAG_ALREADY_EXISTS_RESPONSE = "A tag with that name already exists."
-TAG_NOT_FOUND_RESPONSE = (
+MAX_CHARACTERS_REACHED = "Tag content cannot exceed 2000 characters."
+TIMED_OUT = "You took too long."
+TAG_DELETED = "Tag not found, it may have been deleted when you called the command."
+TAG_BEING_MADE = "This tag is already being made by someone right now!"
+TAG_ALREADY_EXISTS = "A tag with that name already exists."
+TAG_NOT_FOUND = (
     "Could not find any tag with these properties.\n"
     "- You can't modify the tag if it doesn't belong to you.\n"
     "- You also can't modify a tag that doesn't exist, obviously."
@@ -107,15 +105,11 @@ class TagMakeModal(discord.ui.Modal, title="Create New Tag"):
             )
 
         if self.cog.is_tag_being_made(name):
-            return await interaction.response.send_message(
-                embed=membed(TAG_BEING_MADE_RESPONSE)
-            )
+            return await interaction.response.send_message(embed=membed(TAG_BEING_MADE))
 
         content = str(self.content)
         if len(content) > 2000:
-            return await interaction.response.send_message(
-                embed=membed(MAX_CHARACTERS_EXCEEDED_RESPONSE)
-            )
+            return await interaction.response.send_message(embed=membed(MAX_CHARACTERS_REACHED))
 
         async with interaction.client.pool.acquire() as conn:
             await self.cog.create_tag(interaction, name, content, conn)
@@ -166,20 +160,16 @@ class Tags(commands.Cog):
         clean_content = await commands.clean_content().convert(interaction, message.content)
 
         if message.attachments:
-            attachments_refs = "\n".join(
-                attachment.url for attachment in message.attachments
-            )
-            clean_content = f"{clean_content}\n{attachments_refs}"
+            attachments_refs = "\n".join(attachment.url for attachment in message.attachments)
+            clean_content = f"{clean_content}\n{attachments_refs}" if clean_content else attachments_refs
 
-        if not clean_content:
+        elif not clean_content:
             return await interaction.response.send_message(
                 embed=membed("This message has no content to tag.")
             )
 
         if len(clean_content) > 2000:
-            return await interaction.response.send_message(
-                embed=membed(MAX_CHARACTERS_EXCEEDED_RESPONSE)
-            )
+            return await interaction.response.send_message(embed=membed(MAX_CHARACTERS_REACHED))
 
         modal = TagMakeModal(self)
         modal.content.default = clean_content
@@ -342,7 +332,7 @@ class Tags(commands.Cog):
     async def get_tag_content(self, name: str, conn: Connection):
         res = await conn.fetchone("SELECT content FROM tags WHERE name = ?", (name,))
         if res is None:
-            raise RuntimeError(TAG_NOT_FOUND_SIMPLE_RESPONSE)
+            raise RuntimeError(TAG_DELETED)
         return res[0]
 
     async def create_tag(
@@ -362,7 +352,7 @@ class Tags(commands.Cog):
             await conn.execute(query, (name, content, author.id))
         except sqlite3.IntegrityError:
             await tr.rollback()
-            await send_message(ctx, embed=membed(TAG_ALREADY_EXISTS_RESPONSE))
+            await send_message(ctx, embed=membed(TAG_ALREADY_EXISTS))
         except Exception as e:
             self.bot.log_exception(e)
             await tr.rollback()
@@ -407,14 +397,10 @@ class Tags(commands.Cog):
         content: Annotated[str, commands.clean_content]
     ) -> Optional[discord.Message]:
         if self.is_tag_being_made(name):
-            return await ctx.send(
-                embed=membed("This tag is currently being made by someone.")
-            )
+            return await ctx.send(embed=membed(TAG_BEING_MADE))
 
         if len(content) > 2000:
-            return await ctx.send(
-                embed=membed("Tag content is a maximum of 2000 characters.")
-            )
+            return await ctx.send(embed=membed(MAX_CHARACTERS_REACHED))
 
         async with self.bot.pool.acquire() as conn:
             await self.create_tag(ctx, name, content, conn)
@@ -435,7 +421,7 @@ class Tags(commands.Cog):
         try:
             name = await self.bot.wait_for("message", timeout=180.0, check=check)
         except TimeoutError:
-            return await ctx.send(embed=membed(TIMED_OUT_RESPONSE))
+            return await ctx.send(embed=membed(TIMED_OUT))
 
         try:
             ctx.message = name
@@ -446,7 +432,7 @@ class Tags(commands.Cog):
             ctx.message = original
 
         if self.is_tag_being_made(name):
-            return await ctx.send(embed=membed(TAG_BEING_MADE_RESPONSE))
+            return await ctx.send(embed=membed(TAG_BEING_MADE))
 
         # it's technically kind of expensive to do two queries like this
         # i.e. one to check if it exists and then another that does the insert
@@ -457,7 +443,7 @@ class Tags(commands.Cog):
             row = await conn.fetchone("SELECT 1 FROM tags WHERE name = $0", name)
 
         if row is not None:
-            return await ctx.send(embed=membed(TAG_ALREADY_EXISTS_RESPONSE))
+            return await ctx.send(embed=membed(TAG_ALREADY_EXISTS))
 
         self.add_in_progress_tag(name)
         await ctx.send(
@@ -470,7 +456,7 @@ class Tags(commands.Cog):
             msg = await self.bot.wait_for("message", check=check, timeout=120.0)
         except TimeoutError:
             self.remove_in_progress_tag(name)
-            return await ctx.reply(embed=membed(TIMED_OUT_RESPONSE))
+            return await ctx.reply(embed=membed(TIMED_OUT))
 
         if msg.content == "abort":
             self.remove_in_progress_tag(name)
@@ -487,7 +473,7 @@ class Tags(commands.Cog):
 
         if len(clean_content) > 2000:
             self.remove_in_progress_tag(name)
-            return await msg.reply(embed=membed(MAX_CHARACTERS_EXCEEDED_RESPONSE))
+            return await msg.reply(embed=membed(MAX_CHARACTERS_REACHED))
 
         conn = await self.bot.pool.acquire()
         try:
@@ -519,37 +505,28 @@ class Tags(commands.Cog):
                 return await ctx.send(
                     embed=membed(
                         "## Missing content to edit with\n"
-                        "Since you prefer the use of text commands for this, try to broaden your input.\n"
-                        "It makes finding the tags you're looking for much faster."
+                        "Try to broaden your input. It makes finding tags much faster."
                     ).set_image(url="https://i.imgur.com/5sPCTCZ.png")
                 )
 
             async with self.bot.pool.acquire() as conn:
-                content_row = await conn.fetchone(
-                    "SELECT content FROM tags WHERE name = $0", name
-                )
+                tag_content, = await conn.fetchone("SELECT content FROM tags WHERE name = $0", name)
 
-            modal = TagEditModal(content_row[0])
+            modal = TagEditModal(tag_content)
             await interaction.response.send_modal(modal)
             await modal.wait()
             ctx.interaction = modal.interaction
             content = modal.text
 
         if len(content) > 2000:
-            return await ctx.send(
-                ephemeral=True,
-                embed=membed(MAX_CHARACTERS_EXCEEDED_RESPONSE)
-            )
+            return await ctx.send(ephemeral=True, embed=membed(MAX_CHARACTERS_REACHED))
 
         query = "UPDATE tags SET content = ? WHERE name = ? AND ownerID = ? RETURNING name"
         async with self.bot.pool.acquire() as conn, conn.transaction():
             val = await conn.fetchone(query, (content, name, ctx.author.id))
 
         if val is None:
-            return await ctx.send(
-                ephemeral=True,
-                embed=membed(TAG_NOT_FOUND_RESPONSE)
-            )
+            return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND))
 
         await ctx.send(embed=membed(f"Successfully edited tag named {name!r}."))
 
@@ -574,10 +551,7 @@ class Tags(commands.Cog):
                 deleted_info = await conn.fetchone(query, *args)
 
         if deleted_info is None:
-            return await ctx.send(
-                ephemeral=True,
-                embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE)
-            )
+            return await ctx.send(ephemeral=True, embed=membed(TAG_DELETED))
 
         await ctx.send(
             embed=membed(
@@ -603,7 +577,7 @@ class Tags(commands.Cog):
             deleted_info = await conn.fetchone(query, *args)
 
         if deleted_info is None:
-            return await ctx.send(embed=membed(TAG_NOT_FOUND_RESPONSE))
+            return await ctx.send(embed=membed(TAG_NOT_FOUND))
 
         await ctx.send(
             embed=membed(
@@ -774,7 +748,7 @@ class Tags(commands.Cog):
             ret = await conn.fetchone(query, (member.id, tag.id, ctx.author.id))
 
             if ret is None:
-                return await ctx.send(ephemeral=True, embed=membed(TAG_NOT_FOUND_SIMPLE_RESPONSE))
+                return await ctx.send(ephemeral=True, embed=membed(TAG_DELETED))
             await conn.commit()
         await ctx.send(
             embed=membed(f"Successfully transferred tag ownership to {member.name}.")
