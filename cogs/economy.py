@@ -1307,27 +1307,21 @@ class StatLeaderboard(BaseInteractionView):
 
 
 class MultiplierView(RefreshPagination):
+    robux_emoji = discord.PartialEmoji.from_str("<:robuxMulti:1263923323088408688>")
+    xp_emoji = discord.PartialEmoji.from_str("<:xpMulti:1263924221109731471>")
+    luck_emoji = discord.PartialEmoji.from_str("<:luckMulti:1263922104231792710>")
 
     length = 6
-    colour_mapping = {
-        "Robux": (0x59DDB3, "https://i.imgur.com/raX1Am0.png"),
-        "XP": (0xCDC700, "https://i.imgur.com/7hJ0oiO.png"),
-        "Luck": (0x65D654, "https://i.imgur.com/9xZIFOg.png")
+    multi_mapping = {
+        "Robux": (0x59DDB3, robux_emoji.url),
+        "XP": (0xCDC700, xp_emoji.url),
+        "Luck": (0x65D654, luck_emoji.url)
     }
 
     multipliers = [
-        discord.SelectOption(
-            label='Robux',
-            emoji="<:robuxMulti:1263923323088408688>"
-        ),
-        discord.SelectOption(
-            label='XP',
-            emoji='<:xpMulti:1263924221109731471>'
-        ),
-        discord.SelectOption(
-            label='Luck',
-            emoji='<:luckMulti:1263922104231792710>'
-        )
+        discord.SelectOption(label='Robux', emoji=robux_emoji),
+        discord.SelectOption(label='XP', emoji=xp_emoji),
+        discord.SelectOption(label='Luck', emoji=luck_emoji)
     ]
 
     def __init__(
@@ -1342,7 +1336,7 @@ class MultiplierView(RefreshPagination):
         self.chosen_multiplier = chosen_multiplier
 
         self.embed = discord.Embed(title=f"{self.viewing.display_name}'s Multipliers")
-        self.embed.colour, thumb_url = self.colour_mapping[chosen_multiplier]
+        self.embed.colour, thumb_url = self.multi_mapping[chosen_multiplier]
         self.embed.set_thumbnail(url=thumb_url)
 
         super().__init__(interaction, get_page=get_page)
@@ -1398,7 +1392,7 @@ class MultiplierView(RefreshPagination):
 
         await self.format_pages()
 
-        self.embed.colour, thumb_url = self.colour_mapping[self.chosen_multiplier]
+        self.embed.colour, thumb_url = self.multi_mapping[self.chosen_multiplier]
         self.embed.set_thumbnail(url=thumb_url)
 
         await self.edit_page(interaction)
