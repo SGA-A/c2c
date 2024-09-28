@@ -33,10 +33,11 @@ We are not responsible for any errors that may occur when running this bot on yo
 - 🏷️ Tagging text by storing it for later retrieval
 
 ## Credits
-- [Jake Lee](https://blog.jakelee.co.uk/converting-levels-into-xp-vice-versa/)
+- [Jake Lee](https://blog.jakelee.co.uk/converting-levels-into-xp-vice-versa)
 - [Jeyy API](https://github.com/JeyyGit/jeyyapi)
 - [DrenJaha](https://github.com/DrenJaha/discord-blackjack-bot)
-- [Skrphenix](https://github.com/Modern-Realm/economy-bot-discord.py/tree/master/economy%20with%20aiosqlite)
-- [RDanny](https://github.com/Rapptz/RoboDanny/)
-- [RMysty](https://github.com/EvieePy/RMysty/)
+- [Skrphenix](https://github.com/Modern-Realm/economy-bot-discord.py)
+- [RDanny](https://github.com/Rapptz/RoboDanny)
+- [RMysty](https://github.com/EvieePy/RMysty)
+- [Salamander](https://github.com/mikeshardmind/salamander-reloaded/)
 - [discord.py](https://discord.gg/r3sSKJJ)
