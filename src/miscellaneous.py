@@ -178,9 +178,9 @@ async def format_gif_api_response(
     await itx.followup.send(file=discord.File(buffer, 'clip.gif'))
 
 
-@app_commands.guild_only()
-@app_commands.guild_install()
 @app_commands.command(description="Show information about the server and its members")
+@app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
+@app_commands.allowed_installs(guilds=True, users=False)
 async def serverinfo(itx: Interaction) -> None:
     await itx.response.defer(thinking=True)
 

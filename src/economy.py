@@ -3194,19 +3194,6 @@ async def prestige(itx: Interaction) -> None:
     await itx.response.send_message(embed=embed)
 
 
-@app_commands.command(description='View user information and other stats')
-@app_commands.describe(user='The user whose profile you want to see.')
-async def profile(
-    itx: Interaction,
-    user: Optional[USER_ENTRY]
-) -> None:
-    """View your profile within the economy."""
-
-    await itx.response.send_message(
-        embed=membed("This command will be available very soon.")
-    )
-
-
 @app_commands.command(description='Guess the number. Jackpot wins big!', extras={"exp_gained": 3})
 @app_commands.describe(robux=ROBUX_DESCRIPTION)
 async def highlow(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
@@ -3575,8 +3562,6 @@ async def get_item_lb(itx: Interaction, item: ITEM_CONVERTER):
     view.message = await respond(itx, embed=lb, view=view)
 
 
-@app_commands.guild_only()
-@app_commands.guild_install()
 @app_commands.rename(host='user')
 @app_commands.describe(host='The user you want to rob money from.')
 @app_commands.command(description="Attempt to steal from someone's pocket", extras={"exp_gained": 4})
@@ -3681,21 +3666,6 @@ async def rob(itx: Interaction, host: discord.Member) -> None:
 
     embed.set_footer(text=f"You stole {CURRENCY} {total:,} in total")
     await itx.response.send_message(embed=embed)
-
-
-@app_commands.rename(host='user')
-@app_commands.command(description="Gather people to rob someone's bank")
-@app_commands.describe(host='The user to attempt to bankrob.')
-async def bankrob(itx: Interaction, host: discord.Member) -> None:
-    """Rob someone else's bank."""
-    heist_starter = itx.user
-
-    if host.id == heist_starter.id:
-        raise FailingConditionalError("You can't bankrob yourself.")
-    elif host.bot:
-        raise FailingConditionalError("You can't bankrob bots.")
-
-    await itx.response.send_message(embed=membed("This feature is in development."))
 
 
 @app_commands.command(description="Test your skills at blackjack", extras={"exp_gained": 3})
@@ -3945,9 +3915,9 @@ async def setting_lookup(
 
 cmds = [
     settings, multipliers, share, trade, shop, item, use,
-    prestige, profile, highlow, slots, inventory, balance,
+    prestige, highlow, slots, inventory, balance,
     weekly, monthly, yearly, resetmydata, withdraw, deposit,
-    leaderboard, rob, bankrob, blackjack, bet
+    leaderboard, rob, blackjack, bet
 ]
 
 for app_cmd in cmds:

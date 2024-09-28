@@ -1,7 +1,6 @@
 from typing import Self
 from random import choice
 from psutil import Process
-from datetime import timedelta
 from sqlite3 import IntegrityError
 from json import load as json_load
 from traceback import format_exception
@@ -97,7 +96,6 @@ async def add_exp_or_levelup(
 
 
 class BasicTree(app_commands.CommandTree["C2C"]):
-    UNHANDLED_CHECKS = (FailingConditionalError, app_commands.CommandOnCooldown)
 
     @classmethod
     def from_c2c(cls: type[Self], client: "C2C") -> Self:
@@ -131,16 +129,6 @@ class BasicTree(app_commands.CommandTree["C2C"]):
         else:
             embed.description = "An error occurred while processing your input."
 
-    @staticmethod
-    def handle_check_failure(error: app_commands.AppCommandError, embed: discord.Embed):
-        try:
-            embed.description = error.cause
-        except AttributeError:
-            embed.title = "Slowmode is enabled"
-            cooldown_resets = discord.utils.utcnow() + timedelta(seconds=error.retry_after)
-            after_cd = discord.utils.format_dt(cooldown_resets, style="R")
-            embed.description = f"You can run this command again {after_cd}."
-
     async def on_error(
         self,
         itx: Interaction,
@@ -159,9 +147,9 @@ class BasicTree(app_commands.CommandTree["C2C"]):
         if isinstance(error, app_commands.TransformerError):
             self.handle_transformer_error(error, embed)
         elif isinstance(error, app_commands.CheckFailure):
-            if not isinstance(error, self.UNHANDLED_CHECKS):
+            if not isinstance(error, FailingConditionalError):
                 return
-            self.handle_check_failure(error, embed)
+            embed.description = error.cause
         elif isinstance(error, app_commands.CommandNotFound):
             embed.description = "This command no longer exists!"
         else:
@@ -179,7 +167,7 @@ class C2C(discord.Client):
         intents = discord.Intents.none()
         intents.message_content = True
         intents.emojis_and_stickers = True
-        intents.guild_messages = True
+        intents.messages = True
         intents.guilds = True
         intents.members = True
 
@@ -274,9 +262,9 @@ class C2C(discord.Client):
         await super().close()
 
     async def setup_hook(self):
-        for mod in self.initial_exts:
+        # ! If in the future some modules don't have commands
+        # ! if mod.exports.commands followed by this branch
 
-            # ! If in the future some modules don't have commands
-            # ! if mod.exports.commands followed by this branch
+        for mod in self.initial_exts:
             for command_obj in mod.exports.commands:
                 self.tree.add_command(command_obj)

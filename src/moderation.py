@@ -390,14 +390,14 @@ roles = RoleManagement(
 )
 
 
-@app_commands.guild_only()
-@app_commands.guild_install()
-@app_commands.default_permissions(manage_guild=True)
 @app_commands.command(description='Upload a new forum thread')
+@app_commands.default_permissions(manage_guild=True)
+@app_commands.allowed_installs(guilds=True, users=False)
+@app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
 @app_commands.describe(
     name="The name of the thread.",
     forum="What forum this thread should be in.",
-    description="The content of the message to send with the thread.",
+    comment="The content of the message to send with the thread.",
     tags="The tags to apply to the thread, seperated by speech marks.",
     file=UPLOAD_FILE_DESCRIPTION,
     file2=UPLOAD_FILE_DESCRIPTION,
@@ -408,7 +408,7 @@ async def post(
     forum: discord.ForumChannel,
     name: str,
     tags: str,
-    description: Optional[str],
+    comment: Optional[str],
     file: Optional[discord.Attachment],
     file2: Optional[discord.Attachment],
     file3: Optional[discord.Attachment]
@@ -430,7 +430,7 @@ async def post(
 
     thread, _ = await forum.create_thread(
         name=name,
-        content=description,
+        content=comment,
         files=files,
         applied_tags=applicable_tags
     )
@@ -438,12 +438,12 @@ async def post(
     await itx.followup.send(thread.jump_url, ephemeral=True)
 
 
-@app_commands.guild_only()
-@app_commands.guild_install()
 @app_commands.context_menu(name="Purge Up To Here")
 @app_commands.default_permissions(manage_messages=True)
+@app_commands.allowed_installs(guilds=True, users=False)
+@app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
 async def purge_from_here(itx: Interaction, message: discord.Message) -> None:
-    await itx.response.defer()
+    await itx.response.defer(ephemeral=True)
     await itx.delete_original_response()
 
     try:

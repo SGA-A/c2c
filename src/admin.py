@@ -66,7 +66,7 @@ class DevTools(discord.ui.View):
         try:
             exec(to_compile, env)
         except Exception as e:
-            return await (f"```py\n{e.__class__.__name__}: {e}\n```")
+            return await itx.followup.send(f"```py\n{e.__class__.__name__}: {e}\n```")
 
         func = env["func"]
         try:
