@@ -110,7 +110,7 @@ class BasicTree(app_commands.CommandTree["C2C"]):
         )
 
     @staticmethod
-    def handle_unknown_exception(embed: discord.Embed):
+    def handle_unknown_exception(embed: discord.Embed) -> None:
         embed.title = "Something went wrong"
         embed.description = (
             "Seems like the bot has stumbled upon an unexpected error.\n"
@@ -119,7 +119,7 @@ class BasicTree(app_commands.CommandTree["C2C"]):
         )
 
     @staticmethod
-    def handle_transformer_error(error: app_commands.AppCommandError, embed: discord.Embed):
+    def handle_transformer_error(error: app_commands.AppCommandError, embed: discord.Embed) -> None:
         if isinstance(error, CustomTransformerError):
             embed.description = error.cause
         elif error.type.value == discord.AppCommandOptionType.user.value:
@@ -203,7 +203,7 @@ class C2C(discord.Client):
         )
 
     @staticmethod
-    def is_owner(user: discord.abc.User):
+    def is_owner(user: discord.abc.User) -> bool:
         return user.id in C2C.owner_ids
 
     async def on_app_command_completion(
@@ -252,16 +252,16 @@ class C2C(discord.Client):
             exp_gainable *= (1+(multi/100))
             await add_exp_or_levelup(itx, conn, int(exp_gainable))
 
-    def log_exception(self, error: Exception):
+    def log_exception(self, error: Exception) -> None:
         formatted_traceback = ''.join(format_exception(type(error), error, error.__traceback__))
         logging_error(formatted_traceback)
 
-    async def close(self):
+    async def close(self) -> None:
         await self.pool.close()
         await self.session.close()
         await super().close()
 
-    async def setup_hook(self):
+    async def setup_hook(self) -> None:
         # ! If in the future some modules don't have commands
         # ! if mod.exports.commands followed by this branch
 

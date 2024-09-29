@@ -172,7 +172,7 @@ class BaseInteractionView(discord.ui.View):
 
 
 class ConfirmButton(discord.ui.Button):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(style=discord.ButtonStyle.success, label="Confirm")
 
     async def callback(self, itx: discord.Interaction) -> None:

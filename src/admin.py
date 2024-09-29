@@ -29,7 +29,7 @@ class DevTools(discord.ui.View):
         """
     )
 
-    def __init__(self, itx: Interaction):
+    def __init__(self, itx: Interaction) -> None:
         self.itx = itx
         super().__init__(timeout=90.0)
 
@@ -43,7 +43,10 @@ class DevTools(discord.ui.View):
         return content.strip("` \n")
 
     @staticmethod
-    async def evaluate(itx: Interaction, message: discord.Message) -> Optional[discord.Message]:
+    async def evaluate(
+        itx: Interaction,
+        message: discord.Message
+    ) -> Optional[discord.Message]:
         env = {
             "bot": itx.client,
             "itx": itx,
@@ -91,7 +94,7 @@ class DevTools(discord.ui.View):
                 DevTools._last_result = ret
                 await itx.followup.send(f"```py\n{value}{ret}\n```")
 
-    def eval_check(self, msg: discord.Message):
+    def eval_check(self, msg: discord.Message) -> bool:
         return (
             (msg.channel.id == self.itx.channel.id) and
             (msg.author.id == self.itx.user.id)
@@ -175,9 +178,13 @@ async def send_role_guide(itx: Interaction) -> None:
 
 @app_commands.check(is_owner)
 @app_commands.command(description="Manage the bot")
-async def devtools(itx: Interaction):
+async def devtools(itx: Interaction) -> None:
     view = DevTools(itx)
-    await itx.response.send_message(view.on_boarding, view=view, ephemeral=True)
+    await itx.response.send_message(
+        view.on_boarding,
+        view=view,
+        ephemeral=True
+    )
 
 
 exports = BotExports([devtools])

@@ -19,9 +19,11 @@ tag = app_commands.Group(name="tag", description="Tag text for later retrieval")
 CONTEXT_MENU_PROMOTION = "\n-# Save time by creating a tag from an existing message."
 MAX_CHARACTERS_REACHED = f"Tag content cannot exceed 2000 characters.{CONTEXT_MENU_PROMOTION}"
 TAG_MISSING = "Could not find a tag with that name."
-# TODO: Add a suitable image to display where users can find this context menu
 TAG_ALREADY_EXISTS = f"A tag with that name already exists.{CONTEXT_MENU_PROMOTION}"
 TAG_NOT_FOUND = "No tags were found with said properties."
+CONTENT_DELIMITER = app_commands.Range[str, 1, 2000]
+TAG_DELIMITER = app_commands.Range[str, 1, 80]
+PAGE_SIZE = 12
 
 
 class TagEditModal(discord.ui.Modal, title="Edit Tag"):
@@ -272,10 +274,7 @@ async def create_tag(
 @tag.command(description=tag.description)
 @app_commands.describe(name="The tag to retrieve.")
 @app_commands.autocomplete(name=all_tag_autocomplete)
-async def get(
-    itx: Interaction,
-    name: app_commands.Range[str, 1, 80]
-) -> None:
+async def get(itx: Interaction, name: TAG_DELIMITER) -> None:
     async with itx.client.pool.acquire() as conn:
         name, itx = await transform(itx, name)
         content = await get_tag_content(name, conn)
@@ -290,8 +289,8 @@ async def get(
 @app_commands.describe(name="The tag name.", content="The tag content.")
 async def create(
     itx: Interaction,
-    name: app_commands.Range[str, 1, 80],
-    content: app_commands.Range[str, 1, 2000]
+    name: TAG_DELIMITER,
+    content: CONTENT_DELIMITER
 ) -> None:
 
     async with itx.client.pool.acquire() as conn:
@@ -302,13 +301,13 @@ async def create(
 @app_commands.describe(name="The name of this tag.")
 async def make(
     itx: Interaction,
-    name: app_commands.Range[str, 1, 80],
+    name: TAG_DELIMITER
 ) -> Optional[Union[discord.WebhookMessage, discord.Message]]:
 
-    def check(msg: discord.Message):
+    def check(msg: discord.Message) -> bool:
         return (
             msg.author.id == itx.user.id and
-            itx.channel == msg.channel
+            msg.channel.id == itx.channel.id
         )
 
     await itx.response.send_message(
@@ -348,8 +347,8 @@ async def make(
 @app_commands.autocomplete(name=all_owned_tag_autocomplete)
 async def edit(
     itx: Interaction,
-    name: app_commands.Range[str, 1, 80],
-    content: Optional[app_commands.Range[str, 1, 2000]] = None
+    name: TAG_DELIMITER,
+    content: Optional[CONTENT_DELIMITER] = None
 ) -> None:
     if content is None:
         async with itx.client.pool.acquire() as conn:
@@ -384,10 +383,7 @@ async def edit(
 @tag.command(description="Remove a tag that you own")
 @app_commands.describe(name="The tag to remove.")
 @app_commands.autocomplete(name=all_owned_tag_autocomplete)
-async def remove(
-    itx: Interaction,
-    name: app_commands.Range[str, 1, 80]
-) -> Optional[discord.WebhookMessage]:
+async def remove(itx: Interaction, name: TAG_DELIMITER) -> None:
     name, itx = await transform(itx, name, owned_tags_only=True)
 
     query = "DELETE FROM tags WHERE name = ? RETURNING rowid, name"
@@ -404,7 +400,7 @@ async def remove(
 @tag.command(description="Remove a tag that you own by its ID")
 @app_commands.describe(tag_id="The internal tag ID to delete.")
 @app_commands.rename(tag_id="id")
-async def remove_id(itx: Interaction, tag_id: int):
+async def remove_id(itx: Interaction, tag_id: int) -> None:
 
     clause = "rowid = $0"
     if itx.client.is_owner(itx.user):
@@ -466,17 +462,14 @@ async def _send_tag_info(itx: Interaction, tag_name: str, row: sqlite3.Row) -> N
 @tag.command(description="Retrieve info about a tag")
 @app_commands.describe(name="The tag to retrieve information for.")
 @app_commands.autocomplete(name=all_tag_autocomplete)
-async def info(
-    itx: Interaction,
-    name: app_commands.Range[str, 1, 80]
-) -> None:
+async def info(itx: Interaction, name: TAG_DELIMITER) -> None:
     query = "SELECT rowid, uses, ownerID, time_created FROM tags WHERE name = ?"
 
     async with itx.client.pool.acquire() as conn:
         name, itx = await transform(itx, name)
         record = await conn.fetchone(query, (name,))
 
-    await _send_tag_info(itx, tag_name=name, row=record)
+    await _send_tag_info(itx, name, record)
 
 
 @tag.command(description="Remove all tags made by a user")
@@ -507,20 +500,20 @@ async def purge(itx: Interaction, user: Optional[discord.User] = None) -> None:
 
 async def reusable_paginator_via(
     itx: Interaction,
-    rows: tuple,
-    em: discord.Embed,
-    length: int = 12
+    rows: tuple[str, int],
+    em: discord.Embed
 ) -> None:
     """Only use this when you have a tuple containing the tag name and rowid in this order."""
 
-    total_pages = PaginationSimple.compute_total_pages(len(rows), length)
+    total_pages = PaginationSimple.compute_total_pages(len(rows), PAGE_SIZE)
     paginator = PaginationSimple(itx, total_pages)
 
     async def get_page_part() -> discord.Embed:
-        offset = (paginator.index - 1) * length
+        offset = (paginator.index - 1) * PAGE_SIZE
+
         em.description = "\n".join(
-            f"{index}. {tag[0]} (ID: {tag[1]})"
-            for index, tag in enumerate(rows[offset:offset+length], start=offset+1)
+            f"{index}. {tag_name} (ID: {tag_id})"
+            for index, (tag_name, tag_id) in enumerate(rows[offset:offset+PAGE_SIZE], start=offset+1)
         )
 
         return em.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
@@ -531,7 +524,7 @@ async def reusable_paginator_via(
 
 @tag.command(description="Search for a tag")
 @app_commands.describe(query="The tag to search for.")
-async def search(itx: Interaction, query: app_commands.Range[str, 1, 80]) -> None:
+async def search(itx: Interaction, query: TAG_DELIMITER) -> None:
 
     sql = (
         """
@@ -558,28 +551,25 @@ async def search(itx: Interaction, query: app_commands.Range[str, 1, 80]) -> Non
 @tag.command(description="Transfer a tag to another member")
 @app_commands.describe(
     tag="The tag to transfer.",
-    member="The member to transfer the tag to."
+    user="Who to transfer the tag to."
 )
 @app_commands.autocomplete(tag=all_owned_tag_autocomplete)
 async def transfer(
     itx: Interaction,
-    member: discord.User,
-    tag: app_commands.Range[str, 1, 80]
+    user: discord.User,
+    tag: TAG_DELIMITER
 ) -> None:
-    if itx.is_user_integration():
-        return await itx.response.send_message("You cannot transfer tags to users outside a server.")
-
-    if member.bot:
+    if user.bot:
         return await itx.response.send_message("You cannot transfer tags to bots.")
 
     query = "UPDATE tags SET ownerID = ? WHERE name = ? RETURNING rowid"
     async with itx.client.pool.acquire() as conn, conn.transaction():
         tag, itx = await transform(itx, tag, owned_tags_only=True)
-        ret = await conn.fetchone(query, (member.id, tag, itx.user.id))
+        ret = await conn.fetchone(query, (user.id, tag))
 
     if ret is None:
         return await itx.response.send_message(TAG_MISSING)
-    await itx.response.send_message(f"Tag with name {tag!r} now belongs to {member.name}.")
+    await itx.response.send_message(f"Tag with name {tag!r} now belongs to {user.name}.")
 
 
 @tag.command(name="all", description="List all tags ever made")
@@ -725,7 +715,7 @@ async def global_stats(itx: Interaction) -> None:
     await itx.response.send_message(embed=em)
 
 
-async def member_stats(itx: Interaction, user: discord.abc.User):
+async def member_stats(itx: Interaction, user: discord.abc.User) -> None:
     e = discord.Embed(colour=discord.Colour.blurple())
     e.set_author(name=str(user), icon_url=user.display_avatar.url)
     e.set_footer(text="These stats are user-specific.")

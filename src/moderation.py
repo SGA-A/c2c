@@ -14,7 +14,11 @@ from .core.bot import Interaction
 ROLE_INPUT_REGEX = compile(r'([+-])([^+-]+)')
 UPLOAD_FILE_DESCRIPTION = "A file to upload alongside the thread."
 GUILD_INSTALL = app_commands.AppInstallationType(guild=True, user=False)
-GUILD_CONTEXT = app_commands.AppCommandContext(guild=True, private_channel=False, dm_channel=False)
+GUILD_CONTEXT = app_commands.AppCommandContext(
+    guild=True,
+    private_channel=False,
+    dm_channel=False
+)
 
 
 def do_boilerplate_role_checks(r: discord.Role, g: discord.Guild) -> None:

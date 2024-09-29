@@ -271,7 +271,7 @@ class RefreshPagination(BasePaginator):
         await self.edit_page(itx)
 
     @discord.ui.button(row=2, emoji=discord.PartialEmoji.from_str("<:refreshPages:1263923160433168414>"))
-    async def refresh_paginator(self, itx: discord.Interaction, _: discord.ui.Button):
+    async def refresh_paginator(self, itx: discord.Interaction, _: discord.ui.Button) -> None:
         await self.edit_page(itx, force_refresh=True)
 
     @discord.ui.button(row=2, style=discord.ButtonStyle.primary, emoji=MOVE_RIGHT_EMOJI)
@@ -292,7 +292,11 @@ class PaginationItem(BasePaginator):
     Disabling logic has been stripped away.
     """
 
-    def __init__(self, itx: discord.Interaction, get_page: Optional[Callable] = None):
+    def __init__(
+        self,
+        itx: discord.Interaction,
+        get_page: Optional[Callable] = None
+    ) -> None:
         super().__init__(itx, get_page)
 
     async def navigate(self) -> None:

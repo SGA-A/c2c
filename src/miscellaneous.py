@@ -20,9 +20,18 @@ GH_PARAMS = {"per_page": 3}
 FACTS_ENDPOINT = 'https://api.api-ninjas.com/v1/facts'
 COMMITS_ENDPOINT = "https://api.github.com/repos/SGA-A/c2c/commits"
 TEXT_RAN = "6,231"  # goodbye prefix commands
-USER_ENTRY = discord.Member | discord.User
 ARROW = "<:Arrow:1263919893762543717>"
 API_EXCEPTION = "The API fucked up, try again later."
+API_ENDPOINTS = Literal[
+    "abstract", "balls", "billboard", "bonks", "bubble", "canny", "clock",
+    "cloth", "contour", "cow", "cube", "dilate", "fall", "fan", "flush", "gallery",
+    "globe", "half-invert", "hearts", "infinity", "laundry", "lsd", "optics", "parapazzi"
+]
+MORE_API_ENDPOINTS = Literal[
+    "minecraft", "patpat", "plates", "pyramid",
+    "radiate", "rain", "ripped", "ripple",
+    "shred", "wiggle", "warp", "wave"
+]
 EMBED_TIMEZONES = {
     'Pacific': 'US/Pacific',
     'Mountain': 'US/Mountain',
@@ -60,7 +69,7 @@ def extract_post_xml(raw_xml: list[Element], offset: int, length: int):
     )
 
 
-def parse_xml(xml_content, mode: Literal["post", "tag"]):
+def parse_xml(mode: Literal["post", "tag"], xml_content: str) -> list[Element]:
     return fromstring(xml_content).findall(f".//{mode}")
 
 
@@ -69,7 +78,7 @@ class CommandUsage(RefreshPagination):
     def __init__(
         self,
         itx: Interaction,
-        viewing: discord.Member | discord.User,
+        viewing: discord.abc.User,
         get_page: Optional[Callable] = None,
     ) -> None:
         super().__init__(itx, get_page)
@@ -100,7 +109,7 @@ class CommandUsage(RefreshPagination):
         self.total_pages = self.compute_total_pages(len(self.usage_data), self.length)
 
     @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a registered user", row=0)
-    async def user_select(self, itx: Interaction, select: discord.ui.UserSelect):
+    async def user_select(self, itx: Interaction, select: discord.ui.UserSelect) -> None:
         self.viewing = select.values[0]
         self.index = 1
 
@@ -158,7 +167,7 @@ async def retrieve_via_kona(itx: Interaction, /, **params) -> int | list[Element
         if resp.status != 200:
             return resp.status
 
-        return parse_xml(mode=mode, xml_content=(await resp.text()))
+        return parse_xml(mode, await resp.text())
 
 
 async def format_gif_api_response(
@@ -245,13 +254,16 @@ async def serverinfo(itx: Interaction) -> None:
 
 @app_commands.command(description="See your total command usage")
 @app_commands.describe(user="Whose command usage to display. Defaults to you.")
-async def usage(itx: Interaction, user: Optional[USER_ENTRY] = None):
+async def usage(
+    itx: Interaction,
+    user: Optional[discord.User] = None
+) -> None:
     user = user or itx.user
 
     paginator = CommandUsage(itx, viewing=user)
     await paginator.fetch_data()
 
-    async def get_page_part(force_refresh: bool = None) -> discord.Embed:
+    async def get_page_part(force_refresh: bool = False) -> discord.Embed:
         if force_refresh:
             await paginator.fetch_data()
             paginator.index = min(paginator.index, paginator.total_pages)
@@ -304,7 +316,10 @@ async def ping(itx: Interaction) -> None:
 
 
 @app_commands.context_menu(name="Extract Embed Colour")
-async def embed_colour_menu(itx: Interaction, message: discord.Message) -> None:
+async def embed_colour_menu(
+    itx: Interaction,
+    message: discord.Message
+) -> None:
 
     all_embeds = [
         discord.Embed(
@@ -415,12 +430,8 @@ async def randomfact(itx: Interaction) -> None:
 )
 async def image(
     itx: Interaction,
-    user: Optional[USER_ENTRY],
-    endpoint: Literal[
-        "abstract", "balls", "billboard", "bonks", "bubble", "canny", "clock",
-        "cloth", "contour", "cow", "cube", "dilate", "fall", "fan", "flush", "gallery",
-        "globe", "half-invert", "hearts", "infinity", "laundry", "lsd", "optics", "parapazzi"
-    ]
+    endpoint: API_ENDPOINTS,
+    user: Optional[discord.User] = None
 ) -> None:
     await itx.response.defer(thinking=True)
 
@@ -439,12 +450,8 @@ async def image(
 )
 async def image2(
     itx: Interaction,
-    user: Optional[USER_ENTRY],
-    endpoint: Literal[
-        "minecraft", "patpat", "plates", "pyramid",
-        "radiate", "rain", "ripped", "ripple",
-        "shred", "wiggle", "warp", "wave"
-    ]
+    endpoint: MORE_API_ENDPOINTS,
+    user: Optional[discord.User] = None
 ) -> None:
     await itx.response.defer(thinking=True)
 
@@ -458,7 +465,10 @@ async def image2(
 
 @app_commands.command(description='Show information about characters')
 @app_commands.describe(characters='Any written letters or symbols.')
-async def charinfo(itx: Interaction, characters: app_commands.Range[str, 1, 25]) -> None:
+async def charinfo(
+    itx: Interaction,
+    characters: app_commands.Range[str, 1, 25]
+) -> None:
     """
     Shows you information about a number of characters.
     Only up to 25 characters at a time.
