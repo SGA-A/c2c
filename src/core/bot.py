@@ -154,8 +154,8 @@ class BasicTree(app_commands.CommandTree["C2C"]):
             embed.description = "This command no longer exists!"
         else:
             self.handle_unknown_exception(embed)
-            itx.client.log_exception(error)
-        await meth(embed=embed, view=itx.client.contact_devs)
+            self.client.log_exception(error)
+        await meth(embed=embed, view=self.client.contact_devs)
 
 
 class C2C(discord.Client):
@@ -239,7 +239,7 @@ class C2C(discord.Client):
             """
         )
 
-        async with itx.client.pool.acquire() as conn, conn.transaction():
+        async with self.pool.acquire() as conn, conn.transaction():
             try:
                 multi, = await conn.fetchone(query, itx.user.id, "xp", f"/{cmd.name}")
             except IntegrityError:
