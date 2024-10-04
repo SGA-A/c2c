@@ -1,6 +1,6 @@
 <h2 align="center">
   <div align="center">
-    <img src=".github/c2c-avatar.png" alt="c2c Logo" style="width:150px; height:auto;">
+    <img src=".github/avatar.png" alt="c2c Logo" style="width:150px; height:auto;">
   </div>
   c2c
 </h2>
