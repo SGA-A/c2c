@@ -116,7 +116,7 @@ class DevTools(discord.ui.View):
         await itx.response.send_message("\U00002705", ephemeral=True)
 
     @discord.ui.button(label="Evaluate", style=discord.ButtonStyle.success)
-    async def evaluate(self, itx: Interaction, _: discord.ui.Button) -> None:
+    async def _eval(self, itx: Interaction, _: discord.ui.Button) -> None:
         await itx.response.send_message("What would you like to evaluate?")
 
         try:
