@@ -1,7 +1,7 @@
 from io import BytesIO
 from unicodedata import name
 from datetime import datetime, timezone
-from typing import Callable, Literal, Optional
+from typing import Callable, Literal, Optional, Generator
 from xml.etree.ElementTree import fromstring, Element
 
 import discord
@@ -12,20 +12,24 @@ from psutil import cpu_count
 
 from ._types import BotExports
 from .core.bot import Interaction
-from .core.helpers import membed, number_to_ordinal, total_commands_used_by_user
+from .core.helpers import membed, to_ord, commands_used_by
 from .core.paginators import Pagination, RefreshPagination
 
 
+BASE = "http://www.fileformat.info/info/unicode/char/"
 GH_PARAMS = {"per_page": 3}
-FACTS_ENDPOINT = 'https://api.api-ninjas.com/v1/facts'
+FACTS_ENDPOINT = "https://api.api-ninjas.com/v1/facts"
 COMMITS_ENDPOINT = "https://api.github.com/repos/SGA-A/c2c/commits"
 TEXT_RAN = "6,231"  # goodbye prefix commands
 ARROW = "<:Arrow:1263919893762543717>"
 API_EXCEPTION = "The API fucked up, try again later."
 API_ENDPOINTS = Literal[
-    "abstract", "balls", "billboard", "bonks", "bubble", "canny", "clock",
-    "cloth", "contour", "cow", "cube", "dilate", "fall", "fan", "flush", "gallery",
-    "globe", "half-invert", "hearts", "infinity", "laundry", "lsd", "optics", "parapazzi"
+    "abstract", "balls", "billboard", "bonks",
+    "bubble", "canny", "clock", "cloth", "contour",
+    "cow", "cube", "dilate", "fall",
+    "fan", "flush", "gallery", "globe",
+    "half-invert", "hearts", "infinity",
+    "laundry", "lsd", "optics", "parapazzi"
 ]
 MORE_API_ENDPOINTS = Literal[
     "minecraft", "patpat", "plates", "pyramid",
@@ -33,15 +37,15 @@ MORE_API_ENDPOINTS = Literal[
     "shred", "wiggle", "warp", "wave"
 ]
 EMBED_TIMEZONES = {
-    'Pacific': 'US/Pacific',
-    'Mountain': 'US/Mountain',
-    'Central': 'US/Central',
-    'Eastern': 'US/Eastern',
-    'Britain': 'Europe/London',
-    'Sydney': 'Australia/Sydney',
-    'Japan': 'Asia/Tokyo',
-    'Germany': 'Europe/Berlin',
-    'India': 'Asia/Kolkata'
+    "Pacific": "US/Pacific",
+    "Mountain": "US/Mountain",
+    "Central": "US/Central",
+    "Eastern": "US/Eastern",
+    "Britain": "Europe/London",
+    "Sydney": "Australia/Sydney",
+    "Japan": "Asia/Tokyo",
+    "Germany": "Europe/Berlin",
+    "India": "Asia/Kolkata"
 }
 
 
@@ -50,15 +54,19 @@ def format_dt(dt: datetime, style: Optional[str] = None) -> str:
         dt = dt.replace(tzinfo=timezone.utc)
 
     if style is None:
-        return f'<t:{int(dt.timestamp())}>'
-    return f'<t:{int(dt.timestamp())}:{style}>'
+        return f"<t:{int(dt.timestamp())}>"
+    return f"<t:{int(dt.timestamp())}:{style}>"
 
 
-def format_relative(dt: datetime) -> str:
-    return format_dt(dt, 'R')
+def relative(dt: datetime) -> str:
+    return format_dt(dt, "R")
 
 
-def extract_post_xml(raw_xml: list[Element], offset: int, length: int):
+def parse_posts(
+    raw_xml: list[Element],
+    offset: int,
+    length: int
+) -> Generator[tuple[str, str, str], None, None]:
     return (
         (
             img_metadata.get("jpeg_url"),
@@ -69,8 +77,8 @@ def extract_post_xml(raw_xml: list[Element], offset: int, length: int):
     )
 
 
-def parse_xml(mode: Literal["post", "tag"], xml_content: str) -> list[Element]:
-    return fromstring(xml_content).findall(f".//{mode}")
+def parse_xml(mode: Literal["post", "tag"], xml: str, /) -> list[Element]:
+    return fromstring(xml).findall(f".//{mode}")
 
 
 class CommandUsage(RefreshPagination):
@@ -83,16 +91,16 @@ class CommandUsage(RefreshPagination):
     ) -> None:
         super().__init__(itx, get_page)
         self.viewing = viewing
-        self.usage_embed = discord.Embed(
-            title=f"{viewing.display_name}'s Command Usage",
-            colour=0x2B2D31
-        )
-        self.usage_data = []  # commands list
-        self.children[-1].default_values = [discord.Object(id=self.viewing.id)]
+        self.embed = membed()
+        self.embed.title = f"{viewing.display_name}'s Command Usage"
+        self.data = []  # commands list
+
+        user_select: discord.ui.UserSelect = self.children[-1]
+        user_select.default_values = [discord.Object(id=self.viewing.id)]
 
     async def fetch_data(self):
         async with self.itx.client.pool.acquire() as conn:
-            self.usage_data = await conn.fetchall(
+            self.data = await conn.fetchall(
                 """
                 SELECT cmd_name, cmd_count
                 FROM command_uses
@@ -100,27 +108,37 @@ class CommandUsage(RefreshPagination):
                 ORDER BY cmd_count DESC
                 """, self.viewing.id
             )
-            if not self.usage_data:
-                self.usage_embed.description = None
+            if not self.data:
+                self.embed.description = None
                 self.total, self.total_pages = 0, 1
                 return
 
-            self.total = await total_commands_used_by_user(self.viewing.id, conn)
-        self.total_pages = self.compute_total_pages(len(self.usage_data), self.length)
+            self.total = await commands_used_by(self.viewing.id, conn)
+        self.total_pages = self.compute_total_pages(
+            len(self.data), self.length
+        )
 
-    @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a registered user", row=0)
-    async def user_select(self, itx: Interaction, select: discord.ui.UserSelect) -> None:
+    @discord.ui.select(
+        cls=discord.ui.UserSelect,
+        placeholder="Select a registered user",
+        row=0
+    )
+    async def user_select(
+        self,
+        itx: Interaction,
+        select: discord.ui.UserSelect
+    ) -> None:
         self.viewing = select.values[0]
         self.index = 1
 
-        self.usage_embed.title = f"{self.viewing.display_name}'s Command Usage"
+        self.embed.title = f"{self.viewing.display_name}'s Command Usage"
         select.default_values = [discord.Object(id=self.viewing.id)]
 
         await self.fetch_data()
         await self.edit_page(itx)
 
 
-async def fetch_commits(itx: Interaction):
+async def fetch_commits(itx: Interaction) -> str:
     gh_headers = {
         "Authorization": f"token {itx.client.gh_token}",
         "Accept": "application/vnd.github.v3+json"
@@ -131,16 +149,23 @@ async def fetch_commits(itx: Interaction):
         headers=gh_headers,
         params=GH_PARAMS
     ) as resp:
-        if resp.status == 200:
-            return await resp.json()
-        return []
+        commits = await resp.json() if resp.status == 200 else []
+
+    revision = "\n".join(
+        f"[`{c['sha'][:6]}`]({c['html_url']}) "
+        f"{c['commit']['message'].splitlines()[0]} "
+        f"({relative(datetime.fromisoformat(c['commit']['author']['date']))})"
+        for c in commits
+    )
+
+    return (revision or "")
 
 
 async def tag_search_autocomplete(
     itx: Interaction,
     current: str
 ) -> list[app_commands.Choice[str]]:
-    tags_xml = await retrieve_via_kona(
+    tags_xml = await kona(
         itx,
         name=current.lower(),
         mode="tag",
@@ -149,7 +174,8 @@ async def tag_search_autocomplete(
         limit=25
     )
 
-    if isinstance(tags_xml, int):  # http exception
+    # http status code was returned (when != 200 OK)
+    if isinstance(tags_xml, int):
         return []
 
     return [
@@ -158,8 +184,12 @@ async def tag_search_autocomplete(
     ]
 
 
-async def retrieve_via_kona(itx: Interaction, /, **params) -> int | list[Element]:
-    """Returns a list of dictionaries for you to iterate through and fetch their attributes"""
+async def kona(itx: Interaction, **params) -> int | list[Element]:
+    """
+    Returns a list of dict-like elements for
+    you to iterate through and fetch their attributes.
+    """
+
     mode = params.pop("mode")
     base_url = f"https://konachan.net/{mode}.xml"
 
@@ -177,29 +207,27 @@ async def format_gif_api_response(
     headers: dict,
     /
 ) -> None:
-    async with itx.client.session.get(api_url, params=params, headers=headers) as resp:
+    async with itx.client.session.get(
+        url=api_url,
+        params=params,
+        headers=headers
+    ) as resp:
         if resp.status != 200:
             await itx.followup.send(API_EXCEPTION)
             return
         initial_bytes = await resp.read()
 
     buffer = BytesIO(initial_bytes)
-    await itx.followup.send(file=discord.File(buffer, 'clip.gif'))
+    await itx.followup.send(file=discord.File(buffer, "clip.gif"))
 
 
-@app_commands.command(description="Show information about the server and its members")
+@app_commands.command(description="Show information about the server")
 @app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
 @app_commands.allowed_installs(guilds=True, users=False)
 async def serverinfo(itx: Interaction) -> None:
     await itx.response.defer(thinking=True)
 
     guild = itx.guild
-    total_bots = 0
-
-    for member in guild.members:
-        if not member.bot:
-            continue
-        total_bots += 1
 
     tn_full, tn_relative = (
         discord.utils.format_dt(guild.created_at),
@@ -209,7 +237,7 @@ async def serverinfo(itx: Interaction) -> None:
     serverinfo = discord.Embed(title=guild.name, colour=guild.me.color)
     serverinfo.description = (
         f"\U00002726 Owner: {guild.owner.name}\n"
-        f"\U00002726 Maximum File Size: {guild.filesize_limit / 1_000_000}MB\n"
+        f"\U00002726 Max File Size: {guild.filesize_limit / 1_000_000}MB\n"
         f"\U00002726 Role Count: {len(guild.roles)-1}\n"
     )
     serverinfo.set_thumbnail(url=guild.icon.url)
@@ -221,39 +249,14 @@ async def serverinfo(itx: Interaction) -> None:
     if guild.description:
         serverinfo.add_field(
             name="Server Description",
-            value=guild.description,
-            inline=False
+            value=guild.description
         )
-
-    animated_emojis = sum(1 for emoji in guild.emojis if emoji.animated)
-
-    serverinfo.add_field(
-        name="Member Info",
-        value=(
-            f"\U00002023 Humans: {guild.member_count-total_bots:,}\n"
-            f"\U00002023 Bots: {total_bots:,}\n"
-            f"\U00002023 Total: {guild.member_count:,}\n"
-        )
-    ).add_field(
-        name="Channel Info",
-        value=(
-            f"\U00002023 <:categoryCh:1263920042056089680> {len(guild.categories)}\n"
-            f"\U00002023 <:textChannel:1263923690056319137> {len(guild.text_channels)}\n"
-            f"\U00002023 <:voiceChannel:1263924105967566968> {len(guild.voice_channels)}"
-        )
-    ).add_field(
-        name="Emojis",
-        value=(
-            f"\U00002023 Static: {len(guild.emojis)-animated_emojis}/{guild.emoji_limit}\n"
-            f"\U00002023 Animated: {animated_emojis}/{guild.emoji_limit}"
-        )
-    )
 
     await itx.followup.send(embed=serverinfo)
 
 
 @app_commands.command(description="See your total command usage")
-@app_commands.describe(user="Whose command usage to display. Defaults to you.")
+@app_commands.describe(user="Whose command usage to display.")
 async def usage(
     itx: Interaction,
     user: Optional[discord.User] = None
@@ -268,33 +271,35 @@ async def usage(
             await paginator.fetch_data()
             paginator.index = min(paginator.index, paginator.total_pages)
 
-        if not paginator.usage_data:
-            return paginator.usage_embed.set_footer(text="Empty")
+        if not paginator.data:
+            return paginator.embed.set_footer(text="Empty")
 
         offset = (paginator.index - 1) * paginator.length
-        paginator.usage_embed.description = f"> Total: {paginator.total:,}\n\n"
-        paginator.usage_embed.description += "\n".join(
+        paginator.embed.description = f"> Total: {paginator.total:,}\n\n"
+        paginator.embed.description += "\n".join(
             f"` {cmd_data[1]:,} ` \U00002014 {cmd_data[0]}"
-            for cmd_data in paginator.usage_data[offset:offset + paginator.length]
+            for cmd_data in paginator.data[offset:offset + paginator.length]
         )
 
-        return paginator.usage_embed.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
+        return paginator.embed.set_footer(
+            text=f"Page {paginator.index} of {paginator.total_pages}"
+        )
 
     paginator.get_page = get_page_part
     await paginator.navigate()
 
 
-@app_commands.command(description='Calculate an expression')
-@app_commands.describe(expression='The expression to evaluate.')
+@app_commands.command(description="Calculate an expression")
+@app_commands.describe(expression="The expression to evaluate.")
 async def calc(itx: Interaction, expression: str) -> None:
     try:
-        expression = expression.replace('^', '**').replace(',', '_')
-
-        # Evaluate the expression
+        expression = expression.replace("^", "**").replace(",", "_")
         result = eval(expression)
 
-        # Format the result with commas for thousands separator
-        result = f"{result:,}" if isinstance(result, (int, float)) else "Invalid Equation"
+        result = (
+            f"{result:,}" if isinstance(result, (int, float))
+            else "Invalid Equation"
+        )
     except Exception:
         result = "Invalid Equation"
 
@@ -310,7 +315,7 @@ async def calc(itx: Interaction, expression: str) -> None:
     await itx.response.send_message(embed=output)
 
 
-@app_commands.command(description='Checks latency of the bot')
+@app_commands.command(description="Checks latency of the bot")
 async def ping(itx: Interaction) -> None:
     await itx.response.send_message(f"{itx.client.latency * 1000:.0f}ms")
 
@@ -322,34 +327,38 @@ async def embed_colour_menu(
 ) -> None:
 
     all_embeds = [
-        discord.Embed(
-            colour=embed.colour,
-            description=f"{embed.colour} - [`{embed.colour.value}`](https:/www.google.com)"
-        ) for embed in message.embeds
+        discord.Embed(colour=embed.colour, description=embed.colour)
+        for embed in message.embeds
     ]
 
     if all_embeds:
-        return await itx.response.send_message(ephemeral=True, embeds=all_embeds)
+        return await itx.response.send_message(
+            ephemeral=True,
+            embeds=all_embeds
+        )
 
     await itx.response.send_message(
-        ephemeral=True,
-        embed=membed("No embeds were found within this message.")
+        "No embeds were found.",
+        ephemeral=True
     )
 
 
-anime = app_commands.Group(name='anime', description="Surf through anime images and posts.")
+anime = app_commands.Group(
+    name="anime",
+    description="Surf through anime images and posts"
+)
 
 
-@anime.command(name='kona', description='Retrieve posts from Konachan')
+@anime.command(name="kona", description="Retrieve posts from Konachan")
 @app_commands.rename(length="max_images")
 @app_commands.describe(
-    tag1='A tag to base your search on.',
-    tag2='A tag to base your search on.',
-    tag3='A tag to base your search on.' ,
-    private='Hide the results from others. Defaults to True.',
-    length='The maximum number of images to display at once. Defaults to 3.',
-    maximum='The maximum number of images to retrieve. Defaults to 30.',
-    page='The page number to look through.'
+    tag1="A tag to base your search on.",
+    tag2="A tag to base your search on.",
+    tag3="A tag to base your search on." ,
+    private="Hide the results from others. Defaults to True.",
+    length="The maximum number of images to display at once. Defaults to 3.",
+    maximum="The maximum number of images to retrieve. Defaults to 30.",
+    page="The page number to look through."
 )
 @app_commands.autocomplete(
     tag1=tag_search_autocomplete,
@@ -365,11 +374,13 @@ async def kona_fetch(
     length: app_commands.Range[int, 1, 10] = 3,
     maximum: app_commands.Range[int, 1, 1000] = 30,
     page: app_commands.Range[int, 1] = 1
-) -> None:
+) -> Optional[discord.WebhookMessage]:
     await itx.response.defer(thinking=True, ephemeral=private)
-    tagviewing = ' '.join(val for _, val in itx.namespace if isinstance(val, str))
 
-    posts_xml: list[Element] = await retrieve_via_kona(
+    tag_args = (arg for _, arg in itx.namespace if isinstance(arg, str))
+    tagviewing = " ".join(tag_args)
+
+    xml: list[Element] = await kona(
         itx,
         tags=tagviewing,
         limit=maximum,
@@ -377,50 +388,56 @@ async def kona_fetch(
         mode="post"
     )
 
-    if isinstance(posts_xml, int):
-        embed = membed("Failed to make this request.")
-        embed.title = f"{posts_xml}. That's an error."
-        return await itx.followup.send(embed=embed)
+    if isinstance(xml, int):
+        resp = (
+            f"## {xml}. That's an error.\n"
+            f"Failed to make this request."
+        )
+        return await itx.followup.send(resp)
 
-    if not len(posts_xml):
-        embed = membed(
+    if not len(xml):
+        resp = (
+            "## No posts found\n"
             "There are a few known causes:\n"
             "- Entering an invalid tag name\n"
             "- Posts aren't available under this tag\n"
             "- Page number exceeds maximum available under this tag\n"
-            "-# You can find a tag by using the [website.](https://konachan.net/tag)"
+            "-# Find a tag by using the [website.](https://konachan.net/tag)"
         )
-        embed.title = "No posts found."
-        return await itx.followup.send(embed=embed)
+        return await itx.followup.send(resp, ephemeral=True)
 
-    total_pages = Pagination.compute_total_pages(len(posts_xml), length)
+    total_pages = Pagination.compute_total_pages(len(xml), length)
     paginator = Pagination(itx, total_pages)
 
+    to_datetime = datetime.fromtimestamp
     async def get_page_part() -> list[discord.Embed]:
         offset = (paginator.index - 1) * length
         return [
             discord.Embed(
                 title=author,
                 colour=0x2B2D31,
-                url=jpeg_url,
-                timestamp=datetime.fromtimestamp(int(created_at), tz=timezone.utc)
-            ).set_image(url=jpeg_url)
-            for (jpeg_url, author, created_at) in extract_post_xml(posts_xml, offset, length)
+                url=url,
+                timestamp=to_datetime(int(created), tz=timezone.utc)
+            ).set_image(url=url)
+            for (url, author, created) in parse_posts(xml, offset, length)
         ]
 
     paginator.get_page = get_page_part
     await paginator.navigate(ephemeral=private)
 
 
-@app_commands.command(description='Queries a random fact')
+@app_commands.command(description="Queries a random fact")
 async def randomfact(itx: Interaction) -> None:
-    api_params = {'X-Api-Key': itx.client.ninja_api}
+    api_params = {"X-Api-Key": itx.client.ninja_api}
 
-    async with itx.client.session.get(url=FACTS_ENDPOINT, params=api_params) as resp:
+    async with itx.client.session.get(
+        url=FACTS_ENDPOINT,
+        params=api_params
+    ) as resp:
         if resp.status != 200:
             return await itx.response.send_message(API_EXCEPTION)
         text = await resp.json()
-    await itx.response.send_message(text[0]['fact'])
+    await itx.response.send_message(text[0]["fact"])
 
 
 @app_commands.command(description="Manipulate a user's avatar")
@@ -436,8 +453,8 @@ async def image(
     await itx.response.defer(thinking=True)
 
     user = user or itx.user
-    params = {'image_url': user.display_avatar.url}
-    headers = {'Authorization': f'Bearer {itx.client.j_api}'}
+    params = {"image_url": user.display_avatar.url}
+    headers = {"Authorization": f"Bearer {itx.client.j_api}"}
     api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
     await format_gif_api_response(itx, api_url, params, headers)
@@ -456,58 +473,55 @@ async def image2(
     await itx.response.defer(thinking=True)
 
     user = user or itx.user
-    params = {'image_url': user.display_avatar.url}
-    headers = {'Authorization': f'Bearer {itx.client.j_api}'}
+    params = {"image_url": user.display_avatar.url}
+    headers = {"Authorization": f"Bearer {itx.client.j_api}"}
     api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
     await format_gif_api_response(itx, api_url, params, headers)
 
 
-@app_commands.command(description='Show information about characters')
-@app_commands.describe(characters='Any written letters or symbols.')
+@app_commands.command(description="Show information about characters")
+@app_commands.describe(characters="Any written letters or symbols.")
 async def charinfo(
     itx: Interaction,
     characters: app_commands.Range[str, 1, 25]
 ) -> None:
-    """
-    Shows you information about a number of characters.
-    Only up to 25 characters at a time.
-    """
 
     def to_string(c):
-        digit = f'{ord(c):x}'
-        the_name = name(c, 'Name not found.')
-        c = '\\`' if c == '`' else c
+        digit = f"{ord(c):x}"
+        the_name = name(c, "Name not found.")
+        c = "\\`" if c == "`" else c
         return (
-            f'[`\\U{digit:>08}`](http://www.fileformat.info/info/unicode/char/{digit}): {the_name} '
-            f'**\N{EM DASH}** {c}'
+            f"[`\\U{digit:>08}`]({BASE}{digit}): "
+            f"{the_name} **\N{EM DASH}** {c}"
         )
 
-    msg = '\n'.join(map(to_string, characters))
+    msg = "\n".join(map(to_string, characters))
     if len(msg) > 2000:
-        return await itx.response.send_message('Output too long to display.', ephemeral=True)
+        return await itx.response.send_message(
+            "Output too long to display.",
+            ephemeral=True
+        )
     await itx.response.send_message(msg, suppress_embeds=True)
 
 
-@app_commands.command(description='Learn more about the bot')
+@app_commands.command(description="Learn more about the bot")
 async def about(itx: Interaction) -> None:
 
-    commits = await fetch_commits(itx)
-    revision = '\n'.join(
-        f"[`{commit['sha'][:6]}`]({commit['html_url']}) "
-        f"{commit['commit']['message'].splitlines()[0]} "
-        f"({format_relative(datetime.fromisoformat(commit['commit']['author']['date']))})"
-        for commit in commits
-    )
+    revision = await fetch_commits(itx)
 
     embed = discord.Embed(
-        title='Official Bot Server Invite',
+        title="Official Bot Server Invite",
         description=f"Latest Changes:\n{revision}",
-        url='https://discord.gg/W3DKAbpJ5E'
+        url="https://discord.gg/W3DKAbpJ5E"
     )
 
-    embed.timestamp, embed.colour = discord.utils.utcnow(), discord.Colour.blurple()
-    embed.set_author(name="inter_geo", icon_url="https://tinyurl.com/m1m2m3ma")
+    embed.timestamp = discord.utils.utcnow()
+    embed.colour = discord.Colour.blurple()
+    embed.set_author(
+        name="inter_geo",
+        icon_url="https://tinyurl.com/m1m2m3ma"
+    )
 
     total_members, total_unique = 0, len(itx.client.users)
     text, voice, guilds = 0, 0, 0
@@ -554,31 +568,31 @@ async def about(itx: Interaction) -> None:
         )
 
     embed.add_field(
-        name='<:Members:1263922150125994054> Members',
-        value=f'{total_members} total\n{total_unique} unique'
+        name="<:Members:1263922150125994054> Members",
+        value=f"{total_members} total\n{total_unique} unique"
     )
 
     embed.add_field(
-        name='<:searchChannels:1263923406592540802> Channels',
-        value=f'{text + voice} total\n{text} text\n{voice} voice'
+        name="<:searchChannels:1263923406592540802> Channels",
+        value=f"{text + voice} total\n{text} text\n{voice} voice"
     )
 
     embed.add_field(
-        name='<:Process:1263923016803418203> Process',
-        value=f'{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU'
+        name="<:Process:1263923016803418203> Process",
+        value=f"{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU"
     )
 
     embed.add_field(
-        name='<:Servers:1263923465409400832> Guilds',
+        name="<:Servers:1263923465409400832> Guilds",
         value=(
-            f'{guilds} total\n'
-            f'{ARROW}{len(itx.client.emojis)} emojis\n'
-            f'{ARROW}{len(itx.client.stickers)} stickers'
+            f"{guilds} total\n"
+            f"{ARROW}{len(itx.client.emojis)} emojis\n"
+            f"{ARROW}{len(itx.client.stickers)} stickers"
         )
     )
 
     embed.add_field(
-        name='<:slashCommands:1263923524213538917> Commands Run',
+        name="<:slashCommands:1263923524213538917> Commands Run",
         value=(
             f"{total_ran:,} total\n"
             f"{ARROW} {slash_ran:,} slash\n"
@@ -587,13 +601,13 @@ async def about(itx: Interaction) -> None:
     )
 
     embed.add_field(
-        name='<:Uptime:1263923835602993183> Uptime',
+        name="<:Uptime:1263923835602993183> Uptime",
         value=f"{int(days)}d {int(hours)}h {int(minutes)}m {int(seconds)}s"
     )
 
     embed.set_footer(
-        text=f'Made with discord.py v{discord.__version__}',
-        icon_url='http://i.imgur.com/5BFecvA.png'
+        text=f"Made with discord.py v{discord.__version__}",
+        icon_url="http://i.imgur.com/5BFecvA.png"
     )
 
     await itx.response.send_message(embed=embed)
@@ -611,22 +625,30 @@ async def worldclock(itx: Interaction) -> None:
 
     for location, tz in EMBED_TIMEZONES.items():
         time_there = datetime.now(tz=pytz_timezone(tz))
-        clock.add_field(name=location, value=f"```prolog\n{time_there:%I:%M %p}```")
+        clock.add_field(
+            name=location,
+            value=f"```prolog\n{time_there:%I:%M %p}```"
+        )
 
     sunmap = (
-        f"https://www.timeanddate.com/scripts/sunmap.php?iso={clock.timestamp:'%Y%m%dT%H%M'}"
+        f"https://www.timeanddate.com/scripts/"
+        f"sunmap.php?iso={clock.timestamp:'%Y%m%dT%H%M'}"
     )
 
     clock.description = (
         f"```prolog\n{clock.timestamp:%I:%M %p, %A} "
-        f"{number_to_ordinal(int(f"{clock.timestamp:%d}"))} {clock.timestamp:%Y}```"
+        f"{to_ord(int(f"{clock.timestamp:%d}"))} {clock.timestamp:%Y}```"
     )
+
     clock.add_field(
         name="Legend",
         inline=False,
         value=(
-            "\U00002600\U0000fe0f = The Sun's position directly overhead in relation to an observer.\n"
-            "\U0001f315 = The Moon's position at its zenith in relation to an observer."
+            "\U00002600\U0000fe0f = The Sun's position "
+            "directly overhead in relation to an observer.\n"
+
+            "\U0001f315 = The Moon's position "
+            "at its zenith in relation to an observer."
         )
     )
 

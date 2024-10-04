@@ -7,7 +7,11 @@ from discord.utils import setup_logging
 
 
 async def main():
-    file_handler = FileHandler(filename="discord.log", encoding="utf-8", mode="w")
+    file_handler = FileHandler(
+        filename="discord.log",
+        encoding="utf-8",
+        mode="w"
+    )
     setup_logging(handler=file_handler)
     log_info(version)
 

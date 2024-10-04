@@ -6,14 +6,19 @@ from asqlite import Connection
 
 
 async def declare_transaction(conn: Connection, user_id: int, /) -> bool:
-    await conn.execute("INSERT INTO transactions (userID) VALUES ($0) ON CONFLICT DO NOTHING", user_id)
+    await conn.execute(
+        """
+        INSERT INTO transactions VALUES ($0)
+        ON CONFLICT DO NOTHING
+        """, user_id
+    )
 
 
 async def end_transaction(conn: Connection, user_id: int, /) -> bool:
     await conn.execute("DELETE FROM transactions WHERE userID = $0", user_id)
 
 
-async def total_commands_used_by_user(user_id: int, conn: Connection) -> int:
+async def commands_used_by(user_id: int, conn: Connection) -> int:
     total, = await conn.fetchone(
         """
         SELECT CAST(TOTAL(cmd_count) AS INTEGER)
@@ -65,7 +70,7 @@ async def add_multiplier(
 
     Returns
     ------------
-    A boolean, either True to indicate that the multiplier was updated/inserted, or False if it was not.
+    A boolean to indicate if the multiplier was updated/inserted.
 
     ## Values of `on_conflict` explained
     ### `on_conflict` set to "DO NOTHING"
@@ -80,8 +85,7 @@ async def add_multiplier(
 
     result = await conn.fetchone(
         f"""
-        INSERT INTO multipliers (userID, amount, multi_type, cause, description, expiry_timestamp)
-        VALUES ($0, $1, $2, $3, $4, $5)
+        INSERT INTO multipliers VALUES ($0, $1, $2, $3, $4, $5)
         ON CONFLICT(userID, cause) DO {on_conflict}
         RETURNING rowid
         """, user_id, multi_amount, multi_type, cause, description, expiry
@@ -97,7 +101,8 @@ async def remove_multiplier_from_cause(
 ) -> None:
     """Remove a multiplier from a user based on the cause."""
 
-    await conn.execute('DELETE FROM multipliers WHERE userID = $0 AND cause = $1', user_id, cause)
+    query = "DELETE FROM multipliers WHERE userID = $0 AND cause = $1"
+    await conn.execute(query, user_id, cause)
 
 
 async def get_multi_of(
@@ -123,21 +128,25 @@ def membed(description: Optional[str] = None) -> discord.Embed:
     return discord.Embed(colour=0x2B2D31, description=description)
 
 
-async def economy_check(itx: discord.Interaction, original_id: int, /) -> bool:
+async def economy_check(
+    itx: discord.Interaction,
+    original_id: int,
+    /
+) -> bool:
     """Shared interaction check common amongst most interactions."""
     if original_id == itx.user.id:
         return True
     await itx.response.send_message(
+        "This menu is not for you",
         ephemeral=True,
         delete_after=5.0,
-        embed=membed("This menu is not for you")
     )
     return False
 
 
 class BaseInteractionView(discord.ui.View):
     """
-    A view that ensures that only the interaction creator can make use of this view.
+    A view ensuring only the interaction creator can interact.
 
     It also destroys the view if an exception is raised.
 
@@ -186,7 +195,7 @@ class ConfirmButton(discord.ui.Button):
         cancel_btn, confirm_btn = self.view.children[0], self
         confirm_btn.disabled, cancel_btn.disabled = True, True
         confirm_btn.style, cancel_btn.style = (
-            discord.ButtonStyle.success, 
+            discord.ButtonStyle.success,
             discord.ButtonStyle.secondary
         )
 
@@ -209,7 +218,7 @@ class CancelButton(discord.ui.Button):
 
         self.disabled, confirm_btn.disabled = True, True
         self.style, confirm_btn.style = (
-            discord.ButtonStyle.success, 
+            discord.ButtonStyle.success,
             discord.ButtonStyle.secondary
         )
 
@@ -234,27 +243,36 @@ async def format_timeout_view(
     return False
 
 
-def number_to_ordinal(n: int) -> str:
+def to_ord(n: int) -> str:
     """Convert 01 to 1st, 02 to 2nd etc."""
     if 10 <= n % 100 <= 20:
         return f"{n}th"
 
-    suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+    suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
     return f"{n}{suffix}"
 
 
-async def respond(itx: discord.Interaction, /, **kwargs) -> Optional[discord.WebhookMessage]:
+async def respond(
+    itx: discord.Interaction,
+    content: Optional[str] = None,
+    /,
+    **kwargs
+) -> Optional[discord.WebhookMessage]:
     """
     Responds to the interaction by sending a message.
 
     Considers whether or not this interaction was already responded to before.
     """
     if itx.response.is_done():
-        return await itx.followup.send(**kwargs)
-    await itx.response.send_message(**kwargs)
+        return await itx.followup.send(content, **kwargs)
+    await itx.response.send_message(content, **kwargs)
 
 
-async def edit_response(itx: discord.Interaction, /, **kwargs) -> Optional[discord.InteractionMessage]:
+async def edit_response(
+    itx: discord.Interaction,
+    /,
+    **kwargs
+) -> Optional[discord.InteractionMessage]:
     """
     Edit an interaction's original response message, which may be a response.
 
@@ -277,22 +295,23 @@ async def process_confirmation(
 
     The actual action is done in the command itself.
 
-    This returns a boolean indicating whether the user confirmed the action or not, or None if the user timed out.
+    This returns a boolean indicating whether the user confirmed the action.
+    Can be None if the user timed out.
     """
 
-    confirm_view = BaseInteractionView(itx, view_owner)
-    confirm_view.add_item(CancelButton()).add_item(ConfirmButton())
+    view = BaseInteractionView(itx, view_owner)
+    view.add_item(CancelButton()).add_item(ConfirmButton())
 
-    confirm_view.value = None
-    confirm_embed = membed(prompt)
-    confirm_embed.title = "Pending Confirmation"
+    view.value = None
+    emb = membed(prompt)
+    emb.title = "Pending Confirmation"
 
-    await respond(itx, embed=confirm_embed, view=confirm_view, **kwargs)
+    await respond(itx, embed=emb, view=view, **kwargs)
 
-    await confirm_view.wait()
-    if confirm_view.value is None:
-        await format_timeout_view(confirm_embed, confirm_view)
-    return confirm_view.value
+    await view.wait()
+    if view.value is None:
+        await format_timeout_view(emb, view)
+    return view.value
 
 
 async def is_setting_enabled(
@@ -316,41 +335,48 @@ async def handle_confirm_outcome(
     **kwargs
 ) -> Optional[bool]:
     """
-    Handle a confirmation outcome correctly, accounting for whether or not a specific confirmation is enabled.
+    Handle a confirmation outcome correctly,
+    considering whether or not a specific confirmation is enabled.
 
     Setting names should be lowercase.
 
     ## Returns
     ### `None`
     - When the user doesn't have the specified confirmation enabled.
-    - When you specify a specific confirmation setting to check but that user doesn't have it enabled.
-    - if a specific confirmation was passed in and the user has it disabled.
 
     ### `True`
-    - When the user has confirmed, either by confirming on a specific confirmation you passed in to check
-    - When enabled specific setting, or through a generic confirmation that the user confirmed on.
+    - When the user has confirmed, by confirming on a specific confirmation
+    - When enabled setting, or through a generic confirmation confirmed on.
 
     ### `False`
-    - When user has not confirmed (the confirmation timed out or they explicitly denied)
+    - When user has not confirmed explicity or via timeout
     - Applicable for both specific and generic confirmations
 
     ## Notes
 
-    Transactions will now be created if a passed in confirmation is enabled or no confirmation is passed in.
+    Transactions will now be created if a passed in
+    confirmation is enabled or no confirmation is passed in.
 
-    Thus, only use this function in the economy system on a user who is registered.
+    Only for use in the economy system on a user who is registered.
 
-    Because foreign key constraints require you to pass in a valid row of the accounts table.
+    Foreign key constraints require you to
+    pass in a valid row of the accounts table.
 
-    All connections acquired by or in the function will also be released in this function. Do not handle it yourself.
+    All connections acquired by or in the function
+    will also be released in this function. Do not handle it yourself.
     """
 
     can_proceed = None
     view_owner = view_owner or itx.user
 
-    conn = conn or await itx.client.pool.acquire()  # always hold a connection
+    # always hold a connection
+    conn = conn or await itx.client.pool.acquire()
     try:
-        disabled_confirms = setting and not(await is_setting_enabled(conn, view_owner.id, setting))
+        disabled_confirms = (
+            setting and not(
+                await is_setting_enabled(conn, view_owner.id, setting)
+            )
+        )
         if disabled_confirms:
             return
 
@@ -359,7 +385,9 @@ async def handle_confirm_outcome(
         await itx.client.pool.release(conn)
         conn = None
 
-        can_proceed = await process_confirmation(itx, prompt, view_owner, **kwargs)
+        can_proceed = await process_confirmation(
+            itx, prompt, view_owner, **kwargs
+        )
     finally:
         if conn:
             await itx.client.pool.release(conn)

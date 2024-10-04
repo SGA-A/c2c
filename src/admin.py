@@ -64,12 +64,14 @@ class DevTools(discord.ui.View):
         script_body = DevTools.cleanup_code(message.content)
         stdout = StringIO()
 
-        to_compile = f'async def func():\n{indent(script_body, "  ")}'
+        to_compile = f"async def func():\n{indent(script_body, '  ')}"
 
         try:
             exec(to_compile, env)
         except Exception as e:
-            return await itx.followup.send(f"```py\n{e.__class__.__name__}: {e}\n```")
+            return await itx.followup.send(
+                f"```py\n{e.__class__.__name__}: {e}\n```"
+            )
 
         func = env["func"]
         try:
@@ -89,7 +91,9 @@ class DevTools(discord.ui.View):
                     try:
                         await itx.followup.send(f"```py\n{value}\n```")
                     except discord.NotFound:
-                        return await itx.followup.send("Output too long to display.")
+                        return await itx.followup.send(
+                            "Output too long to display."
+                        )
             else:
                 DevTools._last_result = ret
                 await itx.followup.send(f"```py\n{value}{ret}\n```")
@@ -101,37 +105,43 @@ class DevTools(discord.ui.View):
         )
 
     @discord.ui.button(label="Quit", style=discord.ButtonStyle.success)
-    async def quit_button(self, itx: Interaction, _: discord.ui.Button) -> None:
+    async def _quit(self, itx: Interaction, _: discord.ui.Button) -> None:
         await self.itx.delete_original_response()
         await itx.response.send_message("\U00002705", ephemeral=True)
         await itx.client.close()
 
     @discord.ui.button(label="Sync", style=discord.ButtonStyle.success)
-    async def sync_button(self, itx: Interaction, _: discord.ui.Button) -> None:
+    async def sync(self, itx: Interaction, _: discord.ui.Button) -> None:
         await itx.client.tree.sync(guild=None)
         await itx.response.send_message("\U00002705", ephemeral=True)
 
     @discord.ui.button(label="Evaluate", style=discord.ButtonStyle.success)
-    async def eval_button(self, itx: Interaction, _: discord.ui.Button) -> None:
+    async def evaluate(self, itx: Interaction, _: discord.ui.Button) -> None:
         await itx.response.send_message("What would you like to evaluate?")
 
         try:
-            msg = await itx.client.wait_for('message', check=self.eval_check, timeout=90.0)
+            msg = await itx.client.wait_for(
+                "message", check=self.eval_check, timeout=90.0
+            )
         except asyncio.TimeoutError:
-            await itx.edit_original_response(content="Timed out waiting for a response.")
+            await itx.edit_original_response(
+                content="Timed out waiting for a response."
+            )
         else:
             await self.evaluate(itx, msg)
 
     @discord.ui.button(label="Blanket", style=discord.ButtonStyle.success)
-    async def blanket_button(self, itx: Interaction, _: discord.ui.Button) -> None:
+    async def blanket(self, itx: Interaction, _: discord.ui.Button) -> None:
         await itx.channel.send(f".{'\n'*1900}\u200b")
-        await itx.response.send_message(self.on_boarding, view=self, ephemeral=True)
+        await itx.response.send_message(
+            self.on_boarding, view=self, ephemeral=True
+        )
         await self.itx.delete_original_response()
 
         self.itx = itx
 
     @discord.ui.button(emoji="<:terminatePages:1263923664433319957>")
-    async def terminate_button(self, itx: Interaction, _: discord.ui.Button) -> None:
+    async def _stop(self, itx: Interaction, _: discord.ui.Button) -> None:
         self.stop()
         for item in self.children:
             item.disabled = True
@@ -146,34 +156,6 @@ async def is_owner(itx: Interaction) -> bool:
         ephemeral=True
     )
     return False
-
-
-async def send_role_guide(itx: Interaction) -> None:
-    channel = itx.client.get_partial_messageable(1254883155882672249)
-    original = channel.get_partial_message(1254901254530924644)
-
-    role_content_pt1 = (
-        """
-        # Role Guide
-        Roles are similar to ranks or accessories that you can add to your profile.
-        There are a few self-assignable roles that you can pick up in <id:customize> by clicking on the buttons.
-
-        There are also roles that are given out based on how active you are within the server on a weekly basis:
-        - <@&1190772029830471781>: Given to users that sent at least 50 messages in the last week.
-        - <@&1190772182591209492>: Given to users that sent at least 150 messages in the last week.
-
-        Other miscellaneous roles for your knowledge:
-        - <@&893550756953735278>: The people who manage the server.
-        - <@&1148209142465581098>: The role for a backup account, granted administrator permissions.
-        - <@&1273655614085664828>: The role verified server members can obtain.
-        - <@&1140197893261758505>: Given to people who had their message on the legacy starboard.
-        - <@&1121426143598354452>: Given on a per-user basis, granting certain privileges.
-        - <@&1150848144440053780>: Bots that only need read access to bot command channels.
-        - <@&1150848206008238151>: Bots that require full read access throughout the server.
-        """
-    )
-
-    await original.edit(content=dedent(role_content_pt1))
 
 
 @app_commands.check(is_owner)

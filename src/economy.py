@@ -51,11 +51,11 @@ MAX_BET_KEYCARD = 15_000_000
 MIN_BET_WITHOUT = 100_000
 MAX_BET_WITHOUT = 10_000_000
 WARN_FOR_CONCURRENCY = (
-    "You cannot interact with this command because you are in an ongoing command.\n"
-    "Finish any commands you are currently using before trying again.\n"
+    "You cannot interact with this right now.\n"
+    "Finish any commands you are currently using before trying again."
 )
-ITEM_DESCRPTION = 'Select an item.'
-ROBUX_DESCRIPTION = 'Can be a constant number like "1234" or a shorthand (max, all, 1e6).'
+ITEM_DESCRPTION = "Select an item."
+ROBUX_DESCRIPTION = "Can be a number like 1234 or a shorthand (max, 1e6)."
 UNIQUE_BADGES = {
     992152414566232139: " <:staffMember:1263921583949480047>",
     546086191414509599: " <:devilAdvocate:1263921422166786179>",
@@ -69,14 +69,14 @@ INVOKER_NOT_REGISTERED = (
     "You'll need to register first before you can use this command.\n"
     "### Already Registered?\n"
     "Find out what could've happened by calling "
-    "[`@me reasons`](https://www.google.com/)."
+    "[`/reasons`](https://www.google.com/)."
 )
 USER_ENTRY = discord.Member | discord.User
-NOT_REGISTERED = "This user is not registered, so you can't use this command on them."
+NOT_REGISTERED = "The user to act on must be registered."
 SLOTS = (
-    '\U0001f525', '\U0001f633', '\U0001f31f',
-    '\U0001f494', '\U0001f595', '\U0001f921',
-    '\U0001f355', '\U0001f346', '\U0001f351'
+    "\U0001f525", "\U0001f633", "\U0001f31f",
+    "\U0001f494", "\U0001f595", "\U0001f921",
+    "\U0001f355", "\U0001f346", "\U0001f351"
 )
 FIRE, FLUSHED, STAR, HEARTACHE, MF, CLOWN, PIZZA, AUBE, PEACH = SLOTS
 BONUS_MULTIPLIERS = {
@@ -99,6 +99,7 @@ BONUS_MULTIPLIERS = {
     f"{STAR*3}": 600,
     f"{FIRE*3}": 900
 }
+
 PRESTIGE_EMOTES = {
     1: "<:irn:1263922000049471650>",
     2: "<:iirn:1263921924082368665>",
@@ -127,7 +128,10 @@ def shortern_number(number: int) -> str:
     """
     Format a numerical value in a concise, abbreviated form.
 
-    Uses 'K' for thousands, 'M' for millions, 'B' for billions, and 'T' for trillions.
+    - K for thousands
+    - M for millions
+    - B for billions
+    - T for trillions
 
     ## Examples
     >>> shortern_number(500)
@@ -145,13 +149,13 @@ def shortern_number(number: int) -> str:
     if number < 1e3:
         return str(number)
     elif number < 1e6:
-        return '{:.1f}K'.format(number / 1e3)
+        return "{:.1f}K".format(number / 1e3)
     elif number < 1e9:
-        return '{:.1f}M'.format(number / 1e6)
+        return "{:.1f}M".format(number / 1e6)
     elif number < 1e12:
-        return '{:.1f}B'.format(number / 1e9)
+        return "{:.1f}B".format(number / 1e9)
     else:
-        return '{:.1f}T'.format(number / 1e12)
+        return "{:.1f}T".format(number / 1e12)
 
 
 def add_multi_to_original(multi: int, original: int) -> int:
@@ -169,13 +173,10 @@ def format_multiplier(multiplier):
 
 
 def selling_price_algo(base_price: int, multiplier: int) -> int:
-    """Calculate the selling price of an item based on its rarity and base price."""
     return round(int(base_price * (1+multiplier/100)), -2)
 
 
 def calculate_hand(hand: list) -> int:
-    """Calculate the value of a hand in a blackjack game, accounting for possible aces."""
-
     aces = hand.count(11)
     total = sum(hand)
 
@@ -191,7 +192,7 @@ def generate_slot_combination() -> str:
 
     weights = (800, 1000, 800, 100, 900, 800, 1000, 800, 800)
 
-    slot_combination = ''.join(choices(SLOTS, weights=weights, k=3))
+    slot_combination = "".join(choices(SLOTS, weights=weights, k=3))
     return slot_combination
 
 
@@ -201,7 +202,7 @@ def find_slot_matches(*args) -> Optional[int]:
 
     The function takes in multiple arguments, each being the individual emoji.
 
-    If there is a match, return the outcome's associated multiplier.
+    If there is a match, return the associated multiplier.
 
     Return `None` if no match found.
 
@@ -215,45 +216,14 @@ def find_slot_matches(*args) -> Optional[int]:
     return None
 
 
-def generate_progress_bar(percentage: float | int) -> str:
-    """Generate a visual representation of a progress bar based on the given percentage."""
-
-    percentage = min(round(percentage, -1), 100)
-
-    progress_bar = {
-        0: "<:pb1e:1263922730588311582><:pb2e:1263922807293612042>"
-           "<:pb2e:1263922807293612042><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
-        10: "<:pb1hf:1263922784124539053><:pb2e:1263922807293612042>"
-            "<:pb2e:1263922807293612042><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
-        20: "<:pb1f:1263922756727341171><:pb2e:1263922807293612042>"
-            "<:pb2e:1263922807293612042><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
-        30: "<:pb1f:1263922756727341171><:pb2hf:1263922865707946036>"
-            "<:pb2e:1263922807293612042><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
-        40: "<:pb1f:1263922756727341171><:pb2f:1263922838239182991>"
-            "<:pb2e:1263922807293612042><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
-        50: "<:pb1f:1263922756727341171><:pb2f:1263922838239182991>"
-            "<:pb2hf:1263922865707946036><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
-        60: "<:pb1f:1263922756727341171><:pb2f:1263922838239182991>"
-            "<:pb2f:1263922838239182991><:pb2e:1263922807293612042><:pb3e:1263922895969583105>",
-        70: "<:pb1f:1263922756727341171><:pb2f:1263922838239182991>"
-            "<:pb2f:1263922838239182991><:pb2hf:1263922865707946036><:pb3e:1263922895969583105>",
-        80: "<:pb1f:1263922756727341171><:pb2f:1263922838239182991>"
-            "<:pb2f:1263922838239182991><:pb2f:1263922838239182991><:pb3e:1263922895969583105>",
-        90: "<:pb1f:1263922756727341171><:pb2f:1263922838239182991>"
-            "<:pb2f:1263922838239182991><:pb2f:1263922838239182991><:pb3hf:1263922944829292577>",
-        100: "<:pb1f:1263922756727341171><:pb2f:1263922838239182991>"
-            "<:pb2f:1263922838239182991><:pb2f:1263922838239182991><:pb3f:1263922923060727838>"
-
-    }.get(percentage)
-
-    return progress_bar
-
-
-def display_user_friendly_card_format(number: int, /) -> str:
-    """Convert a card number into a user-friendly format with a suit and rank."""
+def repr_card(number: int, /) -> str:
+    """
+    Convert a card number into a user-friendly format with a suit and rank."""
     ranks = {10: ("K", "Q", "J"), 11: ("A",)}
 
-    chosen_suit = choice(("\U00002665", "\U00002666", "\U00002663", "\U00002660"))
+    chosen_suit = choice(
+        ("\U00002665", "\U00002666", "\U00002663", "\U00002660")
+    )
     rank = choice(ranks.get(number, (number,)))
 
     return f"[`{chosen_suit} {rank}`](https://www.youtube.com)"
@@ -273,11 +243,19 @@ async def find_fav_cmd_for(user_id, conn: Connection) -> str:
 
 
 class ItemInputTransformer(app_commands.Transformer):
-    """Transforms an item name into a row containing the item's ID, name, and emoji."""
+    """
+    Convert an item's name to a tuple
+    containing the item ID, name, and emoji.
+    """
+
     ITEM_NOT_FOUND = "No items found with that name pattern."
     TIMED_OUT = "Timed out waiting for a response."
 
-    async def transform(self, itx: Interaction, value: str) -> tuple[int, str, str]:
+    async def transform(
+        self,
+        itx: Interaction,
+        value: str
+    ) -> tuple[int, str, str]:
         async with itx.client.pool.acquire() as conn:
             res = await conn.fetchall(
                 """
@@ -289,7 +267,9 @@ class ItemInputTransformer(app_commands.Transformer):
             )
 
         if not res:
-            raise CustomTransformerError(value, self.type, self, self.ITEM_NOT_FOUND)
+            raise CustomTransformerError(
+                value, self.type, self, self.ITEM_NOT_FOUND
+            )
 
         if len(res) == 1:
             return res[0]
@@ -300,11 +280,14 @@ class ItemInputTransformer(app_commands.Transformer):
         for (item_id, item_name, item_emoji) in res:
             match_view.add_item(MatchItem(item_id, item_name, item_emoji))
 
-        prompt_embed = membed(
-            "Several possible matching items found, select one below."
-        ).set_author(name=f"Search: {value}", icon_url=itx.user.display_avatar.url)
+        embed = membed("Several matching items, select one below.")
 
-        await respond(itx, view=match_view, embed=prompt_embed)
+        embed.set_author(
+            name=f"Search: {value}",
+            icon_url=itx.user.display_avatar.url
+        )
+
+        await respond(itx, view=match_view, embed=embed)
         await match_view.wait()
 
         if match_view.chosen_item:
@@ -323,9 +306,22 @@ class UserSettings(BaseInteractionView):
     ) -> None:
         super().__init__(itx)
 
-        self.setting_dropdown = SettingsDropdown(data=data, default_setting=chosen_setting)
-        self.disable_button = ToggleButton(self.setting_dropdown, label="Disable", style=discord.ButtonStyle.danger, row=1)
-        self.enable_button = ToggleButton(self.setting_dropdown, label="Enable", style=discord.ButtonStyle.success, row=1)
+        self.setting_dropdown = SettingsDropdown(
+            data=data,
+            default_setting=chosen_setting
+        )
+        self.disable_button = ToggleButton(
+            self.setting_dropdown,
+            label="Disable",
+            style=discord.ButtonStyle.danger,
+            row=1
+        )
+        self.enable_button = ToggleButton(
+            self.setting_dropdown,
+            label="Enable",
+            style=discord.ButtonStyle.success,
+            row=1
+        )
 
     async def on_timeout(self) -> None:
         for item in self.children:
@@ -339,20 +335,21 @@ class UserSettings(BaseInteractionView):
         itx: Interaction,
         error: Exception,
         item: discord.ui.Item[Any]
-    ) -> None:
+    ) -> Optional[discord.WebhookMessage]:
         if isinstance(error, IntegrityError):
             if not self.is_finished():
                 self.stop()
             await itx.delete_original_response()
-            return await respond(itx, embed=membed(INVOKER_NOT_REGISTERED))
-        await super().on_error(itx, error, item)
+            return await respond(itx, INVOKER_NOT_REGISTERED)
+        return await super().on_error(itx, error, item)
 
 class ConfirmResetData(BaseInteractionView):
+    roo_fire = discord.PartialEmoji.from_str("<:rooFire:1263923362154156103>")
     WARNING = (
         f"This command resets **[everything]({YT_SHORT})**.\n"
         "Are you sure you want to do this?\n\n"
         "If you do, press `Reset` **3** times.\n"
-        "-# See what's being reset by viewing the resetmydata tag."
+        "-# See what resets by viewing the resetmydata tag."
     )
 
     def __init__(
@@ -379,11 +376,11 @@ class ConfirmResetData(BaseInteractionView):
             await self.itx.edit_original_response(embed=self.embed, view=self)
 
     @discord.ui.button(
-        label='Reset',
+        label="Reset",
         style=discord.ButtonStyle.danger,
-        emoji=discord.PartialEmoji.from_str("<:rooFire:1263923362154156103>")
+        emoji=roo_fire
     )
-    async def reset_btn(self, itx: Interaction, button: discord.ui.Button) -> None:
+    async def yes(self, itx: Interaction, button: discord.ui.Button) -> None:
 
         self.count += 1
         if self.count < 3:
@@ -396,12 +393,13 @@ class ConfirmResetData(BaseInteractionView):
 
         await itx.response.edit_message(view=self, embed=self.embed)
 
+        query = "DELETE FROM accounts WHERE userID = $0"
         async with itx.client.pool.acquire() as conn:
             tr = conn.transaction()
             await tr.start()
 
             try:
-                await conn.execute("DELETE FROM accounts WHERE userID = $0", self.target.id)
+                await conn.execute(query, self.target.id)
             except Exception as e:
                 itx.client.log_exception(e)
                 await tr.rollback()
@@ -421,8 +419,8 @@ class ConfirmResetData(BaseInteractionView):
 
         await itx.followup.send(f"Success.{end_note}")
 
-    @discord.ui.button(label='Cancel', style=discord.ButtonStyle.primary)
-    async def cancel_btn(self, itx: Interaction, button: discord.ui.Button) -> None:
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.primary)
+    async def no(self, itx: Interaction, button: discord.ui.Button) -> None:
 
         self.stop()
         self.embed.title = "Action Cancelled"
@@ -446,7 +444,7 @@ class BalanceView(discord.ui.View):
         self.children[2].default_values = [discord.Object(id=self.viewing.id)]
 
     async def interaction_check(self, itx: Interaction) -> bool:
-        #! Check it's the author of the original interaction running this
+        #! Check it is the author of the original interaction running this
 
         value = await economy_check(itx, self.itx.user.id)
         if not value:
@@ -454,7 +452,6 @@ class BalanceView(discord.ui.View):
 
         #! Check if they're already in a transaction
         #! Check if they exist in the database
-        #! Ensure connections are carried into item callbacks when prerequisites are met
 
         return await transactional_check(itx)
 
@@ -465,26 +462,30 @@ class BalanceView(discord.ui.View):
         with contextlib.suppress(discord.NotFound):
             await self.itx.edit_original_response(view=self)
 
-    async def fetch_balance(self, itx: Interaction) -> Optional[discord.Embed]:
-        """
-        Fetch the user's balance, format it into an embed.
-
-        A connection needs to be supplied to the class instance in order for this to work.
-        """
+    async def fetch_balance(self, itx: Interaction) -> discord.Embed:
+        """Fetch the user's balance, format it into an embed."""
 
         balance = membed()
         balance.url = "https://dis.gd/support"
         balance.title = f"{self.viewing.display_name}'s Balances"
         balance.timestamp = discord.utils.utcnow()
 
-        query = "SELECT wallet, bank, bankspace FROM accounts WHERE userID = $0"
+        query = (
+            """
+            SELECT wallet, bank, bankspace
+            FROM accounts
+            WHERE userID = $0
+            """
+        )
+
         async with itx.client.pool.acquire() as conn:
             nd = await conn.fetchone(query, self.viewing.id)
 
         if nd is None:
             if itx.user.id != self.viewing.id:
                 balance.description = "This user is not registered."
-                self.children[0].disabled, self.children[1].disabled = True, True
+                self.children[0].disabled = True
+                self.children[1].disabled = True
                 return balance
 
         async with itx.client.pool.acquire() as conn:
@@ -492,16 +493,24 @@ class BalanceView(discord.ui.View):
             if inserted:
                 await conn.commit()
 
-            rank = await calculate_net_ranking_for(self.viewing, conn)
-            inv = await calculate_inventory_value(self.viewing, conn) if nd else 0
-            wallet, bank, bankspace = nd or await conn.fetchone(query, self.viewing.id)
+            rank = await calc_net_ranking_for(self.viewing, conn)
+
+            # Save a call to the database with short circuiting
+            inv = await calc_inv_net(self.viewing, conn) if nd else 0
+
+            nd = nd or await conn.fetchone(query, self.viewing.id)
+            wallet, bank, bankspace = nd
 
         space = (bank / bankspace) * 100
         money = wallet + bank
 
         balance.add_field(name="Wallet", value=f"{CURRENCY} {wallet:,}")
         balance.add_field(name="Bank", value=f"{CURRENCY} {bank:,}")
-        balance.add_field(name="Bankspace", value=f"{CURRENCY} {bankspace:,} ({space:.2f}% full)")
+        balance.add_field(
+            name="Bankspace",
+            value=f"{CURRENCY} {bankspace:,} ({space:.2f}% full)"
+        )
+
         balance.add_field(name="Money Net", value=f"{CURRENCY} {money:,}")
         balance.add_field(name="Inventory Net", value=f"{CURRENCY} {inv:,}")
         balance.add_field(name="Total Net", value=f"{CURRENCY} {inv+money:,}")
@@ -510,372 +519,104 @@ class BalanceView(discord.ui.View):
         self.checks(bank, wallet, bankspace-bank)
         return balance
 
-    def checks(self, current_bank, current_wallet, current_bankspace_left) -> None:
-        """Check if the buttons should be disabled or not."""
+    def checks(
+        self,
+        current_bank: int,
+        current_wallet: int,
+        current_bankspace_left: int
+    ) -> None:
+        """Check if balance buttons should be disabled or not."""
         if self.viewing.id != self.itx.user.id:
-            self.children[0].disabled, self.children[1].disabled = True, True
+            self.children[0].disabled = True
+            self.children[1].disabled = True
             return
 
         self.children[0].disabled = (current_bank == 0)
-        self.children[1].disabled = (current_wallet == 0) or (current_bankspace_left == 0)
+        self.children[1].disabled = (
+            (current_wallet == 0) or (current_bankspace_left == 0)
+        )
 
     @discord.ui.button(label="Withdraw", row=1)
-    async def withdraw_money_btn(self, itx: Interaction, _: discord.ui.Button) -> None:
-        """Withdraw money from the bank."""
+    async def withdraw(self, itx: Interaction, _: discord.ui.Button) -> None:
 
         async with itx.client.pool.acquire() as conn:
-            bank_amt = await fetch_account_data(itx.user.id, "bank", conn, default=0)
+            bank_amt = await fetch_account_data(
+                itx.user.id, "bank", conn, default=0
+            )
 
         if not bank_amt:
             return await itx.response.send_message(
-                embed=membed("You have nothing to withdraw.")
+                "You have nothing to withdraw."
             )
 
-        modal = DepositOrWithdraw(title="Withdraw", default_val=bank_amt, view=self)
+        modal = DepositOrWithdraw(
+            title="Withdraw",
+            default_val=bank_amt,
+            view=self
+        )
+
         await itx.response.send_modal(modal)
 
     @discord.ui.button(label="Deposit", row=1)
-    async def deposit_money_btn(self, itx: Interaction, _: discord.ui.Button) -> None:
-        """Deposit money into the bank."""
+    async def deposit(self, itx: Interaction, _: discord.ui.Button) -> None:
+        query = (
+            """
+            SELECT wallet, bank, bankspace
+            FROM accounts
+            WHERE userID = $0
+            """
+        )
 
         async with itx.client.pool.acquire() as conn:
-            query = "SELECT wallet, bank, bankspace FROM accounts WHERE userID = $0"
-            wallet, bank, bankspace = await conn.fetchone(query, itx.user.id) or (0, 0, 0)
+            wallet, bank, bankspace = (
+                await conn.fetchone(query, itx.user.id) or (0, 0, 0)
+            )
 
         if not wallet:
             return await itx.response.send_message(
-                embed=membed("You have nothing to deposit.")
+                "You have nothing to deposit."
             )
 
         available_bankspace = bankspace - bank
         if not available_bankspace:
             return await itx.response.send_message(
-                embed=membed(
-                    f"You can only hold {CURRENCY} **{bankspace:,}** in your bank right now.\n"
-                    "To hold more, use currency commands and level up more."
-                )
+                f"Max bankspace of {CURRENCY} **{bankspace:,}** reached.\n"
+                f"To hold more, use currency commands and level up more. "
+                f"Bank Notes can aid with this."
             )
 
         available_bankspace = min(wallet, available_bankspace)
-        modal = DepositOrWithdraw(title="Deposit", default_val=available_bankspace, view=self)
+        modal = DepositOrWithdraw(
+            title="Deposit",
+            default_val=available_bankspace,
+            view=self
+        )
+
         await itx.response.send_modal(modal)
 
-    @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a registered user", row=0)
-    async def select_user_balance(self, itx: Interaction, select: discord.ui.UserSelect) -> None:
-        self.viewing = select.values[0]
-        select.default_values = [discord.Object(id=self.viewing.id)]
+    @discord.ui.select(
+        cls=discord.ui.UserSelect,
+        placeholder="Select a registered user",
+    )
+    async def uslct(self, itx: Interaction, s: discord.ui.UserSelect) -> None:
+        self.viewing = s.values[0]
+        s.default_values = [discord.Object(id=self.viewing.id)]
 
         balance = await self.fetch_balance(itx)
         await itx.response.edit_message(embed=balance, view=self)
 
     @discord.ui.button(emoji="<:refreshPages:1263923160433168414>", row=1)
-    async def refresh_balance(self, itx: Interaction, _: discord.ui.Button) -> None:
-        """Refresh the current message to display the user's latest balance."""
+    async def refresh(self, itx: Interaction, _: discord.ui.Button) -> None:
         balance = await self.fetch_balance(itx)
         await itx.response.edit_message(embed=balance, view=self)
 
     @discord.ui.button(emoji="<:terminatePages:1263923664433319957>", row=1)
-    async def close_view(self, itx: Interaction, _: discord.ui.Button) -> None:
-        """Close the balance view."""
+    async def close(self, itx: Interaction, _: discord.ui.Button) -> None:
         self.stop()
         for item in self.children:
             item.disabled = True
 
         await itx.response.edit_message(view=self)
-
-
-@dataclass(slots=True, repr=False, eq=False)
-class BlackjackGame:
-    deck: list[int]
-    player_hand: list[int]
-    dealer_hand: list[int]
-    player_hand_ui: list[str]
-    dealer_hand_ui: list[str]
-    bet: int
-
-
-class BlackjackUi(BaseInteractionView):
-    """View for the blackjack command and its associated functions."""
-
-    def __init__(
-        self,
-        itx: Interaction,
-        metadata: BlackjackGame
-    ) -> None:
-        super().__init__(itx)
-        self.metadata = metadata
-
-    async def on_timeout(self) -> None:
-        async with self.itx.client.pool.acquire() as conn, conn.transaction():
-            await end_transaction(conn, self.itx.user.id)
-
-        with contextlib.suppress(discord.NotFound):
-            await self.itx.delete_original_response()
-
-    async def update_winning_data(self, *, bet_amount: int) -> tuple:
-        """
-        Return a tuple containing elements in this order:
-
-        Amount after multiplier effect, New amount balance, Percentage games won, multiplier
-        """
-
-        async with self.itx.client.pool.acquire() as conn, conn.transaction():
-            await end_transaction(conn, self.itx.user.id)
-
-            their_multi = await get_multi_of(self.itx.user.id, "robux", conn)
-            multiplied = add_multi_to_original(their_multi, bet_amount)
-            new_balance, = await update_account(self.itx.user.id, multiplied, conn)
-
-            new_bj_win, bj_lose = await update_games(
-                self.itx.user.id,
-                game_id=5,
-                game_amt=multiplied,
-                returning_game_id=6,
-                conn=conn
-            )
-
-        prctnw = (new_bj_win / (new_bj_win + bj_lose)) * 100
-        return multiplied, new_balance, prctnw, their_multi
-
-    async def update_losing_data(self, *, bet_amount: int) -> tuple:
-        """
-        Return a tuple containing elements in this order:
-
-        New amount balance, Percentage games lost
-        """
-
-        async with self.itx.client.pool.acquire() as conn, conn.transaction():
-            await end_transaction(conn, self.itx.user.id)
-            new_amount_balance, = await update_account(self.itx.user.id, -bet_amount, conn)
-            new_bj_lose, bj_win = await update_games(
-                self.itx.user.id,
-                game_id=6,
-                game_amt=bet_amount,
-                returning_game_id=5,
-                conn=conn
-            )
-
-        prnctl = (new_bj_lose / (new_bj_lose + bj_win)) * 100
-        return new_amount_balance, prnctl
-
-    @discord.ui.button(label='Hit', style=discord.ButtonStyle.primary)
-    async def hit_bj(self, itx: Interaction, _: discord.ui.Button) -> None:
-
-        self.metadata.player_hand.append(self.metadata.deck.pop())
-        self.metadata.player_hand_ui.append(display_user_friendly_card_format(self.metadata.player_hand[-1]))
-        player_sum = calculate_hand(self.metadata.player_hand)
-
-        embed = itx.message.embeds[0]
-        if player_sum > 21:
-            self.stop()
-            new_amount_balance, prnctl = await self.update_losing_data(bet_amount=self.metadata.bet)
-
-            embed.colour = discord.Colour.brand_red()
-            embed.description = (
-                f"**You lost. You went over 21 and busted.**\n"
-                f"You lost {CURRENCY} **{self.metadata.bet:,}**. "
-                f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-                f"-# {prnctl:.1f}% of blackjack games lost."
-            )
-
-            embed.set_field_at(
-                index=0,
-                name=f"{itx.user.name} (Player)",
-                value=(
-                    f"**Cards** - {' '.join(self.metadata.player_hand_ui)}\n"
-                    f"**Total** - `{player_sum}`"
-                )
-            ).set_field_at(
-                index=1,
-                name=f"{itx.client.user.name} (Dealer)",
-                value=(
-                    f"**Cards** - {' '.join(self.metadata.dealer_hand_ui)}\n"
-                    f"**Total** - `{calculate_hand(self.metadata.dealer_hand)}`"
-                )
-            ).remove_footer()
-
-            return await itx.response.edit_message(embed=embed, view=None)
-
-        elif player_sum == 21:
-            self.stop()
-
-            (   amount_after_multi,
-                new_amount_balance,
-                prctnw,
-                new_multi
-            ) = await self.update_winning_data(bet_amount=self.metadata.bet)
-
-            embed.colour = discord.Colour.brand_green()
-            embed.description = (
-                f"**You win! You got to 21**.\n"
-                f"You won {CURRENCY} **{amount_after_multi:,}**. "
-                f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-                f"-# {prctnw:.1f}% of blackjack games won."
-            )
-
-            embed.set_field_at(
-                index=0,
-                name=f"{itx.user.name} (Player)",
-                value=(
-                    f"**Cards** - {' '.join(self.metadata.player_hand_ui)}\n"
-                    f"**Total** - `{player_sum}`"
-                )
-            ).set_field_at(
-                index=1,
-                name=f"{itx.client.user.name} (Dealer)",
-                value=(
-                    f"**Cards** - {' '.join(self.metadata.dealer_hand_ui)}\n"
-                    f"**Total** - `{calculate_hand(self.metadata.dealer_hand)}`"
-                )
-            ).set_footer(text=f"Multiplier: {new_multi:,}%")
-
-            return await itx.response.edit_message(embed=embed, view=None)
-
-        necessary_show = self.metadata.dealer_hand_ui[0]
-        embed.description = f"**Your move. Your hand is now {player_sum}**."
-
-        embed.set_field_at(
-            index=0,
-            name=f"{itx.user.name} (Player)",
-            value=(
-                f"**Cards** - {' '.join(self.metadata.player_hand_ui)}\n"
-                f"**Total** - `{player_sum}`"
-            )
-        ).set_field_at(
-            index=1,
-            name=f"{itx.client.user.name} (Dealer)",
-            value=(
-                f"**Cards** - {necessary_show} `?`\n"
-                f"**Total** - ` ? `"
-            )
-        )
-
-        await itx.response.edit_message(embed=embed, view=self)
-
-    @discord.ui.button(label='Stand', style=discord.ButtonStyle.primary)
-    async def stand_bj(self, itx: Interaction, _: discord.ui.Button) -> None:
-        self.stop()
-
-        dealer_total = calculate_hand(self.metadata.dealer_hand)
-        player_sum = calculate_hand(self.metadata.player_hand)
-
-        while dealer_total < 17:
-            self.metadata.dealer_hand.append(self.metadata.deck.pop())
-            self.metadata.dealer_hand_ui.append(
-                display_user_friendly_card_format(self.metadata.dealer_hand[-1])
-            )
-            dealer_total = calculate_hand(self.metadata.dealer_hand)
-
-        embed = itx.message.embeds[0]
-        if dealer_total > 21:
-            (   amount_after_multi,
-                new_amount_balance,
-                prctnw,
-                new_multi
-            ) = await self.update_winning_data(bet_amount=self.metadata.bet)
-
-            embed.set_footer(text=f"Multiplier: {new_multi:,}%")
-            embed.colour = discord.Colour.brand_green()
-            embed.description = (
-                f"**You win! The dealer went over 21 and busted.**\n"
-                f"You won {CURRENCY} **{amount_after_multi:,}**. "
-                f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-                f"-# {prctnw:.1f}% of blackjack games won."
-            )
-
-        elif dealer_total > player_sum:
-            new_amount_balance, prnctl = await self.update_losing_data(bet_amount=self.metadata.bet)
-
-            embed.remove_footer()
-            embed.colour = discord.Colour.brand_red()
-            embed.description = (
-                f"**You lost. You stood with a lower score (`{player_sum}`) than the dealer (`{dealer_total}`).**\n"
-                f"You lost {CURRENCY} **{self.metadata.bet:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-                f"-# {prnctl:.1f}% of blackjack games lost."
-            )
-
-        elif dealer_total < player_sum:
-            (   amount_after_multi,
-                new_amount_balance,
-                prctnw,
-                new_multi
-            ) = await self.update_winning_data(bet_amount=self.metadata.bet)
-
-            embed.set_footer(text=f"Multiplier: {new_multi:,}%")
-            embed.colour = discord.Colour.brand_green()
-            embed.description = (
-                f"**You win! You stood with a higher score (`{player_sum}`) than the dealer (`{dealer_total}`).**\n"
-                f"You won {CURRENCY} **{amount_after_multi:,}**. You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-                f"-# {prctnw:.1f}% of blackjack games won."
-            )
-
-        else:
-            async with itx.client.pool.acquire() as conn, conn.transaction():
-                await end_transaction(conn, itx.user.id)
-                wallet_amt = await fetch_balance(itx.user.id, conn)
-
-            embed.remove_footer()
-            embed.colour = discord.Colour.yellow()
-            embed.description = (
-                f"**Tie! You tied with the dealer.**\n"
-                f"Your wallet hasn't changed! You have {CURRENCY} **{wallet_amt:,}** still."
-            )
-
-        embed.set_field_at(
-            index=0,
-            name=f"{itx.user.name} (Player)",
-            value=(
-                f"**Cards** - {' '.join(self.metadata.player_hand_ui)}\n"
-                f"**Total** - `{player_sum}`"
-            )
-        ).set_field_at(
-            index=1,
-            name=f"{itx.client.user.name} (Dealer)",
-            value=(
-                f"**Cards** - {' '.join(self.metadata.dealer_hand_ui)}\n"
-                f"**Total** - `{dealer_total}`"
-            )
-        )
-
-        await itx.response.edit_message(embed=embed, view=None)
-
-    @discord.ui.button(label='Forfeit', style=discord.ButtonStyle.primary)
-    async def forfeit_bj(self, itx: Interaction, _: discord.ui.Button) -> None:
-        """Button for the blackjack interface to forfeit the current match."""
-        self.stop()
-
-        self.metadata.bet //= 2
-        dealer_total = calculate_hand(self.metadata.dealer_hand)
-        player_sum = calculate_hand(self.metadata.player_hand)
-
-        new_amount_balance, prcntl = await self.update_losing_data(bet_amount=self.metadata.bet)
-
-        embed = itx.message.embeds[0]
-        embed.colour = discord.Colour.brand_red()
-        embed.description = (
-            f"**You forfeit. The dealer took half of your bet for surrendering.**\n"
-            f"You lost {CURRENCY} **{self.metadata.bet:,}**. "
-            f"You now have {CURRENCY} **{new_amount_balance:,}**.\n"
-            f"-# {prcntl:.1f}% of blackjack games lost."
-        )
-
-        embed.set_field_at(
-            index=0,
-            name=f"{itx.user.name} (Player)",
-            value=(
-                f"**Cards** - {' '.join(self.metadata.player_hand_ui)}\n"
-                f"**Total** - `{player_sum}`"
-            )
-        ).set_field_at(
-            index=1,
-            name=f"{itx.client.user.name} (Dealer)",
-            value=(
-                f"**Cards** - {' '.join(self.metadata.dealer_hand_ui)}\n"
-                f"**Total** - `{dealer_total}`"
-            )
-        ).remove_footer()
-
-        await itx.response.edit_message(embed=embed, view=None)
 
 
 class HighLow(BaseInteractionView):
@@ -890,19 +631,25 @@ class HighLow(BaseInteractionView):
     async def start(self) -> None:
         query = membed(
             "I just chose a secret number between 0 and 100.\n"
-            f"Is the secret number *higher* or *lower* than **{self.hint_provided}**?"
-        ).set_author(
+            f"Is it *higher* or *lower* than **{self.hint_provided}**?"
+        )
+
+        query.set_author(
             name=f"{self.itx.user.name}'s high-low game",
             icon_url=self.itx.user.display_avatar.url
-        ).set_footer(text="The jackpot button is if you think it is the same!")
+        )
+
+        query.set_footer(
+            text="The jackpot button is if you think it is the same!"
+        )
 
         await self.itx.response.send_message(embed=query, view=self)
 
-    async def make_clicked_blurple_only(self, clicked_button: discord.ui.Button) -> None:
+    async def blurplify(self, clicked: discord.ui.Button) -> None:
         self.stop()
         for item in self.children:
             item.disabled = True
-            if item == clicked_button:
+            if item == clicked:
                 continue
             item.style = discord.ButtonStyle.secondary
 
@@ -913,8 +660,12 @@ class HighLow(BaseInteractionView):
         with contextlib.suppress(discord.NotFound):
             await self.itx.delete_original_response()
 
-    async def send_win(self, itx: Interaction, button: discord.ui.Button) -> None:
-        await self.make_clicked_blurple_only(button)
+    async def send_win(
+        self,
+        itx: Interaction,
+        button: discord.ui.Button
+    ) -> None:
+        await self.blurplify(button)
 
         async with itx.client.pool.acquire() as conn, conn.transaction():
             await end_transaction(conn, self.itx.user.id)
@@ -936,24 +687,30 @@ class HighLow(BaseInteractionView):
         win = itx.message.embeds[0]
         win.colour = discord.Colour.brand_green()
         win.description = (
-            f'**You won {CURRENCY} {total:,}!**\n'
-            f'Your hint was **{self.hint_provided}**. '
-            f'The hidden number was **{self.true_value}**.\n'
-            f'Your new balance is {CURRENCY} **{new_balance:,}**.\n'
-            f'-# {win_rate:.1f}% of highlow games won.'
+            f"**You won {CURRENCY} {total:,}!**\n"
+            f"Your hint was **{self.hint_provided}**. "
+            f"The hidden number was **{self.true_value}**.\n"
+            f"Your new balance is {CURRENCY} **{new_balance:,}**.\n"
+            f"-# {win_rate:.1f}% of highlow games won."
         )
 
         win.set_footer(text=f"Multiplier: {new_multi:,}%")
 
         await itx.response.edit_message(embed=win, view=self)
 
-    async def send_loss(self, itx: Interaction, button: discord.ui.Button) -> None:
-        await self.make_clicked_blurple_only(button)
+    async def send_loss(
+        self,
+        itx: Interaction,
+        button: discord.ui.Button
+    ) -> None:
+        await self.blurplify(button)
 
         async with itx.client.pool.acquire() as conn, conn.transaction():
             await end_transaction(conn, self.itx.user.id)
 
-            new_amount, = await update_account(itx.user.id, -self.their_bet, conn)
+            new_amount, = await update_account(
+                itx.user.id, -self.their_bet, conn
+            )
             hl_loss, hl_win = await update_games(
                 itx.user.id,
                 game_id=8,
@@ -967,263 +724,49 @@ class HighLow(BaseInteractionView):
         lose = itx.message.embeds[0]
         lose.colour = discord.Colour.brand_red()
         lose.description = (
-            f'**You lost {CURRENCY} {self.their_bet:,}!**\n'
-            f'Your hint was **{self.hint_provided}**. '
-            f'The hidden number was **{self.true_value}**.\n'
-            f'Your new balance is {CURRENCY} **{new_amount:,}**.\n'
-            f'-# {loss_rate:.1f}% of highlow games lost.'
+            f"**You lost {CURRENCY} {self.their_bet:,}!**\n"
+            f"Your hint was **{self.hint_provided}**. "
+            f"The hidden number was **{self.true_value}**.\n"
+            f"Your new balance is {CURRENCY} **{new_amount:,}**.\n"
+            f"-# {loss_rate:.1f}% of highlow games lost."
         )
 
         lose.remove_footer()
 
         await itx.response.edit_message(embed=lose, view=self)
 
-    @discord.ui.button(label='Lower', style=discord.ButtonStyle.primary)
-    async def low(self, itx: Interaction, button: discord.ui.Button) -> None:
+    @discord.ui.button(label="Lower", style=discord.ButtonStyle.primary)
+    async def low(self, itx: Interaction, btn: discord.ui.Button) -> None:
 
         if self.true_value < self.hint_provided:
-            return await self.send_win(itx, button)
-        await self.send_loss(itx, button)
+            return await self.send_win(itx, btn)
+        await self.send_loss(itx, btn)
 
-    @discord.ui.button(label='JACKPOT!', style=discord.ButtonStyle.primary)
-    async def jackpot(self, itx: Interaction, button: discord.ui.Button) -> None:
+    @discord.ui.button(label="JACKPOT!", style=discord.ButtonStyle.primary)
+    async def jackpot(self, itx: Interaction, btn: discord.ui.Button) -> None:
 
         if self.hint_provided == self.true_value:
-            return await self.send_win(itx, button)
-        await self.send_loss(itx, button)
+            return await self.send_win(itx, btn)
+        await self.send_loss(itx, btn)
 
-    @discord.ui.button(label='Higher', style=discord.ButtonStyle.primary)
-    async def high(self, itx: Interaction, button: discord.ui.Button) -> None:
+    @discord.ui.button(label="Higher", style=discord.ButtonStyle.primary)
+    async def high(self, itx: Interaction, btn: discord.ui.Button) -> None:
 
         if self.true_value > self.hint_provided:
-            return await self.send_win(itx, button)
-        await self.send_loss(itx, button)
-
-
-class ItemLeaderboard(BaseInteractionView):
-    podium_pos = {1: "### \U0001f947", 2: "\U0001f948", 3: "\U0001f949"}
-
-    def __init__(self, itx: Interaction, chosen_item_id: int) -> None:
-        super().__init__(itx)
-        self.chosen_item_id = chosen_item_id
-        self.message: Optional[discord.WebhookMessage] = None
-
-    async def on_timeout(self) -> None:
-        edit_meth = getattr(
-            self.message,
-            "edit",
-            self.itx.edit_original_response
-        )
-
-        with contextlib.suppress(discord.NotFound):
-            await edit_meth(view=None)
-
-    @staticmethod
-    async def populate_data(itx: Interaction, ret: list[Row]) -> list[str]:
-        return [
-            f"{ItemLeaderboard.podium_pos.get(i, '\U0001f539')} ` {metric:,} ` "
-            f"\U00002014 {memobj.name}{UNIQUE_BADGES.get(identifier, '')}"
-            for i, (identifier, metric) in enumerate(ret, start=1)
-            if (memobj:=itx.client.get_user(identifier) or await itx.client.fetch_user(identifier))
-        ]
-
-    async def fetch_emoji(self, conn: Connection) -> str:
-        query = "SELECT emoji FROM shop WHERE itemID = $0"
-        ret, = await conn.fetchone(query, self.chosen_item_id)
-        emote_id = search(r':(\d+)>', ret).group(1)
-        return f"https://cdn.discordapp.com/emojis/{emote_id}.png?size=240&quality=lossless"
-
-    async def create_lb(self, conn: Connection, /) -> list[str]:
-        data = await conn.fetchall(
-            """
-            SELECT
-                userID AS identifier,
-                SUM(qty) AS metric
-            FROM inventory
-            WHERE itemID = $0
-            GROUP BY userID
-            ORDER BY SUM(qty) DESC
-            LIMIT 10
-            """, self.chosen_item_id
-        )
-
-        return (
-            await self.populate_data(self.itx, data)
-        ) or "Looks like nobody has this item."
-
-    @discord.ui.button(emoji="<:refreshPages:1263923160433168414>", row=0)
-    async def refresh_lb_button(self, itx: Interaction, _: discord.ui.Button) -> None:
-        lb = itx.message.embeds[0]
-        lb.timestamp = discord.utils.utcnow()
-
-        async with itx.client.pool.acquire() as conn:
-            lb.description = "\n".join(await self.create_lb(conn))
-        await itx.response.edit_message(embed=lb, view=self)
-
-
-class StatLeaderboard(BaseInteractionView):
-    options = [
-        discord.SelectOption(label='Money Net', description='The sum of wallet and bank.'),
-        discord.SelectOption(label='Wallet', description='The wallet amount only.'),
-        discord.SelectOption(label='Bank', description='The bank amount only.'),
-        discord.SelectOption(label='Inventory Net', description='The net value of your inventory.'),
-        discord.SelectOption(label='Commands', description="The total commands ran."),
-        discord.SelectOption(label='Level', description="The player level."),
-        discord.SelectOption(label='Net Worth', description="The sum of wallet, bank and inventory value.")
-    ]
-
-    query_dict = {
-        'Money Net': (
-            """
-            SELECT
-                userID,
-                SUM(wallet + bank) AS total_balance
-            FROM accounts
-            GROUP BY userID
-            ORDER BY total_balance DESC
-            LIMIT 10
-            """
-        ),
-        'Wallet': (
-            """
-            SELECT
-                userID,
-                wallet AS total_wallet
-            FROM accounts
-            GROUP BY userID
-            ORDER BY total_wallet DESC
-            LIMIT 10
-            """
-        ),
-        'Bank': (
-            """
-            SELECT
-                userID,
-                bank AS total_bank
-            FROM accounts
-            GROUP BY userID
-            ORDER BY total_bank DESC
-            LIMIT 10
-            """
-        ),
-        'Inventory Net': (
-            """
-            SELECT
-                inventory.userID,
-                SUM(shop.cost * inventory.qty) AS NetValue
-            FROM inventory
-            INNER JOIN shop
-                ON shop.itemID = inventory.itemID
-            GROUP BY inventory.userID
-            ORDER BY NetValue DESC
-            LIMIT 10
-            """
-        ),
-        'Commands': (
-            """
-            SELECT
-                userID,
-                SUM(cmd_count) AS total_commands
-            FROM command_uses
-            GROUP BY userID
-            HAVING total_commands > 0
-            ORDER BY total_commands DESC
-            LIMIT 10
-            """
-        ),
-        'Level': (
-            """
-            SELECT userID, level
-            FROM accounts
-            GROUP BY userID
-            HAVING level > 0
-            ORDER BY level DESC
-            LIMIT 10
-            """
-        ),
-        'Net Worth': (
-            """
-            SELECT
-                COALESCE(inventory.userID, money.userID) AS userID,
-                (COALESCE(SUM(shop.cost * inventory.qty), 0) + COALESCE(money.total_balance, 0)) AS TotalNetWorth
-            FROM
-                inventory
-            LEFT JOIN
-                shop ON shop.itemID = inventory.itemID
-            RIGHT JOIN
-                (
-                    SELECT
-                        userID,
-                        SUM(wallet + bank) AS total_balance
-                    FROM
-                        accounts
-                    GROUP BY
-                        userID
-                ) AS money ON inventory.userID = money.userID
-            GROUP BY
-                COALESCE(inventory.userID, money.userID)
-            ORDER BY
-                TotalNetWorth DESC
-            LIMIT 10
-            """
-        )
-    }
-
-    def __init__(
-        self,
-        itx: Interaction,
-        chosen_option: str
-    ) -> None:
-        super().__init__(itx)
-
-        self.chosen_option = chosen_option
-        select: discord.ui.Select = self.children[0]
-        for option in select.options:
-            option.default = option.value == chosen_option
-
-    async def on_timeout(self) -> None:
-        with contextlib.suppress(discord.NotFound):
-            await self.itx.edit_original_response(view=None)
-
-    async def create_lb(self) -> list[str]:
-        async with self.itx.client.pool.acquire() as conn:
-            data = await conn.fetchall(self.query_dict[self.chosen_option])
-
-        return (
-            await ItemLeaderboard.populate_data(self.itx, data)
-        ) or "Nobody has earnt this stat yet."
-
-    async def refresh_lb(
-        self,
-        itx: Interaction,
-        lb: Optional[discord.Embed] = None
-    ) -> None:
-        lb = lb or itx.message.embeds[0]
-        lb.timestamp = discord.utils.utcnow()
-        lb.description = "\n".join(await self.create_lb())
-
-        await itx.response.edit_message(embed=lb, view=self)
-
-    @discord.ui.select(options=options, placeholder="Select a leaderboard filter", row=0)
-    async def lb_stat_select(self, itx: Interaction, select: discord.ui.Select) -> None:
-        self.chosen_option = select.values[0]
-        lb = itx.message.embeds[0]
-        lb.title = f"Global Leaderboard: {self.chosen_option}"
-
-        for option in select.options:
-            option.default = option.value == self.chosen_option
-
-        await self.refresh_lb(itx, lb)
-
-    @discord.ui.button(emoji="<:refreshPages:1263923160433168414>", row=1)
-    async def refresh_lb_button(self, itx: Interaction, _: discord.ui.Button) -> None:
-        await self.refresh_lb(itx)
+            return await self.send_win(itx, btn)
+        await self.send_loss(itx, btn)
 
 
 class MultiplierView(RefreshPagination):
-    robux_emoji = discord.PartialEmoji.from_str("<:robuxMulti:1263923323088408688>")
-    xp_emoji = discord.PartialEmoji.from_str("<:xpMulti:1263924221109731471>")
-    luck_emoji = discord.PartialEmoji.from_str("<:luckMulti:1263922104231792710>")
+    robux_emoji = discord.PartialEmoji.from_str(
+        "<:robuxMulti:1263923323088408688>"
+    )
+    xp_emoji = discord.PartialEmoji.from_str(
+        "<:xpMulti:1263924221109731471>"
+    )
+    luck_emoji = discord.PartialEmoji.from_str(
+        "<:luckMulti:1263922104231792710>"
+    )
 
     length = 6
     multi_mapping = {
@@ -1233,9 +776,9 @@ class MultiplierView(RefreshPagination):
     }
 
     multipliers = [
-        discord.SelectOption(label='Robux', emoji=robux_emoji),
-        discord.SelectOption(label='XP', emoji=xp_emoji),
-        discord.SelectOption(label='Luck', emoji=luck_emoji)
+        discord.SelectOption(label="Robux", emoji=robux_emoji),
+        discord.SelectOption(label="XP", emoji=xp_emoji),
+        discord.SelectOption(label="Luck", emoji=luck_emoji)
     ]
 
     def __init__(
@@ -1249,7 +792,9 @@ class MultiplierView(RefreshPagination):
         self.viewing = viewing
         self.chosen_multiplier = chosen_multiplier
 
-        self.embed = discord.Embed(title=f"{self.viewing.display_name}'s Multipliers")
+        self.embed = discord.Embed(
+            title=f"{self.viewing.display_name}'s Multipliers"
+        )
         self.embed.colour, thumb_url = self.multi_mapping[chosen_multiplier]
         self.embed.set_thumbnail(url=thumb_url)
 
@@ -1260,17 +805,24 @@ class MultiplierView(RefreshPagination):
 
     def repr_multi(self) -> None:
         """
-        Represent a multiplier using proper formatting. Edits are in-place, returns None.
+        Represent a multiplier using proper formatting.
+        Edits are in-place, returns None.
 
-        For instance, to represent a user with no XP multiplier, instead of showing 0, show 1x.
+        To represent a user with no XP multiplier, shows 1x.
 
-        The units are also converted as necessary based on the type we're looking at.
+        The units are also converted as necessary based on the type.
         """
 
         unit = "x" if self.chosen_multiplier == "XP" else "%"
-        amount = self.total_multi if self.chosen_multiplier != "XP" else (1 + (self.total_multi / 100))
+        amount = (
+            self.total_multi
+            if self.chosen_multiplier != "XP"
+            else (1 + (self.total_multi / 100))
+        )
 
-        self.embed.description = f"> {self.chosen_multiplier}: **{amount:.2f}{unit}**\n\n"
+        self.embed.description = (
+            f"> {self.chosen_multiplier}: **{amount:.2f}{unit}**\n\n"
+        )
 
     async def format_pages(self) -> None:
         lowered = self.chosen_multiplier.lower()
@@ -1294,10 +846,18 @@ class MultiplierView(RefreshPagination):
                     ORDER BY amount DESC
                     """, self.viewing.id, lowered
                 )
-        self.total_pages = self.compute_total_pages(len(self.multiplier_list), self.length)
 
-    @discord.ui.select(options=multipliers, row=0, placeholder="Select a multiplier")
-    async def callback(self, itx: Interaction, select: discord.ui.Select) -> None:
+        self.total_pages = self.compute_total_pages(
+            len(self.multiplier_list),
+            self.length
+        )
+
+    @discord.ui.select(
+        options=multipliers,
+        row=0,
+        placeholder="Select a multiplier"
+    )
+    async def slct(self, itx: Interaction, select: discord.ui.Select) -> None:
         self.chosen_multiplier: str = select.values[0]
         self.index = 1
 
@@ -1306,9 +866,11 @@ class MultiplierView(RefreshPagination):
 
         await self.format_pages()
 
-        self.embed.colour, thumb_url = self.multi_mapping[self.chosen_multiplier]
-        self.embed.set_thumbnail(url=thumb_url)
+        self.embed.colour, thumb_url = (
+            self.multi_mapping[self.chosen_multiplier]
+        )
 
+        self.embed.set_thumbnail(url=thumb_url)
         await self.edit_page(itx)
 
 
@@ -1316,9 +878,9 @@ class MatchItem(discord.ui.Button):
     """
     A menu to select an item from a list of items provided.
 
-    Should be used when the user searches for an item that matches multiple items.
+    For use when the user searches for an item with several matches.
 
-    Helps users by not having to retype the item name more specifically.
+    Helps by not having to retype the item name more specifically.
     """
 
     def __init__(
@@ -1347,7 +909,6 @@ class MatchItem(discord.ui.Button):
 class SettingsDropdown(discord.ui.Select):
 
     def __init__(self, data: tuple, default_setting: str) -> None:
-        """`data` is a list of tuples containing the settings and their brief descriptions."""
         options = [
             discord.SelectOption(
                 label=" ".join(setting.split("_")).title(),
@@ -1360,7 +921,11 @@ class SettingsDropdown(discord.ui.Select):
         self.current_setting = default_setting
         self.current_setting_state = None
 
-        super().__init__(options=options, placeholder="Select a setting", row=0)
+        super().__init__(
+            options=options,
+            placeholder="Select a setting",
+            row=0
+        )
 
     async def callback(self, itx: Interaction) -> None:
         self.current_setting = self.values[0]
@@ -1379,13 +944,19 @@ class ToggleButton(discord.ui.Button):
         super().__init__(**kwargs)
 
     async def callback(self, itx: Interaction) -> None:
-        self.setting_dropdown.current_setting_state = int(not self.setting_dropdown.current_setting_state)
+        self.setting_dropdown.current_setting_state = (
+            int(not self.setting_dropdown.current_setting_state)
+        )
 
         enabled = self.setting_dropdown.current_setting_state == 1
         em = itx.message.embeds[0].set_field_at(
             index=0,
             name="Current",
-            value="<:Enabled:1263921710990622802> Enabled" if enabled else "<:Disabled:1263921453229801544> Disabled"
+            value=(
+                "<:Enabled:1263921710990622802> Enabled"
+                if enabled
+                else "<:Disabled:1263921453229801544> Disabled"
+            )
         )
 
         self.view.disable_button.disabled = not enabled
@@ -1433,7 +1004,7 @@ class ItemQuantityModal(discord.ui.Modal):
         self.ie = item_emoji
         self.activated_coupon = False
 
-        super().__init__(timeout=60.0, title=f"Purchase {item_name}")
+        super().__init__(title=f"Purchase {item_name}")
 
     quantity = discord.ui.TextInput(
         label="Quantity",
@@ -1468,7 +1039,11 @@ class ItemQuantityModal(discord.ui.Modal):
 
         if self.activated_coupon:
             await update_inv_new(itx.user.id, -1, "Shop Coupon", conn)
-            success.description += "\n\n**Additional info:**\n- <:shopCoupon:1263923497323855907> 5% Coupon Discount was applied"
+            success.description += (
+                "\n\n**Additional info:**\n"
+                "- <:shopCoupon:1263923497323855907> "
+                "5% Coupon Discount was applied"
+            )
         await respond(itx, embed=success)
 
     async def calculate_discount_price(self, /, itx: Interaction) -> int:
@@ -1482,7 +1057,8 @@ class ItemQuantityModal(discord.ui.Modal):
                 LEFT JOIN inventory
                     ON shop.itemID = inventory.itemID
                 LEFT JOIN settings
-                    ON inventory.userID = settings.userID AND settings.setting = 'always_use_coupon'
+                    ON inventory.userID = settings.userID
+                    AND settings.setting = 'always_use_coupon'
                 WHERE shop.itemID = $0 AND inventory.userID = $1
                 """, 8, itx.user.id
             )
@@ -1502,15 +1078,18 @@ class ItemQuantityModal(discord.ui.Modal):
         async with itx.client.pool.acquire() as conn, conn.transaction():
             await declare_transaction(conn, itx.user.id)
 
-        # Send a confirmation asking whether or not they wish to apply the coupon.
+        # Ask whether or not they wish to apply the coupon.
         self.activated_coupon = await process_confirmation(
             itx,
             prompt=(
-                "Would you like to use your <:shopCoupon:1263923497323855907> "
-                "**Shop Coupon** for an additional **5**% off?\n"
+                f"Would you like to use your "
+                f"<:shopCoupon:1263923497323855907> "
+                f"**Shop Coupon** for an additional **5**% off?\n"
                 f"(You have **{qty:,}** coupons in total)\n\n"
-                f"This will bring the __actual price per unit__ down to {CURRENCY} "
-                f"**{discounted_price:,}** if you decide to use the coupon."
+
+                f"This will bring the __actual price per unit__ "
+                f"down to {CURRENCY} **{discounted_price:,}** if "
+                f"you decide to use the coupon."
             )
         )
 
@@ -1525,10 +1104,13 @@ class ItemQuantityModal(discord.ui.Modal):
             return discounted_price
         return self.item_cost
 
-    # --------------------------------------------------------------------------------------------
+    # ---------------------------------------------------------
 
-    async def on_submit(self, itx: Interaction):
-        true_quantity = RawIntegerTransformer().transform(itx, self.quantity.value)
+    async def on_submit(
+        self,
+        itx: Interaction
+    ) -> Optional[discord.WebhookMessage]:
+        true_qty = RawIntegerTransformer().transform(itx, self.quantity.value)
 
         # base cost per unit (considering discounts)
         self.item_cost = await self.calculate_discount_price(itx)
@@ -1536,29 +1118,27 @@ class ItemQuantityModal(discord.ui.Modal):
         async with itx.client.pool.acquire() as conn:
             current_balance = await fetch_balance(itx.user.id, conn)
 
-            if isinstance(true_quantity, str):
-                true_quantity = current_balance // self.item_cost
-                if not true_quantity:
-                    return await respond(
-                        itx,
-                        embed=membed(f"You can't buy a single {self.ie} {self.item_name}.")
-                    )
-            elif (self.item_cost * true_quantity) > current_balance:
-                error_em = membed(
-                    f"You don't have enough robux to"
-                    f" buy **{true_quantity:,}x {self.ie} {self.item_name}**."
+            if isinstance(true_qty, str):
+                true_qty = current_balance // self.item_cost
+                if not true_qty:
+                    msg = f"You can't buy a single {self.ie} {self.item_name}"
+                    return await respond(itx, msg)
+            elif (self.item_cost * true_qty) > current_balance:
+                msg = (
+                    f"You don't have enough robux to "
+                    f"buy **{true_qty:,}x {self.ie} {self.item_name}**."
                 )
-                return await respond(itx, embed=error_em)
+                return await respond(itx, msg)
 
-            total_price = self.item_cost * true_quantity
+            total_price = self.item_cost * true_qty
             can_proceed = await handle_confirm_outcome(
                 itx,
                 conn=conn,
                 setting="buying_confirmations",
                 prompt=(
-                    f"Are you sure you want to buy **{true_quantity:,}x {self.ie} "
-                    f"{self.item_name}** for **{CURRENCY} {total_price:,}**?\n"
-                    f"-# It is costing you **{CURRENCY} {self.item_cost:,}** per unit."
+                    f"Are you sure you want to buy **{true_qty:,}x {self.ie} "
+                    f"{self.item_name}** for **{CURRENCY} {total_price:,}**?"
+                    f"\n-# Costs **{CURRENCY} {self.item_cost:,}** per unit."
                 )
             )
 
@@ -1568,21 +1148,21 @@ class ItemQuantityModal(discord.ui.Modal):
                 if can_proceed is False:
                     return
 
-            await self.begin_purchase(itx, true_quantity, conn, total_price)
+            await self.begin_purchase(itx, true_qty, conn, total_price)
 
     async def on_error(self, itx: Interaction, error: Exception):
         # Catch both custom errors
         if hasattr(error, "cause"):
             return await respond(
                 itx,
-                ephemeral=True,
-                embed=membed(error.cause)
+                error.cause,
+                ephemeral=True
             )
 
         self.stop()
         await itx.response.edit_message(
-            view=None,
-            embed=membed("Something went wrong. Try again later.")
+            content="Something went wrong. Try again later.",
+            view=None
         )
         await super().on_error(itx, error)
 
@@ -1616,16 +1196,22 @@ class DepositOrWithdraw(discord.ui.Modal):
         "Withdraw": "You don't have that much money in your bank.",
         "Deposit": (
             "Either one (or both) of the following is true:\n"
-            "1. You only have don't have that much money in your wallet.\n"
+            "1. You don't have that much money in your wallet.\n"
             "2. You don't have enough bankspace to deposit that amount."
         )
     }
 
-    def __init__(self, *, title: str, default_val: int, view: "BalanceView") -> None:
+    def __init__(
+        self,
+        *,
+        title: str,
+        default_val: int,
+        view: "BalanceView"
+    ) -> None:
         self.their_default = default_val
         self.view = view
         self.amount.default = f"{self.their_default:,}"
-        super().__init__(title=title, timeout=120.0)
+        super().__init__(title=title)
 
     amount = discord.ui.TextInput(
         label="Amount",
@@ -1641,9 +1227,9 @@ class DepositOrWithdraw(discord.ui.Modal):
             val = self.their_default
         elif val > self.their_default:
             return await itx.response.send_message(
+                self.bigarg_response[self.title],
                 ephemeral=True,
-                delete_after=5.0,
-                embed=membed(self.bigarg_response[self.title])
+                delete_after=5.0
             )
 
         if self.title == "Withdraw":
@@ -1679,7 +1265,11 @@ class DepositOrWithdraw(discord.ui.Modal):
         embed = itx.message.embeds[0]
         embed.set_field_at(0, name="Wallet", value=f"{CURRENCY} {wallet:,}")
         embed.set_field_at(1, name="Bank", value=f"{CURRENCY} {bank:,}")
-        embed.set_field_at(2, name="Bankspace", value=f"{CURRENCY} {bankspace:,} ({prcnt_full:.2f}% full)")
+        embed.set_field_at(
+            index=2,
+            name="Bankspace",
+            value=f"{CURRENCY} {bankspace:,} ({prcnt_full:.2f}% full)"
+        )
         embed.timestamp = discord.utils.utcnow()
 
         self.view.checks(bank, wallet, bankspace-bank)
@@ -1688,15 +1278,16 @@ class DepositOrWithdraw(discord.ui.Modal):
     async def on_error(self, itx: Interaction, error: Exception) -> None:
         if isinstance(error, CustomTransformerError):
             return await itx.response.send_message(
+                embed=membed(error.cause),
                 ephemeral=True,
-                embed=membed(error.cause)
+                delete_after=5.0
             )
 
         with contextlib.suppress(discord.NotFound):
             await self.view.itx.delete_original_response()
 
         self.view.stop()
-        await respond(itx, embed=membed("Something went wrong. Try again later."))
+        await respond(itx, "Something went wrong. Try again later.")
         await super().on_error(itx, error)
 
 
@@ -1739,7 +1330,7 @@ class InventoryPaginator(RefreshPagination):
 
     async def fetch_data(self) -> None:
         if NO_FILTER not in self.applied_filters:
-            placeholders = ','.join(("?",)*len(self.applied_filters))
+            placeholders = ",".join(("?",)*len(self.applied_filters))
             args = (self.viewing.id, *map(int, self.applied_filters))
 
             query = (
@@ -1750,7 +1341,8 @@ class InventoryPaginator(RefreshPagination):
                     ON shop.itemID = inventory.itemID
                 LEFT JOIN item_types
                     ON shop.itemType = item_types.id
-                WHERE inventory.userID = ? AND shop.itemType IN ({placeholders})
+                WHERE inventory.userID = ?
+                AND shop.itemType IN ({placeholders})
                 """
             )
 
@@ -1768,7 +1360,9 @@ class InventoryPaginator(RefreshPagination):
 
         async with self.itx.client.pool.acquire() as conn:
             self.data = await conn.fetchall(query, args)
-        self.total_pages = self.compute_total_pages(len(self.data), self.length)
+        self.total_pages = self.compute_total_pages(
+            len(self.data), self.length
+        )
 
     def set_all(self, select: discord.ui.Select) -> None:
         self.applied_filters = [NO_FILTER]
@@ -1780,8 +1374,16 @@ class InventoryPaginator(RefreshPagination):
         for option in select.options:
             option.default = option.value in self.applied_filters
 
-    @discord.ui.select(cls=discord.ui.UserSelect, placeholder="Select a registered user", row=0)
-    async def inventory_user_select(self, itx: Interaction, select: discord.ui.UserSelect) -> None:
+    @discord.ui.select(
+        cls=discord.ui.UserSelect,
+        placeholder="Select a registered user",
+        row=0
+    )
+    async def inventory_user_select(
+        self,
+        itx: Interaction,
+        select: discord.ui.UserSelect
+    ) -> None:
         self.viewing = select.values[0]
         self.index = 1
         select.default_values = [discord.Object(id=self.viewing.id)]
@@ -1794,12 +1396,21 @@ class InventoryPaginator(RefreshPagination):
         await self.fetch_data()
         await self.edit_page(itx)
 
-    @discord.ui.select(placeholder="Select a filter", max_values=len(options), options=options, row=1)
-    async def item_filter_select(self, itx: Interaction, select: discord.ui.Select) -> None:
+    @discord.ui.select(
+        placeholder="Select a filter",
+        max_values=len(options),
+        options=options,
+        row=1
+    )
+    async def item_filter_select(
+        self,
+        itx: Interaction,
+        select: discord.ui.Select
+    ) -> None:
         self.index = 1
 
         # this is in the order of item type IDs
-        defaults = {option.value for option in select.options if option.default}
+        defaults = {opt.value for opt in select.options if opt.default}
 
         no_filter_default = NO_FILTER in defaults
         no_filter_selected = NO_FILTER in select.values
@@ -1841,7 +1452,9 @@ class InventoryPaginator(RefreshPagination):
 
 
 all_mentions = discord.AllowedMentions.all()
-ITEM_CONVERTER = app_commands.Transform[tuple[int, str, str], ItemInputTransformer]
+ITEM_CONVERTER = app_commands.Transform[
+    tuple[int, str, str], ItemInputTransformer
+]
 ROBUX_CONVERTER = app_commands.Transform[int | str, RawIntegerTransformer]
 TR_QUERY = "SELECT userID FROM transactions WHERE userID = $0"
 
@@ -1860,11 +1473,24 @@ async def transactional_check(itx: Interaction) -> bool:
         )
     )
     await itx.response.send_message(
+        WARN_FOR_CONCURRENCY,
         view=error_view,
-        ephemeral=True,
-        embed=membed(WARN_FOR_CONCURRENCY)
+        ephemeral=True
     )
     return False
+
+
+async def can_call_out(user_id: int, conn: Connection) -> bool:
+    ret, = await conn.fetchone(
+        """
+        SELECT EXISTS (
+            SELECT 1
+            FROM accounts
+            WHERE userID = $0
+        )
+        """, user_id
+    )
+    return not ret
 
 
 def calculate_exp_for(*, level: int) -> int:
@@ -1888,7 +1514,7 @@ async def update_games(
     - returning_game_id (int): The ID of the returning game.
     - conn (Connection): The database connection.
     ## Returns:
-    - tuple: A tuple containing the count of the current and returning game ID in this order.
+    - tuple: Contains the count of the current and returning game ID.
     """
 
     return await conn.fetchone(
@@ -1901,17 +1527,28 @@ async def update_games(
             amount = amount + excluded.amount
         RETURNING
             games.value,
-            COALESCE((SELECT value FROM games WHERE state = $3 AND userID = $0), 0)
+            COALESCE(
+                (SELECT value FROM games WHERE state = $3 AND userID = $0), 0
+            )
         """, user_id, game_id, game_amt, returning_game_id
     )
 
 
-async def get_setting_embed(view: UserSettings, conn: Connection) -> discord.Embed:
+async def get_setting_embed(
+    view: UserSettings,
+    conn: Connection
+) -> discord.Embed:
 
     data = await conn.fetchone(
         """
         SELECT
-            COALESCE((SELECT settings.value FROM settings WHERE settings.userID = $0 AND setting = $1), 0) AS userSetting,
+            COALESCE(
+                (
+                    SELECT settings.value
+                    FROM settings
+                    WHERE settings.userID = $0 AND setting = $1
+                ), 0
+            ) AS userSetting,
             settings_descriptions.description
         FROM settings_descriptions
         WHERE setting = $1
@@ -1927,7 +1564,9 @@ async def get_setting_embed(view: UserSettings, conn: Connection) -> discord.Emb
 
     embed = membed(f"> {description}")
 
-    embed.title = " ".join(view.setting_dropdown.current_setting.split("_")).title()
+    embed.title = " ".join(
+        view.setting_dropdown.current_setting.split("_")
+    ).title()
 
     view.clear_items().add_item(view.setting_dropdown)
 
@@ -1935,7 +1574,11 @@ async def get_setting_embed(view: UserSettings, conn: Connection) -> discord.Emb
         view.add_item(ProfileCustomizeButton())
     else:
         enabled = value == 1
-        current_text = "<:Enabled:1263921710990622802> Enabled" if enabled else "<:Disabled:1263921453229801544> Disabled"
+        current_text = (
+            "<:Enabled:1263921710990622802> Enabled"
+            if enabled
+            else "<:Disabled:1263921453229801544> Disabled"
+        )
         embed.add_field(name="Current", value=current_text)
         view.disable_button.disabled = not enabled
         view.enable_button.disabled = enabled
@@ -1943,8 +1586,8 @@ async def get_setting_embed(view: UserSettings, conn: Connection) -> discord.Emb
     return embed
 
 
-async def calculate_inventory_value(user: USER_ENTRY, conn: Connection) -> int:
-    """A reusable funtion to calculate the net value of a user's inventory"""
+async def calc_inv_net(user: USER_ENTRY, conn: Connection) -> int:
+    """Calculate the net value of a user's inventory"""
 
     res, = await conn.fetchone(
         """
@@ -1960,8 +1603,9 @@ async def calculate_inventory_value(user: USER_ENTRY, conn: Connection) -> int:
 # ------------------ BANK FUNCS ------------------ #
 
 
-async def calculate_net_ranking_for(user: USER_ENTRY, conn: Connection) -> int:
-    """Calculate the alternative net ranking of a user based on their net worth."""
+async def calc_net_ranking_for(user: USER_ENTRY, conn: Connection) -> int:
+    """Calculate the ranking of a user based on their net worth."""
+
     val = await conn.fetchone(
         """
         SELECT
@@ -1972,7 +1616,10 @@ async def calculate_net_ranking_for(user: USER_ENTRY, conn: Connection) -> int:
                 (
                     SELECT
                         inventory.userID,
-                        (SUM(shop.cost * inventory.qty) + COALESCE(money.total_balance, 0)) AS TotalNetWorth
+                        (
+                            SUM(shop.cost * inventory.qty)
+                            + COALESCE(money.total_balance, 0)
+                        ) AS TotalNetWorth
                     FROM
                         inventory
                     LEFT JOIN
@@ -1994,7 +1641,10 @@ async def calculate_net_ranking_for(user: USER_ENTRY, conn: Connection) -> int:
                 TotalNetWorth > COALESCE(
                     (
                         SELECT
-                            (SUM(shop.cost * inventory.qty) + money.total_balance) AS TotalNetWorth
+                            (
+                                SUM(shop.cost * inventory.qty)
+                                + money.total_balance
+                            ) AS TotalNetWorth
                         FROM
                             inventory
                         INNER JOIN
@@ -2021,7 +1671,11 @@ async def calculate_net_ranking_for(user: USER_ENTRY, conn: Connection) -> int:
 
 
 async def open_bank_new(user: USER_ENTRY, conn: Connection) -> bool:
-    """Register a new user. On success, return `True`. Otherwise, return `False`."""
+    """
+    Register a new user.
+
+    Return `True` on success, `False` otherwise.
+    """
 
     query = (
         """
@@ -2064,19 +1718,29 @@ async def update_account(
 ) -> Any:
     """Update a column in the account table."""
 
-    query = f"UPDATE accounts SET {mode} = {mode} + $0 WHERE userID = $1 RETURNING {mode}"
+    query = (
+        f"""
+        UPDATE accounts
+        SET {mode} = {mode} + $0
+        WHERE userID = $1
+        RETURNING {mode}
+        """
+    )
 
     return await conn.fetchone(query, amount, user_id)
 
 
 async def update_wallet_many(conn: Connection, *params_users) -> list[Row]:
     """
-    Update the bank of two users at once. Useful to transfer money between multiple users at once.
+    Update the bank of two users at once.
+    Useful to transfer money between multiple users at once.
 
-    The parameters are tuples, each tuple containing the amount to be added to the wallet and the user ID.
+    The parameters are tuples.
+
+    Each contains the amount to be added to the wallet and the user ID.
 
     Example:
-    await Economy.update_wallet_many(conn, (100, 546086191414509599), (200, 270904126974590976))
+    await update_wallet_many(conn, (100, USER2_ID), (200, USER_ID))
     """
 
     query = "UPDATE accounts SET wallet = wallet + ? WHERE userID = ?"
@@ -2085,14 +1749,22 @@ async def update_wallet_many(conn: Connection, *params_users) -> list[Row]:
 
 # ------------------ INVENTORY FUNCS ------------------ #
 
-async def fetch_item_qty_from_id(user_id: int, item_id: int, conn: Connection) -> bool:
+async def fetch_amt_by_id(
+    user_id: int,
+    item_id: int,
+    conn: Connection
+) -> int:
     """Fetch the quantity of an item owned by a user based via it's ID."""
     query = "SELECT qty FROM inventory WHERE userID = ? AND itemID = ?"
     val, = await conn.fetchone(query, (user_id, item_id)) or (0,)
     return val
 
 
-async def user_has_item_from_name(user_id: int, item_name: str, conn: Connection) -> bool:
+async def fetch_amt_by_name(
+    user_id: int,
+    item_name: str,
+    conn: Connection
+) -> bool:
     """Fetch the quantity of an item owned by a user based via it's name."""
     query = (
         """
@@ -2119,10 +1791,13 @@ async def update_inv_new(
 
     If the item quantity is <= 0, delete the row.
 
-    This method should always be called when updating the inventory to ensure rows are deleted when necessary.
+    This method should always be called when updating the
+    inventory to ensure rows are deleted when necessary.
     """
 
-    item_row = await conn.fetchone("SELECT itemID FROM shop WHERE itemName = $0", item_name)
+    item_row = await conn.fetchone(
+        "SELECT itemID FROM shop WHERE itemName = $0", item_name
+    )
 
     item_id = item_row[0] if item_row else None
 
@@ -2136,7 +1811,10 @@ async def update_inv_new(
 
     if check_result and check_result[0]:
         # If the resulting quantity would be <= 0, delete the row
-        await conn.execute("DELETE FROM inventory WHERE userID = ? AND itemID = ?", (user_id, item_id))
+        await conn.execute(
+            "DELETE FROM inventory WHERE userID = ? AND itemID = ?",
+            (user_id, item_id)
+        )
         return (0,)
 
     val = await conn.fetchone(
@@ -2173,7 +1851,8 @@ async def update_inv_by_id(
 
     if check_result and check_result[0]:
         # If the resulting quantity would be <= 0, delete the row
-        await conn.execute("DELETE FROM inventory WHERE userID = $0 AND itemID = $1", user_id, item_id)
+        query = "DELETE FROM inventory WHERE userID = $0 AND itemID = $1"
+        await conn.execute(query, user_id, item_id)
         return (0,)
 
     val = await conn.fetchone(
@@ -2188,40 +1867,14 @@ async def update_inv_by_id(
     return val
 
 
-async def add_user_freemium(
-    user_id: int,
-    conn: Connection,
-    qty: int
-) -> tuple:
-    """
-    Update user's inventory with a random item by a random amount requested.
-
-    Return the item name and emoji.
-    """
-    random_item_query = await conn.fetchone(
-        """
-        SELECT itemID, itemName, emoji
-        FROM shop
-        ORDER BY RANDOM()
-        LIMIT 1
-        """
-    )
-
-    update_query = (
-        """
-        INSERT INTO inventory (userID, itemID, qty)
-        VALUES ($0, $1, $2)
-        ON CONFLICT(userID, itemID) DO UPDATE SET qty = qty + 1
-        """
-    )
-
-    await conn.execute(update_query, user_id, random_item_query[0], qty)
-    return random_item_query[1:]
-
 # ------------ cooldowns ----------------
 
 def has_cd(cd_timestamp: float) -> Optional[datetime]:
-    """Check if a cooldown has expired. Returns when it will expire if not already."""
+    """
+    Check if a cooldown has expired. If not already, return when.
+
+    Assumes the cooldown timestamp is epoch.
+    """
     current_time = discord.utils.utcnow().timestamp()
     if current_time > cd_timestamp:
         return
@@ -2251,11 +1904,12 @@ async def update_cooldown(
 # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
 
 @app_commands.command(description="Adjust user-specific settings")
-@app_commands.describe(setting="The specific setting you want to adjust. Defaults to view.")
+@app_commands.describe(setting="The specific setting you want to adjust.")
 async def settings(itx: Interaction, setting: Optional[str]) -> None:
-    """View or adjust user-specific settings."""
+
+    query = "SELECT setting, brief FROM settings_descriptions"
     async with itx.client.pool.acquire() as conn:
-        settings = await conn.fetchall("SELECT setting, brief FROM settings_descriptions")
+        settings = await conn.fetchall(query)
         chosen_setting = setting or settings[0][0]
 
         view = UserSettings(itx, data=settings, chosen_setting=chosen_setting)
@@ -2263,7 +1917,7 @@ async def settings(itx: Interaction, setting: Optional[str]) -> None:
     await itx.response.send_message(embed=em, view=view)
 
 
-@app_commands.command(description="View all of your multipliers within the bot")
+@app_commands.command(description="View all multipliers within the bot")
 @app_commands.describe(
     user="The user whose multipliers you want to see. Defaults to your own.",
     multiplier="The type of multiplier you want to see. Defaults to robux."
@@ -2291,55 +1945,63 @@ async def multipliers(
         offset = ((paginator.index - 1) * paginator.length)
         paginator.embed.description += "\n".join(
             format_multiplier(multi)
-            for multi in paginator.multiplier_list[offset:offset + paginator.length]
+            for multi in paginator.multiplier_list[
+                offset:offset + paginator.length
+            ]
         )
-        return paginator.embed.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
+        return paginator.embed.set_footer(
+            text=f"Page {paginator.index} of {paginator.total_pages}"
+        )
 
     paginator.get_page = get_page_part
     await paginator.navigate()
 
 
-share = app_commands.Group(name='share', description='Share different assets with others.')
+share = app_commands.Group(
+    name="share",
+    description="Share different assets with others"
+)
 
 
-@share.command(name="robux", description="Share robux with another user", extras={"exp_gained": 5})
+@share.command(
+    name="robux",
+    description="Share robux with another user",
+    extras={"exp_gained": 5}
+)
 @app_commands.rename(recipient="user")
 @app_commands.describe(
-    recipient='The user receiving the robux shared.',
+    recipient="The user receiving the robux shared.",
     quantity=ROBUX_DESCRIPTION
 )
 async def share_robux(
     itx: Interaction,
     recipient: USER_ENTRY,
     quantity: ROBUX_CONVERTER
-) -> None:
-    """"Give an amount of robux to another user."""
+) -> Optional[discord.WebhookMessage]:
 
     sender = itx.user
     if sender.id == recipient.id:
-        return await itx.response.send_message(embed=membed("You can't share with yourself."))
+        return await itx.response.send_message(
+            "You can't share with yourself."
+        )
 
     async with itx.client.pool.acquire() as conn:
+
         actual_wallet = await fetch_balance(sender.id, conn)
-
-        try:
-            assert actual_wallet > 0
-        except AssertionError:
-            return await itx.response.send_message(
-                embed=membed("You have nothing to share!")
-            )
-
         if isinstance(quantity, str):
             quantity = actual_wallet
         elif quantity > actual_wallet:
-            return await respond(
-                itx,
-                embed=membed("You don't have that much money to share.")
+            return await itx.response.send_message(
+                "You don't have that much money to share."
             )
 
+        share_prompt = (
+            f"Are you sure you want to share {CURRENCY} "
+            f"**{quantity:,}** with {recipient.mention}?"
+        )
         can_proceed = await handle_confirm_outcome(
             itx,
-            prompt=f"Are you sure you want to share {CURRENCY} **{quantity:,}** with {recipient.mention}?",
+            prompt=share_prompt,
             setting="share_robux_confirmations",
             conn=conn
         )
@@ -2350,6 +2012,9 @@ async def share_robux(
             if can_proceed is False:
                 return
 
+        if await can_call_out(recipient.id, conn):
+            return await respond(itx, NOT_REGISTERED)
+
         await update_wallet_many(
             conn,
             (-int(quantity), sender.id),
@@ -2358,57 +2023,49 @@ async def share_robux(
 
     await respond(
         itx,
-        embed=membed(f"Shared {CURRENCY} **{quantity:,}** with {recipient.mention}!")
+        f"Shared {CURRENCY} **{quantity:,}** with {recipient.mention}!"
     )
 
 
-@share.command(name='items', description='Share items with another user', extras={"exp_gained": 5})
-@app_commands.rename(recipient='user')
+@share.command(
+    name="items",
+    description="Share items with another user",
+    extras={"exp_gained": 5}
+)
+@app_commands.rename(recipient="user")
 @app_commands.describe(
     item=ITEM_DESCRPTION,
-    quantity='The amount of this item to share.',
-    recipient='The user receiving the item.'
+    quantity="The amount of this item to share.",
+    recipient="The user receiving the item."
 )
 async def share_items(
     itx: Interaction,
     recipient: USER_ENTRY,
     quantity: app_commands.Range[int, 1],
     item: ITEM_CONVERTER
-) -> None:
+) -> Optional[discord.WebhookMessage]:
 
     sender = itx.user
     if sender.id == recipient.id:
-        return await itx.response.send_message(embed=membed("You can't share with yourself."))
+        return await respond(itx, "You can't share with yourself.")
 
     item_id, item_name, ie = item
     async with itx.client.pool.acquire() as conn:
-        actual_inv_qty, item_hex = await conn.fetchone(
-            """
-            SELECT
-                COALESCE(inventory.qty, 0),
-                item_rarities.colour
-            FROM shop
-            LEFT JOIN inventory
-                ON inventory.itemID = shop.itemID AND inventory.userID = $0
-            LEFT JOIN item_rarities
-                ON shop.rarity = item_rarities.rarityID
-            WHERE shop.itemID = $1
-            """, sender.id, item_id
-        )
-        item_hex = int(item_hex, 16)
+
+        actual_inv_qty = await fetch_amt_by_id(itx.user.id, item_id, conn)
 
         if actual_inv_qty < quantity:
             return await respond(
-                itx,
-                embed=discord.Embed(
-                    description=f"You don't have **{quantity}x {ie} {item_name}**.",
-                    colour=item_hex
-                )
+                itx, f"You don't have **{quantity}x {ie} {item_name}**."
             )
 
+        share_prompt = (
+            f"Are you sure you want to share **{quantity:,} "
+            f"{ie} {item_name}** with {recipient.mention}?"
+        )
         can_proceed = await handle_confirm_outcome(
             itx,
-            f"Are you sure you want to share **{quantity:,} {ie} {item_name}** with {recipient.mention}?",
+            prompt=share_prompt,
             setting="share_item_confirmations",
             conn=conn
         )
@@ -2418,6 +2075,9 @@ async def share_items(
             await end_transaction(conn, sender.id)
             if can_proceed is False:
                 return
+
+        if await can_call_out(recipient.id, conn):
+            return await respond(itx, NOT_REGISTERED)
 
         await update_inv_by_id(sender.id, -quantity, item_id, conn)
         await conn.execute(
@@ -2430,14 +2090,14 @@ async def share_items(
 
     await respond(
         itx,
-        embed=discord.Embed(
-            colour=item_hex,
-            description=f"Shared **{quantity}x {ie} {item_name}** with {recipient.mention}!"
-        )
+        f"Shared **{quantity}x {ie} {item_name}** with {recipient.mention}!"
     )
 
 
-trade = app_commands.Group(name='trade', description='Exchange different assets with others.')
+trade = app_commands.Group(
+    name="trade",
+    description="Exchange different assets with others"
+)
 
 
 def default_checks_passing(trader: USER_ENTRY, with_who: USER_ENTRY) -> None:
@@ -2454,7 +2114,8 @@ def robux_checks_passing(
 ) -> None:
     if actual_wallet_amt < robux_qty_offered:
         resp = (
-            f"{user_checked.mention} only has {CURRENCY} **{actual_wallet_amt:,}**.\n"
+            f"{user_checked.mention} only has {CURRENCY} "
+            f"**{actual_wallet_amt:,}**.\n"
             f"Not the requested {CURRENCY} **{robux_qty_offered:,}**."
         )
         raise FailingConditionalError(resp)
@@ -2469,11 +2130,12 @@ async def item_checks_passing(
     """
     Basic trading item checks.
 
-    If checks fail, it is your responsibility to respond and close transactions.
+    If checks fail, it is your responsibility
+    to respond and close transactions.
     """
     item_id, item_name, ie = item_data
 
-    item_amt = await fetch_item_qty_from_id(user_to_check.id, item_id, conn)
+    item_amt = await fetch_amt_by_id(user_to_check.id, item_id, conn)
     if item_amt < item_qty_offered:
         resp = (
             f"{user_to_check.mention} has **{item_amt}x {ie} {item_name}**.\n"
@@ -2493,11 +2155,13 @@ async def prompt_for_robux(
     """
     Send a confirmation prompt to `item_sender`.
 
-    Confirms whether they want to exchange their items[1] with the recipient[2] in return for money[3].
+    Confirms whether they want to exchange their
+    items[1] with the recipient[2] in return for money[3].
 
     [1] = `item_sender_data` [2] = `robux_sender` [3] = `robux_sender_qty`
 
-    The person that is confirming has to send items, in exchange they get robux.
+    The person that is confirming has to send items,
+    in exchange they get robux.
     """
     can_continue = await handle_confirm_outcome(
         itx,
@@ -2528,12 +2192,15 @@ async def prompt_robux_for_items(
     item_sender_data: tuple
 ) -> Optional[bool]:
     """
-    Confirm with the recipient[1], whether they want to exchange their robux for items.
+    Confirm with the recipient[1],
+    whether they want to exchange their robux for items.
 
     [1] = `robux_sender`
 
-    The person that is confirming has to send robux, and they get items in return.
+    The person that is confirming has to send robux,
+    and they get items in return.
     """
+
     can_continue = await handle_confirm_outcome(
         itx,
         view_owner=robux_sender,
@@ -2563,28 +2230,36 @@ async def prompt_items_for_items(
     item_sender2_qty: int,
     item_sender2_data: tuple
 ) -> Optional[bool]:
-    """Confirm whether the sender wants to give items to the receiver in return for other items."""
+    """
+    Confirm whether the sender wants to give
+    items to the receiver in return for other items.
+    """
+
     can_continue = await handle_confirm_outcome(
         itx,
         view_owner=item_sender,
         content=item_sender.mention,
         allowed_mentions=all_mentions,
-        prompt=dedent(
-            f"""
-            > Are you sure you want to trade with {item_sender2.mention}?
+        prompt=(
+            f"> Are you sure you want to trade "
+            f"with {item_sender2.mention}?\n\n"
 
-            **Their:**
-            - {item_sender2_qty}x {item_sender2_data[-1]} {item_sender2_data[1]}
+            f"**Their:**"
+            f"- {item_sender2_qty}x "
+            f"{item_sender2_data[-1]} {item_sender2_data[1]}\n\n"
 
-            **For Your:**
-            - {item_sender_qty}x {item_sender_data[-1]} {item_sender_data[1]}
-            """
+            f"**For Your:**"
+            f"- {item_sender_qty}x "
+            f"{item_sender_data[-1]} {item_sender_data[1]}"
         )
     )
     return can_continue
 
 
-@trade.command(name="items_for_robux", description="Exchange your items for robux in return")
+@trade.command(
+    name="items_for_robux",
+    description="Exchange your items for robux in return"
+)
 @app_commands.rename(with_who="with")
 @app_commands.describe(
     item="What item will you give?",
@@ -2646,25 +2321,35 @@ async def trade_items_for_robux(
         if not can_proceed:
             return
 
-        await update_inv_by_id(itx.user.id, -quantity, item_id=item[0], conn=conn)
-        await update_inv_by_id(with_who.id, +quantity, item_id=item[0], conn=conn)
+        await update_inv_by_id(
+            itx.user.id, -quantity, item_id=item[0], conn=conn
+        )
+        await update_inv_by_id(
+            with_who.id, +quantity, item_id=item[0], conn=conn
+        )
         await update_wallet_many(
             conn,
             (-for_robux, with_who.id),
             (+for_robux, itx.user.id)
         )
 
-    embed = discord.Embed(colour=0xFFFFFF).set_footer(text="Thanks for your business.")
-    embed.title = "Your Trade Receipt"
+    embed = discord.Embed(colour=0xFFFFFF, title="Your Trade Receipt")
+    embed.set_footer(text="Thanks for your business.")
     embed.description = (
-        f"- {itx.user.mention} gave {with_who.mention} **{quantity}x {item[-1]} {item[1]}**.\n"
-        f"- {itx.user.mention} received {CURRENCY} **{for_robux:,}** in return."
+        f"- {itx.user.mention} gave {with_who.mention} "
+        f"**{quantity}x {item[-1]} {item[1]}**.\n"
+
+        f"- {itx.user.mention} received {CURRENCY} "
+        f"**{for_robux:,}** in return."
     )
 
     await itx.followup.send(embed=embed)
 
 
-@trade.command(name="robux_for_items", description="Exchange your robux for items in return")
+@trade.command(
+    name="robux_for_items",
+    description="Exchange your robux for items in return"
+)
 @app_commands.rename(with_who="with")
 @app_commands.describe(
     robux="How much robux do you want to give?",
@@ -2703,8 +2388,7 @@ async def trade_robux_for_items(
     async with itx.client.pool.acquire() as conn:
         if not can_proceed:
             await end_transaction(conn, itx.user.id)
-            await conn.commit()
-            return
+            return await conn.commit()
 
     can_proceed = await prompt_for_robux(
         itx,
@@ -2721,25 +2405,42 @@ async def trade_robux_for_items(
         if not can_proceed:
             return
 
-        await update_inv_by_id(with_who.id, -item_quantity, item_id=for_item[0], conn=conn)
-        await update_inv_by_id(itx.user.id, item_quantity, item_id=for_item[0], conn=conn)
+        await update_inv_by_id(
+            with_who.id,
+            -item_quantity,
+            item_id=for_item[0],
+            conn=conn
+        )
+        await update_inv_by_id(
+            itx.user.id,
+            item_quantity,
+            item_id=for_item[0],
+            conn=conn
+        )
         await update_wallet_many(
             conn,
             (-robux, itx.user.id),
             (+robux, with_who.id)
         )
 
-    embed = discord.Embed(colour=0xFFFFFF).set_footer(text="Thanks for your business.")
+    embed = discord.Embed(colour=0xFFFFFF)
+    embed.set_footer(text="Thanks for your business.")
     embed.title = "Your Trade Receipt"
     embed.description = (
-        f"- {itx.user.mention} gave {with_who.mention} {CURRENCY} **{robux:,}**.\n"
-        f"- {itx.user.mention} received **{item_quantity}x** {for_item[-1]} {for_item[1]} in return."
+        f"- {itx.user.mention} gave "
+        f"{with_who.mention} {CURRENCY} **{robux:,}**.\n"
+
+        f"- {itx.user.mention} received **{item_quantity}x** "
+        f"{for_item[-1]} {for_item[1]} in return."
     )
 
     await itx.followup.send(embed=embed)
 
 
-@trade.command(name="items_for_items", description="Exchange your items for other items")
+@trade.command(
+    name="items_for_items",
+    description="Exchange your items for other items"
+)
 @app_commands.rename(with_who="with")
 @app_commands.describe(
     item="What item will you give?",
@@ -2755,14 +2456,12 @@ async def trade_items_for_items(
     with_who: USER_ENTRY,
     for_item: ITEM_CONVERTER,
     for_quantity: int
-) -> None:
+) -> Optional[discord.WebhookMessage]:
     default_checks_passing(itx.user, with_who)
 
     if item[0] == for_item[0]:
-        return await respond(
-            itx,
-            embed=membed(f"You can't trade {item[-1]} {item[1]}(s) on both sides.")
-        )
+        msg = f"You can't trade {item[-1]} {item[1]}(s) on both sides."
+        return await respond(itx, msg)
 
     async with itx.client.pool.acquire() as conn:
         await item_checks_passing(conn, itx.user, item, quantity)
@@ -2800,31 +2499,45 @@ async def trade_items_for_items(
         if not can_proceed:
             return
 
+        query = (
+            """
+            UPDATE inventory
+            SET qty = qty + $0
+            WHERE userID = $1 AND itemID = $2
+            """
+        )
+
         await update_inv_by_id(itx.user.id, -quantity, item[0], conn)
         await update_inv_by_id(with_who.id, -for_quantity, for_item[0], conn)
         await conn.executemany(
-            sql="UPDATE inventory SET qty = qty + $0 WHERE userID = $1 AND itemID = $2",
+            sql=query,
             seq_of_parameters=[
                 (for_quantity, itx.user.id, for_item[0]),
                 (quantity, with_who.id, item[0])
             ]
         )
 
-    embed = discord.Embed(colour=0xFFFFFF).set_footer(text="Thanks for your business.")
-    embed.title = "Your Trade Receipt"
+    embed = discord.Embed(colour=0xFFFFFF, title="Your Trade Receipt")
+    embed.set_footer(text="Thanks for your business.")
     embed.description = (
-        f"- {itx.user.mention} gave {with_who.mention} **{quantity}x {item[-1]} {item[1]}**.\n"
-        f"- {itx.user.mention} received **{for_quantity}x {for_item[-1]} {for_item[1]}** in return."
+        f"- {itx.user.mention} gave {with_who.mention} "
+        f"**{quantity}x {item[-1]} {item[1]}**.\n"
+
+        f"- {itx.user.mention} received **{for_quantity}x "
+        f"{for_item[-1]} {for_item[1]}** in return."
     )
+
     await itx.followup.send(embed=embed)
 
 
-shop = app_commands.Group(name='shop', description='View items available for purchase.')
+shop = app_commands.Group(
+    name="shop",
+    description="View items available for purchase"
+)
 
 
-@shop.command(name='view', description='View all the shop items')
+@shop.command(name="view", description="View all the shop items")
 async def view_shop(itx: Interaction) -> None:
-    """This is a subcommand. View the currently available items within the shop."""
 
     paginator = PaginationItem(itx)
     async with itx.client.pool.acquire() as conn:
@@ -2839,9 +2552,10 @@ async def view_shop(itx: Interaction) -> None:
             """
         )
 
+    url = "https://youtu.be/dQw4w9WgXcQ"
     shop_metadata = [
         (
-            f"{emote} {name} \U00002500 [{CURRENCY} **{cost:,}**](https://youtu.be/dQw4w9WgXcQ)",
+            f"{emote} {name} \U00002500 [{CURRENCY} **{cost:,}**]({url})",
             ShopItem(name, cost, emote, row=i % 2)
         )
         for i, (name, emote, cost) in enumerate(shop_sorted)
@@ -2851,7 +2565,9 @@ async def view_shop(itx: Interaction) -> None:
     emb.title = "Shop"
     length = 6
 
-    paginator.total_pages = paginator.compute_total_pages(len(shop_metadata), length)
+    paginator.total_pages = paginator.compute_total_pages(
+        len(shop_metadata), length
+    )
 
     async def get_page_part() -> discord.Embed:
         async with itx.client.pool.acquire() as conn:
@@ -2860,7 +2576,8 @@ async def view_shop(itx: Interaction) -> None:
 
         if len(paginator.children) > 2:
             backward_btn, forward_btn = paginator.children[:2]
-            paginator.clear_items().add_item(backward_btn).add_item(forward_btn)
+            paginator.clear_items()
+            paginator.add_item(backward_btn).add_item(forward_btn)
 
         offset = (paginator.index - 1) * length
         emb.description += "\n".join(
@@ -2872,23 +2589,24 @@ async def view_shop(itx: Interaction) -> None:
             item_btn.disabled = wallet < item_btn.cost
             paginator.add_item(item_btn)
 
-        return emb.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
+        return emb.set_footer(
+            text=f"Page {paginator.index} of {paginator.total_pages}"
+        )
 
     paginator.get_page = get_page_part
     await paginator.navigate()
 
 
-@shop.command(description='Sell an item from your inventory')
+@shop.command(description="Sell an item from your inventory")
 @app_commands.describe(
-    item='The name of the item you want to sell.',
-    sell_quantity='The amount of this item to sell. Defaults to 1.'
+    item="The name of the item you want to sell.",
+    sell_quantity="The amount of this item to sell. Defaults to 1."
 )
 async def sell(
     itx: Interaction,
     item: ITEM_CONVERTER,
     sell_quantity: app_commands.Range[int, 1] = 1
 ) -> None:
-    """Sell an item you already own."""
     seller = itx.user
 
     query = (
@@ -2912,17 +2630,26 @@ async def sell(
 
     async with itx.client.pool.acquire() as conn:
         item_id, item_name, ie = item
-        qty, cost, sellable, multi = await conn.fetchone(query, seller.id, item_id)
+        qty, cost, sellable, multi = (
+            await conn.fetchone(query, seller.id, item_id)
+        )
 
         if not sellable:
-            raise FailingConditionalError(f"You can't sell **{ie} {item_name}**.")
+            msg = f"You can't sell **{ie} {item_name}**."
+            raise FailingConditionalError(msg)
         elif qty < sell_quantity:
-            raise FailingConditionalError(f"You don't have {ie} **{sell_quantity:,}x** {item_name}.")
+            msg = f"You don't have {ie} **{sell_quantity:,}x** {item_name}."
+            raise FailingConditionalError(msg)
+
+        sell_prompt = (
+            f"Are you sure you want to sell **{sell_quantity:,}x "
+            f"{ie} {item_name}** for **{CURRENCY} {cost:,}**?"
+        )
 
         cost = selling_price_algo((cost / 4) * sell_quantity, multi)
         can_proceed = await handle_confirm_outcome(
             itx,
-            prompt=f"Are you sure you want to sell **{sell_quantity:,}x {ie} {item_name}** for **{CURRENCY} {cost:,}**?",
+            prompt=sell_prompt,
             setting="selling_confirmations",
             conn=conn
         )
@@ -2936,19 +2663,22 @@ async def sell(
         await update_inv_new(seller.id, -sell_quantity, item_name, conn)
         await update_account(seller.id, +cost, conn)
 
-    embed = membed(
-        f"{seller.mention} sold **{sell_quantity:,}x {ie} {item_name}** "
-        f"and got paid {CURRENCY} **{cost:,}**."
+    embed = discord.Embed(
+        colour=0xFFFFFF,
+        title=f"{seller.display_name}'s Sale Receipt"
     ).set_footer(text="Thanks for your business.")
 
-    embed.title = f"{seller.display_name}'s Sale Receipt"
+    embed.description = (
+        f"{seller.mention} sold **{sell_quantity:,}x {ie} {item_name}** "
+        f"and got paid {CURRENCY} **{cost:,}**."
+    )
+
     await respond(itx, embed=embed)
 
 
-@app_commands.command(description='Get more details on a specific item')
+@app_commands.command(description="Get more details on a specific item")
 @app_commands.describe(item=ITEM_DESCRPTION)
 async def item(itx: Interaction, item: ITEM_CONVERTER) -> None:
-    """This is a subcommand. Look up a particular item within the shop to get more information about it."""
 
     query = (
         """
@@ -3000,7 +2730,7 @@ async def item(itx: Interaction, item: ITEM_CONVERTER) -> None:
             sellable,
             multi
         ) = await conn.fetchone(query, item_id, itx.user.id, "robux")
-        net = await calculate_inventory_value(itx.user, conn)
+        net = await calc_inv_net(itx.user, conn)
 
     dynamic_text = f"> *{description}*\n\nYou own **{their_count:,}**"
 
@@ -3009,7 +2739,7 @@ async def item(itx: Interaction, item: ITEM_CONVERTER) -> None:
         if amt >= 0.1:
             dynamic_text += f" ({amt:.1f}% of your net worth)"
 
-    instruction = (instruction or '').replace("\\n\\n", "\n\n", 1)
+    instruction = (instruction or "").replace("\\n\\n", "\n\n", 1)
     dynamic_text = f"{dynamic_text}{instruction}"
 
     emote = discord.PartialEmoji.from_str(emote)
@@ -3019,20 +2749,24 @@ async def item(itx: Interaction, item: ITEM_CONVERTER) -> None:
         description=dynamic_text,
         url="https://www.youtube.com",
         colour=int(item_hex, 16)
-    ).set_thumbnail(url=emote.url).set_footer(text=f"{item_rarity} {item_type}")
+    ).set_thumbnail(url=emote.url)
 
+    em.set_footer(text=f"{item_rarity} {item_type}")
     em.add_field(name="Net Value", inline=False, value=f"{CURRENCY} {cost:,}")
 
-    dynamic_text = f"- {'Can' if available else 'Cannot'} purchase in the shop"
+    dynamic_text = f"- {"Can" if available else "Cannot"} purchase in shop"
     if sellable:
         new_sell = selling_price_algo(cost // 4, multi)
-        dynamic_text += f"\n- Sellable for {CURRENCY} {new_sell:,} (with your {multi}% multiplier)"
+        dynamic_text += (
+            f"\n- Sellable for {CURRENCY} {new_sell:,} "
+            f"(with your {multi}% multiplier)"
+        )
 
     em.add_field(name="Additional Info", value=dynamic_text, inline=False)
     await respond(itx, embed=em)
 
 
-@register_item('Bank Note')
+@register_item("Bank Note")
 async def increase_bank_space(itx: Interaction, quantity: int) -> None:
 
     expansion = randint(1_600_000, 6_000_000)
@@ -3056,10 +2790,14 @@ async def increase_bank_space(itx: Interaction, quantity: int) -> None:
     embed.add_field(
         name="Used",
         value=f"{quantity}x <:BankNote:1263919952562487418> Bank Note"
-    ).add_field(
+    )
+
+    embed.add_field(
         name="Added Bank Space",
         value=f"{CURRENCY} {expansion:,}"
-    ).add_field(
+    )
+
+    embed.add_field(
         name="Total Bank Space",
         value=f"{CURRENCY} {new_bankspace:,}"
     )
@@ -3067,58 +2805,66 @@ async def increase_bank_space(itx: Interaction, quantity: int) -> None:
     await respond(itx, embed=embed)
 
 
-@app_commands.command(description="Use an item you own from your inventory", extras={"exp_gained": 3})
-@app_commands.describe(item=ITEM_DESCRPTION, quantity='Amount of items to use, when possible.')
+@app_commands.command(
+    description="Use an item you own from your inventory",
+    extras={"exp_gained": 3}
+)
+@app_commands.describe(
+    item=ITEM_DESCRPTION,
+    quantity="Amount of items to use, when possible."
+)
 async def use(
     itx: Interaction,
     item: ITEM_CONVERTER,
     quantity: app_commands.Range[int, 1] = 1
 ) -> Optional[discord.WebhookMessage]:
-    """Use a currently owned item."""
 
     item_id, item_name, ie = item
     async with itx.client.pool.acquire() as conn:
-        qty = await fetch_item_qty_from_id(itx.user.id, item_id, conn)
+        qty = await fetch_amt_by_id(itx.user.id, item_id, conn)
 
     if not qty:
-        return await respond(
-            itx,
-            embed=membed(f"You don't have a single {ie} **{item_name}**, therefore cannot use it.")
+        msg = (
+            f"You don't have a single {ie} "
+            f"**{item_name}**, therefore cannot use it."
         )
+        return await respond(itx, msg)
 
     if qty < quantity:
-        return await respond(
-            itx,
-            embed=membed(f"You don't have **{quantity}x {ie} {item_name}**, therefore cannot use this many.")
+        msg = (
+            f"You don't have **{quantity}x {ie} "
+            f"{item_name}**, therefore cannot use this many."
         )
+        return await respond(itx, msg)
 
     handler = item_handlers.get(item_name)
     if handler is None:
-        return await respond(
-            itx,
-            embed=membed(f"{ie} **{item_name}** does not have a use yet.\nWait until it does!")
+        msg = (
+            f"{ie} **{item_name}** does not have a use yet.\n"
+            f"Wait until it does!"
         )
+        return await respond(itx, msg)
 
     await handler(itx, quantity)
 
 
 async def start_prestige(itx: Interaction, prestige: int) -> None:
     massive_prompt = dedent(
-        "Prestiging means losing nearly everything you've ever earned in the currency "
-        "system in exchange for increasing your 'Prestige Level' and upgrading your status."
-        "\n**Things you will lose**:\n"
-        "- All of your items/showcase\n"
-        "- All of your robux\n"
-        "- Your levels and XP\n"
-        "Anything not mentioned in this list will not be lost.\n"
+        "Prestiging means losing nearly everything you ever "
+        "earnt in the currency system in exchange for increasing "
+        "your 'Prestige Level' and upgrading your status.\n\n"
+        "Check what you lose by reading the relevant tag.\n"
         "Are you sure you want to prestige?"
     )
     can_proceed = await handle_confirm_outcome(itx, massive_prompt)
 
+
     async with itx.client.pool.acquire() as conn, conn.transaction():
         await end_transaction(conn, user_id=itx.user.id)
         if can_proceed:
-            await conn.execute("DELETE FROM inventory WHERE userID = $0", itx.user.id)
+            await conn.execute(
+                "DELETE FROM inventory WHERE userID = $0", itx.user.id
+            )
             await conn.execute(
                 """
                 UPDATE accounts
@@ -3143,10 +2889,10 @@ async def start_prestige(itx: Interaction, prestige: int) -> None:
             )
 
 
-@app_commands.command(description="Sacrifice currency stats in exchange for incremental perks")
+@app_commands.command(
+    description="Sacrifice currency stats for incremental perks"
+)
 async def prestige(itx: Interaction) -> None:
-    """Sacrifice a portion of your currency stats in exchange for incremental perks."""
-
     async with itx.client.pool.acquire() as conn:
         prestige, actual_level, actual_robux = await conn.fetchone(
             """
@@ -3161,10 +2907,8 @@ async def prestige(itx: Interaction) -> None:
 
     if prestige == 10:
         return await itx.response.send_message(
-            embed=membed(
-                "You've reached the highest prestige!\n"
-                "No more perks can be obtained from this command."
-            )
+            "You reached the highest prestige!\n"
+            "No more perks can be obtained from this command."
         )
 
     req_robux = (prestige + 1) * 24_000_000
@@ -3174,42 +2918,49 @@ async def prestige(itx: Interaction) -> None:
     if met_check:
         return await start_prestige(itx, prestige)
 
-    emote_id = search(r':(\d+)>', PRESTIGE_EMOTES[prestige+1]).group(1)
+    emote_id = search(r":(\d+)>", PRESTIGE_EMOTES[prestige+1]).group(1)
 
     actual_robux_progress = (actual_robux / req_robux) * 100
     actual_level_progress = (actual_level / req_level) * 100
 
-    embed = discord.Embed(
-        title=f"Prestige {prestige + 1} Requirements",
-        colour=0x2B2D31,
-        description=(
-            f"**Total Balance**\n"
-            f"<:replyBranchExt:1263923237016834249> {CURRENCY} {actual_robux:,}/{req_robux:,}\n"
-            f"<:replyBranch:1263923209921757224> {generate_progress_bar(actual_robux_progress)} "
-            f"` {int(actual_robux_progress):,}% `\n\n"
-            f"**Level Required**\n"
-            f"<:replyBranchExt:1263923237016834249> {actual_level:,}/{req_level:,}\n"
-            f"<:replyBranch:1263923209921757224> {generate_progress_bar(actual_level_progress)} "
-            f"` {int(actual_level_progress):,}% `"
+    embed = membed(
+        f"**Total Balance**\n"
+        f"<:replyBranchExt:1263923237016834249> "
+        f"{CURRENCY} {actual_robux:,} / {req_robux:,}\n"
+
+        f"<:replyBranch:1263923209921757224> "
+        f"` {int(actual_robux_progress):,}% `\n\n"
+
+        f"**Level Required**\n"
+        f"<:replyBranchExt:1263923237016834249> "
+        f"{actual_level:,} / {req_level:,}\n"
+
+        f"<:replyBranch:1263923209921757224> "
+        f"` {int(actual_level_progress):,}% `"
+    )
+
+    embed.set_thumbnail(
+        url=(
+            f"https://cdn.discordapp.com/emojis/"
+            f"{emote_id}.png?size=240&quality=lossless"
         )
-    ).set_thumbnail(
-        url=f"https://cdn.discordapp.com/emojis/{emote_id}.png?size=240&quality=lossless"
-    ).set_footer(text="Imagine thinking you can prestige already.")
+    )
+
+    embed.set_footer(text="Imagine thinking you can prestige already.")
 
     await itx.response.send_message(embed=embed)
 
 
-@app_commands.command(description='Guess the number. Jackpot wins big!', extras={"exp_gained": 3})
+@app_commands.command(
+    description="Guess the number I am thinking of",
+    extras={"exp_gained": 3}
+)
 @app_commands.describe(robux=ROBUX_DESCRIPTION)
 async def highlow(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
-    """
-    Guess the number. The user must guess if the clue the bot gives is higher,
-    lower or equal to the actual number.
-    """
 
     async with itx.client.pool.acquire() as conn:
         wallet_amt = await fetch_balance(itx.user.id, conn)
-        has_keycard = await fetch_item_qty_from_id(itx.user.id, item_id=1, conn=conn)
+        has_keycard = await fetch_amt_by_id(itx.user.id, item_id=1, conn=conn)
 
         robux = do_wallet_checks(wallet_amt, robux, has_keycard)
 
@@ -3218,11 +2969,12 @@ async def highlow(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
     await HighLow(itx, bet=robux).start()
 
 
-@app_commands.command(description='Try your luck on a slot machine', extras={"exp_gained": 3})
+@app_commands.command(
+    description="Try your luck on a slot machine",
+    extras={"exp_gained": 3}
+)
 @app_commands.describe(robux=ROBUX_DESCRIPTION)
 async def slots(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
-    """Play a round of slots. At least one matching combination is required to win."""
-
     query = (
         """
         SELECT accounts.wallet, COALESCE(inventory.qty, 0)
@@ -3233,7 +2985,9 @@ async def slots(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
         """
     )
     async with itx.client.pool.acquire() as conn:
-        wallet_amt, has_keycard = await conn.fetchone(query, itx.user.id) or (0, 0)
+        wallet_amt, has_keycard = (
+            await conn.fetchone(query, itx.user.id) or (0, 0)
+        )
     robux = do_wallet_checks(wallet_amt, robux, has_keycard)
 
     emoji_1, emoji_2, emoji_3 = generate_slot_combination()
@@ -3291,10 +3045,9 @@ async def slots(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
     await itx.response.send_message(embed=slot_machine)
 
 
-@app_commands.command(description='View your currently owned items')
-@app_commands.describe(user='The user whose inventory you want to see.')
+@app_commands.command(description="View your currently owned items")
+@app_commands.describe(user="The user whose inventory you want to see.")
 async def inventory(itx: Interaction, user: Optional[USER_ENTRY]) -> None:
-    """View your inventory or another player's inventory."""
 
     user = user or itx.user
     embed = membed().set_author(
@@ -3316,16 +3069,20 @@ async def inventory(itx: Interaction, user: Optional[USER_ENTRY]) -> None:
         offset = (paginator.index - 1) * paginator.length
         paginator.embed.description = "\n".join(
             f"{ie} **{item_name}** \U00002500 {qty:,}"
-            for (item_name, ie, qty) in paginator.data[offset:offset+paginator.length]
+            for (item_name, ie, qty) in paginator.data[
+                offset:offset+paginator.length
+            ]
         )
-        return paginator.embed.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
+        return paginator.embed.set_footer(
+            text=f"Page {paginator.index} of {paginator.total_pages}"
+        )
 
     paginator.get_page = get_page_part
     await paginator.navigate()
 
 
 @app_commands.command(description="Get someone's balance")
-@app_commands.describe(user='The user to find the balance of.')
+@app_commands.describe(user="The user to find the balance of.")
 async def balance(itx: Interaction, user: Optional[USER_ENTRY]) -> None:
     user = user or itx.user
 
@@ -3345,11 +3102,16 @@ async def payout_recurring_income(
         "monthly": 100_000_000,
         "yearly": 1_000_000_000
     }.get(income_type)
-    em = membed()
 
     # ! Do they have a cooldown?
     async with itx.client.pool.acquire() as conn:
-        query = "SELECT until FROM cooldowns WHERE userID = $0 AND cooldown = $1"
+        query = (
+            """
+            SELECT until
+            FROM cooldowns
+            WHERE userID = $0 AND cooldown = $1
+            """
+        )
         cd_timestamp = await conn.fetchone(query, itx.user.id, income_type)
 
     noun_period = income_type[:-2]
@@ -3359,11 +3121,10 @@ async def payout_recurring_income(
         user_cd = has_cd(cd_timestamp)
         if isinstance(user_cd, datetime):
             r = discord.utils.format_dt(user_cd, style="R")
-            em.description = (
+            return await itx.response.send_message(
                 f"You already got your {income_type} robux "
                 f"this {noun_period}, try again {r}."
             )
-            return await itx.response.send_message(embed=em)
 
     # ! Try updating the cooldown, giving robux
     r = discord.utils.utcnow() + timedelta(weeks=weeks_away)
@@ -3375,19 +3136,19 @@ async def payout_recurring_income(
             assert ret is not None
         except AssertionError:
             await tr.rollback()
-            return await itx.response.send_message(embed=membed(INVOKER_NOT_REGISTERED))
+            return await itx.response.send_message(INVOKER_NOT_REGISTERED)
 
         await update_cooldown(itx.user.id, income_type, r.timestamp(), conn)
 
-    em.description = (
-        f"You just got {CURRENCY} **{multiplier:,}** for checking in this {noun_period}.\n"
+    link = "https://www.youtube.com/watch?v=ue_X8DskUN4"
+    msg = (
+        f"## [{itx.user.display_name}'s {income_type.title()} Robux]({link})"
+        f"You just got {CURRENCY} **{multiplier:,}** "
+        f"for checking in this {noun_period}.\n"
         f"See you next {noun_period} ({rformatted})!"
     )
 
-    em.title = f"{itx.user.display_name}'s {income_type.title()} Robux"
-    em.url = "https://www.youtube.com/watch?v=ue_X8DskUN4"
-
-    await itx.response.send_message(embed=em)
+    await itx.response.send_message(msg)
 
 
 @app_commands.command(description="Get a weekly injection of robux")
@@ -3406,17 +3167,16 @@ async def yearly(itx: Interaction) -> None:
 
 
 @app_commands.command(description="Request the deletion of all of your data")
-@app_commands.describe(user='The player to remove all of the data of. Defaults to you.')
+@app_commands.describe(user="The user to erase data from.")
 async def resetmydata(itx: Interaction, user: Optional[USER_ENTRY]) -> None:
-    """Opt out of the virtual economy and delete all of the user data associated."""
-
     user = user or itx.user
 
     if (user.id != itx.user.id) and (not itx.client.is_owner(itx.user)):
         return await itx.response.send_message(
-            embed=membed("You can only reset your own data.")
+            "You can only reset your own data."
         )
 
+    who_is = "You are" if user.id == itx.user.id else f"{user.name} is"
     async with itx.client.pool.acquire() as conn:
         tr = conn.transaction()
         await tr.start()
@@ -3425,9 +3185,8 @@ async def resetmydata(itx: Interaction, user: Optional[USER_ENTRY]) -> None:
             await declare_transaction(conn, user.id)
         except IntegrityError:
             await tr.rollback()
-            who_is = "You are" if user.id == itx.user.id else f"{user.name} is"
             return await itx.response.send_message(
-                embed=membed(f"{who_is} not registered.")
+                f"{who_is} not registered."
             )
         else:
             await tr.commit()
@@ -3439,21 +3198,21 @@ async def resetmydata(itx: Interaction, user: Optional[USER_ENTRY]) -> None:
 @app_commands.command(description="Withdraw robux from your bank account")
 @app_commands.describe(robux=ROBUX_DESCRIPTION)
 async def withdraw(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
-    """Withdraw a given amount of robux from your bank."""
 
     async with itx.client.pool.acquire() as conn:
         bank_amt = await fetch_balance(itx.user.id, conn, "bank")
 
-    embed = membed()
     if not bank_amt:
-        embed.description = "You have nothing to withdraw."
-        return await itx.response.send_message(embed=embed)
+        return await itx.response.send_message(
+            "You have nothing to withdraw."
+        )
 
     if isinstance(robux, str):
         robux = bank_amt
     elif robux > bank_amt:
-        embed.description = f"You only have {CURRENCY} **{bank_amt:,}** in your bank right now."
-        return await itx.response.send_message(embed=embed)
+        return await itx.response.send_message(
+            f"You only have {CURRENCY} **{bank_amt:,}** in your bank."
+        )
 
     query = (
         """
@@ -3469,9 +3228,20 @@ async def withdraw(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
     async with itx.client.pool.acquire() as conn, conn.transaction():
         wallet_new, bank_new = await conn.fetchone(query, robux, itx.user.id)
 
-    embed.add_field(name="Withdrawn", value=f"{CURRENCY} {robux:,}", inline=False)
-    embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}")
-    embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
+    embed = membed()
+    embed.add_field(
+        name="Withdrawn",
+        value=f"{CURRENCY} {robux:,}",
+        inline=False
+    )
+    embed.add_field(
+        name="Current Wallet Balance",
+        value=f"{CURRENCY} {wallet_new:,}"
+    )
+    embed.add_field(
+        name="Current Bank Balance",
+        value=f"{CURRENCY} {bank_new:,}"
+    )
 
     await itx.response.send_message(embed=embed)
 
@@ -3479,30 +3249,33 @@ async def withdraw(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
 @app_commands.command(description="Deposit robux into your bank account")
 @app_commands.describe(robux=ROBUX_DESCRIPTION)
 async def deposit(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
-    """Deposit an amount of robux into your bank."""
 
     query = "SELECT wallet, bank, bankspace FROM accounts WHERE userID = $0"
     async with itx.client.pool.acquire() as conn:
-        wallet_amt, bank, bankspace = await conn.fetchone(query, itx.user.id) or (0, 0, 0)
+        wallet_amt, bank, bankspace = (
+            await conn.fetchone(query, itx.user.id) or (0, 0, 0)
+        )
 
-    embed = membed()
     if not wallet_amt:
-        embed.description = "You have nothing to deposit."
-        return await itx.response.send_message(embed=embed)
+        return await itx.response.send_message(
+            "You have nothing to deposit."
+        )
 
     can_deposit = bankspace - bank
     if can_deposit <= 0:
-        embed.description = (
-            f"You can only hold {CURRENCY} **{bankspace:,}** in your bank right now.\n"
-            f"To hold more, use currency commands and level up more. Bank Notes can aid with this."
+        return await itx.response.send_message(
+            f"Max bankspace of {CURRENCY} **{bankspace:,}** reached.\n"
+            f"To hold more, use currency commands and level up more. "
+            f"Bank Notes can aid with this."
         )
-        return await itx.response.send_message(embed=embed)
 
     if isinstance(robux, str):
         robux = min(wallet_amt, can_deposit)
     elif robux > wallet_amt:
-        embed.description = f"You only have {CURRENCY} **{wallet_amt:,}** in your wallet right now."
-        return await itx.response.send_message(embed=embed)
+        return await itx.response.send_message(
+            f"You only have {CURRENCY} **{wallet_amt:,}** "
+            f"in your wallet right now."
+        )
 
     query = (
         """
@@ -3518,80 +3291,53 @@ async def deposit(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
     async with itx.client.pool.acquire() as conn, conn.transaction():
         wallet_new, bank_new = await conn.fetchone(query, robux, itx.user.id)
 
-    embed.add_field(name="Deposited", value=f"{CURRENCY} {robux:,}", inline=False)
-    embed.add_field(name="Current Wallet Balance", value=f"{CURRENCY} {wallet_new:,}")
-    embed.add_field(name="Current Bank Balance", value=f"{CURRENCY} {bank_new:,}")
+    embed = membed()
+    embed.add_field(
+        name="Deposited",
+        value=f"{CURRENCY} {robux:,}",
+        inline=False
+    )
+    embed.add_field(
+        name="Current Wallet Balance",
+        value=f"{CURRENCY} {wallet_new:,}"
+    )
+    embed.add_field(
+        name="Current Bank Balance",
+        value=f"{CURRENCY} {bank_new:,}"
+    )
 
     await itx.response.send_message(embed=embed)
 
 
-leaderboard = app_commands.Group(name="leaderboard", description="Rank users in various different ways.")
-
-
-@leaderboard.command(name='stats', description='Rank users based on various stats')
-@app_commands.describe(stat="The stat you want to see.")
-async def get_stat_lb(
-    itx: Interaction,
-    stat: Literal[
-        "Money Net",
-        "Wallet",
-        "Bank",
-        "Inventory Net",
-        "Commands",
-        "Level",
-        "Net Worth"
-    ]
-) -> None:
-    view = StatLeaderboard(itx, chosen_option=stat)
-
-    lb = membed("\n".join(await view.create_lb()))
-    lb.title = f"Global Leaderboard: {stat}"
-    lb.timestamp = discord.utils.utcnow()
-
-    await itx.response.send_message(embed=lb, view=view)
-
-
-@leaderboard.command(name="item", description="Rank users based on an item count")
-@app_commands.describe(item=ITEM_DESCRPTION)
-async def get_item_lb(itx: Interaction, item: ITEM_CONVERTER) -> None:
-    item_id, item_name = item[:2]
-    view = ItemLeaderboard(itx, chosen_item_id=item_id)
-
-    async with itx.client.pool.acquire() as conn:
-        thumb_url = await view.fetch_emoji(conn)
-        lb = membed("\n".join(await view.create_lb(conn))).set_thumbnail(url=thumb_url)
-
-    lb.timestamp = discord.utils.utcnow()
-    lb.title = f"{item_name} Global Leaderboard"
-
-    view.message = await respond(itx, embed=lb, view=view)
-
-
-@app_commands.rename(host='user')
-@app_commands.describe(host='The user you want to rob money from.')
-@app_commands.command(description="Attempt to steal from someone's pocket", extras={"exp_gained": 4})
+@app_commands.rename(host="user")
+@app_commands.describe(host="The user you want to rob money from.")
+@app_commands.command(
+    description="Attempt to steal from someone's pocket",
+    extras={"exp_gained": 4}
+)
 async def rob(itx: Interaction, host: USER_ENTRY) -> None:
     robber = itx.user
-    embed = membed()
 
     if robber.id == host.id:
-        embed.description = 'Seems pretty foolish to steal from yourself'
-        return await itx.response.send_message(embed=embed)
+        return await itx.response.send_message(
+            "Seems pretty foolish to steal from yourself."
+        )
 
     if host.bot:
-        embed.description = 'You are not allowed to steal from bots, back off my kind'
-        return await itx.response.send_message(embed=embed)
+        return await itx.response.send_message(
+            "You are not allowed to steal from bots, back off my kind."
+        )
 
-    if itx.is_user_integration():
-        embed.description = "You can't rob people here."
-        return await itx.response.send_message(embed=embed)
+    if not itx.is_guild_integration():
+        return await itx.response.send_message("You cannot rob people here.")
 
     query = (
         """
         SELECT wallet, settings.value
         FROM accounts
         LEFT JOIN settings
-            ON accounts.userID = settings.userID AND settings.setting = 'passive_mode'
+            ON accounts.userID = settings.userID
+            AND settings.setting = 'passive_mode'
         WHERE accounts.userID = $0
         """
     )
@@ -3601,51 +3347,54 @@ async def rob(itx: Interaction, host: USER_ENTRY) -> None:
         SELECT wallet, settings.value
         FROM accounts
         LEFT JOIN settings
-            ON accounts.userID = settings.userID AND settings.setting = 'passive_mode'
+            ON accounts.userID = settings.userID
+            AND settings.setting = 'passive_mode'
         WHERE accounts.userID = $0
         """
     )
 
     async with itx.client.pool.acquire() as conn:
-        robber_wallet, robber_passive_mode = await conn.fetchone(query, robber.id) or (0, 0, 0)
-        host_wallet, host_passive_mode = await conn.fetchone(query2, host.id) or (0, 0)
+        robber_wallet, robber_passive_mode = (
+            await conn.fetchone(query, robber.id) or (0, 0)
+        )
+        host_wallet, host_passive_mode = (
+            await conn.fetchone(query2, host.id) or (0, 0)
+        )
 
     if robber_passive_mode:
-        embed.description = "You are in passive mode! If you want to rob, turn that off!"
-        return await itx.response.send_message(embed=embed)
+        return await itx.response.send_message(
+            "You are in passive mode! If you want to rob, turn that off!"
+        )
 
     if host_passive_mode:
-        embed.description = f"{host.mention} is in passive mode, you can't rob them!"
-        return await itx.response.send_message(embed=embed)
+        return await itx.response.send_message(
+            f"{host.name} is in passive mode, you cannot rob them!"
+        )
 
     if host_wallet < 1_000_000:
-        embed.description = f"{host.mention} doesn't even have {CURRENCY} **1,000,000**, not worth it."
-        return await itx.response.send_message(embed=embed)
+        return await itx.response.send_message(
+            f"{host.name} does not even have {CURRENCY} **1,000,000**."
+        )
 
     if robber_wallet < 10_000_000:
-        embed.description = f"You need at least {CURRENCY} **10,000,000** in your wallet to rob someone."
-        return await itx.response.send_message(embed=embed)
+        return await itx.response.send_message(
+            f"You need at least {CURRENCY} **10,000,000** first."
+        )
 
     fifty50, = choices((0, 1), weights=(49, 51))
 
     if fifty50:
-        emote = choice(
-            (
-                "<a:kekRealize:970295657233539162>",
-                "<:smhlol:1160157952410386513>",
-            )
-        )
-
         fine = randint(min(50_000, robber_wallet), robber_wallet)
-        embed.description = (
-            f'You were caught {emote}\n'
-            f'You paid {host.mention} {CURRENCY} **{fine:,}**.'
+
+        await itx.response.send_message(
+            f"You got caught and paid {host.mention} {CURRENCY} **{fine:,}**."
         )
 
         async with itx.client.pool.acquire() as conn, conn.transaction():
-            await update_wallet_many(conn, (fine, host.id), (-fine, robber.id))
-
-        return await itx.response.send_message(embed=embed)
+            await update_wallet_many(
+                conn, (fine, host.id), (-fine, robber.id)
+            )
+        return
 
     amt_stolen = randint(min(1_000_000, robber_wallet), robber_wallet)
     amt_dropped = floor((randint(1, 25) / 100) * amt_stolen)
@@ -3653,8 +3402,11 @@ async def rob(itx: Interaction, host: USER_ENTRY) -> None:
     percent_stolen = int((total/amt_stolen) * 100)
 
     async with itx.client.pool.acquire() as conn, conn.transaction():
-        await update_wallet_many(conn, (-amt_stolen, host.id), (total, robber.id))
+        await update_wallet_many(
+            conn, (-amt_stolen, host.id), (total, robber.id)
+        )
 
+    embed = membed()
     if percent_stolen <= 25:
         embed.title = "You stole a TINY portion!"
         embed.set_thumbnail(url="https://i.imgur.com/TA5j8d8.png")
@@ -3670,87 +3422,52 @@ async def rob(itx: Interaction, host: USER_ENTRY) -> None:
 
     embed.description = (
         f"**You managed to get:**\n"
-        f"{CURRENCY} {amt_stolen:,} (but dropped {CURRENCY} {amt_dropped:,} while escaping)"
+        f"{CURRENCY} {amt_stolen:,} "
+        f"(but dropped {CURRENCY} {amt_dropped:,} while escaping)"
     )
 
     embed.set_footer(text=f"You stole {CURRENCY} {total:,} in total")
     await itx.response.send_message(embed=embed)
 
 
-@app_commands.command(description="Test your skills at blackjack", extras={"exp_gained": 3})
-@app_commands.describe(robux=ROBUX_DESCRIPTION)
-async def blackjack(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
-    """
-    Play a round of blackjack with the bot.
-
-    Win by reaching 21 and a higher score than the bot without bust.
-    """
-
-    async with itx.client.pool.acquire() as conn, conn.transaction():
-        wallet_amt = await fetch_balance(itx.user.id, conn)
-        has_keycard = await fetch_item_qty_from_id(itx.user.id, item_id=1, conn=conn)
-        robux = do_wallet_checks(wallet_amt, robux, has_keycard)
-        await declare_transaction(conn, itx.user.id)
-
-    deck = [2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10, 10, 11] * 4
-    shuffle(deck)
-
-    player_hand = [deck.pop(), deck.pop()]
-    dealer_hand = [deck.pop(), deck.pop()]
-
-    player_sum = calculate_hand(player_hand)
-
-    shallow_pv = [display_user_friendly_card_format(number) for number in player_hand]
-    shallow_dv = [display_user_friendly_card_format(number) for number in dealer_hand]
-
-    game = BlackjackGame(deck, player_hand, dealer_hand, shallow_pv, shallow_dv, robux)
-
-    initial = membed(
-        f"The game has started. May the best win.\n"
-        f"`{CURRENCY} ~{shortern_number(robux)}` is up for grabs on the table."
-    ).add_field(
-        name=f"{itx.user.name} (Player)",
-        value=f"**Cards** - {' '.join(shallow_pv)}\n**Total** - `{player_sum}`"
-    ).add_field(
-        name=f"{itx.client.user.name} (Dealer)",
-        value=f"**Cards** - {shallow_dv[0]} `?`\n**Total** - ` ? `"
-    ).set_author(
-        name=f"{itx.user.name}'s blackjack game",
-        icon_url=itx.user.display_avatar.url
-    ).set_footer(text="K, Q, J = 10  |  A = 1 or 11")
-
-    await itx.response.send_message(embed=initial, view=BlackjackUi(itx, game))
-
-
-def do_wallet_checks(wallet: int, bet : str | int, keycard: bool = False) -> int:
+def do_wallet_checks(
+    wallet: int,
+    bet : str | int,
+    keycard: bool = False
+) -> int:
     """
     Reusable wallet checks that are common amongst most gambling commands.
 
     Bet must be transformed an integer or shorthand via the `ROBUX_CONVERTER`
     """
 
-    if isinstance(bet, str):
-        bet = min(MAX_BET_KEYCARD, wallet) if keycard else min(MAX_BET_WITHOUT, wallet)
+    min_bet, max_bet = (
+        (MIN_BET_KEYCARD, MAX_BET_KEYCARD) if keycard
+        else (MIN_BET_WITHOUT, MIN_BET_KEYCARD)
+    )
 
-    if keycard:
-        if (bet < MIN_BET_KEYCARD) or (bet > MAX_BET_KEYCARD):
-            raise FailingConditionalError(
-                f"You can't bet less than {CURRENCY} **{MIN_BET_KEYCARD:,}**.\n"
-                f"You also can't bet anything more than {CURRENCY} **{MAX_BET_KEYCARD:,}**."
-            )
-    elif (bet < MIN_BET_WITHOUT) or (bet > MAX_BET_WITHOUT):
+    if isinstance(bet, str):
+        bet = min(max_bet, wallet)
+
+    # Cannot be an elif
+    if (bet < min_bet) or (bet > max_bet):
         raise FailingConditionalError(
-            f"You can't bet less than {CURRENCY} **{MIN_BET_WITHOUT:,}**.\n"
-            f"You also can't bet anything more than {CURRENCY} **{MAX_BET_WITHOUT:,}**.\n"
-            f"-# These values can increase when you acquire a <:Keycard:1263922058220408872> Keycard."
+            f"You cannot bet less than "
+            f"{CURRENCY} **{min_bet:,}**.\n"
+
+            f"You also cannot bet anything more "
+            f"than {CURRENCY} **{max_bet:,}**."
         )
+
     return bet
 
 
-@app_commands.command(description="Bet your robux on a dice roll", extras={"exp_gained": 3})
+@app_commands.command(
+    description="Bet your robux on a dice roll",
+    extras={"exp_gained": 3}
+)
 @app_commands.describe(robux=ROBUX_DESCRIPTION)
 async def bet(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
-    """Bet your robux on a gamble to win or lose robux."""
 
     query = (
         """
@@ -3760,9 +3477,11 @@ async def bet(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
             CAST(TOTAL(multipliers.amount) AS INTEGER)
         FROM accounts
         INNER JOIN multipliers
-            ON (accounts.userID = multipliers.userID) OR multipliers.userID IS NULL
+            ON (accounts.userID = multipliers.userID)
+            OR multipliers.userID IS NULL
         INNER JOIN inventory
-            ON accounts.userID = inventory.userID AND inventory.itemID = 1
+            ON accounts.userID = inventory.userID
+            AND inventory.itemID = 1
         WHERE accounts.userID = $0 AND multipliers.multi_type = 'robux'
         """
     )
@@ -3841,10 +3560,10 @@ async def bet(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
     await itx.response.send_message(embed=embed)
 
 
-@sell.autocomplete('item')
-@share_items.autocomplete('item')
-@trade_items_for_robux.autocomplete('item')
-@trade_items_for_items.autocomplete('item')
+@sell.autocomplete("item")
+@share_items.autocomplete("item")
+@trade_items_for_robux.autocomplete("item")
+@trade_items_for_items.autocomplete("item")
 async def owned_items_lookup(
     itx: Interaction,
     current: str
@@ -3865,14 +3584,16 @@ async def owned_items_lookup(
     async with itx.client.pool.acquire() as conn:
         options = await conn.fetchall(query, (current, itx.user.id, current))
 
-    return [app_commands.Choice(name=option, value=option) for (option,) in options]
+    return [
+        app_commands.Choice(name=option, value=option)
+        for (option,) in options
+    ]
 
 
-@use.autocomplete('item')
-@item.autocomplete('item')
-@get_item_lb.autocomplete('item')
-@trade_robux_for_items.autocomplete('for_item')
-@trade_items_for_items.autocomplete('for_item')
+@use.autocomplete("item")
+@item.autocomplete("item")
+@trade_robux_for_items.autocomplete("for_item")
+@trade_items_for_items.autocomplete("for_item")
 async def item_lookup(
     itx: Interaction,
     current: str
@@ -3892,10 +3613,13 @@ async def item_lookup(
     async with itx.client.pool.acquire() as conn:
         options = await conn.fetchall(query, (current, current))
 
-    return [app_commands.Choice(name=option, value=option) for (option,) in options]
+    return [
+        app_commands.Choice(name=option, value=option)
+        for (option,) in options
+    ]
 
 
-@settings.autocomplete('setting')
+@settings.autocomplete("setting")
 async def setting_lookup(
     itx: Interaction,
     current: str
@@ -3925,8 +3649,8 @@ async def setting_lookup(
 cmds = [
     settings, multipliers, share, trade, shop, item, use,
     prestige, highlow, slots, inventory, balance,
-    weekly, monthly, yearly, resetmydata, withdraw, deposit,
-    leaderboard, rob, blackjack, bet
+    weekly, monthly, yearly, resetmydata, withdraw,
+    deposit, rob, bet
 ]
 
 for app_cmd in cmds:

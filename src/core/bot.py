@@ -89,7 +89,7 @@ async def add_exp_or_levelup(
 
     rankup = membed(
         f"{choice(LEVEL_UP_PROMPTS)}, {itx.user.name}!\n"
-        f"You've leveled up from level **{level-1:,}** to level **{level:,}**."
+        f"You've leveled up from level **{level-1:,}** to **{level:,}**."
     )
 
     await itx.followup.send(embed=rankup)
@@ -100,7 +100,11 @@ class BasicTree(app_commands.CommandTree["C2C"]):
     @classmethod
     def from_c2c(cls: type[Self], client: "C2C") -> Self:
         all_installs = app_commands.AppInstallationType(guild=True, user=True)
-        all_contexts = app_commands.AppCommandContext(guild=True, dm_channel=True, private_channel=True)
+        all_contexts = app_commands.AppCommandContext(
+            guild=True,
+            dm_channel=True,
+            private_channel=True
+        )
 
         return cls(
             client,
@@ -110,24 +114,16 @@ class BasicTree(app_commands.CommandTree["C2C"]):
         )
 
     @staticmethod
-    def handle_unknown_exception(embed: discord.Embed) -> None:
-        embed.title = "Something went wrong"
-        embed.description = (
-            "Seems like the bot has stumbled upon an unexpected error.\n"
-            "Not to worry, these happen from time to time. If this issue persists, "
-            "please let us know about it. We're always here to help!"
-        )
-
-    @staticmethod
-    def handle_transformer_error(error: app_commands.AppCommandError, embed: discord.Embed) -> None:
+    def handle_transformer_error(error: app_commands.AppCommandError) -> None:
         if isinstance(error, CustomTransformerError):
-            embed.description = error.cause
+            msg = error.cause
         elif error.type.value == discord.AppCommandOptionType.user.value:
-            embed.description = f"{error.value} is not a member of this server."
+            msg = f"{error.value} is not a member of this server."
         elif error.type.value == discord.AppCommandOptionType.string.value:
-            embed.description = "You need to provide a valid number."
+            msg = "You need to provide a valid number."
         else:
-            embed.description = "An error occurred while processing your input."
+            msg = "An error occurred while processing your input."
+        return msg
 
     async def on_error(
         self,
@@ -141,21 +137,23 @@ class BasicTree(app_commands.CommandTree["C2C"]):
         except discord.HTTPException:
             meth = itx.channel.send
 
-        embed = discord.Embed(colour=0x2B2D31)
         error = getattr(error, "original", error)
 
         if isinstance(error, app_commands.TransformerError):
-            self.handle_transformer_error(error, embed)
+            msg = self.handle_transformer_error(error)
         elif isinstance(error, app_commands.CheckFailure):
             if not isinstance(error, FailingConditionalError):
                 return
-            embed.description = error.cause
+            msg = error.cause
         elif isinstance(error, app_commands.CommandNotFound):
-            embed.description = "This command no longer exists!"
+            msg = "This command no longer exists!"
         else:
-            self.handle_unknown_exception(embed)
             self.client.log_exception(error)
-        await meth(embed=embed, view=self.client.contact_devs)
+            msg = (
+                "Seems like the bot has stumbled upon an unexpected error.\n"
+                "Not to worry. If the issue persists, please let us know."
+            )
+        await meth(msg, view=self.client.contact_devs)
 
 
 class C2C(discord.Client):
@@ -173,7 +171,7 @@ class C2C(discord.Client):
 
         no_mentions = discord.AllowedMentions.none()
 
-        with open('.\\config.json', 'r') as f:
+        with open(".\\config.json", "r") as f:
             config: dict[str, str] = json_load(f)
             for k, v in config.items():
                 setattr(self, k, v)
@@ -215,8 +213,6 @@ class C2C(discord.Client):
         Track slash commands ran.
 
         Increase the interaction user's XP/Level if they are registered.
-
-        Provide a tip if the total command counter for that command ran is a multiple of 15.
         """
 
         if isinstance(itx.command, app_commands.ContextMenu):
@@ -234,14 +230,17 @@ class C2C(discord.Client):
 
             INSERT INTO command_uses (userID, cmd_name, cmd_count)
             VALUES ($0, $2, 1)
-            ON CONFLICT(userID, cmd_name) DO UPDATE SET cmd_count = cmd_count + 1
+            ON CONFLICT(userID, cmd_name)
+                DO UPDATE SET cmd_count = cmd_count + 1
             RETURNING (SELECT total FROM multi)
             """
         )
 
         async with self.pool.acquire() as conn, conn.transaction():
             try:
-                multi, = await conn.fetchone(query, itx.user.id, "xp", f"/{cmd.name}")
+                multi, = await conn.fetchone(
+                    query, itx.user.id, "xp", f"/{cmd.name}"
+                )
             except IntegrityError:
                 return
 
@@ -253,7 +252,9 @@ class C2C(discord.Client):
             await add_exp_or_levelup(itx, conn, int(exp_gainable))
 
     def log_exception(self, error: Exception) -> None:
-        formatted_traceback = ''.join(format_exception(type(error), error, error.__traceback__))
+        formatted_traceback = "".join(
+            format_exception(type(error), error, error.__traceback__)
+        )
         logging_error(formatted_traceback)
 
     async def close(self) -> None:

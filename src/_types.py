@@ -1,10 +1,10 @@
 from typing import Any, NamedTuple, Protocol
 
-from discord import app_commands
+from discord.app_commands import Command, Group, ContextMenu
 
 
-type ACommand = app_commands.Command[Any, Any, Any]
-type AppCommandTypes = app_commands.Group | ACommand | app_commands.ContextMenu
+type ACommand = Command[Any, Any, Any]
+type AppCommandTypes = Group | ACommand | ContextMenu
 
 
 class BotExports(NamedTuple):

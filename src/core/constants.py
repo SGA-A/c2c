@@ -1,4 +1,4 @@
 __all__ = ("CURRENCY",)
 
 
-CURRENCY = '\U000023e3'
+CURRENCY = "\U000023e3"
