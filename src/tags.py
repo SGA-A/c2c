@@ -12,7 +12,7 @@ from ._types import BotExports
 from .core.bot import Interaction
 from .core.paginators import PaginationSimple
 from .core.errors import FailingConditionalError
-from .core.helpers import respond, process_confirmation
+from .core.helpers import process_confirmation
 
 
 PROMO = "\n-# Save time by creating a tag from an existing message."
