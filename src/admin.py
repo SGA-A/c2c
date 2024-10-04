@@ -45,7 +45,7 @@ class DevTools(discord.ui.View):
     @staticmethod
     async def evaluate(
         itx: Interaction,
-        message: discord.Message
+        msg: discord.Message
     ) -> Optional[discord.Message]:
         env = {
             "bot": itx.client,
@@ -53,7 +53,7 @@ class DevTools(discord.ui.View):
             "channel": itx.channel,
             "user": itx.user,
             "guild": itx.guild,
-            "message": message,
+            "message": msg,
             "_": DevTools._last_result,
             "discord": discord,
             "asyncio": asyncio,
@@ -61,7 +61,7 @@ class DevTools(discord.ui.View):
 
         env.update(globals())
 
-        script_body = DevTools.cleanup_code(message.content)
+        script_body = DevTools.cleanup_code(msg.content)
         stdout = StringIO()
 
         to_compile = f"async def func():\n{indent(script_body, '  ')}"
@@ -69,7 +69,7 @@ class DevTools(discord.ui.View):
         try:
             exec(to_compile, env)
         except Exception as e:
-            return await itx.followup.send(
+            return await msg.reply(
                 f"```py\n{e.__class__.__name__}: {e}\n```"
             )
 
@@ -79,24 +79,24 @@ class DevTools(discord.ui.View):
                 ret = await func()
         except Exception:
             value = stdout.getvalue()
-            await itx.followup.send(f"```py\n{value}{format_exc()}\n```")
+            await msg.reply(f"```py\n{value}{format_exc()}\n```")
         else:
             value = stdout.getvalue()
 
             with suppress(discord.HTTPException):
-                await message.add_reaction("\U00002705")
+                await msg.add_reaction("\U00002705")
 
             if ret is None:
                 if value:
                     try:
-                        await itx.followup.send(f"```py\n{value}\n```")
-                    except discord.NotFound:
-                        return await itx.followup.send(
+                        await msg.reply(f"```py\n{value}\n```")
+                    except discord.HTTPException:
+                        return await msg.reply(
                             "Output too long to display."
                         )
             else:
                 DevTools._last_result = ret
-                await itx.followup.send(f"```py\n{value}{ret}\n```")
+                await msg.reply(f"```py\n{value}{ret}\n```")
 
     def eval_check(self, msg: discord.Message) -> bool:
         return (

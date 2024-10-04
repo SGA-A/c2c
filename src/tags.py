@@ -65,7 +65,8 @@ class TagMakeModal(discord.ui.Modal, title="Create New Tag"):
         content = str(self.content)
 
         async with itx.client.pool.acquire() as conn:
-            await create_tag(itx, name, content, conn)
+            resp = await create_tag(itx, name, content, conn)
+        await itx.response.send_message(resp)
 
 
 class MatchView(discord.ui.View):
@@ -261,7 +262,7 @@ async def create_tag(
     name: str,
     content: str,
     conn: Connection
-) -> None:
+) -> str:
     query = "INSERT INTO tags (name, content, ownerID) VALUES (?, ?, ?)"
 
     tr = conn.transaction()
@@ -271,14 +272,14 @@ async def create_tag(
         await conn.execute(query, (name, content, itx.user.id))
     except sqlite3.IntegrityError:
         await tr.rollback()
-        await respond(itx, TAG_ALREADY_EXISTS)
+        return TAG_ALREADY_EXISTS
     except Exception as e:
         itx.client.log_exception(e)
         await tr.rollback()
-        await respond(itx, "Could not create tag.")
+        return "Could not create tag."
     else:
         await tr.commit()
-        await respond(itx, f"Tag {name!r} successfully created.")
+        return f"Tag {name!r} successfully created."
 
 
 tag = app_commands.Group(
@@ -312,7 +313,8 @@ async def create(
 ) -> None:
 
     async with itx.client.pool.acquire() as conn:
-        await create_tag(itx, name, content, conn)
+        resp = await create_tag(itx, name, content, conn)
+    await itx.response.send_message(resp)
 
 
 @tag.command(description="Interactively make your own tag")
@@ -356,7 +358,8 @@ async def make(
         return await msg.reply(MAX_CHARACTERS_REACHED)
 
     async with itx.client.pool.acquire() as conn:
-        await create_tag(itx, name, cleaned, conn)
+        resp = await create_tag(itx, name, cleaned, conn)
+    await msg.reply(resp)
 
 
 @tag.command(description="Modifiy an existing tag that you own")
