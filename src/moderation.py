@@ -1,9 +1,8 @@
 from re import compile
-from typing import Any, Dict, Generator, List, Optional
+from typing import Generator, Optional
 
 import discord
 from discord import app_commands
-from discord.utils import MISSING
 
 from ._types import BotExports
 from .core.errors import FailingConditionalError

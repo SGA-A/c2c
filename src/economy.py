@@ -3,14 +3,12 @@ from sqlite3 import Row, IntegrityError
 from math import floor, ceil
 from re import search
 from textwrap import dedent
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from random import (
     choice,
     choices,
-    randint,
-    shuffle
+    randint
 )
 
 from typing import (
