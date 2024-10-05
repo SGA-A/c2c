@@ -11,7 +11,6 @@ from discord import app_commands
 from ._types import BotExports
 from .core.bot import Interaction
 
-
 class DevTools(discord.ui.View):
     _last_result: Optional[Any] = None
     on_boarding = dedent(
