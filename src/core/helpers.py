@@ -1,5 +1,5 @@
 import contextlib
-from typing import Any, Optional, Literal
+from typing import Any, Literal, Optional
 
 import discord
 from asqlite import Connection
