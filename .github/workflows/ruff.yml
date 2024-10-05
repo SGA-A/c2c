@@ -7,8 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     name: "ruff"
     steps:
-      - name: Clone repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Run Ruff
         uses: astral-sh/ruff-action@v1
