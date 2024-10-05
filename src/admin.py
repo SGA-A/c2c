@@ -1,15 +1,15 @@
 import asyncio
-from io import StringIO
-from traceback import format_exc
-from textwrap import indent, dedent
 from contextlib import redirect_stdout, suppress
+from io import StringIO
+from textwrap import dedent, indent
+from traceback import format_exc
 from typing import Any, Optional
 
 import discord
 from discord import app_commands
 
-from .core.bot import Interaction
 from ._types import BotExports
+from .core.bot import Interaction
 
 
 class DevTools(discord.ui.View):

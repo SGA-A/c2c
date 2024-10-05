@@ -1,12 +1,11 @@
 import contextlib
-from typing import Optional, Callable, Self
+from typing import Callable, Optional, Self
 
 import discord
 
 from .bot import Interaction
 from .helpers import economy_check, edit_response, respond
 from .transformers import RawIntegerTransformer
-
 
 REFRESH = discord.PartialEmoji.from_str("<:refreshPages:1263923160433168414>")
 FIRST = discord.PartialEmoji.from_str("<:firstPage:1263921815345041460>")

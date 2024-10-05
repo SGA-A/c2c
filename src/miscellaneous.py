@@ -1,20 +1,18 @@
-from io import BytesIO
-from unicodedata import name
 from datetime import datetime, timezone
-from typing import Callable, Literal, Optional, Generator
-from xml.etree.ElementTree import fromstring, Element
+from io import BytesIO
+from typing import Callable, Generator, Literal, Optional
+from unicodedata import name
+from xml.etree.ElementTree import Element, fromstring
 
 import discord
-from pytz import timezone as pytz_timezone
 from discord import app_commands
 from psutil import cpu_count
-
+from pytz import timezone as pytz_timezone
 
 from ._types import BotExports
 from .core.bot import Interaction
-from .core.helpers import membed, to_ord, commands_used_by
+from .core.helpers import commands_used_by, membed, to_ord
 from .core.paginators import Pagination, RefreshPagination
-
 
 BASE = "http://www.fileformat.info/info/unicode/char/"
 GH_PARAMS = {"per_page": 3}
@@ -368,8 +366,8 @@ anime = app_commands.Group(
 async def kona_fetch(
     itx: Interaction,
     tag1: str,
-    tag2: str = None,
-    tag3: str = None,
+    tag2: Optional[str],
+    tag3: Optional[str],
     private: bool = True,
     length: app_commands.Range[int, 1, 10] = 3,
     maximum: app_commands.Range[int, 1, 1000] = 30,

@@ -1,19 +1,18 @@
-import sqlite3
 import contextlib
+import sqlite3
 from asyncio import TimeoutError
 from datetime import datetime, timezone
 from typing import Optional, Union
 
 import discord
-from discord import app_commands
 from asqlite import Connection
+from discord import app_commands
 
 from ._types import BotExports
 from .core.bot import Interaction
-from .core.paginators import PaginationSimple
 from .core.errors import FailingConditionalError
 from .core.helpers import process_confirmation
-
+from .core.paginators import PaginationSimple
 
 PROMO = "\n-# Save time by creating a tag from an existing message."
 MAX_CHARACTERS_REACHED = f"Tag content cannot exceed 2000 characters.{PROMO}"

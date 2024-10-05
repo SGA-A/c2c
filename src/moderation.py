@@ -5,11 +5,10 @@ import discord
 from discord import app_commands
 
 from ._types import BotExports
+from .core.bot import Interaction
 from .core.errors import FailingConditionalError
 from .core.helpers import membed, process_confirmation
 from .core.paginators import PaginationItem
-from .core.bot import Interaction
-
 
 ROLE_INPUT_REGEX = compile(r"([+-])([^+-]+)")
 UPLOAD_FILE_DESCRIPTION = "A file to upload alongside the thread."

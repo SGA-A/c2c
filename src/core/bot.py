@@ -1,20 +1,19 @@
-from typing import Self
-from random import choice
-from psutil import Process
+import json
+import logging
+import random
 from sqlite3 import IntegrityError
-from json import load as json_load
 from traceback import format_exception
-from logging import error as logging_error
-from aiohttp import ClientSession, DummyCookieJar
+from typing import Self
 
 import discord
+from aiohttp import ClientSession, DummyCookieJar
+from asqlite import Connection, Pool
 from discord import app_commands
-from asqlite import Pool, Connection
+from psutil import Process
 
-from .._types import HasExports, AppCommandTypes
-from .helpers import membed, add_multiplier
+from .._types import AppCommandTypes, HasExports
 from .errors import CustomTransformerError, FailingConditionalError
-
+from .helpers import add_multiplier, membed
 
 type Interaction = discord.Interaction[C2C]
 
@@ -88,7 +87,7 @@ async def add_exp_or_levelup(
     )
 
     rankup = membed(
-        f"{choice(LEVEL_UP_PROMPTS)}, {itx.user.name}!\n"
+        f"{random.choice(LEVEL_UP_PROMPTS)}, {itx.user.name}!\n"
         f"You've leveled up from level **{level-1:,}** to **{level:,}**."
     )
 
@@ -172,7 +171,7 @@ class C2C(discord.Client):
         no_mentions = discord.AllowedMentions.none()
 
         with open(".\\config.json", "r") as f:
-            config: dict[str, str] = json_load(f)
+            config: dict[str, str] = json.load(f)
             for k, v in config.items():
                 setattr(self, k, v)
 
@@ -255,7 +254,7 @@ class C2C(discord.Client):
         formatted_traceback = "".join(
             format_exception(type(error), error, error.__traceback__)
         )
-        logging_error(formatted_traceback)
+        logging.error(formatted_traceback)
 
     async def close(self) -> None:
         await self.pool.close()
