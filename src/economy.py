@@ -3126,9 +3126,9 @@ async def payout_recurring_income(
 
         await update_cooldown(itx.user.id, income_type, r.timestamp(), conn)
 
-    link = "https://www.youtube.com/watch?v=ue_X8DskUN4"
+    link = "<https://www.youtube.com/watch?v=ue_X8DskUN4>"
     msg = (
-        f"## [{itx.user.display_name}'s {income_type.title()} Robux]({link})"
+        f"## [{itx.user.display_name}'s {income_type.title()} Robux]({link})\n"
         f"You just got {CURRENCY} **{multiplier:,}** "
         f"for checking in this {noun_period}.\n"
         f"See you next {noun_period} ({rformatted})!"
