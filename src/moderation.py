@@ -180,7 +180,7 @@ class RoleManagement(app_commands.Group):
         itx: Interaction,
         member: discord.Member,
         roles: str
-    ) -> None:
+    ) -> Optional[discord.WebhookMessage]:
         await itx.response.defer(thinking=True)
 
         role_changes = ROLE_INPUT_REGEX.findall(roles)
@@ -207,7 +207,7 @@ class RoleManagement(app_commands.Group):
         removed_roles = removed_roles.intersection(their_roles)
 
         if (not added_roles) and (not removed_roles):
-            await itx.followup.send("No changes were made.")
+            return await itx.followup.send("No changes were made.")
 
         embed = membed().set_thumbnail(url=member.display_avatar.url)
         embed.title = f"Role Changes: {member.display_name}"
