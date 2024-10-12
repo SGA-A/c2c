@@ -1,10 +1,9 @@
-import contextlib
 from typing import Callable, Optional, Self
 
 import discord
 
 from .bot import Interaction
-from .helpers import economy_check, edit_response, respond
+from .helpers import BaseView, edit_response, respond
 from .transformers import RawIntegerTransformer
 
 REFRESH = discord.PartialEmoji.from_str("<:refreshPages:1263923160433168414>")
@@ -39,32 +38,19 @@ class PaginatorInput(discord.ui.Modal):
         await self.view.on_error(itx, error, self)
 
 
-class BasePaginator(discord.ui.View):
-    """
-    The base paginator which all paginators
-    should inherit properties from.
-    """
+class BasePaginator(BaseView):
+    """The base paginator which all paginators should inherit from."""
 
     def __init__(
         self,
         itx: Interaction,
         get_page: Optional[Callable] = None
     ) -> None:
-        super().__init__(timeout=90.0)
-        self.itx = itx
-        self.get_page = get_page
+        super().__init__(itx)
+
         self.index = 1
+        self.get_page = get_page
         self.total_pages: Optional[int] = None
-
-    async def interaction_check(self, itx: Interaction) -> bool:
-        return await economy_check(itx, self.itx.user.id)
-
-    async def on_timeout(self) -> None:
-        for item in self.children:
-            item.disabled = True
-
-        with contextlib.suppress(discord.NotFound):
-            await self.itx.edit_original_response(view=self)
 
     async def on_error(
         self,
@@ -80,12 +66,6 @@ class BasePaginator(discord.ui.View):
                 error.cause, ephemeral=True
             )
 
-        with contextlib.suppress(discord.NotFound):
-            await self.itx.delete_original_response()
-
-        await respond(itx, "Something went wrong.")
-
-        self.stop()
         await super().on_error(itx, error, item)
 
     @staticmethod

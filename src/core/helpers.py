@@ -144,22 +144,45 @@ async def economy_check(
     return False
 
 
-class BaseInteractionView(discord.ui.View):
+class BaseView(discord.ui.View):
     """
-    A view ensuring only the interaction creator can interact.
+    An itemless base view that most views must inherit from.
 
     It also destroys the view if an exception is raised.
-
-    This view has no items, you'll need to add them in manually.
     """
     def __init__(
         self,
         itx: discord.Interaction,
+        content: Optional[str] = None,
+        transactional: bool = False,
         controlling_user: Optional[discord.User] = None
     ) -> None:
+        super().__init__(timeout=90.0)
+
         self.itx = itx
+        self.content = content
+        self.transactional = transactional
         self.controlling_user = controlling_user or itx.user
-        super().__init__(timeout=45.0)
+
+    @staticmethod
+    async def end_transactions(itx: discord.Interaction) -> None:
+        async with itx.client.pool.acquire() as conn, conn.transaction():
+            await end_transaction(conn, itx.user.id)
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            item.disabled = True
+
+        if self.content:
+            self.content = f"~~{self.content}~~"
+
+        with contextlib.suppress(discord.NotFound):
+            await self.itx.edit_original_response(
+                content=self.content, view=self
+            )
+
+        if self.transactional:
+            await self.end_transactions(self.itx)
 
     async def interaction_check(self, itx: discord.Interaction) -> bool:
         return await economy_check(itx, self.controlling_user.id)
@@ -168,16 +191,15 @@ class BaseInteractionView(discord.ui.View):
         self,
         itx: discord.Interaction,
         error: Exception,
-        item: discord.ui.Item[Any],
+        _: discord.ui.Item[Any],
         /
     ) -> None:
-        with contextlib.suppress(discord.NotFound):
-            await self.itx.edit_original_response(view=None)
-
+        # ! NB. Transactions also end here when calling on_timeout
         if not self.is_finished():
             self.stop()
 
-        await super().on_error(itx, error, item)
+        await self.on_timeout()
+        await itx.client.tree.on_error(itx, error)
 
 
 class ConfirmButton(discord.ui.Button):
@@ -188,18 +210,14 @@ class ConfirmButton(discord.ui.Button):
         self.view.value = True
         self.view.stop()
 
-        embed = itx.message.embeds[0]
-        embed.title = "Action Confirmed"
-        embed.colour = discord.Colour.brand_green()
-
-        cancel_btn, confirm_btn = self.view.children[0], self
-        confirm_btn.disabled, cancel_btn.disabled = True, True
-        confirm_btn.style, cancel_btn.style = (
+        cancel_btn = self.view.children[0]
+        self.disabled, cancel_btn.disabled = True, True
+        self.style, cancel_btn.style = (
             discord.ButtonStyle.success,
             discord.ButtonStyle.secondary
         )
 
-        await itx.response.edit_message(embed=embed, view=self.view)
+        await itx.response.edit_message(view=self.view)
 
 
 class CancelButton(discord.ui.Button):
@@ -210,37 +228,14 @@ class CancelButton(discord.ui.Button):
         self.view.value = False
         self.view.stop()
 
-        embed = itx.message.embeds[0]
-        embed.title = "Action Cancelled"
-        embed.colour = discord.Colour.brand_red()
-
         confirm_btn = self.view.children[-1]
-
         self.disabled, confirm_btn.disabled = True, True
         self.style, confirm_btn.style = (
             discord.ButtonStyle.success,
             discord.ButtonStyle.secondary
         )
 
-        await itx.response.edit_message(embed=embed, view=self.view)
-
-
-async def format_timeout_view(
-    embed: discord.Embed,
-    view: BaseInteractionView
-) -> bool:
-
-    embed.colour = discord.Colour.brand_red()
-    embed.description = f"~~{embed.description}~~"
-    embed.title = "Timed Out"
-    view.value = False
-
-    for item in view.children:
-        item.disabled = True
-
-    with contextlib.suppress(discord.NotFound):
-        await view.itx.edit_original_response(embed=embed, view=view)
-    return False
+        await itx.response.edit_message(view=self.view)
 
 
 def to_ord(n: int) -> str:
@@ -299,18 +294,14 @@ async def process_confirmation(
     Can be None if the user timed out.
     """
 
-    view = BaseInteractionView(itx, view_owner)
+    view = BaseView(itx, view_owner)
     view.add_item(CancelButton()).add_item(ConfirmButton())
 
     view.value = None
-    emb = membed(prompt)
-    emb.title = "Pending Confirmation"
 
-    await respond(itx, embed=emb, view=view, **kwargs)
+    await respond(itx, prompt, view=view, **kwargs)
 
     await view.wait()
-    if view.value is None:
-        await format_timeout_view(emb, view)
     return view.value
 
 

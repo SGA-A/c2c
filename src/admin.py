@@ -10,9 +10,10 @@ from discord import app_commands
 
 from ._types import BotExports
 from .core.bot import Interaction
+from .core.helpers import BaseView
 
 
-class DevTools(discord.ui.View):
+class DevTools(BaseView):
     _last_result: Optional[Any] = None
     on_boarding = dedent(
         """
@@ -30,8 +31,7 @@ class DevTools(discord.ui.View):
     )
 
     def __init__(self, itx: Interaction) -> None:
-        self.itx = itx
-        super().__init__(timeout=90.0)
+        super().__init__(itx, self.on_boarding)
 
     @staticmethod
     def cleanup_code(content: str) -> str:

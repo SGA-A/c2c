@@ -11,7 +11,7 @@ from discord import app_commands
 from ._types import BotExports
 from .core.bot import Interaction
 from .core.errors import FailingConditionalError
-from .core.helpers import process_confirmation
+from .core.helpers import BaseView, process_confirmation
 from .core.paginators import PaginationSimple
 
 PROMO = "\n-# Save time by creating a tag from an existing message."
@@ -68,41 +68,42 @@ class TagMakeModal(discord.ui.Modal, title="Create New Tag"):
         await itx.response.send_message(resp)
 
 
-class MatchView(discord.ui.View):
-    # ! Possibility of failing due to empty options on super init
+class MatchView(BaseView):
+
     def __init__(
         self,
         itx: Interaction,
+        content: str,
         options: list[discord.SelectOption]
     ) -> None:
-        super().__init__(timeout=45.0)
+        super().__init__(itx, content)
 
         self.children[0].options = options
-        self.itx = itx
         self.tag: Optional[str] = None
 
+    # Keep this since looping over children is unnecessary here
     async def on_timeout(self) -> None:
         self.children[0].disabled = True
         with contextlib.suppress(discord.NotFound):
             await self.itx.edit_original_response(view=self)
 
-    async def interaction_check(self, itx: Interaction) -> bool:
-        if itx.user.id == self.itx.user.id:
-            return True
-        await itx.response.send_message("This is not for you")
-        return False
-
     @discord.ui.select(placeholder="Select what tag you meant")
     async def call(self, itx: Interaction, select: discord.ui.Select) -> None:
-        await self.itx.delete_original_response()
-
         self.tag = select.values[0]
-        self.itx = itx
+
+        for option in select.options:
+            option.default = option.value == self.tag
+
+        await self.on_timeout()
         self.stop()
 
+        # This needs to be below the on_timeout call
+        self.itx = itx
 
+
+# Must pass in interaction, see usage for info
 async def partial_match(
-    itx: Interaction,
+    _: Interaction,
     word_input: str,
     conn: Connection
 ) -> list[sqlite3.Row]:
@@ -169,14 +170,12 @@ async def transform(
         return tag_results[0][0], itx
 
     options = [discord.SelectOption(label=tag) for (tag,) in tag_results]
-    view = MatchView(itx, options)
+    content = f"{length} results for {value!r} found, select one below."
+    view = MatchView(itx, content, options)
 
-    content = (
-        f"**{length}** results for {value!r} were found, select one below."
-    )
     await itx.response.send_message(content, view=view)
-    await view.wait()
 
+    await view.wait()
     if view.tag:
         return view.tag, view.itx
 
@@ -185,6 +184,11 @@ async def transform(
 
 @app_commands.context_menu(name="Tag Message")
 async def create_tag_menu(itx: Interaction, message: discord.Message) -> None:
+    # Somehow you can use user apps on archived threads?
+    # This check helps to avoid the error
+    if message.thread and message.thread.archived:
+        return
+
     cleaned = message.clean_content
 
     if message.attachments:

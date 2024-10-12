@@ -6,7 +6,7 @@ from traceback import format_exception
 from typing import Self
 
 import discord
-from aiohttp import ClientSession, DummyCookieJar
+from aiohttp import ClientSession
 from asqlite import Connection, Pool
 from discord import app_commands
 from psutil import Process
@@ -156,8 +156,15 @@ class BasicTree(app_commands.CommandTree["C2C"]):
 
 
 class C2C(discord.Client):
-    owner_ids = {992152414566232139, 546086191414509599}
-    def __init__(self, pool: Pool, initial_exts: list[HasExports]) -> None:
+    owner_ids: set[int] = {992152414566232139, 546086191414509599}
+
+    def __init__(
+        self,
+        pool: Pool,
+        session: ClientSession,
+        initial_exts: list[HasExports]
+    ) -> None:
+
         flags = discord.MemberCacheFlags.none()
         flags.joined = True
 
@@ -185,9 +192,9 @@ class C2C(discord.Client):
 
         # Setup
         self.pool = pool
+        self.session = session
         self.initial_exts = initial_exts
         self.tree = BasicTree.from_c2c(self)
-        self.session = ClientSession(cookie_jar=DummyCookieJar())
 
         # Misc
         self.process = Process()
@@ -255,11 +262,6 @@ class C2C(discord.Client):
             format_exception(type(error), error, error.__traceback__)
         )
         logging.error(formatted_traceback)
-
-    async def close(self) -> None:
-        await self.pool.close()
-        await self.session.close()
-        await super().close()
 
     async def setup_hook(self) -> None:
         # ! If in the future some modules don't have commands

@@ -18,7 +18,7 @@ BASE = "http://www.fileformat.info/info/unicode/char/"
 GH_PARAMS = {"per_page": 3}
 FACTS_ENDPOINT = "https://api.api-ninjas.com/v1/facts"
 COMMITS_ENDPOINT = "https://api.github.com/repos/SGA-A/c2c/commits"
-TEXT_RAN = "6,231"  # goodbye prefix commands
+TEXT_RAN = 6231  # goodbye prefix commands
 ARROW = "<:Arrow:1263919893762543717>"
 API_EXCEPTION = "The API fucked up, try again later."
 API_ENDPOINTS = Literal[
@@ -96,7 +96,7 @@ class CommandUsage(RefreshPagination):
         user_select: discord.ui.UserSelect = self.children[-1]
         user_select.default_values = [discord.Object(id=self.viewing.id)]
 
-    async def fetch_data(self):
+    async def fetch_data(self) -> None:
         async with self.itx.client.pool.acquire() as conn:
             self.data = await conn.fetchall(
                 """
@@ -273,10 +273,15 @@ async def usage(
             return paginator.embed.set_footer(text="Empty")
 
         offset = (paginator.index - 1) * paginator.length
-        paginator.embed.description = f"> Total: {paginator.total:,}\n\n"
-        paginator.embed.description += "\n".join(
-            f"` {cmd_data[1]:,} ` \U00002014 {cmd_data[0]}"
-            for cmd_data in paginator.data[offset:offset + paginator.length]
+        desc = "\n".join(
+            f"` {usage:,} ` \U00002014 {cmd_name}"
+            for cmd_name, usage in paginator.data[
+                offset:offset + paginator.length
+            ]
+        )
+
+        paginator.embed.description = (
+            f"> Total: {paginator.total:,}\n\n{desc}"
         )
 
         return paginator.embed.set_footer(
@@ -316,29 +321,6 @@ async def calc(itx: Interaction, expression: str) -> None:
 @app_commands.command(description="Checks latency of the bot")
 async def ping(itx: Interaction) -> None:
     await itx.response.send_message(f"{itx.client.latency * 1000:.0f}ms")
-
-
-@app_commands.context_menu(name="Extract Embed Colour")
-async def embed_colour_menu(
-    itx: Interaction,
-    message: discord.Message
-) -> None:
-
-    all_embeds = [
-        discord.Embed(colour=embed.colour, description=embed.colour)
-        for embed in message.embeds
-    ]
-
-    if all_embeds:
-        return await itx.response.send_message(
-            ephemeral=True,
-            embeds=all_embeds
-        )
-
-    await itx.response.send_message(
-        "No embeds were found.",
-        ephemeral=True
-    )
 
 
 anime = app_commands.Group(
@@ -545,23 +527,11 @@ async def about(itx: Interaction) -> None:
     days, hours = divmod(hours, 24)
 
     async with itx.client.pool.acquire() as conn:
-        slash_ran, total_ran = await conn.fetchone(
+        slash_ran, = await conn.fetchone(
             """
-            WITH slash_commands AS (
-                SELECT SUM(cmd_count) AS total_sum
-                FROM command_uses
-                WHERE cmd_name LIKE '/%'
-            ),
-            total_commands AS (
-                SELECT SUM(cmd_count) AS total_sum
-                FROM command_uses
-            )
-            SELECT
-                slash_commands.total_sum,
-                total_commands.total_sum
-            FROM
-                slash_commands,
-                total_commands
+            SELECT SUM(cmd_count)
+            FROM command_uses
+            WHERE cmd_name LIKE '/%'
             """
         )
 
@@ -592,7 +562,7 @@ async def about(itx: Interaction) -> None:
     embed.add_field(
         name="<:slashCommands:1263923524213538917> Commands Run",
         value=(
-            f"{total_ran:,} total\n"
+            f"{TEXT_RAN+slash_ran:,} total\n"
             f"{ARROW} {slash_ran:,} slash\n"
             f"{ARROW} {TEXT_RAN} text"
         )
@@ -665,6 +635,6 @@ exports = BotExports(
         serverinfo, usage, calc,
         ping, anime, randomfact,
         image, image2, charinfo,
-        about, worldclock, embed_colour_menu
+        about, worldclock
     ]
 )

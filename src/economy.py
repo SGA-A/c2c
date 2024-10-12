@@ -1,4 +1,3 @@
-import contextlib
 from datetime import datetime, timedelta, timezone
 from math import ceil, floor
 from random import choice, choices, randint
@@ -16,7 +15,7 @@ from .core.bot import Interaction
 from .core.constants import CURRENCY
 from .core.errors import CustomTransformerError, FailingConditionalError
 from .core.helpers import (
-    BaseInteractionView,
+    BaseView,
     add_multiplier,
     declare_transaction,
     economy_check,
@@ -101,6 +100,15 @@ PRESTIGE_EMOTES = {
 }
 
 item_handlers = {}
+
+error_view = discord.ui.View()
+error_view.stop()
+error_view.add_item(
+    discord.ui.Button(
+        emoji="\U00002754",
+        url="https://dankmemer.lol/tutorial/interaction-locks"
+    )
+)
 
 
 def register_item(item):
@@ -204,7 +212,9 @@ def find_slot_matches(*args) -> Optional[int]:
 
 def repr_card(number: int, /) -> str:
     """
-    Convert a card number into a user-friendly format with a suit and rank."""
+    Convert a card number into a user-friendly
+    format with a suit and rank.
+    """
     ranks = {10: ("K", "Q", "J"), 11: ("A",)}
 
     chosen_suit = choice(
@@ -257,32 +267,27 @@ class ItemInputTransformer(app_commands.Transformer):
                 value, self.type, self, self.ITEM_NOT_FOUND
             )
 
-        if len(res) == 1:
+        length = len(res)
+        if length == 1:
             return res[0]
 
-        match_view = BaseInteractionView(itx)
+        content = f"{length} results for {value!r} found, select one below."
+        match_view = BaseView(itx, content)
         match_view.chosen_item = None
 
         for (item_id, item_name, item_emoji) in res:
             match_view.add_item(MatchItem(item_id, item_name, item_emoji))
 
-        embed = membed("Several matching items, select one below.")
+        await respond(itx, content, view=match_view)
 
-        embed.set_author(
-            name=f"Search: {value}",
-            icon_url=itx.user.display_avatar.url
-        )
-
-        await respond(itx, view=match_view, embed=embed)
         await match_view.wait()
-
         if match_view.chosen_item:
             return match_view.chosen_item
 
         raise CustomTransformerError(value, self.type, self, self.TIMED_OUT)
 
 
-class UserSettings(BaseInteractionView):
+class UserSettings(BaseView):
     def __init__(
         self,
         itx: Interaction,
@@ -309,13 +314,6 @@ class UserSettings(BaseInteractionView):
             row=1
         )
 
-    async def on_timeout(self) -> None:
-        for item in self.children:
-            item.disabled = True
-
-        with contextlib.suppress(discord.NotFound):
-            await self.itx.edit_original_response(view=self)
-
     async def on_error(
         self,
         itx: Interaction,
@@ -323,13 +321,12 @@ class UserSettings(BaseInteractionView):
         item: discord.ui.Item[Any]
     ) -> Optional[discord.WebhookMessage]:
         if isinstance(error, IntegrityError):
-            if not self.is_finished():
-                self.stop()
-            await itx.delete_original_response()
             return await respond(itx, INVOKER_NOT_REGISTERED)
-        return await super().on_error(itx, error, item)
 
-class ConfirmResetData(BaseInteractionView):
+        await super().on_error(itx, error, item)
+
+
+class ConfirmResetData(BaseView):
     roo_fire = discord.PartialEmoji.from_str("<:rooFire:1263923362154156103>")
     WARNING = (
         f"This command resets **[everything]({YT_SHORT})**.\n"
@@ -338,28 +335,11 @@ class ConfirmResetData(BaseInteractionView):
         "-# See what resets by viewing the resetmydata tag."
     )
 
-    def __init__(
-        self,
-        itx: Interaction,
-        target: USER_ENTRY,
-        /
-    ) -> None:
+    def __init__(self, itx: Interaction, target: USER_ENTRY, /) -> None:
+        super().__init__(itx, self.WARNING)
+
         self.target = target
         self.count = 0
-        self.embed = membed(self.WARNING)
-        self.embed.title = "Pending Confirmation"
-
-        super().__init__(itx)
-
-    async def on_timeout(self) -> None:
-        for item in self.children:
-            item.disabled = True
-
-        self.embed.colour = discord.Colour.blurple()
-        self.embed.title = "Action Cancelled"
-
-        with contextlib.suppress(discord.NotFound):
-            await self.itx.edit_original_response(embed=self.embed, view=self)
 
     @discord.ui.button(
         label="Reset",
@@ -373,11 +353,14 @@ class ConfirmResetData(BaseInteractionView):
             return await itx.response.edit_message(view=self)
 
         self.stop()
-        self.embed.title = "Action Confirmed"
-        self.embed.colour = discord.Colour.brand_red()
-        button.disabled, self.children[-1].disabled = True, True
 
-        await itx.response.edit_message(view=self, embed=self.embed)
+        button.disabled, self.children[-1].disabled = True, True
+        button.style, self.children[-1].style = (
+            discord.ButtonStyle.success,
+            discord.ButtonStyle.secondary
+        )
+
+        await itx.response.edit_message(view=self)
 
         query = "DELETE FROM accounts WHERE userID = $0"
         async with itx.client.pool.acquire() as conn:
@@ -407,26 +390,25 @@ class ConfirmResetData(BaseInteractionView):
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.primary)
     async def no(self, itx: Interaction, button: discord.ui.Button) -> None:
-
         self.stop()
-        self.embed.title = "Action Cancelled"
-        self.embed.colour = discord.Colour.blurple()
+
         button.disabled, self.children[0].disabled = True, True
+        button.style, self.children[0].style = (
+            discord.ButtonStyle.success,
+            discord.ButtonStyle.secondary
+        )
 
-        await itx.response.edit_message(view=self, embed=self.embed)
-
-        async with itx.client.pool.acquire() as conn, conn.transaction():
-            await end_transaction(conn, self.target.id)
+        await itx.response.edit_message(view=self)
+        await self.end_transactions(itx)
 
 
-class BalanceView(discord.ui.View):
+class BalanceView(BaseView):
     """View for the balance command to mange and deposit/withdraw money."""
 
     def __init__(self, itx: Interaction, viewing: USER_ENTRY) -> None:
+        super().__init__(itx)
 
-        self.itx = itx
         self.viewing = viewing
-        super().__init__(timeout=120.0)
         self.children[2].default_values = [discord.Object(id=self.viewing.id)]
 
     async def interaction_check(self, itx: Interaction) -> bool:
@@ -440,13 +422,6 @@ class BalanceView(discord.ui.View):
         #! Check if they exist in the database
 
         return await transactional_check(itx)
-
-    async def on_timeout(self) -> None:
-        for item in self.children:
-            item.disabled = True
-
-        with contextlib.suppress(discord.NotFound):
-            await self.itx.edit_original_response(view=self)
 
     async def fetch_balance(self, itx: Interaction) -> discord.Embed:
         """Fetch the user's balance, format it into an embed."""
@@ -605,14 +580,15 @@ class BalanceView(discord.ui.View):
         await itx.response.edit_message(view=self)
 
 
-class HighLow(BaseInteractionView):
+class HighLow(BaseView):
     """View for the Highlow command and its associated functions."""
 
     def __init__(self, itx: Interaction, bet: int) -> None:
+        super().__init__(itx, transactional=True)
+
         self.their_bet = bet
         self.true_value = randint(1, 100)
         self.hint_provided = randint(1, 100)
-        super().__init__(itx)
 
     async def start(self) -> None:
         query = membed(
@@ -638,13 +614,6 @@ class HighLow(BaseInteractionView):
             if item == clicked:
                 continue
             item.style = discord.ButtonStyle.secondary
-
-    async def on_timeout(self) -> None:
-        async with self.itx.client.pool.acquire() as conn, conn.transaction():
-            await end_transaction(conn, self.itx.user.id)
-
-        with contextlib.suppress(discord.NotFound):
-            await self.itx.delete_original_response()
 
     async def send_win(
         self,
@@ -774,17 +743,15 @@ class MultiplierView(RefreshPagination):
         viewing: USER_ENTRY,
         get_page: Optional[Callable] = None
     ) -> None:
+        super().__init__(itx, get_page)
 
         self.viewing = viewing
         self.chosen_multiplier = chosen_multiplier
 
-        self.embed = discord.Embed(
-            title=f"{self.viewing.display_name}'s Multipliers"
-        )
+        self.embed = discord.Embed()
+        self.embed.title = f"{self.viewing.display_name}'s Multipliers"
         self.embed.colour, thumb_url = self.multi_mapping[chosen_multiplier]
         self.embed.set_thumbnail(url=thumb_url)
-
-        super().__init__(itx, get_page=get_page)
 
         for option in self.children[-1].options:
             option.default = option.value == chosen_multiplier
@@ -873,23 +840,21 @@ class MatchItem(discord.ui.Button):
         self,
         item_id: int,
         item_name: str,
-        ie: str,
-        **kwargs
+        ie: str
     ) -> None:
-        self.item_id = item_id
+        super().__init__(label=item_name, emoji=ie)
 
-        super().__init__(
-            label=item_name,
-            emoji=ie,
-            **kwargs
-        )
+        self.item_id = item_id
 
     async def callback(self, itx: Interaction) -> None:
         self.view.chosen_item = (self.item_id, self.label, self.emoji)
         self.view.stop()
 
+        self.style = discord.ButtonStyle.success
+        for item in self.view.children:
+            item.disabled = True
+
         await itx.response.edit_message(view=self.view)
-        await itx.message.delete()
 
 
 class SettingsDropdown(discord.ui.Select):
@@ -984,13 +949,12 @@ class ItemQuantityModal(discord.ui.Modal):
         item_cost: int,
         item_emoji: str
     ) -> None:
+        super().__init__(title=f"Purchase {item_name}")
 
         self.item_cost = item_cost
         self.item_name = item_name
         self.ie = item_emoji
         self.activated_coupon = False
-
-        super().__init__(title=f"Purchase {item_name}")
 
     quantity = discord.ui.TextInput(
         label="Quantity",
@@ -1025,10 +989,12 @@ class ItemQuantityModal(discord.ui.Modal):
 
         if self.activated_coupon:
             await update_inv_new(itx.user.id, -1, "Shop Coupon", conn)
-            success.description += (
-                "\n\n**Additional info:**\n"
-                "- <:shopCoupon:1263923497323855907> "
-                "5% Coupon Discount was applied"
+            success.add_field(
+                name="Additional Info",
+                value=(
+                    "- <:shopCoupon:1263923497323855907> "
+                    "5% Coupon Discount was applied"
+                )
             )
         await respond(itx, embed=success)
 
@@ -1064,23 +1030,21 @@ class ItemQuantityModal(discord.ui.Modal):
         async with itx.client.pool.acquire() as conn, conn.transaction():
             await declare_transaction(conn, itx.user.id)
 
-        # Ask whether or not they wish to apply the coupon.
-        self.activated_coupon = await process_confirmation(
-            itx,
-            prompt=(
-                f"Would you like to use your "
-                f"<:shopCoupon:1263923497323855907> "
-                f"**Shop Coupon** for an additional **5**% off?\n"
-                f"(You have **{qty:,}** coupons in total)\n\n"
+        # Ask whether or not they wish to apply the coupon
+        prompt = (
+            f"Would you like to use your "
+            f"<:shopCoupon:1263923497323855907> "
+            f"**Shop Coupon** for an additional **5**% off?\n"
+            f"(You have **{qty:,}** coupons in total)\n\n"
 
-                f"This will bring the __actual price per unit__ "
-                f"down to {CURRENCY} **{discounted_price:,}** if "
-                f"you decide to use the coupon."
-            )
+            f"This will bring the __actual price per unit__ "
+            f"down to {CURRENCY} **{discounted_price:,}** if "
+            f"you decide to use the coupon."
         )
 
-        async with itx.client.pool.acquire() as conn, conn.transaction():
-            await end_transaction(conn, itx.user.id)
+        self.activated_coupon = await process_confirmation(itx, prompt)
+
+        await BaseView.end_transactions(itx)
 
         if self.activated_coupon is None:
             # Transaction ends, no further cleanup needed
@@ -1155,16 +1119,16 @@ class ItemQuantityModal(discord.ui.Modal):
 
 class ShopItem(discord.ui.Button):
     def __init__(self, item_name: str, cost: int, ie: str, **kwargs) -> None:
-        self.item_name = item_name
-        self.cost = cost
-        self.ie = ie
-
         super().__init__(
             style=discord.ButtonStyle.primary,
-            emoji=self.ie,
+            emoji=ie,
             label=item_name,
             **kwargs
         )
+
+        self.item_name = item_name
+        self.cost = cost
+        self.ie = ie
 
     async def callback(self, itx: Interaction) -> None:
 
@@ -1194,10 +1158,11 @@ class DepositOrWithdraw(discord.ui.Modal):
         default_val: int,
         view: "BalanceView"
     ) -> None:
+        super().__init__(title=title)
+
         self.their_default = default_val
         self.view = view
         self.amount.default = f"{self.their_default:,}"
-        super().__init__(title=title)
 
     amount = discord.ui.TextInput(
         label="Amount",
@@ -1262,19 +1227,7 @@ class DepositOrWithdraw(discord.ui.Modal):
         await itx.response.edit_message(embed=embed, view=self.view)
 
     async def on_error(self, itx: Interaction, error: Exception) -> None:
-        if isinstance(error, CustomTransformerError):
-            return await itx.response.send_message(
-                embed=membed(error.cause),
-                ephemeral=True,
-                delete_after=5.0
-            )
-
-        with contextlib.suppress(discord.NotFound):
-            await self.view.itx.delete_original_response()
-
-        self.view.stop()
-        await respond(itx, "Something went wrong. Try again later.")
-        await super().on_error(itx, error)
+        await itx.client.tree.on_error(itx, error)
 
 
 class InventoryPaginator(RefreshPagination):
@@ -1304,6 +1257,7 @@ class InventoryPaginator(RefreshPagination):
         get_page: Optional[Callable[..., Any]] = None,
     ) -> None:
         super().__init__(itx, get_page)
+
         self.embed = embed
         self.viewing = viewing
         self.data: list[Row] = []
@@ -1437,7 +1391,9 @@ class InventoryPaginator(RefreshPagination):
         await self.edit_page(itx)
 
 
-all_mentions = discord.AllowedMentions.all()
+user_mention = discord.AllowedMentions.none()
+user_mention.users = True
+
 ITEM_CONVERTER = app_commands.Transform[
     tuple[int, str, str], ItemInputTransformer
 ]
@@ -1452,12 +1408,6 @@ async def transactional_check(itx: Interaction) -> bool:
     if data is None:
         return True
 
-    error_view = discord.ui.View().add_item(
-        discord.ui.Button(
-            label="Explain This!",
-            url="https://dankmemer.lol/tutorial/interaction-locks"
-        )
-    )
     await itx.response.send_message(
         WARN_FOR_CONCURRENCY,
         view=error_view,
@@ -2153,7 +2103,7 @@ async def prompt_for_robux(
         itx,
         view_owner=item_sender,
         content=item_sender.mention,
-        allowed_mentions=all_mentions,
+        allowed_mentions=user_mention,
         prompt=dedent(
             f"""
             > Are you sure you want to trade with {robux_sender.mention}?
@@ -2191,7 +2141,7 @@ async def prompt_robux_for_items(
         itx,
         view_owner=robux_sender,
         content=robux_sender.mention,
-        allowed_mentions=all_mentions,
+        allowed_mentions=user_mention,
         prompt=dedent(
             f"""
             > Are you sure you want to trade with {item_sender.mention}?
@@ -2225,7 +2175,7 @@ async def prompt_items_for_items(
         itx,
         view_owner=item_sender,
         content=item_sender.mention,
-        allowed_mentions=all_mentions,
+        allowed_mentions=user_mention,
         prompt=(
             f"> Are you sure you want to trade "
             f"with {item_sender2.mention}?\n\n"
@@ -2558,7 +2508,6 @@ async def view_shop(itx: Interaction) -> None:
     async def get_page_part() -> discord.Embed:
         async with itx.client.pool.acquire() as conn:
             wallet = await fetch_balance(itx.user.id, conn)
-        emb.description = f"> You have {CURRENCY} **{wallet:,}**.\n\n"
 
         if len(paginator.children) > 2:
             backward_btn, forward_btn = paginator.children[:2]
@@ -2566,9 +2515,13 @@ async def view_shop(itx: Interaction) -> None:
             paginator.add_item(backward_btn).add_item(forward_btn)
 
         offset = (paginator.index - 1) * length
-        emb.description += "\n".join(
+        desc = "\n".join(
             item_metadata[0]
             for item_metadata in shop_metadata[offset:offset + length]
+        )
+
+        emb.description = (
+            f"> You have {CURRENCY} **{wallet:,}**.\n\n{desc}"
         )
 
         for _, item_btn in shop_metadata[offset:offset + length]:
