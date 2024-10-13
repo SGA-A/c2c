@@ -50,10 +50,7 @@ EMBED_TIMEZONES = {
 def format_dt(dt: datetime, style: Optional[str] = None) -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-
-    if style is None:
-        return f"<t:{int(dt.timestamp())}>"
-    return f"<t:{int(dt.timestamp())}:{style}>"
+    return discord.utils.format_dt(dt, style)
 
 
 def relative(dt: datetime) -> str:

@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from math import ceil, floor
-from random import choice, choices, randint
+from random import choices, randint
 from re import search
 from sqlite3 import IntegrityError, Row
 from textwrap import dedent
@@ -41,14 +41,6 @@ WARN_FOR_CONCURRENCY = (
 )
 ITEM_DESCRPTION = "Select an item."
 ROBUX_DESCRIPTION = "Can be a number like 1234 or a shorthand (max, all, 1e6)."
-UNIQUE_BADGES = {
-    992152414566232139: " <:staffMember:1263921583949480047>",
-    546086191414509599: " <:devilAdvocate:1263921422166786179>",
-    1134123734421217412: " <:goldBugHunter:1263921864963653662>",
-    1154092136115994687: " <:bugHunter:1263920006392188968>",
-    1047572530422108311: " <:c2cAvatar:1263920021063733451>",
-    1148206353647669298: " <:staffMember:1263921583949480047>",
-}
 INVOKER_NOT_REGISTERED = (
     "## <:notFound:1263922668823122075> You are not registered.\n"
     "You'll need to register first before you can use this command.\n"
@@ -118,40 +110,6 @@ def register_item(item):
     return decorator
 
 
-def shortern_number(number: int) -> str:
-    """
-    Format a numerical value in a concise, abbreviated form.
-
-    - K for thousands
-    - M for millions
-    - B for billions
-    - T for trillions
-
-    ## Examples
-    >>> shortern_number(500)
-    '500'
-    >>> shortern_number(1500)
-    '1.5K'
-    >>> shortern_number(1200000)
-    '1.2M'
-    >>> shortern_number(2500000000)
-    '2.5B'
-    >>> shortern_number(9000000000000)
-    '9.0T'
-    """
-
-    if number < 1e3:
-        return str(number)
-    elif number < 1e6:
-        return "{:.1f}K".format(number / 1e3)
-    elif number < 1e9:
-        return "{:.1f}M".format(number / 1e6)
-    elif number < 1e12:
-        return "{:.1f}B".format(number / 1e9)
-    else:
-        return "{:.1f}T".format(number / 1e12)
-
-
 def add_multi_to_original(multi: int, original: int) -> int:
     return int(((multi / 100) * original) + original)
 
@@ -159,17 +117,6 @@ def selling_price_algo(base_price: int, multiplier: int) -> int:
     base_price //= 4
     base_price = (1 + (multiplier / 100)) * base_price
     return int(round(base_price, -2))
-
-
-def calculate_hand(hand: list) -> int:
-    aces = hand.count(11)
-    total = sum(hand)
-
-    while total > 21 and aces:
-        total -= 10
-        aces -= 1
-
-    return total
 
 
 def generate_slot_combination() -> str:
@@ -199,34 +146,6 @@ def find_slot_matches(*args) -> Optional[int]:
         if occurences > 1:
             return BONUS_MULTIPLIERS[emoji*occurences]
     return None
-
-
-def repr_card(number: int, /) -> str:
-    """
-    Convert a card number into a user-friendly
-    format with a suit and rank.
-    """
-    ranks = {10: ("K", "Q", "J"), 11: ("A",)}
-
-    chosen_suit = choice(
-        ("\U00002665", "\U00002666", "\U00002663", "\U00002660")
-    )
-    rank = choice(ranks.get(number, (number,)))
-
-    return f"[`{chosen_suit} {rank}`](https://www.youtube.com)"
-
-
-async def find_fav_cmd_for(user_id, conn: Connection) -> str:
-    fav, = await conn.fetchone(
-        """
-        SELECT cmd_name FROM command_uses
-        WHERE userID = $0
-        ORDER BY cmd_count DESC
-        LIMIT 1
-        """, user_id
-    ) or ("-",)
-
-    return fav
 
 
 class ItemInputTransformer(app_commands.Transformer):
