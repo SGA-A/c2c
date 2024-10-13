@@ -177,11 +177,6 @@ class C2C(discord.Client):
 
         no_mentions = discord.AllowedMentions.none()
 
-        with open(".\\config.json", "r") as f:
-            config: dict[str, str] = json.load(f)
-            for k, v in config.items():
-                setattr(self, k, v)
-
         super().__init__(
             allowed_mentions=no_mentions,
             intents=intents,
@@ -189,6 +184,11 @@ class C2C(discord.Client):
             member_cache_flags=flags,
             status=discord.Status.idle
         )
+
+        with open(".\\config.json", "r") as f:
+            config: dict[str, str] = json.load(f)
+            for k, v in config.items():
+                setattr(self, k, v)
 
         # Setup
         self.pool = pool

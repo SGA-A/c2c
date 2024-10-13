@@ -29,5 +29,5 @@ class FailingConditionalError(app_commands.CheckFailure):
     the command to continue is not met.
     """
     def __init__(self, cause: str) -> None:
-        self.cause = cause
         super().__init__()
+        self.cause = cause

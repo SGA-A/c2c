@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from math import ceil, floor
 from random import choice, choices, randint
 from re import search
@@ -40,7 +40,7 @@ WARN_FOR_CONCURRENCY = (
     "Finish any commands you are currently using before trying again."
 )
 ITEM_DESCRPTION = "Select an item."
-ROBUX_DESCRIPTION = "Can be a number like 1234 or a shorthand (max, 1e6)."
+ROBUX_DESCRIPTION = "Can be a number like 1234 or a shorthand (max, all, 1e6)."
 UNIQUE_BADGES = {
     992152414566232139: " <:staffMember:1263921583949480047>",
     546086191414509599: " <:devilAdvocate:1263921422166786179>",
@@ -155,19 +155,10 @@ def shortern_number(number: int) -> str:
 def add_multi_to_original(multi: int, original: int) -> int:
     return int(((multi / 100) * original) + original)
 
-
-def format_multiplier(multiplier):
-    """Formats a multiplier for a more readable display."""
-    description = f"` {multiplier[0]} ` \U00002014 {multiplier[1]}"
-    if multiplier[2]:
-        expiry_time = datetime.fromtimestamp(multiplier[2], tz=timezone.utc)
-        expiry_time = discord.utils.format_dt(expiry_time, style="R")
-        description = f"{description} (expires {expiry_time})"
-    return description
-
-
 def selling_price_algo(base_price: int, multiplier: int) -> int:
-    return round(int(base_price * (1+multiplier/100)), -2)
+    base_price //= 4
+    base_price = (1 + (multiplier / 100)) * base_price
+    return int(round(base_price, -2))
 
 
 def calculate_hand(hand: list) -> int:
@@ -297,39 +288,26 @@ class UserSettings(BaseView):
     ) -> None:
         super().__init__(itx)
 
-        self.setting_dropdown = SettingsDropdown(
+        self.select = SettingsDropdown(
             data=data,
             default_setting=chosen_setting
         )
         self.disable_button = ToggleButton(
-            self.setting_dropdown,
             label="Disable",
             style=discord.ButtonStyle.danger,
             row=1
         )
         self.enable_button = ToggleButton(
-            self.setting_dropdown,
             label="Enable",
             style=discord.ButtonStyle.success,
             row=1
         )
 
-    async def on_error(
-        self,
-        itx: Interaction,
-        error: Exception,
-        item: discord.ui.Item[Any]
-    ) -> Optional[discord.WebhookMessage]:
-        if isinstance(error, IntegrityError):
-            return await respond(itx, INVOKER_NOT_REGISTERED)
-
-        await super().on_error(itx, error, item)
-
 
 class ConfirmResetData(BaseView):
     roo_fire = discord.PartialEmoji.from_str("<:rooFire:1263923362154156103>")
     WARNING = (
-        f"This command resets **[everything]({YT_SHORT})**.\n"
+        f"This command resets **[everything](<{YT_SHORT}>)**.\n"
         "Are you sure you want to do this?\n\n"
         "If you do, press `Reset` **3** times.\n"
         "-# See what resets by viewing the resetmydata tag."
@@ -792,7 +770,7 @@ class MultiplierView(RefreshPagination):
             if self.total_multi:
                 self.multiplier_list = await conn.fetchall(
                     """
-                    SELECT amount, description, expiry_timestamp
+                    SELECT amount, description
                     FROM multipliers
                     WHERE (userID IS NULL OR userID = $0)
                     AND multi_type = $1
@@ -869,14 +847,10 @@ class SettingsDropdown(discord.ui.Select):
             )
             for setting, brief in data
         ]
+        super().__init__(options=options, placeholder="Select a setting")
+
         self.current_setting = default_setting
         self.current_setting_state = None
-
-        super().__init__(
-            options=options,
-            placeholder="Select a setting",
-            row=0
-        )
 
     async def callback(self, itx: Interaction) -> None:
         self.current_setting = self.values[0]
@@ -890,16 +864,42 @@ class SettingsDropdown(discord.ui.Select):
 
 
 class ToggleButton(discord.ui.Button):
-    def __init__(self, setting_dropdown: SettingsDropdown, **kwargs) -> None:
-        self.setting_dropdown = setting_dropdown
+    QUERY = (
+        """
+        INSERT INTO settings (userID, setting, value)
+        VALUES ($0, $1, $2)
+        ON CONFLICT(userID, setting) DO UPDATE SET value = $2
+        """
+    )
+
+    def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
 
     async def callback(self, itx: Interaction) -> None:
-        self.setting_dropdown.current_setting_state = (
-            int(not self.setting_dropdown.current_setting_state)
-        )
+        select = self.view.select
 
-        enabled = self.setting_dropdown.current_setting_state == 1
+        select.current_setting_state = int(not select.current_setting_state)
+
+        async with itx.client.pool.acquire() as conn:
+            tr = conn.transaction()
+            await tr.start()
+
+            try:
+                await conn.execute(
+                    self.QUERY,
+                    itx.user.id,
+                    select.current_setting,
+                    select.current_setting_state
+                )
+            except IntegrityError:
+                await tr.rollback()
+                return await itx.response.send_message(
+                    INVOKER_NOT_REGISTERED, ephemeral=True
+                )
+            else:
+                await tr.commit()
+
+        enabled = select.current_setting_state == 1
         em = itx.message.embeds[0].set_field_at(
             index=0,
             name="Current",
@@ -914,18 +914,6 @@ class ToggleButton(discord.ui.Button):
         self.view.enable_button.disabled = enabled
 
         await itx.response.edit_message(embed=em, view=self.view)
-
-        async with itx.client.pool.acquire() as conn, conn.transaction():
-            await conn.execute(
-                """
-                INSERT INTO settings (userID, setting, value)
-                VALUES ($0, $1, $2)
-                ON CONFLICT(userID, setting) DO UPDATE SET value = $2
-                """,
-                itx.user.id,
-                self.setting_dropdown.current_setting,
-                self.setting_dropdown.current_setting_state
-            )
 
 
 class ProfileCustomizeButton(discord.ui.Button):
@@ -958,7 +946,7 @@ class ItemQuantityModal(discord.ui.Modal):
 
     quantity = discord.ui.TextInput(
         label="Quantity",
-        placeholder="A positive integer.",
+        placeholder=ROBUX_DESCRIPTION,
         default="1",
         min_length=1,
         max_length=5
@@ -1168,7 +1156,7 @@ class DepositOrWithdraw(discord.ui.Modal):
         label="Amount",
         min_length=1,
         max_length=30,
-        placeholder="A constant number or an exponent (e.g., 1e6, 1234)"
+        placeholder=ROBUX_DESCRIPTION
     )
 
     async def on_submit(self, itx: Interaction) -> None:
@@ -1488,7 +1476,7 @@ async def get_setting_embed(
             settings_descriptions.description
         FROM settings_descriptions
         WHERE setting = $1
-        """, view.itx.user.id, view.setting_dropdown.current_setting
+        """, view.itx.user.id, view.select.current_setting
     )
 
     if data is None:
@@ -1496,15 +1484,15 @@ async def get_setting_embed(
         return membed("This setting does not exist.")
 
     value, description = data
-    view.setting_dropdown.current_setting_state = value
+    view.select.current_setting_state = value
 
     embed = membed(f"> {description}")
 
     embed.title = " ".join(
-        view.setting_dropdown.current_setting.split("_")
+        view.select.current_setting.split("_")
     ).title()
 
-    view.clear_items().add_item(view.setting_dropdown)
+    view.clear_items().add_item(view.select)
 
     if embed.title == "Profile Customization":
         view.add_item(ProfileCustomizeButton())
@@ -1863,7 +1851,6 @@ async def multipliers(
     user: Optional[USER_ENTRY],
     multiplier: Literal["Robux", "XP", "Luck"] = "Robux"
 ) -> None:
-
     user = user or itx.user
     paginator = MultiplierView(itx, multiplier, user)
     await paginator.format_pages()
@@ -1880,8 +1867,8 @@ async def multipliers(
 
         offset = ((paginator.index - 1) * paginator.length)
         paginator.embed.description += "\n".join(
-            format_multiplier(multi)
-            for multi in paginator.multiplier_list[
+            f"` {multi} ` \U00002014 {cause}"
+            for (multi, cause) in paginator.multiplier_list[
                 offset:offset + paginator.length
             ]
         )
@@ -2475,7 +2462,6 @@ shop = app_commands.Group(
 @shop.command(name="view", description="View all the shop items")
 async def view_shop(itx: Interaction) -> None:
 
-    paginator = PaginationItem(itx)
     async with itx.client.pool.acquire() as conn:
 
         shop_sorted = await conn.fetchall(
@@ -2501,10 +2487,11 @@ async def view_shop(itx: Interaction) -> None:
     emb.title = "Shop"
     length = 6
 
-    paginator.total_pages = paginator.compute_total_pages(
+    total = PaginationItem.compute_total_pages(
         len(shop_metadata), length
     )
 
+    paginator = PaginationItem(itx, total)
     async def get_page_part() -> discord.Embed:
         async with itx.client.pool.acquire() as conn:
             wallet = await fetch_balance(itx.user.id, conn)
@@ -2552,15 +2539,16 @@ async def sell(
         """
         SELECT
             (
-                SELECT CAST(TOTAL(amount) AS INTEGER)
+                SELECT COALESCE(SUM(amount), 0) AS total_amount
                 FROM multipliers
                 WHERE (userID IS NULL OR userID = $0)
-                AND multi_type = $1
+                AND multi_type = 'robux'
             ) AS total_amount,
             COALESCE(inventory.qty, 0) AS qty,
             shop.cost,
-            shop.sellable
+            item_types.sellable
         FROM shop
+        LEFT JOIN item_types ON shop.itemType = item_types.id
         LEFT JOIN inventory
             ON inventory.itemID = shop.itemID AND inventory.userID = $0
         WHERE shop.itemID = $1
@@ -2569,7 +2557,7 @@ async def sell(
 
     async with itx.client.pool.acquire() as conn:
         item_id, item_name, ie = item
-        qty, cost, sellable, multi = (
+        multi, qty, cost, sellable = (
             await conn.fetchone(query, seller.id, item_id)
         )
 
@@ -2580,12 +2568,13 @@ async def sell(
             msg = f"You don't have {ie} **{sell_quantity:,}x** {item_name}."
             raise FailingConditionalError(msg)
 
+        # Selling price algorithm must be calculated before prompt is sent
+        cost = selling_price_algo(cost*sell_quantity, multi)
         sell_prompt = (
             f"Are you sure you want to sell **{sell_quantity:,}x "
             f"{ie} {item_name}** for **{CURRENCY} {cost:,}**?"
         )
 
-        cost = selling_price_algo((cost / 4) * sell_quantity, multi)
         can_proceed = await handle_confirm_outcome(
             itx,
             prompt=sell_prompt,
@@ -2595,7 +2584,7 @@ async def sell(
 
     async with itx.client.pool.acquire() as conn, conn.transaction():
         if can_proceed is not None:
-            await end_transaction(conn, user_id=seller.id)
+            await end_transaction(conn, seller.id)
             if can_proceed is False:
                 return
 
@@ -2630,7 +2619,7 @@ async def item(itx: Interaction, item: ITEM_CONVERTER) -> None:
             SELECT COALESCE(SUM(amount), 0) AS total_amount
             FROM multipliers
             WHERE (userID IS NULL OR userID = $2)
-            AND multi_type = $3
+            AND multi_type = 'robux'
         )
         SELECT
             COALESCE(inventory_data.qty, 0),
@@ -2668,7 +2657,7 @@ async def item(itx: Interaction, item: ITEM_CONVERTER) -> None:
             available,
             sellable,
             multi
-        ) = await conn.fetchone(query, item_id, itx.user.id, "robux")
+        ) = await conn.fetchone(query, item_id, itx.user.id)
         net = await calc_inv_net(itx.user, conn)
 
     dynamic_text = f"> *{description}*\n\nYou own **{their_count:,}**"
@@ -2695,7 +2684,7 @@ async def item(itx: Interaction, item: ITEM_CONVERTER) -> None:
 
     dynamic_text = f"- {"Can" if available else "Cannot"} purchase in shop"
     if sellable:
-        new_sell = selling_price_algo(cost // 4, multi)
+        new_sell = selling_price_algo(cost, multi)
         dynamic_text += (
             f"\n- Sellable for {CURRENCY} {new_sell:,} "
             f"(with your {multi}% multiplier)"
@@ -2799,7 +2788,7 @@ async def start_prestige(itx: Interaction, prestige: int) -> None:
 
 
     async with itx.client.pool.acquire() as conn, conn.transaction():
-        await end_transaction(conn, user_id=itx.user.id)
+        await end_transaction(conn, itx.user.id)
         if can_proceed:
             await conn.execute(
                 "DELETE FROM inventory WHERE userID = $0", itx.user.id
@@ -3131,7 +3120,7 @@ async def resetmydata(itx: Interaction, user: Optional[USER_ENTRY]) -> None:
             await tr.commit()
 
     view = ConfirmResetData(itx, user)
-    await itx.response.send_message(view=view, embed=view.embed)
+    await itx.response.send_message(view.content, view=view)
 
 
 @app_commands.command(description="Withdraw robux from your bank account")
@@ -3387,6 +3376,10 @@ def do_wallet_checks(
 
     if isinstance(bet, str):
         bet = min(max_bet, wallet)
+    elif bet > wallet:
+        raise FailingConditionalError(
+            f"You don't have {CURRENCY} **{bet:,}** to spare."
+        )
 
     # Cannot be an elif
     if (bet < min_bet) or (bet > max_bet):

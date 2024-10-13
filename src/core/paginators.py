@@ -88,6 +88,8 @@ class Pagination(BasePaginator):
         get_page: Optional[Callable] = None
     ) -> None:
         super().__init__(itx, get_page)
+
+        # Pagination size is fixed
         self.total_pages = total_pages
 
     async def navigate(self, **kwargs) -> None:
@@ -151,6 +153,8 @@ class PaginationSimple(BasePaginator):
         get_page: Optional[Callable] = None
     ) -> None:
         super().__init__(itx, get_page)
+
+        # Pagination size is fixed
         self.total_pages = total_pages
 
     async def navigate(self) -> None:
@@ -206,6 +210,7 @@ class RefreshPagination(BasePaginator):
         itx: Interaction,
         get_page: Optional[Callable] = None
     ) -> None:
+        # Pagination size can change on refresh
         super().__init__(itx, get_page)
 
     async def navigate(self) -> None:
@@ -287,9 +292,13 @@ class PaginationItem(BasePaginator):
     def __init__(
         self,
         itx: Interaction,
+        total_pages: int,
         get_page: Optional[Callable] = None
     ) -> None:
         super().__init__(itx, get_page)
+
+        # Pagination size is fixed
+        self.total_pages = total_pages
 
     async def navigate(self) -> None:
         emb = await self.get_page()

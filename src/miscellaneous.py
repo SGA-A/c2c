@@ -88,6 +88,7 @@ class CommandUsage(RefreshPagination):
         get_page: Optional[Callable] = None,
     ) -> None:
         super().__init__(itx, get_page)
+
         self.viewing = viewing
         self.embed = membed()
         self.embed.title = f"{viewing.display_name}'s Command Usage"
@@ -217,40 +218,6 @@ async def format_gif_api_response(
 
     buffer = BytesIO(initial_bytes)
     await itx.followup.send(file=discord.File(buffer, "clip.gif"))
-
-
-@app_commands.command(description="Show information about the server")
-@app_commands.allowed_contexts(guilds=True, dms=False, private_channels=False)
-@app_commands.allowed_installs(guilds=True, users=False)
-async def serverinfo(itx: Interaction) -> None:
-    await itx.response.defer(thinking=True)
-
-    guild = itx.guild
-
-    tn_full, tn_relative = (
-        discord.utils.format_dt(guild.created_at),
-        discord.utils.format_dt(guild.created_at, style="R")
-    )
-
-    serverinfo = discord.Embed(title=guild.name, colour=guild.me.color)
-    serverinfo.description = (
-        f"\U00002726 Owner: {guild.owner.name}\n"
-        f"\U00002726 Max File Size: {guild.filesize_limit / 1_000_000}MB\n"
-        f"\U00002726 Role Count: {len(guild.roles)-1}\n"
-    )
-    serverinfo.set_thumbnail(url=guild.icon.url)
-    serverinfo.add_field(
-        name="Created",
-        value=f"{tn_full} ({tn_relative})",
-    )
-
-    if guild.description:
-        serverinfo.add_field(
-            name="Server Description",
-            value=guild.description
-        )
-
-    await itx.followup.send(embed=serverinfo)
 
 
 @app_commands.command(description="See your total command usage")
@@ -632,9 +599,9 @@ async def worldclock(itx: Interaction) -> None:
 
 exports = BotExports(
     [
-        serverinfo, usage, calc,
+        usage, calc, worldclock,
         ping, anime, randomfact,
         image, image2, charinfo,
-        about, worldclock
+        about
     ]
 )

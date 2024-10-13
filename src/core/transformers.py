@@ -1,6 +1,6 @@
-import discord
 from discord import app_commands
 
+from .bot import Interaction
 from .errors import CustomTransformerError
 
 
@@ -23,7 +23,7 @@ class RawIntegerTransformer(app_commands.Transformer):
         super().__init__()
         self.reject_shorthands = reject_shorthands
 
-    def transform(self, _: discord.Interaction, value: str) -> int | str:
+    def transform(self, _: Interaction, value: str) -> int | str:
         value = value.translate(str.maketrans("", "", ","))
 
         try:
