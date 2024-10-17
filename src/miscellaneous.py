@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Callable, Generator, Literal, Optional
@@ -11,7 +12,7 @@ from pytz import timezone as pytz_timezone
 
 from ._types import BotExports
 from .core.bot import Interaction
-from .core.helpers import commands_used_by, membed, to_ord
+from .core.helpers import BaseView, commands_used_by, membed, to_ord
 from .core.paginators import Pagination, RefreshPagination
 
 BASE = "http://www.fileformat.info/info/unicode/char/"
@@ -132,6 +133,106 @@ class CommandUsage(RefreshPagination):
 
         await self.fetch_data()
         await self.edit_page(itx)
+
+
+class BookmarkSelect(discord.ui.Select):
+    def __init__(self) -> None:
+        super().__init__(placeholder="Select images to (un)bookmark")
+
+    async def callback(self, itx: Interaction) -> None:
+        query = (
+            """
+            INSERT INTO bookmarks (userID, bookmarkID, bookmark)
+            VALUES (?, ?, ?)
+            """
+        )
+
+        args = [
+            (itx.user.id, url.split("/")[-1].split("%20")[2], url)
+            for url in self.values
+        ]
+
+        async with itx.client.pool.acquire() as conn:
+            tr = conn.transaction()
+            await tr.start()
+
+            try:
+                await conn.executemany(query, args)
+            except sqlite3.IntegrityError:
+                await tr.rollback()
+                return await itx.response.send_message(
+                    "Could not apply bookmark changes.",
+                    ephemeral=True
+                )
+            else:
+                await tr.commit()
+                await itx.response.send_message(
+                    "Your changes were applied!",
+                    ephemeral=True
+                )
+
+        old_defaults = {opt.value for opt in self.options if opt.default}
+        deleted = set()
+
+        # Loop over all options
+        for opt in self.options:
+
+            # Set new defaults
+            opt.default = opt.value in self.values
+
+            # Track what options were de-selected for later removal
+            if opt.value not in old_defaults:
+                deleted.add(opt)
+
+        placeholders = ",".join("?" for _ in deleted)
+
+        query = (
+            f"""
+            DELETE
+            FROM bookmarks
+            WHERE userID = ? AND bookmark IN ({placeholders})
+            """
+        )
+
+        async with itx.client.pool.acquire() as conn, conn.transaction():
+            await conn.execute(query, (itx.user.id, *deleted))
+
+        await itx.edit_original_response(view=self.view)
+
+
+class KonaPagination(Pagination):
+    book = "\U0001f516"
+
+    @discord.ui.button(emoji=book, row=2, style=discord.ButtonStyle.success)
+    async def bookmark(self, itx: Interaction, _: discord.ui.Button) -> None:
+        bookmark_select = BookmarkSelect()
+        bookmark_view = BaseView.add_item(bookmark_select)
+
+        query = (
+            """
+            SELECT bookmark
+            FROM bookmarks
+            WHERE userID = $0 AND IN
+            """
+        )
+
+        data = (
+            (em.footer.text.split()[-1], em.image.url)
+            for em in itx.message.embeds
+        )
+
+        # TODO set default options BASED ON current bookmarks
+        async with itx.client.pool.acquire() as conn:
+            await conn.fetchone(query, itx.user.id)
+
+        bookmark_select.options = [
+            discord.SelectOption(
+                label=img_id,
+                value=img_url
+            )
+            for (img_id, img_url) in data
+        ]
+        await itx.response.send_message(view=bookmark_view)
 
 
 async def fetch_commits(itx: Interaction) -> str:
@@ -287,13 +388,13 @@ async def ping(itx: Interaction) -> None:
     await itx.response.send_message(f"{itx.client.latency * 1000:.0f}ms")
 
 
-anime = app_commands.Group(
-    name="anime",
-    description="Surf through anime images and posts"
+kona_group = app_commands.Group(
+    name="kona",
+    description="Surf through kona images and posts"
 )
 
 
-@anime.command(name="kona", description="Retrieve posts from Konachan")
+@kona_group.command(name="search", description="Retrieve posts from Konachan")
 @app_commands.rename(length="max_images")
 @app_commands.describe(
     tag1="A tag to base your search on.",
@@ -418,7 +519,7 @@ async def image2(
 
     user = user or itx.user
     params = {"image_url": user.display_avatar.url}
-    headers = {"Authorization": f"Bearer {itx.client.j_api}"}
+    headers = {"Authonarization": f"Bearer {itx.client.j_api}"}
     api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
     await format_gif_api_response(itx, api_url, params, headers)
@@ -528,7 +629,7 @@ async def about(itx: Interaction) -> None:
         value=(
             f"{TEXT_RAN+slash_ran:,} total\n"
             f"{ARROW} {slash_ran:,} slash\n"
-            f"{ARROW} {TEXT_RAN} text"
+            f"{ARROW} {TEXT_RAN:,} text"
         )
     )
 
@@ -597,7 +698,7 @@ async def worldclock(itx: Interaction) -> None:
 exports = BotExports(
     [
         usage, calc, worldclock,
-        ping, anime, randomfact,
+        ping, kona_group, randomfact,
         image, image2, charinfo,
         about
     ]
