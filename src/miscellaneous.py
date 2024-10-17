@@ -12,7 +12,7 @@ from pytz import timezone as pytz_timezone
 
 from ._types import BotExports
 from .core.bot import Interaction
-from .core.helpers import commands_used_by, membed, to_ord
+from .core.helpers import BaseView, commands_used_by, membed, to_ord
 from .core.paginators import Pagination, RefreshPagination
 
 BASE = "http://www.fileformat.info/info/unicode/char/"
@@ -135,23 +135,21 @@ class CommandUsage(RefreshPagination):
         await self.edit_page(itx)
 
 
-class KonaPagination(Pagination):
-    @discord.ui.select(placeholder="Bookmark or Unbookmark shown images")
-    async def select(
-        self,
-        itx: Interaction,
-        select: discord.ui.Select
-    ) -> None:
+class BookmarkSelect(discord.ui.Select):
+    def __init__(self) -> None:
+        super().__init__(placeholder="Select images to (un)bookmark")
 
+    async def callback(self, itx: Interaction) -> None:
         query = (
             """
             INSERT INTO bookmarks (userID, bookmarkID, bookmark)
             VALUES (?, ?, ?)
             """
         )
+
         args = [
             (itx.user.id, url.split("/")[-1].split("%20")[2], url)
-            for url in select.values
+            for url in self.values
         ]
 
         async with itx.client.pool.acquire() as conn:
@@ -169,9 +167,72 @@ class KonaPagination(Pagination):
             else:
                 await tr.commit()
                 await itx.response.send_message(
-                    "Changes applied!",
+                    "Your changes were applied!",
                     ephemeral=True
                 )
+
+        old_defaults = {opt.value for opt in self.options if opt.default}
+        deleted = set()
+
+        # Loop over all options
+        for opt in self.options:
+
+            # Set new defaults
+            opt.default = opt.value in self.values
+
+            # Track what options were de-selected for later removal
+            if opt.value not in old_defaults:
+                deleted.add(opt)
+
+        placeholders = ",".join("?" for _ in deleted)
+
+        query = (
+            f"""
+            DELETE
+            FROM bookmarks
+            WHERE userID = ? AND bookmark IN ({placeholders})
+            """
+        )
+
+        async with itx.client.pool.acquire() as conn, conn.transaction():
+            await conn.execute(query, (itx.user.id, *deleted))
+
+        await itx.edit_original_response(view=self.view)
+
+
+class KonaPagination(Pagination):
+    book = "\U0001f516"
+
+    @discord.ui.button(emoji=book, row=2, style=discord.ButtonStyle.success)
+    async def bookmark(self, itx: Interaction, _: discord.ui.Button) -> None:
+        bookmark_select = BookmarkSelect()
+        bookmark_view = BaseView.add_item(bookmark_select)
+
+        query = (
+            """
+            SELECT bookmark
+            FROM bookmarks
+            WHERE userID = $0 AND IN
+            """
+        )
+
+        data = (
+            (em.footer.text.split()[-1], em.image.url)
+            for em in itx.message.embeds
+        )
+
+        # TODO set default options BASED ON current bookmarks
+        async with itx.client.pool.acquire() as conn:
+            await conn.fetchone(query, itx.user.id)
+
+        bookmark_select.options = [
+            discord.SelectOption(
+                label=img_id,
+                value=img_url
+            )
+            for (img_id, img_url) in data
+        ]
+        await itx.response.send_message(view=bookmark_view)
 
 
 async def fetch_commits(itx: Interaction) -> str:
