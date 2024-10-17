@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Callable, Generator, Literal, Optional
@@ -132,6 +133,45 @@ class CommandUsage(RefreshPagination):
 
         await self.fetch_data()
         await self.edit_page(itx)
+
+
+class KonaPagination(Pagination):
+    @discord.ui.select(placeholder="Bookmark or Unbookmark shown images")
+    async def select(
+        self,
+        itx: Interaction,
+        select: discord.ui.Select
+    ) -> None:
+
+        query = (
+            """
+            INSERT INTO bookmarks (userID, bookmarkID, bookmark)
+            VALUES (?, ?, ?)
+            """
+        )
+        args = [
+            (itx.user.id, url.split("/")[-1].split("%20")[2], url)
+            for url in select.values
+        ]
+
+        async with itx.client.pool.acquire() as conn:
+            tr = conn.transaction()
+            await tr.start()
+
+            try:
+                await conn.executemany(query, args)
+            except sqlite3.IntegrityError:
+                await tr.rollback()
+                return await itx.response.send_message(
+                    "Could not apply bookmark changes.",
+                    ephemeral=True
+                )
+            else:
+                await tr.commit()
+                await itx.response.send_message(
+                    "Changes applied!",
+                    ephemeral=True
+                )
 
 
 async def fetch_commits(itx: Interaction) -> str:
@@ -287,13 +327,13 @@ async def ping(itx: Interaction) -> None:
     await itx.response.send_message(f"{itx.client.latency * 1000:.0f}ms")
 
 
-anime = app_commands.Group(
-    name="anime",
-    description="Surf through anime images and posts"
+kona_group = app_commands.Group(
+    name="kona",
+    description="Surf through kona images and posts"
 )
 
 
-@anime.command(name="kona", description="Retrieve posts from Konachan")
+@kona_group.command(name="search", description="Retrieve posts from Konachan")
 @app_commands.rename(length="max_images")
 @app_commands.describe(
     tag1="A tag to base your search on.",
@@ -418,7 +458,7 @@ async def image2(
 
     user = user or itx.user
     params = {"image_url": user.display_avatar.url}
-    headers = {"Authorization": f"Bearer {itx.client.j_api}"}
+    headers = {"Authonarization": f"Bearer {itx.client.j_api}"}
     api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
     await format_gif_api_response(itx, api_url, params, headers)
@@ -528,7 +568,7 @@ async def about(itx: Interaction) -> None:
         value=(
             f"{TEXT_RAN+slash_ran:,} total\n"
             f"{ARROW} {slash_ran:,} slash\n"
-            f"{ARROW} {TEXT_RAN} text"
+            f"{ARROW} {TEXT_RAN:,} text"
         )
     )
 
@@ -597,7 +637,7 @@ async def worldclock(itx: Interaction) -> None:
 exports = BotExports(
     [
         usage, calc, worldclock,
-        ping, anime, randomfact,
+        ping, kona_group, randomfact,
         image, image2, charinfo,
         about
     ]
