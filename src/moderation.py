@@ -268,10 +268,10 @@ class RoleManagement(app_commands.Group):
         emb = membed()
         length = 12
 
-        paginator = PaginationItem(itx)
-        paginator.total_pages = (
-            paginator.compute_total_pages(len(itx.guild.roles), length)
+        total_pages = PaginationItem.compute_total_pages(
+            len(itx.guild.roles), length
         )
+        paginator = PaginationItem(itx, total_pages)
 
         async def get_page_part() -> discord.Embed:
             offset = length - (paginator.index * length) - 1

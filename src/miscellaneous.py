@@ -65,6 +65,7 @@ def parse_posts(
 ) -> Generator[tuple[str, str, str], None, None]:
     return (
         (
+            img_metadata.get("id"),
             img_metadata.get("jpeg_url"),
             img_metadata.get("author"),
             img_metadata.get("created_at")
@@ -463,8 +464,10 @@ async def kona_fetch(
                 colour=0x2B2D31,
                 url=url,
                 timestamp=to_datetime(int(created), tz=timezone.utc)
-            ).set_image(url=url)
-            for (url, author, created) in parse_posts(xml, offset, length)
+            ).set_image(url=url).set_footer(text=f"ID: {img_id}")
+            for (img_id, url, author, created) in parse_posts(
+                xml, offset, length
+            )
         ]
 
     paginator.get_page = get_page_part

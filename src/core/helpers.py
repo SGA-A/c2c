@@ -1,8 +1,13 @@
+from __future__ import annotations
+
 import contextlib
-from typing import Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import discord
 from asqlite import Connection
+
+if TYPE_CHECKING:
+    from .bot import Interaction
 
 
 async def declare_transaction(conn: Connection, user_id: int, /) -> bool:
@@ -129,7 +134,7 @@ def membed(description: Optional[str] = None) -> discord.Embed:
 
 
 async def economy_check(
-    itx: discord.Interaction,
+    itx: Interaction,
     original_id: int,
     /
 ) -> bool:
@@ -152,7 +157,7 @@ class BaseView(discord.ui.View):
     """
     def __init__(
         self,
-        itx: discord.Interaction,
+        itx: Interaction,
         content: Optional[str] = None,
         transactional: bool = False,
         controlling_user: Optional[discord.User] = None
@@ -165,7 +170,7 @@ class BaseView(discord.ui.View):
         self.controlling_user = controlling_user or itx.user
 
     @staticmethod
-    async def end_transactions(itx: discord.Interaction) -> None:
+    async def end_transactions(itx: Interaction) -> None:
         async with itx.client.pool.acquire() as conn, conn.transaction():
             await end_transaction(conn, itx.user.id)
 
@@ -184,12 +189,12 @@ class BaseView(discord.ui.View):
         if self.transactional:
             await self.end_transactions(self.itx)
 
-    async def interaction_check(self, itx: discord.Interaction) -> bool:
+    async def interaction_check(self, itx: Interaction) -> bool:
         return await economy_check(itx, self.controlling_user.id)
 
     async def on_error(
         self,
-        itx: discord.Interaction,
+        itx: Interaction,
         error: Exception,
         _: discord.ui.Item[Any],
         /
@@ -206,7 +211,7 @@ class ConfirmButton(discord.ui.Button):
     def __init__(self) -> None:
         super().__init__(style=discord.ButtonStyle.success, label="Confirm")
 
-    async def callback(self, itx: discord.Interaction) -> None:
+    async def callback(self, itx: Interaction) -> None:
         self.view.value = True
         self.view.stop()
 
@@ -224,7 +229,7 @@ class CancelButton(discord.ui.Button):
     def __init__(self) -> None:
         super().__init__(label="Cancel", style=discord.ButtonStyle.danger)
 
-    async def callback(self, itx: discord.Interaction) -> None:
+    async def callback(self, itx: Interaction) -> None:
         self.view.value = False
         self.view.stop()
 
@@ -248,7 +253,7 @@ def to_ord(n: int) -> str:
 
 
 async def respond(
-    itx: discord.Interaction,
+    itx: Interaction,
     content: Optional[str] = None,
     /,
     **kwargs
@@ -264,7 +269,7 @@ async def respond(
 
 
 async def edit_response(
-    itx: discord.Interaction,
+    itx: Interaction,
     /,
     **kwargs
 ) -> Optional[discord.InteractionMessage]:
@@ -279,7 +284,7 @@ async def edit_response(
 
 
 async def process_confirmation(
-    itx: discord.Interaction,
+    itx: Interaction,
     /,
     prompt: str,
     view_owner: Optional[discord.User] = None,
@@ -318,7 +323,7 @@ async def is_setting_enabled(
 
 
 async def handle_confirm_outcome(
-    itx: discord.Interaction,
+    itx: Interaction,
     prompt: str,
     view_owner: Optional[discord.User] = None,
     setting: Optional[str] = None,

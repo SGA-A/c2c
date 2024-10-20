@@ -166,8 +166,8 @@ async def transform(
     if not length:
         raise FailingConditionalError(TAG_MISSING)
 
-    if length == 1:
-        return tag_results[0][0], itx
+    if length == 1 or ((result:=tag_results[0][0]) == value):
+        return result, itx
 
     options = [discord.SelectOption(label=tag) for (tag,) in tag_results]
     content = f"{length} results for {value!r} found, select one below."
@@ -214,43 +214,22 @@ async def all_tag_autocomplete(
     itx: Interaction,
     current: str
 ) -> list[app_commands.Choice[str]]:
-    query = (
-        """
-        SELECT name
-        FROM tags
-        WHERE name LIKE '%' || ? || '%'
-        COLLATE NOCASE
-        ORDER BY INSTR(name, ?)
-        LIMIT 25
-        """
-    )
 
-    current = current.lower()
     async with itx.client.pool.acquire() as conn:
-        rows = await conn.fetchall(query, (current, current))
-    return [app_commands.Choice(name=row, value=row) for (row,) in rows]
+        all_tags = await partial_match(itx, current, conn)
+
+    return [app_commands.Choice(name=tag, value=tag) for (tag,) in all_tags]
 
 
-async def all_owned_tag_autocomplete(
+async def owned_tag_autocomplete(
     itx: Interaction,
     current: str
 ) -> list[app_commands.Choice[str]]:
-    query = (
-        """
-        SELECT name
-        FROM tags
-        WHERE ownerID = ? AND LOWER(name) LIKE '%' || ? || '%'
-        COLLATE NOCASE
-        ORDER BY INSTR(name, ?)
-        LIMIT 25
-        """
-    )
 
-    current = current.lower()
     async with itx.client.pool.acquire() as conn:
-        all_tags = await conn.fetchall(query, (itx.user.id, current, current))
+        owned_tags = await owned_partial_match(itx, current, conn)
 
-    return [app_commands.Choice(name=tag, value=tag) for (tag,) in all_tags]
+    return [app_commands.Choice(name=tag, value=tag) for (tag,) in owned_tags]
 
 
 async def get_tag_content(name: str, conn: Connection) -> str:
@@ -334,8 +313,8 @@ async def make(
         )
 
     await itx.response.send_message(
-        "What about the tag's content?\n"
-        "-# Type `abort` to end this process."
+        f"You've named the tag {name!r}. What about its content? "
+        f"You can type `abort` to end the process."
     )
 
     try:
@@ -370,7 +349,7 @@ async def make(
     name="The tag to edit.",
     content="The new content of the tag. If not given, a modal is opened."
 )
-@app_commands.autocomplete(name=all_owned_tag_autocomplete)
+@app_commands.autocomplete(name=owned_tag_autocomplete)
 async def edit(
     itx: Interaction,
     name: TAG_DELIMITER,
@@ -411,7 +390,7 @@ async def edit(
 
 @tag.command(description="Remove a tag that you own")
 @app_commands.describe(name="The tag to remove.")
-@app_commands.autocomplete(name=all_owned_tag_autocomplete)
+@app_commands.autocomplete(name=owned_tag_autocomplete)
 async def remove(itx: Interaction, name: TAG_DELIMITER) -> None:
     name, itx = await transform(itx, name, owned_tags_only=True)
 
@@ -610,7 +589,7 @@ async def search(itx: Interaction, query: TAG_DELIMITER) -> None:
     tag="The tag to transfer.",
     user="Who to transfer the tag to."
 )
-@app_commands.autocomplete(tag=all_owned_tag_autocomplete)
+@app_commands.autocomplete(tag=owned_tag_autocomplete)
 async def transfer(
     itx: Interaction,
     user: discord.User,
