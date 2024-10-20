@@ -12,7 +12,7 @@ from pytz import timezone as pytz_timezone
 
 from ._types import BotExports
 from .core.bot import Interaction
-from .core.helpers import BaseView, commands_used_by, membed, to_ord
+from .core.helpers import commands_used_by, membed, to_ord
 from .core.paginators import Pagination, RefreshPagination
 
 BASE = "http://www.fileformat.info/info/unicode/char/"
@@ -46,6 +46,10 @@ EMBED_TIMEZONES = {
     "Germany": "Europe/Berlin",
     "India": "Asia/Kolkata"
 }
+
+
+def from_epoch(timestamp: int) -> datetime:
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc)
 
 
 def format_dt(dt: datetime, style: Optional[str] = None) -> str:
@@ -136,11 +140,60 @@ class CommandUsage(RefreshPagination):
         await self.edit_page(itx)
 
 
-class BookmarkSelect(discord.ui.Select):
-    def __init__(self) -> None:
-        super().__init__(placeholder="Select images to (un)bookmark")
+class KonaPagination(Pagination):
+    book = "\U0001f516"
+    icon_url = "https://i.imgur.com/AlDBkyA.png"
 
-    async def callback(self, itx: Interaction) -> None:
+    def __init__(
+        self,
+        itx: Interaction,
+        total_pages: int,
+        get_page: Optional[Callable] = None
+    ) -> None:
+        super().__init__(itx, total_pages, get_page)
+
+        self.url_dict: dict[str, str] = {}
+        self.dropdown: discord.ui.Select = self.children[-1]
+
+    async def navigate(self, **kwargs) -> None:
+        embeds = await self.get_page()
+        self.dropdown.max_values = len(embeds)
+        self.refresh_options(embeds)
+
+        if self.total_pages == 1:
+            await self.itx.followup.send(embeds=embeds, **kwargs)
+
+        self.update_buttons()
+        await self.itx.followup.send(embeds=embeds, view=self, **kwargs)
+
+    async def edit_page(self, itx: Interaction) -> None:
+        embeds = await self.get_page()
+        self.dropdown.max_values = len(embeds)
+
+        # Remove previous image IDs and their URLs
+        self.url_dict.clear()
+        self.refresh_options(embeds)
+
+        self.update_buttons()
+        await itx.response.edit_message(embeds=embeds, view=self)
+
+    def refresh_options(self, embeds: list[discord.Embed]) -> None:
+        self.dropdown.options = self.dropdown.options or [
+            discord.SelectOption(label=f"x{i}", emoji="\U0001f194")
+            for i, _ in enumerate(embeds)
+        ]
+
+        for em, opt in zip(embeds, self.dropdown.options, strict=True):
+            opt.value, opt.label = em.footer.text, em.footer.text
+            self.url_dict[opt.label] = em.image.url
+
+    @discord.ui.select(row=2, placeholder="Select images to bookmark")
+    async def dropdown_callback(
+        self,
+        itx: Interaction,
+        select: discord.ui.Select
+    ) -> None:
+
         query = (
             """
             INSERT INTO bookmarks (userID, bookmarkID, bookmark)
@@ -149,91 +202,17 @@ class BookmarkSelect(discord.ui.Select):
         )
 
         args = [
-            (itx.user.id, url.split("/")[-1].split("%20")[2], url)
-            for url in self.values
+            (itx.user.id, int(img_id), self.url_dict[img_id])
+            for img_id in select.values
         ]
 
-        async with itx.client.pool.acquire() as conn:
-            tr = conn.transaction()
-            await tr.start()
-
+        async with itx.client.pool.acquire() as conn, conn.transaction():
             try:
                 await conn.executemany(query, args)
             except sqlite3.IntegrityError:
-                await tr.rollback()
-                return await itx.response.send_message(
-                    "Could not apply bookmark changes.",
-                    ephemeral=True
-                )
-            else:
-                await tr.commit()
-                await itx.response.send_message(
-                    "Your changes were applied!",
-                    ephemeral=True
-                )
+                pass
 
-        old_defaults = {opt.value for opt in self.options if opt.default}
-        deleted = set()
-
-        # Loop over all options
-        for opt in self.options:
-
-            # Set new defaults
-            opt.default = opt.value in self.values
-
-            # Track what options were de-selected for later removal
-            if opt.value not in old_defaults:
-                deleted.add(opt)
-
-        placeholders = ",".join("?" for _ in deleted)
-
-        query = (
-            f"""
-            DELETE
-            FROM bookmarks
-            WHERE userID = ? AND bookmark IN ({placeholders})
-            """
-        )
-
-        async with itx.client.pool.acquire() as conn, conn.transaction():
-            await conn.execute(query, (itx.user.id, *deleted))
-
-        await itx.edit_original_response(view=self.view)
-
-
-class KonaPagination(Pagination):
-    book = "\U0001f516"
-
-    @discord.ui.button(emoji=book, row=2, style=discord.ButtonStyle.success)
-    async def bookmark(self, itx: Interaction, _: discord.ui.Button) -> None:
-        bookmark_select = BookmarkSelect()
-        bookmark_view = BaseView.add_item(bookmark_select)
-
-        query = (
-            """
-            SELECT bookmark
-            FROM bookmarks
-            WHERE userID = $0 AND IN
-            """
-        )
-
-        data = (
-            (em.footer.text.split()[-1], em.image.url)
-            for em in itx.message.embeds
-        )
-
-        # TODO set default options BASED ON current bookmarks
-        async with itx.client.pool.acquire() as conn:
-            await conn.fetchone(query, itx.user.id)
-
-        bookmark_select.options = [
-            discord.SelectOption(
-                label=img_id,
-                value=img_url
-            )
-            for (img_id, img_url) in data
-        ]
-        await itx.response.send_message(view=bookmark_view)
+        await itx.response.send_message("\U00002705", ephemeral=True)
 
 
 async def fetch_commits(itx: Interaction) -> str:
@@ -411,7 +390,7 @@ kona_group = app_commands.Group(
     tag2=tag_search_autocomplete,
     tag3=tag_search_autocomplete
 )
-async def kona_fetch(
+async def kona_search(
     itx: Interaction,
     tag1: str,
     tag2: Optional[str],
@@ -435,13 +414,10 @@ async def kona_fetch(
     )
 
     if isinstance(xml, int):
-        resp = (
-            f"## {xml}. That's an error.\n"
-            f"Failed to make this request."
-        )
-        return await itx.followup.send(resp)
+        return await itx.followup.send(API_EXCEPTION)
 
-    if not len(xml):
+    # If the list of raw XML is empty
+    if not xml:
         resp = (
             "## No posts found\n"
             "There are a few known causes:\n"
@@ -453,18 +429,20 @@ async def kona_fetch(
         return await itx.followup.send(resp, ephemeral=True)
 
     total_pages = Pagination.compute_total_pages(len(xml), length)
-    paginator = Pagination(itx, total_pages)
+    paginator = KonaPagination(itx, total_pages)
 
-    to_datetime = datetime.fromtimestamp
     async def get_page_part() -> list[discord.Embed]:
         offset = (paginator.index - 1) * length
+
         return [
             discord.Embed(
                 title=author,
                 colour=0x2B2D31,
                 url=url,
-                timestamp=to_datetime(int(created), tz=timezone.utc)
-            ).set_image(url=url).set_footer(text=f"ID: {img_id}")
+                timestamp=from_epoch(int(created))
+            ).set_image(url=url).set_footer(
+                text=f"{img_id}", icon_url=paginator.icon_url
+            )
             for (img_id, url, author, created) in parse_posts(
                 xml, offset, length
             )
