@@ -1086,8 +1086,7 @@ class DepositOrWithdraw(discord.ui.Modal):
         elif val > self.their_default:
             return await itx.response.send_message(
                 self.bigarg_response[self.title],
-                ephemeral=True,
-                delete_after=5.0
+                ephemeral=True
             )
 
         if self.title == "Withdraw":

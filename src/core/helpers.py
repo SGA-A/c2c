@@ -143,8 +143,7 @@ async def economy_check(
         return True
     await itx.response.send_message(
         "This menu is not for you",
-        ephemeral=True,
-        delete_after=5.0,
+        ephemeral=True
     )
     return False
 
