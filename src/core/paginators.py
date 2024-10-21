@@ -31,7 +31,7 @@ class PaginatorInput(discord.ui.Modal):
         if isinstance(true_page, str):
             self.view.index = self.view.total_pages
         elif self.view.index == true_page:
-            # modal inputs only exist on non-refreshable paginators
+            # Modal inputs only exist on non-refreshable paginators
             return await itx.response.edit_message(view=self)
 
         self.view.index = min(self.view.total_pages, true_page)

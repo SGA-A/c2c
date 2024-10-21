@@ -593,7 +593,7 @@ async def image2(
 
     user = user or itx.user
     params = {"image_url": user.display_avatar.url}
-    headers = {"Authonarization": f"Bearer {itx.client.j_api}"}
+    headers = {"Authorization": f"Bearer {itx.client.j_api}"}
     api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
     await format_gif_api_response(itx, api_url, params, headers)
