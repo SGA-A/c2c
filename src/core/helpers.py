@@ -209,7 +209,10 @@ class BaseView(discord.ui.View):
 
 class ConfirmButton(discord.ui.Button):
     def __init__(self) -> None:
-        super().__init__(style=discord.ButtonStyle.success, label="Confirm")
+        super().__init__(
+            style=discord.ButtonStyle.success,
+            emoji="<:Tick:1297985728738889858>"
+        )
 
     async def callback(self, itx: Interaction) -> None:
         self.view.value = True
@@ -227,7 +230,10 @@ class ConfirmButton(discord.ui.Button):
 
 class CancelButton(discord.ui.Button):
     def __init__(self) -> None:
-        super().__init__(label="Cancel", style=discord.ButtonStyle.danger)
+        super().__init__(
+            style=discord.ButtonStyle.danger,
+            emoji="<:Cross:1297985740600246283>"
+        )
 
     async def callback(self, itx: Interaction) -> None:
         self.view.value = False
@@ -283,7 +289,7 @@ async def edit_response(
     await itx.response.edit_message(**kwargs)
 
 
-async def process_confirmation(
+async def send_prompt(
     itx: Interaction,
     /,
     prompt: str,
@@ -299,7 +305,7 @@ async def process_confirmation(
     Can be None if the user timed out.
     """
 
-    view = BaseView(itx, view_owner)
+    view = BaseView(itx, prompt, view_owner)
     view.add_item(CancelButton()).add_item(ConfirmButton())
 
     view.value = None
@@ -322,7 +328,7 @@ async def is_setting_enabled(
     return result
 
 
-async def handle_confirm_outcome(
+async def trans_prompt(
     itx: Interaction,
     prompt: str,
     view_owner: Optional[discord.User] = None,
@@ -381,7 +387,7 @@ async def handle_confirm_outcome(
         await itx.client.pool.release(conn)
         conn = None
 
-        can_proceed = await process_confirmation(
+        can_proceed = await send_prompt(
             itx, prompt, view_owner, **kwargs
         )
     finally:

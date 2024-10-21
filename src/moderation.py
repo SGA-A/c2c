@@ -7,7 +7,7 @@ from discord import app_commands
 from ._types import BotExports
 from .core.bot import Interaction
 from .core.errors import FailingConditionalError
-from .core.helpers import membed, process_confirmation
+from .core.helpers import membed, send_prompt
 from .core.paginators import PaginationItem
 
 ROLE_INPUT_REGEX = compile(r"([+-])([^+-]+)")
@@ -240,7 +240,7 @@ class RoleManagement(app_commands.Group):
         )
 
         prompt = f"This will add {role.name!r} to all members."
-        value = await process_confirmation(itx, prompt)
+        value = await send_prompt(itx, prompt)
 
         if not value:
             return
@@ -257,7 +257,7 @@ class RoleManagement(app_commands.Group):
         )
 
         prompt = f"This will remove {role.name!r} from all members."
-        value = await process_confirmation(itx, prompt)
+        value = await send_prompt(itx, prompt)
 
         if not value:
             return
@@ -320,7 +320,7 @@ class RoleManagement(app_commands.Group):
         )
 
         prompt = f"This will remove {role.name!r} from all bots."
-        value = await process_confirmation(itx, prompt)
+        value = await send_prompt(itx, prompt)
 
         if not value:
             return
@@ -337,7 +337,7 @@ class RoleManagement(app_commands.Group):
         )
 
         prompt = f"This will add {role.name!r} to all humans in this server."
-        value = await process_confirmation(itx, prompt)
+        value = await send_prompt(itx, prompt)
 
         if not value:
             return
@@ -359,7 +359,7 @@ class RoleManagement(app_commands.Group):
         prompt = (
             f"This will remove {role.name!r} from all humans in this server."
         )
-        value = await process_confirmation(itx, prompt)
+        value = await send_prompt(itx, prompt)
 
         if not value:
             return
@@ -390,7 +390,7 @@ class RoleManagement(app_commands.Group):
             f"all members with {base_role.name!r}."
         )
 
-        value = await process_confirmation(itx, prompt)
+        value = await send_prompt(itx, prompt)
 
         if not value:
             return
@@ -420,7 +420,7 @@ class RoleManagement(app_commands.Group):
             f"all members with {base_role.name!r}."
         )
 
-        value = await process_confirmation(itx, prompt)
+        value = await send_prompt(itx, prompt)
 
         if not value:
             return

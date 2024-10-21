@@ -11,7 +11,7 @@ from discord import app_commands
 from ._types import BotExports
 from .core.bot import Interaction
 from .core.errors import FailingConditionalError
-from .core.helpers import BaseView, process_confirmation
+from .core.helpers import BaseView, send_prompt
 from .core.paginators import PaginationSimple
 
 PROMO = "\n-# Save time by creating a tag from an existing message."
@@ -353,7 +353,7 @@ async def make(
 async def edit(
     itx: Interaction,
     name: TAG_DELIMITER,
-    content: Optional[CONTENT_DELIMITER] = None
+    content: Optional[CONTENT_DELIMITER]
 ) -> None:
     if content is None:
         async with itx.client.pool.acquire() as conn:
@@ -517,7 +517,7 @@ async def purge(itx: Interaction, user: Optional[discord.User]) -> None:
     message = (
         f"Upon approval, **{count}** tag(s) by {user.name} will be deleted."
     )
-    val = await process_confirmation(itx, message)
+    val = await send_prompt(itx, message)
 
     if not val:
         return

@@ -12,7 +12,7 @@ from pytz import timezone as pytz_timezone
 
 from ._types import BotExports
 from .core.bot import Interaction
-from .core.helpers import commands_used_by, membed, to_ord
+from .core.helpers import commands_used_by, membed, send_prompt, to_ord
 from .core.paginators import Pagination, RefreshPagination
 
 BASE = "http://www.fileformat.info/info/unicode/char/"
@@ -302,7 +302,7 @@ async def format_gif_api_response(
 @app_commands.describe(user="Whose command usage to display.")
 async def usage(
     itx: Interaction,
-    user: Optional[discord.User] = None
+    user: Optional[discord.User]
 ) -> None:
     user = user or itx.user
 
@@ -368,20 +368,29 @@ async def ping(itx: Interaction) -> None:
     await itx.response.send_message(f"{itx.client.latency * 1000:.0f}ms")
 
 
+bookmark_group = app_commands.Group(
+    name="bookmarks",
+    description="Manage your kona bookmarks"
+)
+
+
 kona_group = app_commands.Group(
     name="kona",
     description="Surf through kona images and posts"
 )
 
 
+kona_group.add_command(bookmark_group)
+
+
 @kona_group.command(name="search", description="Retrieve posts from Konachan")
-@app_commands.rename(length="max_images")
+@app_commands.rename(per_page="max_images")
 @app_commands.describe(
     tag1="A tag to base your search on.",
     tag2="A tag to base your search on.",
     tag3="A tag to base your search on." ,
     private="Hide the results from others. Defaults to True.",
-    length="The maximum number of images to display at once. Defaults to 3.",
+    per_page="The maximum number of images to display at once. Defaults to 3.",
     maximum="The maximum number of images to retrieve. Defaults to 30.",
     page="The page number to look through."
 )
@@ -396,7 +405,7 @@ async def kona_search(
     tag2: Optional[str],
     tag3: Optional[str],
     private: bool = True,
-    length: app_commands.Range[int, 1, 10] = 3,
+    per_page: app_commands.Range[int, 1, 10] = 3,
     maximum: app_commands.Range[int, 1, 1000] = 30,
     page: app_commands.Range[int, 1] = 1
 ) -> Optional[discord.WebhookMessage]:
@@ -428,11 +437,11 @@ async def kona_search(
         )
         return await itx.followup.send(resp, ephemeral=True)
 
-    total_pages = Pagination.compute_total_pages(len(xml), length)
+    total_pages = Pagination.compute_total_pages(len(xml), per_page)
     paginator = KonaPagination(itx, total_pages)
 
     async def get_page_part() -> list[discord.Embed]:
-        offset = (paginator.index - 1) * length
+        offset = (paginator.index - 1) * per_page
 
         return [
             discord.Embed(
@@ -444,12 +453,96 @@ async def kona_search(
                 text=f"{img_id}", icon_url=paginator.icon_url
             )
             for (img_id, url, author, created) in parse_posts(
-                xml, offset, length
+                xml, offset, per_page
             )
         ]
 
     paginator.get_page = get_page_part
     await paginator.navigate(ephemeral=private)
+
+
+@bookmark_group.command(name="remove", description="Remove a kona bookmark")
+@app_commands.describe(bookmark_id="The bookmark ID to remove.")
+async def remove_bookmark(
+    itx: Interaction,
+    bookmark_id: app_commands.Range[int, 1, 10_000_000]
+) -> None:
+
+    query = (
+        """
+        DELETE
+        FROM bookmarks
+        WHERE userID = ? AND bookmarkID = ?
+        """
+    )
+
+    async with itx.client.pool.acquire() as conn, conn.transaction():
+        await conn.execute(query, (itx.user.id, bookmark_id))
+    await itx.response.send_message("\U00002705", ephemeral=True)
+
+
+@bookmark_group.command(name="list", description="List your kona bookmarks")
+@app_commands.describe(
+    per_page="The amount to images to display at once on each page.",
+    private="Hide your bookmarks from others. Defaults to True."
+)
+async def list_bookmarks(
+    itx: Interaction,
+    per_page: app_commands.Range[int, 1, 10] = 3,
+    private: bool = True
+) -> None:
+
+    query = "SELECT bookmarkID, bookmark FROM bookmarks WHERE userID = ?"
+    async with itx.client.pool.acquire() as conn:
+        bookmarks = await conn.fetchall(query, (itx.user.id,))
+
+    if not bookmarks:
+        return await itx.response.send_message(
+            "You have no bookmarks.", ephemeral=private
+        )
+
+    total_pages = Pagination.compute_total_pages(len(bookmarks), per_page)
+    paginator = Pagination(itx, total_pages)
+
+    async def get_page_part() -> list[discord.Embed]:
+        offset = (paginator.index - 1) * per_page
+        return [
+            membed().set_image(
+                url=image_url
+            ).set_footer(icon_url=KonaPagination.icon_url, text=image_id)
+            for image_id, image_url in bookmarks[offset:offset+per_page]
+        ]
+
+    paginator.get_page = get_page_part
+    await paginator.navigate(ephemeral=private)
+
+
+@bookmark_group.command(description="Delete all of your kona bookmarks")
+async def clear(itx: Interaction) -> None:
+
+    query = "SELECT COUNT(*) FROM bookmarks WHERE userID = ?"
+    async with itx.client.pool.acquire() as conn:
+        count, = await conn.fetchone(query, (itx.user.id,))
+
+    if not count:
+        return await itx.response.send_message("You have no bookmarks!")
+
+    prompt = f"You are about to erase **{count:,}** bookmarks. Continue?"
+    confirmed = await send_prompt(itx, prompt)
+    if not confirmed:
+        return
+
+    query = "DELETE FROM bookmarks WHERE userID = ? RETURNING COUNT(*)"
+    async with itx.client.pool.acquire() as conn, conn.transaction():
+        deleted, = await conn.fetchone(query, (itx.user.id,))
+
+    resp = (
+        f"**{deleted:,}** bookmarks erased successfully."
+        if deleted else
+        "You erased your bookmarks already!"
+    )
+
+    await itx.followup.send(resp)
 
 
 @app_commands.command(description="Queries a random fact")
@@ -474,7 +567,7 @@ async def randomfact(itx: Interaction) -> None:
 async def image(
     itx: Interaction,
     endpoint: API_ENDPOINTS,
-    user: Optional[discord.User] = None
+    user: Optional[discord.User]
 ) -> None:
     await itx.response.defer(thinking=True)
 
@@ -494,7 +587,7 @@ async def image(
 async def image2(
     itx: Interaction,
     endpoint: MORE_API_ENDPOINTS,
-    user: Optional[discord.User] = None
+    user: Optional[discord.User]
 ) -> None:
     await itx.response.defer(thinking=True)
 
