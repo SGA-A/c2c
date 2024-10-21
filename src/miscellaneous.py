@@ -1,3 +1,4 @@
+import sqlite3
 from datetime import datetime, timezone
 from io import BytesIO
 from typing import Callable, Generator, Literal, Optional
@@ -11,7 +12,7 @@ from pytz import timezone as pytz_timezone
 
 from ._types import BotExports
 from .core.bot import Interaction
-from .core.helpers import commands_used_by, membed, to_ord
+from .core.helpers import commands_used_by, membed, send_prompt, to_ord
 from .core.paginators import Pagination, RefreshPagination
 
 BASE = "http://www.fileformat.info/info/unicode/char/"
@@ -47,6 +48,10 @@ EMBED_TIMEZONES = {
 }
 
 
+def from_epoch(timestamp: int) -> datetime:
+    return datetime.fromtimestamp(timestamp, tz=timezone.utc)
+
+
 def format_dt(dt: datetime, style: Optional[str] = None) -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
@@ -64,6 +69,7 @@ def parse_posts(
 ) -> Generator[tuple[str, str, str], None, None]:
     return (
         (
+            img_metadata.get("id"),
             img_metadata.get("jpeg_url"),
             img_metadata.get("author"),
             img_metadata.get("created_at")
@@ -132,6 +138,81 @@ class CommandUsage(RefreshPagination):
 
         await self.fetch_data()
         await self.edit_page(itx)
+
+
+class KonaPagination(Pagination):
+    book = "\U0001f516"
+    icon_url = "https://i.imgur.com/AlDBkyA.png"
+
+    def __init__(
+        self,
+        itx: Interaction,
+        total_pages: int,
+        get_page: Optional[Callable] = None
+    ) -> None:
+        super().__init__(itx, total_pages, get_page)
+
+        self.url_dict: dict[str, str] = {}
+        self.dropdown: discord.ui.Select = self.children[-1]
+
+    async def navigate(self, **kwargs) -> None:
+        embeds = await self.get_page()
+        self.dropdown.max_values = len(embeds)
+        self.refresh_options(embeds)
+
+        if self.total_pages == 1:
+            await self.itx.followup.send(embeds=embeds, **kwargs)
+
+        self.update_buttons()
+        await self.itx.followup.send(embeds=embeds, view=self, **kwargs)
+
+    async def edit_page(self, itx: Interaction) -> None:
+        embeds = await self.get_page()
+        self.dropdown.max_values = len(embeds)
+
+        # Remove previous image IDs and their URLs
+        self.url_dict.clear()
+        self.refresh_options(embeds)
+
+        self.update_buttons()
+        await itx.response.edit_message(embeds=embeds, view=self)
+
+    def refresh_options(self, embeds: list[discord.Embed]) -> None:
+        self.dropdown.options = self.dropdown.options or [
+            discord.SelectOption(label=f"x{i}", emoji="\U0001f194")
+            for i, _ in enumerate(embeds)
+        ]
+
+        for em, opt in zip(embeds, self.dropdown.options, strict=True):
+            opt.value, opt.label = em.footer.text, em.footer.text
+            self.url_dict[opt.label] = em.image.url
+
+    @discord.ui.select(row=2, placeholder="Select images to bookmark")
+    async def dropdown_callback(
+        self,
+        itx: Interaction,
+        select: discord.ui.Select
+    ) -> None:
+
+        query = (
+            """
+            INSERT INTO bookmarks (userID, bookmarkID, bookmark)
+            VALUES (?, ?, ?)
+            """
+        )
+
+        args = [
+            (itx.user.id, int(img_id), self.url_dict[img_id])
+            for img_id in select.values
+        ]
+
+        async with itx.client.pool.acquire() as conn, conn.transaction():
+            try:
+                await conn.executemany(query, args)
+            except sqlite3.IntegrityError:
+                pass
+
+        await itx.response.send_message("\U00002705", ephemeral=True)
 
 
 async def fetch_commits(itx: Interaction) -> str:
@@ -221,7 +302,7 @@ async def format_gif_api_response(
 @app_commands.describe(user="Whose command usage to display.")
 async def usage(
     itx: Interaction,
-    user: Optional[discord.User] = None
+    user: Optional[discord.User]
 ) -> None:
     user = user or itx.user
 
@@ -287,20 +368,29 @@ async def ping(itx: Interaction) -> None:
     await itx.response.send_message(f"{itx.client.latency * 1000:.0f}ms")
 
 
-anime = app_commands.Group(
-    name="anime",
-    description="Surf through anime images and posts"
+bookmark_group = app_commands.Group(
+    name="bookmarks",
+    description="Manage your kona bookmarks"
 )
 
 
-@anime.command(name="kona", description="Retrieve posts from Konachan")
-@app_commands.rename(length="max_images")
+kona_group = app_commands.Group(
+    name="kona",
+    description="Surf through kona images and posts"
+)
+
+
+kona_group.add_command(bookmark_group)
+
+
+@kona_group.command(name="search", description="Retrieve posts from Konachan")
+@app_commands.rename(per_page="max_images")
 @app_commands.describe(
     tag1="A tag to base your search on.",
     tag2="A tag to base your search on.",
     tag3="A tag to base your search on." ,
     private="Hide the results from others. Defaults to True.",
-    length="The maximum number of images to display at once. Defaults to 3.",
+    per_page="The maximum number of images to display at once. Defaults to 3.",
     maximum="The maximum number of images to retrieve. Defaults to 30.",
     page="The page number to look through."
 )
@@ -309,13 +399,13 @@ anime = app_commands.Group(
     tag2=tag_search_autocomplete,
     tag3=tag_search_autocomplete
 )
-async def kona_fetch(
+async def kona_search(
     itx: Interaction,
     tag1: str,
     tag2: Optional[str],
     tag3: Optional[str],
     private: bool = True,
-    length: app_commands.Range[int, 1, 10] = 3,
+    per_page: app_commands.Range[int, 1, 10] = 3,
     maximum: app_commands.Range[int, 1, 1000] = 30,
     page: app_commands.Range[int, 1] = 1
 ) -> Optional[discord.WebhookMessage]:
@@ -333,13 +423,10 @@ async def kona_fetch(
     )
 
     if isinstance(xml, int):
-        resp = (
-            f"## {xml}. That's an error.\n"
-            f"Failed to make this request."
-        )
-        return await itx.followup.send(resp)
+        return await itx.followup.send(API_EXCEPTION)
 
-    if not len(xml):
+    # If the list of raw XML is empty
+    if not xml:
         resp = (
             "## No posts found\n"
             "There are a few known causes:\n"
@@ -350,24 +437,112 @@ async def kona_fetch(
         )
         return await itx.followup.send(resp, ephemeral=True)
 
-    total_pages = Pagination.compute_total_pages(len(xml), length)
-    paginator = Pagination(itx, total_pages)
+    total_pages = Pagination.compute_total_pages(len(xml), per_page)
+    paginator = KonaPagination(itx, total_pages)
 
-    to_datetime = datetime.fromtimestamp
     async def get_page_part() -> list[discord.Embed]:
-        offset = (paginator.index - 1) * length
+        offset = (paginator.index - 1) * per_page
+
         return [
             discord.Embed(
                 title=author,
                 colour=0x2B2D31,
                 url=url,
-                timestamp=to_datetime(int(created), tz=timezone.utc)
-            ).set_image(url=url)
-            for (url, author, created) in parse_posts(xml, offset, length)
+                timestamp=from_epoch(int(created))
+            ).set_image(url=url).set_footer(
+                text=f"{img_id}", icon_url=paginator.icon_url
+            )
+            for (img_id, url, author, created) in parse_posts(
+                xml, offset, per_page
+            )
         ]
 
     paginator.get_page = get_page_part
     await paginator.navigate(ephemeral=private)
+
+
+@bookmark_group.command(name="remove", description="Remove a kona bookmark")
+@app_commands.describe(bookmark_id="The bookmark ID to remove.")
+async def remove_bookmark(
+    itx: Interaction,
+    bookmark_id: app_commands.Range[int, 1, 10_000_000]
+) -> None:
+
+    query = (
+        """
+        DELETE
+        FROM bookmarks
+        WHERE userID = ? AND bookmarkID = ?
+        """
+    )
+
+    async with itx.client.pool.acquire() as conn, conn.transaction():
+        await conn.execute(query, (itx.user.id, bookmark_id))
+    await itx.response.send_message("\U00002705", ephemeral=True)
+
+
+@bookmark_group.command(name="list", description="List your kona bookmarks")
+@app_commands.describe(
+    per_page="The amount to images to display at once on each page.",
+    private="Hide your bookmarks from others. Defaults to True."
+)
+async def list_bookmarks(
+    itx: Interaction,
+    per_page: app_commands.Range[int, 1, 10] = 3,
+    private: bool = True
+) -> None:
+
+    query = "SELECT bookmarkID, bookmark FROM bookmarks WHERE userID = ?"
+    async with itx.client.pool.acquire() as conn:
+        bookmarks = await conn.fetchall(query, (itx.user.id,))
+
+    if not bookmarks:
+        return await itx.response.send_message(
+            "You have no bookmarks.", ephemeral=private
+        )
+
+    total_pages = Pagination.compute_total_pages(len(bookmarks), per_page)
+    paginator = Pagination(itx, total_pages)
+
+    async def get_page_part() -> list[discord.Embed]:
+        offset = (paginator.index - 1) * per_page
+        return [
+            membed().set_image(
+                url=image_url
+            ).set_footer(icon_url=KonaPagination.icon_url, text=image_id)
+            for image_id, image_url in bookmarks[offset:offset+per_page]
+        ]
+
+    paginator.get_page = get_page_part
+    await paginator.navigate(ephemeral=private)
+
+
+@bookmark_group.command(description="Delete all of your kona bookmarks")
+async def clear(itx: Interaction) -> None:
+
+    query = "SELECT COUNT(*) FROM bookmarks WHERE userID = ?"
+    async with itx.client.pool.acquire() as conn:
+        count, = await conn.fetchone(query, (itx.user.id,))
+
+    if not count:
+        return await itx.response.send_message("You have no bookmarks!")
+
+    prompt = f"You are about to erase **{count:,}** bookmarks. Continue?"
+    confirmed = await send_prompt(itx, prompt)
+    if not confirmed:
+        return
+
+    query = "DELETE FROM bookmarks WHERE userID = ? RETURNING COUNT(*)"
+    async with itx.client.pool.acquire() as conn, conn.transaction():
+        deleted, = await conn.fetchone(query, (itx.user.id,))
+
+    resp = (
+        f"**{deleted:,}** bookmarks erased successfully."
+        if deleted else
+        "You erased your bookmarks already!"
+    )
+
+    await itx.followup.send(resp)
 
 
 @app_commands.command(description="Queries a random fact")
@@ -392,7 +567,7 @@ async def randomfact(itx: Interaction) -> None:
 async def image(
     itx: Interaction,
     endpoint: API_ENDPOINTS,
-    user: Optional[discord.User] = None
+    user: Optional[discord.User]
 ) -> None:
     await itx.response.defer(thinking=True)
 
@@ -412,7 +587,7 @@ async def image(
 async def image2(
     itx: Interaction,
     endpoint: MORE_API_ENDPOINTS,
-    user: Optional[discord.User] = None
+    user: Optional[discord.User]
 ) -> None:
     await itx.response.defer(thinking=True)
 
@@ -528,7 +703,7 @@ async def about(itx: Interaction) -> None:
         value=(
             f"{TEXT_RAN+slash_ran:,} total\n"
             f"{ARROW} {slash_ran:,} slash\n"
-            f"{ARROW} {TEXT_RAN} text"
+            f"{ARROW} {TEXT_RAN:,} text"
         )
     )
 
@@ -597,7 +772,7 @@ async def worldclock(itx: Interaction) -> None:
 exports = BotExports(
     [
         usage, calc, worldclock,
-        ping, anime, randomfact,
+        ping, kona_group, randomfact,
         image, image2, charinfo,
         about
     ]

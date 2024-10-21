@@ -21,10 +21,10 @@ from .core.helpers import (
     economy_check,
     end_transaction,
     get_multi_of,
-    handle_confirm_outcome,
     membed,
-    process_confirmation,
     respond,
+    send_prompt,
+    trans_prompt,
 )
 from .core.paginators import PaginationItem, RefreshPagination
 from .core.transformers import RawIntegerTransformer
@@ -949,7 +949,7 @@ class ItemQuantityModal(discord.ui.Modal):
             f"you decide to use the coupon."
         )
 
-        self.activated_coupon = await process_confirmation(itx, prompt)
+        self.activated_coupon = await send_prompt(itx, prompt)
 
         await BaseView.end_transactions(itx)
 
@@ -988,7 +988,7 @@ class ItemQuantityModal(discord.ui.Modal):
                 return await respond(itx, msg)
 
             total_price = self.item_cost * true_qty
-            can_proceed = await handle_confirm_outcome(
+            can_proceed = await trans_prompt(
                 itx,
                 conn=conn,
                 setting="buying_confirmations",
@@ -1086,8 +1086,7 @@ class DepositOrWithdraw(discord.ui.Modal):
         elif val > self.their_default:
             return await itx.response.send_message(
                 self.bigarg_response[self.title],
-                ephemeral=True,
-                delete_after=5.0
+                ephemeral=True
             )
 
         if self.title == "Withdraw":
@@ -1161,7 +1160,7 @@ class InventoryPaginator(RefreshPagination):
         itx: Interaction,
         embed: discord.Embed,
         viewing: USER_ENTRY,
-        get_page: Optional[Callable[..., Any]] = None,
+        get_page: Optional[Callable] = None,
     ) -> None:
         super().__init__(itx, get_page)
 
@@ -1841,7 +1840,7 @@ async def share_robux(
             f"Are you sure you want to share {CURRENCY} "
             f"**{quantity:,}** with {recipient.mention}?"
         )
-        can_proceed = await handle_confirm_outcome(
+        can_proceed = await trans_prompt(
             itx,
             prompt=share_prompt,
             setting="share_robux_confirmations",
@@ -1905,7 +1904,7 @@ async def share_items(
             f"Are you sure you want to share **{quantity:,} "
             f"{ie} {item_name}** with {recipient.mention}?"
         )
-        can_proceed = await handle_confirm_outcome(
+        can_proceed = await trans_prompt(
             itx,
             prompt=share_prompt,
             setting="share_item_confirmations",
@@ -2005,7 +2004,7 @@ async def prompt_for_robux(
     The person that is confirming has to send items,
     in exchange they get robux.
     """
-    can_continue = await handle_confirm_outcome(
+    can_continue = await trans_prompt(
         itx,
         view_owner=item_sender,
         content=item_sender.mention,
@@ -2043,7 +2042,7 @@ async def prompt_robux_for_items(
     and they get items in return.
     """
 
-    can_continue = await handle_confirm_outcome(
+    can_continue = await trans_prompt(
         itx,
         view_owner=robux_sender,
         content=robux_sender.mention,
@@ -2077,7 +2076,7 @@ async def prompt_items_for_items(
     items to the receiver in return for other items.
     """
 
-    can_continue = await handle_confirm_outcome(
+    can_continue = await trans_prompt(
         itx,
         view_owner=item_sender,
         content=item_sender.mention,
@@ -2423,7 +2422,7 @@ async def view_shop(itx: Interaction) -> None:
         offset = (paginator.index - 1) * length
         desc = "\n".join(
             item_metadata[0]
-            for item_metadata in shop_metadata[offset:offset + length]
+            for item_metadata in shop_metadata[offset:offset+length]
         )
 
         emb.description = (
@@ -2494,7 +2493,7 @@ async def sell(
             f"{ie} {item_name}** for **{CURRENCY} {cost:,}**?"
         )
 
-        can_proceed = await handle_confirm_outcome(
+        can_proceed = await trans_prompt(
             itx,
             prompt=sell_prompt,
             setting="selling_confirmations",
@@ -2703,7 +2702,7 @@ async def start_prestige(itx: Interaction, prestige: int) -> None:
         "Check what you lose by reading the relevant tag.\n"
         "Are you sure you want to prestige?"
     )
-    can_proceed = await handle_confirm_outcome(itx, massive_prompt)
+    can_proceed = await trans_prompt(itx, massive_prompt)
 
 
     async with itx.client.pool.acquire() as conn, conn.transaction():
@@ -2737,7 +2736,7 @@ async def start_prestige(itx: Interaction, prestige: int) -> None:
 
 
 @app_commands.command(
-    description="Sacrifice currency stats for incremental perks"
+    description="Sacrifice currency stats in exchange for incremental perks"
 )
 async def prestige(itx: Interaction) -> None:
     async with itx.client.pool.acquire() as conn:

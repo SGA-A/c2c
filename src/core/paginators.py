@@ -30,6 +30,9 @@ class PaginatorInput(discord.ui.Modal):
 
         if isinstance(true_page, str):
             self.view.index = self.view.total_pages
+        elif self.view.index == true_page:
+            # Modal inputs only exist on non-refreshable paginators
+            return await itx.response.edit_message(view=self)
 
         self.view.index = min(self.view.total_pages, true_page)
         await self.view.edit_page(itx)
@@ -102,7 +105,7 @@ class Pagination(BasePaginator):
         await respond(self.itx, embeds=embs, view=self, **kwargs)
 
     async def edit_page(self, itx: Interaction) -> None:
-        embs  = await self.get_page()
+        embs = await self.get_page()
         self.update_buttons()
         await edit_response(itx, embeds=embs, view=self)
 
