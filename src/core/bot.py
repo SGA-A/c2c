@@ -170,7 +170,6 @@ class C2C(discord.Client):
 
         intents = discord.Intents.none()
         intents.message_content = True
-        intents.emojis_and_stickers = True
         intents.messages = True
         intents.guilds = True
         intents.members = True

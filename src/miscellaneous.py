@@ -642,21 +642,6 @@ async def about(itx: Interaction) -> None:
         icon_url="https://tinyurl.com/m1m2m3ma"
     )
 
-    total_members, total_unique = 0, len(itx.client.users)
-    text, voice, guilds = 0, 0, 0
-
-    for guild in itx.client.guilds:
-        guilds += 1
-        if guild.unavailable:
-            continue
-
-        total_members += guild.member_count or 0
-        for channel in guild.channels:
-            if isinstance(channel, discord.TextChannel):
-                text += 1
-            elif isinstance(channel, discord.VoiceChannel):
-                voice += 1
-
     memory_usage = itx.client.process.memory_full_info().uss / 1024 ** 2
     cpu_usage = itx.client.process.cpu_percent() / cpu_count()
 
@@ -675,27 +660,8 @@ async def about(itx: Interaction) -> None:
         )
 
     embed.add_field(
-        name="<:Members:1263922150125994054> Members",
-        value=f"{total_members} total\n{total_unique} unique"
-    )
-
-    embed.add_field(
-        name="<:searchChannels:1263923406592540802> Channels",
-        value=f"{text + voice} total\n{text} text\n{voice} voice"
-    )
-
-    embed.add_field(
         name="<:Process:1263923016803418203> Process",
         value=f"{memory_usage:.2f} MiB\n{cpu_usage:.2f}% CPU"
-    )
-
-    embed.add_field(
-        name="<:Servers:1263923465409400832> Guilds",
-        value=(
-            f"{guilds} total\n"
-            f"{ARROW}{len(itx.client.emojis)} emojis\n"
-            f"{ARROW}{len(itx.client.stickers)} stickers"
-        )
     )
 
     embed.add_field(
