@@ -210,28 +210,6 @@ async def create_tag_menu(itx: Interaction, message: discord.Message) -> None:
     await itx.response.send_modal(modal)
 
 
-async def all_tag_autocomplete(
-    itx: Interaction,
-    current: str
-) -> list[app_commands.Choice[str]]:
-
-    async with itx.client.pool.acquire() as conn:
-        all_tags = await partial_match(itx, current, conn)
-
-    return [app_commands.Choice(name=tag, value=tag) for (tag,) in all_tags]
-
-
-async def owned_tag_autocomplete(
-    itx: Interaction,
-    current: str
-) -> list[app_commands.Choice[str]]:
-
-    async with itx.client.pool.acquire() as conn:
-        owned_tags = await owned_partial_match(itx, current, conn)
-
-    return [app_commands.Choice(name=tag, value=tag) for (tag,) in owned_tags]
-
-
 async def get_tag_content(name: str, conn: Connection) -> str:
     res, = await conn.fetchone(
         "SELECT content FROM tags WHERE name = ?", (name,)
@@ -272,7 +250,6 @@ tag = app_commands.Group(
 
 @tag.command(description=tag.description)
 @app_commands.describe(name="The tag to retrieve.")
-@app_commands.autocomplete(name=all_tag_autocomplete)
 async def get(itx: Interaction, name: TAG_DELIMITER) -> None:
     async with itx.client.pool.acquire() as conn:
         name, itx = await transform(itx, name)
@@ -349,7 +326,6 @@ async def make(
     name="The tag to edit.",
     content="The new content of the tag. If not given, a modal is opened."
 )
-@app_commands.autocomplete(name=owned_tag_autocomplete)
 async def edit(
     itx: Interaction,
     name: TAG_DELIMITER,
@@ -390,7 +366,6 @@ async def edit(
 
 @tag.command(description="Remove a tag that you own")
 @app_commands.describe(name="The tag to remove.")
-@app_commands.autocomplete(name=owned_tag_autocomplete)
 async def remove(itx: Interaction, name: TAG_DELIMITER) -> None:
     name, itx = await transform(itx, name, owned_tags_only=True)
 
@@ -480,7 +455,6 @@ async def _send_tag_info(
 
 @tag.command(description="Retrieve info about a tag")
 @app_commands.describe(name="The tag to retrieve information for.")
-@app_commands.autocomplete(name=all_tag_autocomplete)
 async def info(itx: Interaction, name: TAG_DELIMITER) -> None:
     query = (
         """
@@ -589,7 +563,6 @@ async def search(itx: Interaction, query: TAG_DELIMITER) -> None:
     tag="The tag to transfer.",
     user="Who to transfer the tag to."
 )
-@app_commands.autocomplete(tag=owned_tag_autocomplete)
 async def transfer(
     itx: Interaction,
     user: discord.User,
@@ -834,6 +807,33 @@ async def stats(itx: Interaction, member: Optional[discord.User]):
     if member:
         return await member_stats(itx, member)
     await global_stats(itx)
+
+
+@get.autocomplete("name")
+@info.autocomplete("name")
+async def all_tag_autocomplete(
+    itx: Interaction,
+    current: str
+) -> list[app_commands.Choice[str]]:
+
+    async with itx.client.pool.acquire() as conn:
+        all_tags = await partial_match(itx, current, conn)
+
+    return [app_commands.Choice(name=tag, value=tag) for (tag,) in all_tags]
+
+
+@edit.autocomplete("name")
+@remove.autocomplete("name")
+@transfer.autocomplete("tag")
+async def owned_tag_autocomplete(
+    itx: Interaction,
+    current: str
+) -> list[app_commands.Choice[str]]:
+
+    async with itx.client.pool.acquire() as conn:
+        owned_tags = await owned_partial_match(itx, current, conn)
+
+    return [app_commands.Choice(name=tag, value=tag) for (tag,) in owned_tags]
 
 
 exports = BotExports([tag, create_tag_menu])

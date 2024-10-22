@@ -29,6 +29,7 @@ from .core.helpers import (
 from .core.paginators import PaginationItem, RefreshPagination
 from .core.transformers import RawIntegerTransformer
 
+DOWN = True
 NO_FILTER = "0"
 YT_SHORT = "https://www.youtube.com/shorts/vTrH4paRl90"
 MIN_BET_KEYCARD = 500_000
@@ -1942,6 +1943,9 @@ trade = app_commands.Group(
 
 
 def default_checks_passing(trader: USER_ENTRY, with_who: USER_ENTRY) -> None:
+    # TODO: Remove this branch (if DOWN)
+    if DOWN:
+        raise FailingConditionalError("This command is under maintenance.")
     if with_who.id == trader.id:
         raise FailingConditionalError("You can't trade with yourself.")
     elif with_who.bot:
