@@ -338,27 +338,23 @@ class BalanceView(BaseView):
         )
 
         async with itx.client.pool.acquire() as conn:
-            nd = await conn.fetchone(query, self.viewing.id)
+            data = await conn.fetchone(query, self.viewing.id)
 
-        if nd is None:
-            if itx.user.id != self.viewing.id:
+            if (not data) and (itx.user.id != self.viewing.id):
                 balance.description = "This user is not registered."
                 self.children[0].disabled = True
                 self.children[1].disabled = True
                 return balance
 
-        async with itx.client.pool.acquire() as conn:
             inserted = await open_bank_new(self.viewing, conn)
             if inserted:
                 await conn.commit()
 
             rank = await calc_net_ranking_for(self.viewing, conn)
-
-            # Save a call to the database with short circuiting
-            inv = await calc_inv_net(self.viewing, conn) if nd else 0
-
-            nd = nd or await conn.fetchone(query, self.viewing.id)
-            wallet, bank, bankspace = nd
+            inv = await calc_inv_net(self.viewing, conn) if data else 0
+            wallet, bank, bankspace = (
+                data or await conn.fetchone(query, self.viewing.id)
+            )
 
         space = (bank / bankspace) * 100
         money = wallet + bank

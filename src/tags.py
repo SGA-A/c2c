@@ -166,8 +166,10 @@ async def transform(
     if not length:
         raise FailingConditionalError(TAG_MISSING)
 
-    if length == 1 or ((result:=tag_results[0][0]) == value):
-        return result, itx
+
+    first_result = tag_results[0][0]
+    if (length == 1) or (first_result == value):
+        return first_result, itx
 
     options = [discord.SelectOption(label=tag) for (tag,) in tag_results]
     content = f"{length} results for {value!r} found, select one below."

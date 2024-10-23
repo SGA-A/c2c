@@ -171,7 +171,7 @@ class KonaPagination(Pagination):
         self.dropdown.max_values = len(embeds)
 
         # Remove previous image IDs and their URLs
-        self.url_dict.clear()
+        self.url_dict = {}
         self.refresh_options(embeds)
 
         self.update_buttons()
