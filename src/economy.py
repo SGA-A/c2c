@@ -4,7 +4,7 @@ from random import choices, randint
 from re import search
 from sqlite3 import IntegrityError, Row
 from textwrap import dedent
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Literal, Optional
 
 import discord
 from asqlite import Connection
@@ -617,8 +617,9 @@ class MultiplierView(RefreshPagination):
         "<:luckMulti:1263922104231792710>"
     )
 
+    prompt = "Select a multiplier"
     length = 6
-    multi_mapping = {
+    _multi = {
         "Robux": (0x59DDB3, robux_emoji.url),
         "XP": (0xCDC700, xp_emoji.url),
         "Luck": (0x65D654, luck_emoji.url)
@@ -634,23 +635,43 @@ class MultiplierView(RefreshPagination):
         self,
         itx: Interaction,
         chosen_multiplier: str,
-        viewing: USER_ENTRY,
-        get_page: Optional[Callable] = None
+        viewing: USER_ENTRY
     ) -> None:
-        super().__init__(itx, get_page)
+        super().__init__(itx)
 
         self.viewing = viewing
         self.chosen_multiplier = chosen_multiplier
 
         self.embed = discord.Embed()
         self.embed.title = f"{self.viewing.display_name}'s Multipliers"
-        self.embed.colour, thumb_url = self.multi_mapping[chosen_multiplier]
+        self.embed.colour, thumb_url = self._multi[chosen_multiplier]
         self.embed.set_thumbnail(url=thumb_url)
 
         for option in self.children[-1].options:
             option.default = option.value == chosen_multiplier
 
-    def repr_multi(self) -> None:
+    async def get_page(self, refresh: bool = False) -> list[discord.Embed]:
+        if refresh:
+            await self.format_pages()
+            self.index = min(self.index, self.total_pages)
+
+        if not self.total_multi:
+            self.embed.description = self._repr()
+            return [self.embed.set_footer(text="Empty")]
+
+        offset = ((self.index - 1) * self.length)
+        multis = "\n".join(
+            f"` {multi} ` \U00002014 {cause}"
+            for (multi, cause) in self.multiplier_list[
+                offset:offset + self.length
+            ]
+        )
+
+        self.embed.description = f"{self._repr()}{multis}"
+        self.embed.set_footer(text=f"Page {self.index} of {self.total_pages}")
+        return [self.embed]
+
+    def _repr(self) -> str:
         """
         Represent a multiplier using proper formatting.
         Edits are in-place, returns None.
@@ -660,16 +681,13 @@ class MultiplierView(RefreshPagination):
         The units are also converted as necessary based on the type.
         """
 
-        unit = "x" if self.chosen_multiplier == "XP" else "%"
-        amount = (
-            self.total_multi
-            if self.chosen_multiplier != "XP"
-            else (1 + (self.total_multi / 100))
+        unit, amount = (
+            ("%", self.total_multi)
+            if self.chosen_multiplier != "XP" else
+            ("x", (1 + (self.total_multi / 100)))
         )
 
-        self.embed.description = (
-            f"> {self.chosen_multiplier}: **{amount:.2f}{unit}**\n\n"
-        )
+        return f"> {self.chosen_multiplier}: **{amount:.2f}{unit}**\n\n"
 
     async def format_pages(self) -> None:
         lowered = self.chosen_multiplier.lower()
@@ -704,20 +722,17 @@ class MultiplierView(RefreshPagination):
         row=0,
         placeholder="Select a multiplier"
     )
-    async def slct(self, itx: Interaction, select: discord.ui.Select) -> None:
+    async def scall(self, itx: Interaction, select: discord.ui.Select) -> None:
         self.chosen_multiplier: str = select.values[0]
         self.index = 1
 
         for option in select.options:
             option.default = option.value == self.chosen_multiplier
 
-        await self.format_pages()
-
-        self.embed.colour, thumb_url = (
-            self.multi_mapping[self.chosen_multiplier]
-        )
-
+        self.embed.colour, thumb_url = self._multi[self.chosen_multiplier]
         self.embed.set_thumbnail(url=thumb_url)
+
+        await self.format_pages()
         await self.edit_page(itx)
 
 
@@ -1156,10 +1171,9 @@ class InventoryPaginator(RefreshPagination):
         self,
         itx: Interaction,
         embed: discord.Embed,
-        viewing: USER_ENTRY,
-        get_page: Optional[Callable] = None,
+        viewing: USER_ENTRY
     ) -> None:
-        super().__init__(itx, get_page)
+        super().__init__(itx)
 
         self.embed = embed
         self.viewing = viewing
@@ -1170,6 +1184,27 @@ class InventoryPaginator(RefreshPagination):
 
         for option in self.children[-1].options:
             option.default = option.value == "0"
+
+    async def get_page(self, refresh: bool = False) -> list[discord.Embed]:
+
+        if refresh:
+            await self.fetch_data()
+            self.index = min(self.index, self.total_pages)
+
+        if not self.data:
+            self.embed.description = None
+            return [self.embed.set_footer(text="Empty")]
+
+        offset = (self.index - 1) * self.length
+        self.embed.description = "\n".join(
+            f"{ie} **{item_name}** \U00002500 {qty:,}"
+            for (item_name, ie, qty) in self.data[
+                offset:offset+self.length
+            ]
+        )
+
+        self.embed.set_footer(text=f"Page {self.index} of {self.total_pages}")
+        return [self.embed]
 
     async def fetch_data(self) -> None:
         if NO_FILTER not in self.applied_filters:
@@ -1769,29 +1804,6 @@ async def multipliers(
     user = user or itx.user
     paginator = MultiplierView(itx, multiplier, user)
     await paginator.format_pages()
-
-    async def get_page_part(force_refresh: bool = False) -> discord.Embed:
-        if force_refresh:
-            await paginator.format_pages()
-            paginator.index = min(paginator.index, paginator.total_pages)
-
-        paginator.repr_multi()
-
-        if not paginator.total_multi:
-            return paginator.embed.set_footer(text="Empty")
-
-        offset = ((paginator.index - 1) * paginator.length)
-        paginator.embed.description += "\n".join(
-            f"` {multi} ` \U00002014 {cause}"
-            for (multi, cause) in paginator.multiplier_list[
-                offset:offset + paginator.length
-            ]
-        )
-        return paginator.embed.set_footer(
-            text=f"Page {paginator.index} of {paginator.total_pages}"
-        )
-
-    paginator.get_page = get_page_part
     await paginator.navigate()
 
 
@@ -1942,7 +1954,6 @@ shop = app_commands.Group(
 async def view_shop(itx: Interaction) -> None:
 
     async with itx.client.pool.acquire() as conn:
-
         shop_sorted = await conn.fetchall(
             """
             SELECT itemName, emoji, cost
@@ -1969,9 +1980,9 @@ async def view_shop(itx: Interaction) -> None:
     total = PaginationItem.compute_total_pages(
         len(shop_metadata), length
     )
-
     paginator = PaginationItem(itx, total)
-    async def get_page_part() -> discord.Embed:
+
+    async def get_page() -> discord.Embed:
         async with itx.client.pool.acquire() as conn:
             wallet = await fetch_balance(itx.user.id, conn)
 
@@ -1998,7 +2009,7 @@ async def view_shop(itx: Interaction) -> None:
             text=f"Page {paginator.index} of {paginator.total_pages}"
         )
 
-    paginator.get_page = get_page_part
+    paginator.get_page = get_page
     await paginator.navigate()
 
 
@@ -2459,30 +2470,9 @@ async def inventory(itx: Interaction, user: Optional[USER_ENTRY]) -> None:
         name=f"{user.name}'s inventory",
         icon_url=user.display_avatar.url
     )
+
     paginator = InventoryPaginator(itx, embed, user)
-
     await paginator.fetch_data()
-    async def get_page_part(force_refresh: bool = False) -> discord.Embed:
-        if force_refresh:
-            await paginator.fetch_data()
-            paginator.index = min(paginator.index, paginator.total_pages)
-
-        if not paginator.data:
-            paginator.embed.description = None
-            return paginator.embed.set_footer(text="Empty")
-
-        offset = (paginator.index - 1) * paginator.length
-        paginator.embed.description = "\n".join(
-            f"{ie} **{item_name}** \U00002500 {qty:,}"
-            for (item_name, ie, qty) in paginator.data[
-                offset:offset+paginator.length
-            ]
-        )
-        return paginator.embed.set_footer(
-            text=f"Page {paginator.index} of {paginator.total_pages}"
-        )
-
-    paginator.get_page = get_page_part
     await paginator.navigate()
 
 

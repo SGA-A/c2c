@@ -515,7 +515,7 @@ async def reusable_paginator_via(
     total_pages = PaginationSimple.compute_total_pages(len(rows), PAGE_SIZE)
     paginator = PaginationSimple(itx, total_pages)
 
-    async def get_page_part() -> discord.Embed:
+    async def get_page() -> list[discord.Embed]:
         offset = (paginator.index - 1) * PAGE_SIZE
 
         em.description = "\n".join(
@@ -526,11 +526,13 @@ async def reusable_paginator_via(
             )
         )
 
-        return em.set_footer(
-            text=f"Page {paginator.index} of {paginator.total_pages}"
-        )
+        return [
+            em.set_footer(
+                text=f"Page {paginator.index} of {paginator.total_pages}"
+            )
+        ]
 
-    paginator.get_page = get_page_part
+    paginator.get_page = get_page
     await paginator.navigate()
 
 

@@ -273,7 +273,7 @@ class RoleManagement(app_commands.Group):
         )
         paginator = PaginationItem(itx, total_pages)
 
-        async def get_page_part() -> discord.Embed:
+        async def get_page() -> discord.Embed:
             offset = length - (paginator.index * length) - 1
 
             emb.description = "\n".join(
@@ -285,7 +285,7 @@ class RoleManagement(app_commands.Group):
                 text=f"Page {paginator.index} of {paginator.total_pages}"
             )
 
-        paginator.get_page = get_page_part
+        paginator.get_page = get_page
         await paginator.navigate()
 
     @app_commands.command(description="Check info for a role")

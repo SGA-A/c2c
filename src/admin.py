@@ -48,7 +48,7 @@ class DevTools(BaseView):
         msg: discord.Message
     ) -> Optional[discord.Message]:
         env = {
-            "bot": itx.client,
+            "client": itx.client,
             "itx": itx,
             "channel": itx.channel,
             "user": itx.user,

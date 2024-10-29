@@ -1,16 +1,18 @@
-from typing import Callable, Optional, Self
+from __future__ import annotations
+
+from typing import Callable, Optional
 
 import discord
 
 from .bot import Interaction
-from .helpers import BaseView, edit_response, respond
+from .helpers import BaseView
 from .transformers import RawIntegerTransformer
 
 REFRESH = discord.PartialEmoji.from_str("<:refreshPages:1263923160433168414>")
 FIRST = discord.PartialEmoji.from_str("<:firstPage:1263921815345041460>")
 LEFT = discord.PartialEmoji.from_str("<:leftPage:1263922081696059404>")
 RIGHT = discord.PartialEmoji.from_str("<:rightPage:1263923290959773706>")
-FINAL = discord.PartialEmoji.from_str("<:finalPage:1263921799633047573>")
+LAST = discord.PartialEmoji.from_str("<:lastPage:1263921799633047573>")
 
 
 class PaginatorInput(discord.ui.Modal):
@@ -42,18 +44,65 @@ class PaginatorInput(discord.ui.Modal):
 
 
 class BasePaginator(BaseView):
-    """The base paginator which all paginators should inherit from."""
+    """
+    The base paginator which all paginators should inherit from.
+
+    You are expected to return a list of embeds even
+    if you only return one embed in your custom function,
+    though you can override this functionality.
+    """
 
     def __init__(
         self,
         itx: Interaction,
+        total_pages: Optional[int] = None,
         get_page: Optional[Callable] = None
     ) -> None:
         super().__init__(itx)
 
         self.index = 1
-        self.get_page = get_page
-        self.total_pages: Optional[int] = None
+        self.total_pages = total_pages
+        self.get_page = getattr(self, "get_page", get_page)
+
+    @staticmethod
+    def update_buttons(view: BasePaginator) -> None:
+        is_first_page_check = view.index == 1
+        is_last_page_check = view.index == view.total_pages
+
+        view.children[0].disabled = is_first_page_check
+        view.children[1].disabled = is_first_page_check
+        view.children[3].disabled = is_last_page_check
+        view.children[4].disabled = is_last_page_check
+
+    @staticmethod
+    def reset_index(
+        view: BasePaginator,
+        refreshed_data: list,
+        length: Optional[int] = None
+    ) -> BasePaginator:
+        """
+        Set the minimum page length in refresh pagination classes.
+
+        Pass in `length` if it's not present in the paginator instance.
+
+        This function returns the class instance for fluent-style chaining.
+        """
+        length = length or view.length
+        view.total_pages = view.compute_total_pages(
+            len(refreshed_data), length
+        )
+        view.index = min(view.index, view.total_pages)
+        return view
+
+    async def navigate(self, **kwargs) -> None:
+        embs = await self.get_page()
+        self.update_buttons(self)
+        await self.itx.response.send_message(embeds=embs, view=self, **kwargs)
+
+    async def edit_page(self, itx: Interaction) -> None:
+        embs = await self.get_page()
+        self.update_buttons(self)
+        await itx.response.edit_message(embeds=embs, view=self)
 
     async def on_error(
         self,
@@ -77,12 +126,7 @@ class BasePaginator(BaseView):
 
 
 class Pagination(BasePaginator):
-    """
-    Pagination menu with support for direct queries to a specific page.
-
-    You are expected to return a list of embeds even
-    if you only return one embed in your custom function.
-    """
+    """Pagination menu with support for direct queries to a specific page."""
 
     def __init__(
         self,
@@ -90,35 +134,20 @@ class Pagination(BasePaginator):
         total_pages: int,
         get_page: Optional[Callable] = None
     ) -> None:
-        super().__init__(itx, get_page)
+        super().__init__(itx, total_pages, get_page)
 
-        # Pagination size is fixed
-        self.total_pages = total_pages
+    @staticmethod
+    def update_buttons(view: Pagination) -> None:
+        # Override parent method to update index button label too
+        view.children[2].label = f"{view.index} / {view.total_pages}"
 
-    async def navigate(self, **kwargs) -> None:
-        embs = await self.get_page()
+        is_first_page_check = view.index == 1
+        is_last_page_check = view.index == view.total_pages
 
-        if self.total_pages == 1:
-            return await respond(self.itx, embeds=embs, **kwargs)
-
-        self.update_buttons()
-        await respond(self.itx, embeds=embs, view=self, **kwargs)
-
-    async def edit_page(self, itx: Interaction) -> None:
-        embs = await self.get_page()
-        self.update_buttons()
-        await edit_response(itx, embeds=embs, view=self)
-
-    def update_buttons(self) -> None:
-        self.children[2].label = f"{self.index} / {self.total_pages}"
-
-        is_first_page_check = self.index == 1
-        is_last_page_check = self.index == self.total_pages
-
-        self.children[0].disabled = is_first_page_check
-        self.children[1].disabled = is_first_page_check
-        self.children[3].disabled = is_last_page_check
-        self.children[4].disabled = is_last_page_check
+        view.children[0].disabled = is_first_page_check
+        view.children[1].disabled = is_first_page_check
+        view.children[3].disabled = is_last_page_check
+        view.children[4].disabled = is_last_page_check
 
     @discord.ui.button(row=1, style=discord.ButtonStyle.primary, emoji=FIRST)
     async def first(self, itx: Interaction, _: discord.ui.Button) -> None:
@@ -140,7 +169,7 @@ class Pagination(BasePaginator):
         self.index += 1
         await self.edit_page(itx)
 
-    @discord.ui.button(row=1, style=discord.ButtonStyle.primary, emoji=FINAL)
+    @discord.ui.button(row=1, style=discord.ButtonStyle.primary, emoji=LAST)
     async def last_page(self, itx: Interaction, _: discord.ui.Button) -> None:
         self.index = self.total_pages
         await self.edit_page(itx)
@@ -155,34 +184,7 @@ class PaginationSimple(BasePaginator):
         total_pages: int,
         get_page: Optional[Callable] = None
     ) -> None:
-        super().__init__(itx, get_page)
-
-        # Pagination size is fixed
-        self.total_pages = total_pages
-
-    async def navigate(self) -> None:
-        emb = await self.get_page()
-
-        if self.total_pages == 1:
-            self.stop()
-            return await self.itx.response.send_message(embed=emb)
-
-        self.update_buttons()
-        await self.itx.response.send_message(embed=emb, view=self)
-
-    async def edit_page(self, itx: Interaction) -> None:
-        emb = await self.get_page()
-        self.update_buttons()
-        await itx.response.edit_message(embed=emb, view=self)
-
-    def update_buttons(self) -> None:
-        is_first_page_check = self.index == 1
-        is_last_page_check = self.index == self.total_pages
-
-        self.children[0].disabled = is_first_page_check
-        self.children[1].disabled = is_first_page_check
-        self.children[2].disabled = is_last_page_check
-        self.children[3].disabled = is_last_page_check
+        super().__init__(itx, total_pages, get_page)
 
     @discord.ui.button(row=1, style=discord.ButtonStyle.primary, emoji=FIRST)
     async def first(self, itx: Interaction, _: discord.ui.Button) -> None:
@@ -199,7 +201,7 @@ class PaginationSimple(BasePaginator):
         self.index += 1
         await self.edit_page(itx)
 
-    @discord.ui.button(row=1, style=discord.ButtonStyle.primary, emoji=FINAL)
+    @discord.ui.button(row=1, style=discord.ButtonStyle.primary, emoji=LAST)
     async def last_page(self, itx: Interaction, _: discord.ui.Button) -> None:
         self.index = self.total_pages
         await self.edit_page(itx)
@@ -214,51 +216,13 @@ class RefreshPagination(BasePaginator):
         get_page: Optional[Callable] = None
     ) -> None:
         # Pagination size can change on refresh
-        super().__init__(itx, get_page)
+        super().__init__(itx, None, get_page)
 
-    async def navigate(self) -> None:
-        emb = await self.get_page()
-        self.update_buttons()
-        await self.itx.response.send_message(embed=emb, view=self)
-
-    def reset_index(
-        self,
-        refreshed_data: list,
-        length: Optional[int] = None
-    ) -> Self:
-        """
-        Set the minimum page length in refresh pagination classes.
-
-        Pass in `length` if it's not present in the paginator instance.
-
-        This function returns the class instance for fluent-style chaining.
-
-        This should not be used within select callbacks that refresh data.
-        """
-        length = length or self.length
-        self.total_pages = self.compute_total_pages(
-            len(refreshed_data), length
-        )
-        self.index = min(self.index, self.total_pages)
-        return self
-
-    async def edit_page(
-        self,
-        itx: Interaction,
-        force_refresh: Optional[bool] = False
-    ) -> None:
-        emb = await self.get_page(force_refresh)
-        self.update_buttons()
-        await edit_response(itx, embed=emb, view=self)
-
-    def update_buttons(self) -> None:
-        is_first_page_check = self.index == 1
-        is_last_page_check = self.index == self.total_pages
-
-        self.children[0].disabled = is_first_page_check
-        self.children[1].disabled = is_first_page_check
-        self.children[3].disabled = is_last_page_check
-        self.children[4].disabled = is_last_page_check
+    # Override parent method to add new refresh parameter
+    async def edit_page(self, itx: Interaction, refresh: bool = False) -> None:
+        embs = await self.get_page(refresh)
+        self.update_buttons(self)
+        await itx.response.edit_message(embeds=embs, view=self)
 
     @discord.ui.button(row=2, style=discord.ButtonStyle.primary, emoji=FIRST)
     async def first(self, itx: Interaction, _: discord.ui.Button) -> None:
@@ -272,14 +236,14 @@ class RefreshPagination(BasePaginator):
 
     @discord.ui.button(row=2, emoji=REFRESH)
     async def refresh(self, itx: Interaction, _: discord.ui.Button) -> None:
-        await self.edit_page(itx, force_refresh=True)
+        await self.edit_page(itx, refresh=True)
 
     @discord.ui.button(row=2, style=discord.ButtonStyle.primary, emoji=RIGHT)
     async def next_page(self, itx: Interaction, _: discord.ui.Button) -> None:
         self.index += 1
         await self.edit_page(itx)
 
-    @discord.ui.button(row=2, style=discord.ButtonStyle.primary, emoji=FINAL)
+    @discord.ui.button(row=2, style=discord.ButtonStyle.primary, emoji=LAST)
     async def last_page(self, itx: Interaction, _: discord.ui.Button) -> None:
         self.index = self.total_pages
         await self.edit_page(itx)
@@ -298,18 +262,17 @@ class PaginationItem(BasePaginator):
         total_pages: int,
         get_page: Optional[Callable] = None
     ) -> None:
-        super().__init__(itx, get_page)
+        super().__init__(itx, total_pages, get_page)
 
-        # Pagination size is fixed
-        self.total_pages = total_pages
-
-    async def navigate(self) -> None:
+    # Override parent class response methods
+    # Due to no button update logic required
+    async def navigate(self, **kwargs) -> None:
         emb = await self.get_page()
-        await self.itx.response.send_message(embed=emb, view=self)
+        await self.itx.response.send_message(embeds=[emb], view=self, **kwargs)
 
     async def edit_page(self, itx: Interaction) -> None:
         emb = await self.get_page()
-        await edit_response(itx, embed=emb, view=self)
+        await itx.response.edit_message(embeds=[emb], view=self)
 
     @discord.ui.button(row=2, emoji=LEFT)
     async def previous(self, itx: Interaction, _: discord.ui.Button) -> None:

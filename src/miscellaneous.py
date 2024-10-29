@@ -163,7 +163,7 @@ class KonaPagination(Pagination):
         if self.total_pages == 1:
             await self.itx.followup.send(embeds=embeds, **kwargs)
 
-        self.update_buttons()
+        self.update_buttons(self)
         await self.itx.followup.send(embeds=embeds, view=self, **kwargs)
 
     async def edit_page(self, itx: Interaction) -> None:
@@ -174,7 +174,7 @@ class KonaPagination(Pagination):
         self.url_dict = {}
         self.refresh_options(embeds)
 
-        self.update_buttons()
+        self.update_buttons(self)
         await itx.response.edit_message(embeds=embeds, view=self)
 
     def refresh_options(self, embeds: list[discord.Embed]) -> None:
@@ -309,13 +309,14 @@ async def usage(
     paginator = CommandUsage(itx, viewing=user)
     await paginator.fetch_data()
 
-    async def get_page_part(force_refresh: bool = False) -> discord.Embed:
-        if force_refresh:
+    async def get_page(refresh: bool = False) -> list[discord.Embed]:
+        if refresh:
             await paginator.fetch_data()
             paginator.index = min(paginator.index, paginator.total_pages)
 
         if not paginator.data:
-            return paginator.embed.set_footer(text="Empty")
+            paginator.embed.description = None
+            return [paginator.embed.set_footer(text="Empty")]
 
         offset = (paginator.index - 1) * paginator.length
         desc = "\n".join(
@@ -325,15 +326,15 @@ async def usage(
             ]
         )
 
-        paginator.embed.description = (
-            f"> Total: {paginator.total:,}\n\n{desc}"
-        )
+        paginator.embed.description = f"> Total: {paginator.total:,}\n\n{desc}"
 
-        return paginator.embed.set_footer(
-            text=f"Page {paginator.index} of {paginator.total_pages}"
-        )
+        return [
+            paginator.embed.set_footer(
+                text=f"Page {paginator.index} of {paginator.total_pages}"
+            )
+        ]
 
-    paginator.get_page = get_page_part
+    paginator.get_page = get_page
     await paginator.navigate()
 
 
@@ -384,7 +385,6 @@ kona_group.add_command(bookmark_group)
 
 
 @kona_group.command(name="search", description="Retrieve posts from Konachan")
-@app_commands.rename(per_page="max_images")
 @app_commands.describe(
     tag1="A tag to base your search on.",
     tag2="A tag to base your search on.",
@@ -433,14 +433,14 @@ async def kona_search(
             "- Entering an invalid tag name\n"
             "- Posts aren't available under this tag\n"
             "- Page number exceeds maximum available under this tag\n"
-            "-# Find a tag by using the [website.](https://konachan.net/tag)"
+            "-# Find a tag by using the [website.](<https://konachan.net/tag>)"
         )
         return await itx.followup.send(resp, ephemeral=True)
 
     total_pages = Pagination.compute_total_pages(len(xml), per_page)
     paginator = KonaPagination(itx, total_pages)
 
-    async def get_page_part() -> list[discord.Embed]:
+    async def get_page() -> list[discord.Embed]:
         offset = (paginator.index - 1) * per_page
 
         return [
@@ -457,7 +457,7 @@ async def kona_search(
             )
         ]
 
-    paginator.get_page = get_page_part
+    paginator.get_page = get_page
     await paginator.navigate(ephemeral=private)
 
 
@@ -504,7 +504,7 @@ async def list_bookmarks(
     total_pages = Pagination.compute_total_pages(len(bookmarks), per_page)
     paginator = Pagination(itx, total_pages)
 
-    async def get_page_part() -> list[discord.Embed]:
+    async def get_page() -> list[discord.Embed]:
         offset = (paginator.index - 1) * per_page
         return [
             membed().set_image(
@@ -513,7 +513,7 @@ async def list_bookmarks(
             for image_id, image_url in bookmarks[offset:offset+per_page]
         ]
 
-    paginator.get_page = get_page_part
+    paginator.get_page = get_page
     await paginator.navigate(ephemeral=private)
 
 
