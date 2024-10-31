@@ -312,37 +312,36 @@ async def make(
 
 
 @tag_group.command(description="Modifiy an existing tag that you own")
-@app_commands.describe(name="The tag to edit.", content="The new tag content.")
-async def edit(
-    itx: Interaction,
-    name: TAG_DELIMITER,
-    content: Optional[CONTENT_DELIMITER]
-) -> None:
-    if not content:
-        query = (
-            """
-            SELECT content
-            FROM tags
-            WHERE name LIKE '%' || ? || '%'
-            COLLATE NOCASE
-            ORDER BY INSTR(name, ?)
-            LIMIT 1
-            """
+@app_commands.describe(name="The tag to edit.")
+async def edit(itx: Interaction, name: TAG_DELIMITER) -> None:
+    query = (
+        """
+        SELECT name, content
+        FROM tags
+        WHERE name LIKE '%' || ? || '%'
+        COLLATE NOCASE
+        ORDER BY INSTR(name, ?)
+        LIMIT 1
+        """
+    )
+
+    # Prefer not using transform method due to extra queries
+    # TODO: use transform and pass in the fields you want in func
+    async with itx.client.pool.acquire() as conn:
+        name, content = (
+            await conn.fetchone(query, (name, name)) or (None, None)
         )
 
-        async with itx.client.pool.acquire() as conn:
-            content = await conn.fetchone(query, (name, name))
+    # Tag with said name not found
+    if not name:
+        return await itx.response.send_message(TAG_NOT_FOUND)
 
-        # Tag with said name not found
-        if not content:
-            return await itx.response.send_message(TAG_NOT_FOUND)
+    modal = TagEditModal(content)
+    await itx.response.send_modal(modal)
+    await modal.wait()
 
-        modal = TagEditModal(content[0])
-        await itx.response.send_modal(modal)
-        await modal.wait()
-
-        itx = modal.itx
-        content = modal.text
+    itx = modal.itx
+    content = modal.text
 
     if itx.client.is_owner(itx.user):
         clause = "WHERE name = ?"
@@ -362,6 +361,7 @@ async def edit(
 
     # Impossible for rowid to be non-truthy so no false outcomes
     await itx.response.send_message(TAG_NOT_FOUND)
+
 
 @tag_group.command(description="Remove a tag that you own")
 @app_commands.describe(name="The tag to remove.")
