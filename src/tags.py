@@ -2,23 +2,23 @@ import contextlib
 import sqlite3
 from asyncio import TimeoutError
 from datetime import datetime, timezone
-from typing import Optional, Union
+from typing import Optional
 
 import discord
 from asqlite import Connection
 from discord import app_commands
 
-from ._types import BotExports
+from ._types import BotExports, MaybeWebhookMessage
 from .core.bot import Interaction
 from .core.errors import FailingConditionalError
 from .core.helpers import BaseView, send_prompt
 from .core.paginators import PaginationSimple
 
+GET_QUERY = "UPDATE tags SET uses = uses + 1 WHERE name = ? RETURNING content"
 PROMO = "\n-# Save time by creating a tag from an existing message."
 MAX_CHARACTERS_REACHED = f"Tag content cannot exceed 2000 characters.{PROMO}"
-TAG_MISSING = "Could not find a tag with that name."
+TAG_NOT_FOUND = "Could not find a tag with that name."
 TAG_ALREADY_EXISTS = f"A tag with that name already exists.{PROMO}"
-TAG_NOT_FOUND = "No tags were found with said properties."
 CONTENT_DELIMITER = app_commands.Range[str, 1, 2000]
 TAG_DELIMITER = app_commands.Range[str, 1, 80]
 PAGE_SIZE = 12
@@ -164,7 +164,7 @@ async def transform(
 
     length = len(tag_results)
     if not length:
-        raise FailingConditionalError(TAG_MISSING)
+        raise FailingConditionalError(TAG_NOT_FOUND)
 
 
     first_result = tag_results[0][0]
@@ -185,7 +185,7 @@ async def transform(
 
 
 @app_commands.context_menu(name="Tag Message")
-async def create_tag_menu(itx: Interaction, message: discord.Message) -> None:
+async def tag_msg_menu(itx: Interaction, message: discord.Message) -> None:
     # Somehow you can use user apps on archived threads?
     # This check helps to avoid the error
     if message.thread and message.thread.archived:
@@ -210,13 +210,6 @@ async def create_tag_menu(itx: Interaction, message: discord.Message) -> None:
     modal = TagMakeModal()
     modal.content.default = cleaned
     await itx.response.send_modal(modal)
-
-
-async def get_tag_content(name: str, conn: Connection) -> str:
-    res, = await conn.fetchone(
-        "SELECT content FROM tags WHERE name = ?", (name,)
-    )
-    return res
 
 
 async def create_tag(
@@ -255,14 +248,10 @@ tag = app_commands.Group(
 async def get(itx: Interaction, name: TAG_DELIMITER) -> None:
     async with itx.client.pool.acquire() as conn:
         name, itx = await transform(itx, name)
-        content = await get_tag_content(name, conn)
 
+        async with conn.transaction():
+            content, = await conn.fetchone(GET_QUERY, (name,))
         await itx.response.send_message(content)
-
-        # update the usage
-        await conn.execute(
-            "UPDATE tags SET uses = uses + 1 WHERE name = $0", name
-        )
 
 
 @tag.command(description="Create a new tag owned by you")
@@ -280,10 +269,7 @@ async def create(
 
 @tag.command(description="Interactively make your own tag")
 @app_commands.describe(name="The name of this tag.")
-async def make(
-    itx: Interaction,
-    name: TAG_DELIMITER
-) -> Optional[Union[discord.WebhookMessage, discord.Message]]:
+async def make(itx: Interaction, name: TAG_DELIMITER) -> MaybeWebhookMessage:
 
     def check(msg: discord.Message) -> bool:
         return (
@@ -324,20 +310,26 @@ async def make(
 
 
 @tag.command(description="Modifiy an existing tag that you own")
-@app_commands.describe(
-    name="The tag to edit.",
-    content="The new content of the tag. If not given, a modal is opened."
-)
+@app_commands.describe(name="The tag to edit.", content="The new tag content.")
 async def edit(
     itx: Interaction,
     name: TAG_DELIMITER,
     content: Optional[CONTENT_DELIMITER]
 ) -> None:
     if content is None:
+        query = (
+            """
+            SELECT content
+            FROM tags
+            WHERE name LIKE '%' || ? || '%'
+            COLLATE NOCASE
+            ORDER BY INSTR(name, ?)
+            LIMIT 1
+            """
+        )
+
         async with itx.client.pool.acquire() as conn:
-            name, itx = await transform(itx, name, owned_tags_only=True)
-            query = "SELECT content FROM tags WHERE name LIKE '%' || ? || '%'"
-            tag_content, = await conn.fetchone(query, (name,))
+            tag_content, = await conn.fetchone(query, (name, name))
 
         modal = TagEditModal(tag_content)
         await itx.response.send_modal(modal)
@@ -346,7 +338,6 @@ async def edit(
         itx = modal.itx
         content = modal.text
 
-    # ! Don't remove as it can skip to here if content not empty
     if itx.client.is_owner(itx.user):
         clause = "WHERE name = ?"
         args = (content, name)
@@ -354,17 +345,17 @@ async def edit(
         clause = "WHERE name = ? AND ownerID = ?"
         args = (content, name, itx.user.id)
 
-    query = f"UPDATE tags SET content = ? {clause} RETURNING name"
+    query = f"UPDATE tags SET content = ? {clause} RETURNING rowid"
     async with itx.client.pool.acquire() as conn, conn.transaction():
-        val = await conn.fetchone(query, args)
+        updated_id = await conn.fetchone(query, args)
 
-    if val is None:
-        return await itx.response.send_message(TAG_NOT_FOUND)
+    if updated_id:
+        return await itx.response.send_message(
+            f"Successfully edited tag named {name!r} (ID {updated_id})."
+        )
 
-    await itx.response.send_message(
-        f"Successfully edited tag named {name!r}."
-    )
-
+    # Impossible for rowid to be non-truthy so no false outcomes
+    await itx.response.send_message(TAG_NOT_FOUND)
 
 @tag.command(description="Remove a tag that you own")
 @app_commands.describe(name="The tag to remove.")
@@ -376,7 +367,7 @@ async def remove(itx: Interaction, name: TAG_DELIMITER) -> None:
         deleted_info = await conn.fetchone(query, (name,))
 
     if deleted_info is None:
-        return await itx.response.send_message(TAG_MISSING)
+        return await itx.response.send_message(TAG_NOT_FOUND)
 
     tag_id, name = deleted_info
     await itx.response.send_message(
@@ -389,19 +380,21 @@ async def remove(itx: Interaction, name: TAG_DELIMITER) -> None:
 @app_commands.rename(tag_id="id")
 async def remove_id(itx: Interaction, tag_id: int) -> None:
 
-    clause = "rowid = $0"
     if itx.client.is_owner(itx.user):
         args = (tag_id,)
+        clause = "rowid = ?"
     else:
         args = (tag_id, itx.user.id)
-        clause = f"{clause} AND ownerID = $1"
+        clause = "rowid = ? AND ownerID = ?"
 
     query = f"DELETE FROM tags WHERE {clause} RETURNING rowid, name"
     async with itx.client.pool.acquire() as conn, conn.transaction():
-        deleted_info = await conn.fetchone(query, *args)
+        deleted_info = await conn.fetchone(query, args)
 
     if deleted_info is None:
-        return await itx.response.send_message(TAG_NOT_FOUND)
+        return await itx.response.send_message(
+            f"You do not own a tag with ID {tag_id}."
+        )
 
     rowid, name = deleted_info
     await itx.response.send_message(
@@ -483,24 +476,21 @@ async def purge(itx: Interaction, user: Optional[discord.User]) -> None:
             "You can only delete tags you own."
         )
 
-    query = "SELECT COUNT(*) FROM tags WHERE ownerID = $0"
+    args = (user.id,)
+    query = "SELECT COUNT(*) FROM tags WHERE ownerID = ?"
     async with itx.client.pool.acquire() as conn:
-        count, = await conn.fetchone(query, user.id)
+        count, = await conn.fetchone(query, args)
 
     if not count:
         return await itx.response.send_message(f"{user.name} has no tags.")
 
-    message = (
-        f"Upon approval, **{count}** tag(s) by {user.name} will be deleted."
-    )
-    val = await send_prompt(itx, message)
-
+    val = await send_prompt(itx, f"Delete **{count}** tag(s) by {user.name}?")
     if not val:
         return
 
-    query = "DELETE FROM tags WHERE ownerID = $0"
+    query = "DELETE FROM tags WHERE ownerID = ?"
     async with itx.client.pool.acquire() as conn, conn.transaction():
-        await conn.execute(query, user.id)
+        await conn.execute(query, args)
 
     await itx.followup.send(f"Removed all tags made by {user.name}.")
 
@@ -508,7 +498,7 @@ async def purge(itx: Interaction, user: Optional[discord.User]) -> None:
 async def reusable_paginator_via(
     itx: Interaction,
     rows: tuple[str, int],
-    em: discord.Embed
+    e: discord.Embed
 ) -> None:
     """Can be used when you have a tuple containing the tag name and rowid."""
 
@@ -518,19 +508,15 @@ async def reusable_paginator_via(
     async def get_page() -> list[discord.Embed]:
         offset = (paginator.index - 1) * PAGE_SIZE
 
-        em.description = "\n".join(
+        e.description = "\n".join(
             f"{index}. {tag_name} (ID: {tag_id})"
             for index, (tag_name, tag_id) in enumerate(
                 rows[offset:offset+PAGE_SIZE],
                 start=offset+1
             )
         )
-
-        return [
-            em.set_footer(
-                text=f"Page {paginator.index} of {paginator.total_pages}"
-            )
-        ]
+        e.set_footer(text=f"Page {paginator.index} of {paginator.total_pages}")
+        return [e]
 
     paginator.get_page = get_page
     await paginator.navigate()
@@ -563,10 +549,7 @@ async def search(itx: Interaction, query: TAG_DELIMITER) -> None:
 
 
 @tag.command(description="Transfer a tag to another member")
-@app_commands.describe(
-    tag="The tag to transfer.",
-    user="Who to transfer the tag to."
-)
+@app_commands.describe(tag="The tag to give.", user="Who to give the tag to.")
 async def transfer(
     itx: Interaction,
     user: discord.User,
@@ -583,21 +566,22 @@ async def transfer(
         ret = await conn.fetchone(query, (user.id, tag))
 
     if ret is None:
-        return await itx.response.send_message(TAG_MISSING)
+        return await itx.response.send_message(TAG_NOT_FOUND)
+
     await itx.response.send_message(
         f"Tag named {tag!r} now belongs to {user.name}."
     )
 
 
 @tag.command(name="all", description="List all tags ever made")
-async def all_tags(itx: Interaction) -> None:
+async def fetch_all(itx: Interaction) -> None:
 
     query = "SELECT name, rowid FROM tags ORDER BY name"
     async with itx.client.pool.acquire() as conn:
         rows = await conn.fetchall(query)
 
     if not rows:
-        return await itx.response.send_message("No tags exist!")
+        return await itx.response.send_message("No tags exist yet.")
 
     em = discord.Embed(colour=discord.Colour.blurple())
     await reusable_paginator_via(itx, rows, em)
@@ -605,12 +589,12 @@ async def all_tags(itx: Interaction) -> None:
 
 @tag.command(name="list", description="Show tags created by a specific user")
 @app_commands.describe(user="The user to show the tags of.")
-async def _list(itx: Interaction, user: Optional[discord.User]) -> None:
+async def fetch_list(itx: Interaction, user: Optional[discord.User]) -> None:
     user = user or itx.user
 
-    query = "SELECT name, rowid FROM tags WHERE ownerID = $0 ORDER BY name"
+    query = "SELECT name, rowid FROM tags WHERE ownerID = ? ORDER BY name"
     async with itx.client.pool.acquire() as conn:
-        rows = await conn.fetchall(query, user.id)
+        rows = await conn.fetchall(query, (user.id,))
 
     if not rows:
         return await itx.response.send_message(f"{user.name} has no tags.")
@@ -622,14 +606,9 @@ async def _list(itx: Interaction, user: Optional[discord.User]) -> None:
 
 @tag.command(description="Display a random tag")
 async def random(itx: Interaction) -> None:
-    query = "SELECT name, content FROM tags ORDER BY RANDOM() LIMIT 1"
+    query = "SELECT content FROM tags ORDER BY RANDOM() LIMIT 1"
     async with itx.client.pool.acquire() as conn:
-        row = await conn.fetchone(query)
-
-    if row is None:
-        return await itx.response.send_message("No tags exist yet!")
-
-    name, content = row
+        content, = await conn.fetchone(query) or ("No tags exist yet.",)
 
     await itx.response.send_message(content)
 
@@ -721,7 +700,9 @@ async def global_stats(itx: Interaction) -> None:
             f"{emoji}: {name} ({uses} uses)" if name else f"{emoji}: Nothing!"
             for (emoji, (name, uses, _, _)) in emojize(top_tags)
         )
-    ).add_field(
+    )
+
+    em.add_field(
         name="Top Tag Users",
         inline=False,
         value="\n".join(
@@ -730,7 +711,9 @@ async def global_stats(itx: Interaction) -> None:
             else f"{emoji}: No one!"
             for (emoji, (author_id, uses)) in emojize(top_users)
         )
-    ).add_field(
+    )
+
+    em.add_field(
         name="Top Tag Creators",
         inline=False,
         value="\n".join(
@@ -793,21 +776,15 @@ async def member_stats(itx: Interaction, user: discord.abc.User) -> None:
 
     emoji = 129351
     for offset, (name, uses) in enumerate(records):
-        if name:
-            value = f"{name} ({uses} uses)"
-        else:
-            value = "Nothing!"
-
+        value = f"{name} ({uses} uses)" if name else "Nothing!"
         e.add_field(name=f"{chr(emoji + offset)} Owned Tag", value=value)
 
     await itx.response.send_message(embed=e)
 
 
 @tag.command(description="Show tag statistics globally or for a member")
-@app_commands.describe(
-    member="The member to get stats about, displays global stats by default."
-)
-async def stats(itx: Interaction, member: Optional[discord.User]):
+@app_commands.describe(member="Whose stats to see, or display global stats.")
+async def stats(itx: Interaction, member: Optional[discord.User]) -> None:
     if member:
         return await member_stats(itx, member)
     await global_stats(itx)
@@ -840,4 +817,4 @@ async def owned_tag_autocomplete(
     return [app_commands.Choice(name=tag, value=tag) for (tag,) in owned_tags]
 
 
-exports = BotExports([tag, create_tag_menu])
+exports = BotExports([tag, tag_msg_menu])

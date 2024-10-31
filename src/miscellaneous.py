@@ -279,20 +279,16 @@ async def kona(itx: Interaction, **params) -> int | list[Element]:
 
 async def format_gif_api_response(
     itx: Interaction,
-    api_url: str,
-    params: dict,
-    headers: dict,
+    url: str,
+    param: dict,
+    header: dict,
     /
 ) -> None:
-    async with itx.client.session.get(
-        url=api_url,
-        params=params,
-        headers=headers
-    ) as resp:
-        if resp.status != 200:
+    async with itx.client.session.get(url, params=param, headers=header) as r:
+        if r.status != 200:
             await itx.followup.send(API_EXCEPTION)
             return
-        initial_bytes = await resp.read()
+        initial_bytes = await r.read()
 
     buffer = BytesIO(initial_bytes)
     await itx.followup.send(file=discord.File(buffer, "clip.gif"))
@@ -539,7 +535,7 @@ async def clear(itx: Interaction) -> None:
     resp = (
         f"**{deleted:,}** bookmarks erased successfully."
         if deleted else
-        "You erased your bookmarks already!"
+        "You have no bookmarks to erase."
     )
 
     await itx.followup.send(resp)
@@ -547,12 +543,9 @@ async def clear(itx: Interaction) -> None:
 
 @app_commands.command(description="Queries a random fact")
 async def randomfact(itx: Interaction) -> None:
-    api_params = {"X-Api-Key": itx.client.ninja_api}
+    params = {"X-Api-Key": itx.client.ninja_api}
 
-    async with itx.client.session.get(
-        url=FACTS_ENDPOINT,
-        params=api_params
-    ) as resp:
+    async with itx.client.session.get(FACTS_ENDPOINT, params=params) as resp:
         if resp.status != 200:
             return await itx.response.send_message(API_EXCEPTION)
         text = await resp.json()

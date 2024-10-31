@@ -4,7 +4,7 @@ from typing import Generator, Optional
 import discord
 from discord import app_commands
 
-from ._types import BotExports
+from ._types import BotExports, MaybeWebhook
 from .core.bot import Interaction
 from .core.errors import FailingConditionalError
 from .core.helpers import membed, send_prompt
@@ -180,7 +180,7 @@ class RoleManagement(app_commands.Group):
         itx: Interaction,
         member: discord.Member,
         roles: str
-    ) -> Optional[discord.WebhookMessage]:
+    ) -> MaybeWebhook:
         await itx.response.defer(thinking=True)
 
         role_changes = ROLE_INPUT_REGEX.findall(roles)

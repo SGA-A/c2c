@@ -10,9 +10,9 @@ import discord
 from asqlite import Connection
 from discord import app_commands
 
-from ._types import BotExports
+from ._types import BotExports, MaybeWebhook, UserEntry
 from .core.bot import Interaction
-from .core.constants import CURRENCY
+from .core.constants import *
 from .core.errors import CustomTransformerError, FailingConditionalError
 from .core.helpers import (
     BaseView,
@@ -49,7 +49,6 @@ INVOKER_NOT_REGISTERED = (
     "Find out what could've happened by calling "
     "[`/reasons`](https://www.google.com/)."
 )
-USER_ENTRY = discord.Member | discord.User
 NOT_REGISTERED = "The user to act on must be registered."
 SLOTS = (
     "\U0001f525", "\U0001f633", "\U0001f31f",
@@ -233,7 +232,7 @@ class ConfirmResetData(BaseView):
         "-# See what resets by viewing the resetmydata tag."
     )
 
-    def __init__(self, itx: Interaction, target: USER_ENTRY, /) -> None:
+    def __init__(self, itx: Interaction, target: UserEntry, /) -> None:
         super().__init__(itx, self.WARNING)
 
         self.target = target
@@ -303,7 +302,7 @@ class ConfirmResetData(BaseView):
 class BalanceView(BaseView):
     """View for the balance command to mange and deposit/withdraw money."""
 
-    def __init__(self, itx: Interaction, viewing: USER_ENTRY) -> None:
+    def __init__(self, itx: Interaction, viewing: UserEntry) -> None:
         super().__init__(itx)
 
         self.viewing = viewing
@@ -635,7 +634,7 @@ class MultiplierView(RefreshPagination):
         self,
         itx: Interaction,
         chosen_multiplier: str,
-        viewing: USER_ENTRY
+        viewing: UserEntry
     ) -> None:
         super().__init__(itx)
 
@@ -975,10 +974,7 @@ class ItemQuantityModal(discord.ui.Modal):
 
     # ---------------------------------------------------------
 
-    async def on_submit(
-        self,
-        itx: Interaction
-    ) -> Optional[discord.WebhookMessage]:
+    async def on_submit(self, itx: Interaction) -> MaybeWebhook:
         true_qty = RawIntegerTransformer().transform(itx, self.quantity.value)
 
         # base cost per unit (considering discounts)
@@ -1171,7 +1167,7 @@ class InventoryPaginator(RefreshPagination):
         self,
         itx: Interaction,
         embed: discord.Embed,
-        viewing: USER_ENTRY
+        viewing: UserEntry
     ) -> None:
         super().__init__(itx)
 
@@ -1460,7 +1456,7 @@ async def get_setting_embed(
     return embed
 
 
-async def calc_inv_net(user: USER_ENTRY, conn: Connection) -> int:
+async def calc_inv_net(user: UserEntry, conn: Connection) -> int:
     """Calculate the net value of a user's inventory"""
 
     res, = await conn.fetchone(
@@ -1477,7 +1473,7 @@ async def calc_inv_net(user: USER_ENTRY, conn: Connection) -> int:
 # ------------------ BANK FUNCS ------------------ #
 
 
-async def calc_net_ranking_for(user: USER_ENTRY, conn: Connection) -> int:
+async def calc_net_ranking_for(user: UserEntry, conn: Connection) -> int:
     """Calculate the ranking of a user based on their net worth."""
 
     val = await conn.fetchone(
@@ -1544,7 +1540,7 @@ async def calc_net_ranking_for(user: USER_ENTRY, conn: Connection) -> int:
     return val
 
 
-async def open_bank_new(user: USER_ENTRY, conn: Connection) -> bool:
+async def open_bank_new(user: UserEntry, conn: Connection) -> bool:
     """
     Register a new user.
 
@@ -1798,7 +1794,7 @@ async def settings(itx: Interaction, setting: Optional[str]) -> None:
 )
 async def multipliers(
     itx: Interaction,
-    user: Optional[USER_ENTRY],
+    user: Optional[UserEntry],
     multiplier: Literal["Robux", "XP", "Luck"] = "Robux"
 ) -> None:
     user = user or itx.user
@@ -1825,9 +1821,9 @@ share = app_commands.Group(
 )
 async def share_robux(
     itx: Interaction,
-    recipient: USER_ENTRY,
+    recipient: UserEntry,
     quantity: ROBUX_CONVERTER
-) -> Optional[discord.WebhookMessage]:
+) -> MaybeWebhook:
 
     sender = itx.user
     if sender.id == recipient.id:
@@ -1890,10 +1886,10 @@ async def share_robux(
 )
 async def share_items(
     itx: Interaction,
-    recipient: USER_ENTRY,
+    recipient: UserEntry,
     quantity: app_commands.Range[int, 1],
     item: ITEM_CONVERTER
-) -> Optional[discord.WebhookMessage]:
+) -> MaybeWebhook:
 
     sender = itx.user
     if sender.id == recipient.id:
@@ -2233,7 +2229,7 @@ async def use(
     itx: Interaction,
     item: ITEM_CONVERTER,
     quantity: app_commands.Range[int, 1] = 1
-) -> Optional[discord.WebhookMessage]:
+) -> MaybeWebhook:
 
     item_id, item_name, ie = item
     async with itx.client.pool.acquire() as conn:
@@ -2463,7 +2459,7 @@ async def slots(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
 
 @app_commands.command(description="View your currently owned items")
 @app_commands.describe(user="The user whose inventory you want to see.")
-async def inventory(itx: Interaction, user: Optional[USER_ENTRY]) -> None:
+async def inventory(itx: Interaction, user: Optional[UserEntry]) -> None:
 
     user = user or itx.user
     embed = membed().set_author(
@@ -2478,7 +2474,7 @@ async def inventory(itx: Interaction, user: Optional[USER_ENTRY]) -> None:
 
 @app_commands.command(description="Get someone's balance")
 @app_commands.describe(user="The user to find the balance of.")
-async def balance(itx: Interaction, user: Optional[USER_ENTRY]) -> None:
+async def balance(itx: Interaction, user: Optional[UserEntry]) -> None:
     user = user or itx.user
 
     balance_view = BalanceView(itx, user)
@@ -2563,7 +2559,7 @@ async def yearly(itx: Interaction) -> None:
 
 @app_commands.command(description="Request the deletion of all of your data")
 @app_commands.describe(user="The user to erase data from.")
-async def resetmydata(itx: Interaction, user: Optional[USER_ENTRY]) -> None:
+async def resetmydata(itx: Interaction, user: Optional[UserEntry]) -> None:
     user = user or itx.user
 
     if (user.id != itx.user.id) and (not itx.client.is_owner(itx.user)):
@@ -2710,7 +2706,7 @@ async def deposit(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
     description="Attempt to steal from someone's pocket",
     extras={"exp_gained": 4}
 )
-async def rob(itx: Interaction, host: USER_ENTRY) -> None:
+async def rob(itx: Interaction, host: UserEntry) -> None:
     robber = itx.user
 
     if robber.id == host.id:
