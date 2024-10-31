@@ -8,7 +8,7 @@ from typing import Any, Literal, Optional
 
 import discord
 from asqlite import Connection
-from discord import app_commands
+from discord import ButtonStyle, app_commands
 
 from ._types import BotExports, MaybeWebhook, UserEntry
 from .core.bot import Interaction
@@ -213,12 +213,12 @@ class UserSettings(BaseView):
         )
         self.disable_button = ToggleButton(
             label="Disable",
-            style=discord.ButtonStyle.danger,
+            style=ButtonStyle.danger,
             row=1
         )
         self.enable_button = ToggleButton(
             label="Enable",
-            style=discord.ButtonStyle.success,
+            style=ButtonStyle.success,
             row=1
         )
 
@@ -226,10 +226,11 @@ class UserSettings(BaseView):
 class ConfirmResetData(BaseView):
     roo_fire = discord.PartialEmoji.from_str("<:rooFire:1263923362154156103>")
     WARNING = (
-        f"This command resets **[everything](<{YT_SHORT}>)**.\n"
-        "Are you sure you want to do this?\n\n"
-        "If you do, press `Reset` **3** times.\n"
-        "-# See what resets by viewing the resetmydata tag."
+        f"## \U000026a0\U0000fe0f Advanced Warning\n"
+        f"> See what resets by viewing the resetmydata tag.\n"
+        f"This command resets **[__everything__](<{YT_SHORT}>)**.\n"
+        f"Are you sure you want to do this? This is irreversible!\n\n"
+        f"If so, press `Reset` **3** times.\n"
     )
 
     def __init__(self, itx: Interaction, target: UserEntry, /) -> None:
@@ -238,11 +239,7 @@ class ConfirmResetData(BaseView):
         self.target = target
         self.count = 0
 
-    @discord.ui.button(
-        label="Reset",
-        style=discord.ButtonStyle.danger,
-        emoji=roo_fire
-    )
+    @discord.ui.button(label="Reset", style=ButtonStyle.danger, emoji=roo_fire)
     async def yes(self, itx: Interaction, button: discord.ui.Button) -> None:
 
         self.count += 1
@@ -253,8 +250,7 @@ class ConfirmResetData(BaseView):
 
         button.disabled, self.children[-1].disabled = True, True
         button.style, self.children[-1].style = (
-            discord.ButtonStyle.success,
-            discord.ButtonStyle.secondary
+            ButtonStyle.success, ButtonStyle.secondary
         )
 
         await itx.response.edit_message(view=self)
@@ -285,14 +281,13 @@ class ConfirmResetData(BaseView):
 
         await itx.followup.send(f"Success.{end_note}")
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Cancel", style=ButtonStyle.primary)
     async def no(self, itx: Interaction, button: discord.ui.Button) -> None:
         self.stop()
 
         button.disabled, self.children[0].disabled = True, True
         button.style, self.children[0].style = (
-            discord.ButtonStyle.success,
-            discord.ButtonStyle.secondary
+            ButtonStyle.success, ButtonStyle.secondary
         )
 
         await itx.response.edit_message(view=self)
@@ -506,7 +501,7 @@ class HighLow(BaseView):
             item.disabled = True
             if item == clicked:
                 continue
-            item.style = discord.ButtonStyle.secondary
+            item.style = ButtonStyle.secondary
 
     async def send_win(
         self,
@@ -583,21 +578,21 @@ class HighLow(BaseView):
 
         await itx.response.edit_message(embed=lose, view=self)
 
-    @discord.ui.button(label="Lower", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Lower", style=ButtonStyle.primary)
     async def low(self, itx: Interaction, btn: discord.ui.Button) -> None:
 
         if self.true_value < self.hint_provided:
             return await self.send_win(itx, btn)
         await self.send_loss(itx, btn)
 
-    @discord.ui.button(label="JACKPOT!", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="JACKPOT!", style=ButtonStyle.primary)
     async def jackpot(self, itx: Interaction, btn: discord.ui.Button) -> None:
 
         if self.hint_provided == self.true_value:
             return await self.send_win(itx, btn)
         await self.send_loss(itx, btn)
 
-    @discord.ui.button(label="Higher", style=discord.ButtonStyle.primary)
+    @discord.ui.button(label="Higher", style=ButtonStyle.primary)
     async def high(self, itx: Interaction, btn: discord.ui.Button) -> None:
 
         if self.true_value > self.hint_provided:
@@ -758,7 +753,7 @@ class MatchItem(discord.ui.Button):
         self.view.chosen_item = (self.item_id, self.label, self.emoji)
         self.view.stop()
 
-        self.style = discord.ButtonStyle.success
+        self.style = ButtonStyle.success
         for item in self.view.children:
             item.disabled = True
 
@@ -1035,7 +1030,7 @@ class ItemQuantityModal(discord.ui.Modal):
 class ShopItem(discord.ui.Button):
     def __init__(self, item_name: str, cost: int, ie: str, **kwargs) -> None:
         super().__init__(
-            style=discord.ButtonStyle.primary,
+            style=ButtonStyle.primary,
             emoji=ie,
             label=item_name,
             **kwargs

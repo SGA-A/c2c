@@ -56,13 +56,17 @@ class BasePaginator(BaseView):
         self,
         itx: Interaction,
         total_pages: Optional[int] = None,
-        get_page: Optional[Callable] = None
+        get_page: Optional[Callable] = None,
+        forward_index: int = 3
     ) -> None:
         super().__init__(itx)
 
         self.index = 1
         self.total_pages = total_pages
         self.get_page = getattr(self, "get_page", get_page)
+
+        self.forward_index = forward_index
+        self.end_index = forward_index + 1
 
     @staticmethod
     def update_buttons(view: BasePaginator) -> None:
@@ -71,8 +75,8 @@ class BasePaginator(BaseView):
 
         view.children[0].disabled = is_first_page_check
         view.children[1].disabled = is_first_page_check
-        view.children[3].disabled = is_last_page_check
-        view.children[4].disabled = is_last_page_check
+        view.children[view.forward_index].disabled = is_last_page_check
+        view.children[view.end_index].disabled = is_last_page_check
 
     @staticmethod
     def reset_index(
@@ -140,14 +144,7 @@ class Pagination(BasePaginator):
     def update_buttons(view: Pagination) -> None:
         # Override parent method to update index button label too
         view.children[2].label = f"{view.index} / {view.total_pages}"
-
-        is_first_page_check = view.index == 1
-        is_last_page_check = view.index == view.total_pages
-
-        view.children[0].disabled = is_first_page_check
-        view.children[1].disabled = is_first_page_check
-        view.children[3].disabled = is_last_page_check
-        view.children[4].disabled = is_last_page_check
+        BasePaginator.update_buttons(view)
 
     @discord.ui.button(row=1, style=discord.ButtonStyle.primary, emoji=FIRST)
     async def first(self, itx: Interaction, _: discord.ui.Button) -> None:
@@ -184,7 +181,7 @@ class PaginationSimple(BasePaginator):
         total_pages: int,
         get_page: Optional[Callable] = None
     ) -> None:
-        super().__init__(itx, total_pages, get_page)
+        super().__init__(itx, total_pages, get_page, forward_index=2)
 
     @discord.ui.button(row=1, style=discord.ButtonStyle.primary, emoji=FIRST)
     async def first(self, itx: Interaction, _: discord.ui.Button) -> None:
