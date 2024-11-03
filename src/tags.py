@@ -95,7 +95,7 @@ class MatchView(BaseView):
         self.tag = self.row_dict[select.values[0]]
 
         for option in select.options:
-            option.default = option.value == self.tag
+            option.default = option.value == select.values[0]
 
         await self.on_timeout()
         self.stop()
