@@ -19,20 +19,21 @@ type Interaction = discord.Interaction[C2C]
 
 
 LEVEL_UP_PROMPTS = (
+    "Amazing",
+    "Awe inspiring stuff",
+    "Brilliant job",
+    "Fantastic work",
     "Great work",
     "Hard work paid off",
-    "Inspiring",
-    "Top notch",
-    "You're on fire",
-    "You're on a roll",
-    "Keep it up",
-    "Amazing",
     "I'm proud of you",
-    "Fantastic work",
-    "Superb effort",
-    "Brilliant job",
+    "Inspiring",
+    "Keep it up",
     "Outstanding",
-    "You're doing great"
+    "Superb effort",
+    "Top notch",
+    "You're doing great",
+    "You're on a roll",
+    "You're on fire"
 )
 
 
@@ -88,7 +89,7 @@ async def add_exp_or_levelup(
 
     rankup = membed(
         f"{random.choice(LEVEL_UP_PROMPTS)}, {itx.user.name}!\n"
-        f"You've leveled up from level **{level-1:,}** to **{level:,}**."
+        f"You've leveled up to level **{level}**"
     )
 
     await itx.followup.send(embed=rankup)
@@ -205,9 +206,8 @@ class C2C(discord.Client):
             )
         )
 
-    @staticmethod
-    def is_owner(user: discord.abc.User) -> bool:
-        return user.id in C2C.owner_ids
+    def is_owner(self, user: discord.abc.User) -> bool:
+        return user.id in self.owner_ids
 
     async def on_app_command_completion(
         self,

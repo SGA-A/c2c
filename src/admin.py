@@ -107,13 +107,13 @@ class DevTools(BaseView):
     @discord.ui.button(label="Quit", style=discord.ButtonStyle.success)
     async def _quit(self, itx: Interaction, _: discord.ui.Button) -> None:
         await self.itx.delete_original_response()
-        await itx.response.send_message("\U00002705", ephemeral=True)
+        await itx.response.send_message("\U00002705")
         await itx.client.close()
 
     @discord.ui.button(label="Sync", style=discord.ButtonStyle.success)
     async def sync(self, itx: Interaction, _: discord.ui.Button) -> None:
         await itx.client.tree.sync(guild=None)
-        await itx.response.send_message("\U00002705", ephemeral=True)
+        await itx.response.send_message("\U00002705")
 
     @discord.ui.button(label="Evaluate", style=discord.ButtonStyle.success)
     async def _eval(self, itx: Interaction, _: discord.ui.Button) -> None:
@@ -133,9 +133,7 @@ class DevTools(BaseView):
     @discord.ui.button(label="Blanket", style=discord.ButtonStyle.success)
     async def blanket(self, itx: Interaction, _: discord.ui.Button) -> None:
         await itx.channel.send(f".{'\n'*1900}\u200b")
-        await itx.response.send_message(
-            self.on_boarding, view=self, ephemeral=True
-        )
+        await itx.response.send_message(self.on_boarding, view=self)
         await self.itx.delete_original_response()
 
         self.itx = itx
@@ -143,9 +141,8 @@ class DevTools(BaseView):
     @discord.ui.button(emoji="<:terminatePages:1263923664433319957>")
     async def _stop(self, itx: Interaction, _: discord.ui.Button) -> None:
         self.stop()
-        for item in self.children:
-            item.disabled = True
         await itx.response.edit_message(view=self)
+        await itx.delete_original_response()
 
 
 async def is_owner(itx: Interaction) -> bool:
@@ -162,11 +159,7 @@ async def is_owner(itx: Interaction) -> bool:
 @app_commands.command(description="Manage the bot")
 async def devtools(itx: Interaction) -> None:
     view = DevTools(itx)
-    await itx.response.send_message(
-        view.on_boarding,
-        view=view,
-        ephemeral=True
-    )
+    await itx.response.send_message(view.on_boarding, view=view)
 
 
 exports = BotExports([devtools])
