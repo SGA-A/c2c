@@ -14,6 +14,7 @@ from .core.errors import FailingConditionalError
 from .core.helpers import BaseView, send_prompt
 from .core.paginators import PaginationSimple
 
+UPDATE_QUERY = "UPDATE tags SET uses = uses + 1 WHERE name = ?"
 PROMO = "\n-# Save time by creating a tag from an existing message."
 MAX_CHARACTERS_REACHED = f"Tag content cannot exceed 2000 characters.{PROMO}"
 TAG_NOT_FOUND = "No such tag exists with that name."
@@ -107,7 +108,7 @@ class MatchView(BaseView):
 # Must pass in interaction, see usage for info
 async def partial_match(
     _: Interaction,
-    word_input: str,
+    _input: str,
     conn: Connection,
     *extras: tuple[str, ...]
 ) -> list[sqlite3.Row]:
@@ -119,22 +120,19 @@ async def partial_match(
         f"""
         SELECT name{extras}
         FROM tags
-        WHERE LOWER(name) LIKE '%' || ? || '%'
+        WHERE name LIKE '%' || ? || '%'
         COLLATE NOCASE
         ORDER BY INSTR(name, ?)
         LIMIT 10
         """
     )
 
-    word_input = word_input.lower()
-    args = (word_input, word_input)
-
-    return await conn.fetchall(query, args)
+    return await conn.fetchall(query, (_input, _input))
 
 
 async def owned_partial_match(
     itx: Interaction,
-    word_input: str,
+    _input: str,
     conn: Connection,
     *extras: tuple[str, ...]
 ) -> list[sqlite3.Row]:
@@ -146,17 +144,14 @@ async def owned_partial_match(
         f"""
         SELECT name{extras}
         FROM tags
-        WHERE ownerID = ? AND LOWER(name) LIKE '%' || ? || '%'
+        WHERE ownerID = ? AND name LIKE '%' || ? || '%'
         COLLATE NOCASE
         ORDER BY INSTR(name, ?)
         LIMIT 10
         """
     )
 
-    word_input = word_input.lower()
-    args = (itx.user.id, word_input, word_input)
-
-    return await conn.fetchall(query, args)
+    return await conn.fetchall(query, (itx.user.id, _input, _input))
 
 
 async def transform(
@@ -174,22 +169,22 @@ async def transform(
         meth = partial_match
 
     async with itx.client.pool.acquire() as conn:
-        tag_rows = await meth(itx, value, conn, *extras)
+        rows = await meth(itx, value, conn, *extras)
 
-    length = len(tag_rows)
+    length = len(rows)
     if not length:
         raise FailingConditionalError(TAG_NOT_FOUND)
 
-    first_row = tag_rows[0]
+    first_row = rows[0]
     if (length == 1) or (first_row[0] == value):
         return first_row, itx
 
     content = f"{length} results for {value!r} found, select one below."
-    view = MatchView(itx, content, tag_rows)
+    view = MatchView(itx, content, rows)
 
     await itx.response.send_message(content, view=view)
-
     await view.wait()
+
     if view.tag:
         return view.tag, view.itx
 
@@ -260,6 +255,10 @@ tag_group = app_commands.Group(
 async def get(itx: Interaction, name: TAG_DELIMITER) -> None:
     tag_row, itx = await transform(itx, name, False, "content")
     await itx.response.send_message(tag_row[-1])
+
+    async with itx.client.pool.acquire() as conn:
+        await conn.execute(UPDATE_QUERY, tag_row[0])
+        await conn.commit()
 
 @tag_group.command(description="Create a new tag owned by you")
 @app_commands.describe(
@@ -526,7 +525,6 @@ async def search(itx: Interaction, query: TAG_DELIMITER) -> None:
         """
     )
 
-    query = query.lower()
     async with itx.client.pool.acquire() as conn:
         rows = await conn.fetchall(sql, (query, query))
 

@@ -310,8 +310,8 @@ async def send_prompt(
     view.value = None
 
     await respond(itx, prompt, view=view, **kwargs)
-
     await view.wait()
+
     return view.value
 
 

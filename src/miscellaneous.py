@@ -233,18 +233,20 @@ async def fetch_commits(itx: Interaction) -> str:
         f"{c['commit']['message'].splitlines()[0]} "
         f"({relative(datetime.fromisoformat(c['commit']['author']['date']))})"
         for c in commits
-    )
+    ) or ""
 
-    return (revision or "")
+    return revision
 
 
-async def tag_search_autocomplete(
+async def tag_autocomplete(
     itx: Interaction,
     current: str
 ) -> list[app_commands.Choice[str]]:
+
+    current = current.lower()
     tags_xml = await kona(
         itx,
-        name=current.lower(),
+        name=current,
         mode="tag",
         page=1,
         order="count",
@@ -391,9 +393,9 @@ kona_group.add_command(bookmark_group)
     page="The page number to look through."
 )
 @app_commands.autocomplete(
-    tag1=tag_search_autocomplete,
-    tag2=tag_search_autocomplete,
-    tag3=tag_search_autocomplete
+    tag1=tag_autocomplete,
+    tag2=tag_autocomplete,
+    tag3=tag_autocomplete
 )
 async def kona_search(
     itx: Interaction,
