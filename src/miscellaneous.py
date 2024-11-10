@@ -296,6 +296,22 @@ async def format_gif_api_response(
     await itx.followup.send(file=discord.File(buffer, "clip.gif"))
 
 
+@app_commands.command(description="See events I observed in Discord")
+async def socketstats(itx: Interaction) -> None:
+    delta = discord.utils.utcnow() - itx.client.uptime
+    total = sum(itx.client.socket_stats.values())
+    cpm = total / (delta.total_seconds() / 60)
+
+    data = "\n".join(
+        f"- {event_type}: {event_count:,}"
+        for event_type, event_count in itx.client.socket_stats.items()
+    )
+
+    await itx.response.send_message(
+        f"## {total:,} events observed ({cpm:.2f}/minute)\n{data}"
+    )
+
+
 @app_commands.command(description="See your total command usage")
 @app_commands.describe(user="Whose command usage to display.")
 async def usage(
@@ -640,7 +656,7 @@ async def about(itx: Interaction) -> None:
     memory_usage = itx.client.process.memory_full_info().uss / 1024 ** 2
     cpu_usage = itx.client.process.cpu_percent() / cpu_count()
 
-    diff = embed.timestamp - itx.client.time_launch
+    diff = embed.timestamp - itx.client.uptime
     minutes, seconds = divmod(diff.total_seconds(), 60)
     hours, minutes = divmod(minutes, 60)
     days, hours = divmod(hours, 24)
@@ -735,6 +751,6 @@ exports = BotExports(
         usage, calc, worldclock,
         ping, kona_group, randomfact,
         image, image2, charinfo,
-        about
+        about, socketstats
     ]
 )

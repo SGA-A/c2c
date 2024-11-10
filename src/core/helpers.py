@@ -133,21 +133,6 @@ def membed(description: Optional[str] = None) -> discord.Embed:
     return discord.Embed(colour=0x2B2D31, description=description)
 
 
-async def economy_check(
-    itx: Interaction,
-    original_id: int,
-    /
-) -> bool:
-    """Shared interaction check common amongst most interactions."""
-    if original_id == itx.user.id:
-        return True
-    await itx.response.send_message(
-        "This menu is not for you",
-        ephemeral=True
-    )
-    return False
-
-
 class BaseView(discord.ui.View):
     """
     An itemless base view that most views must inherit from.
@@ -189,7 +174,14 @@ class BaseView(discord.ui.View):
             await self.end_transactions(self.itx)
 
     async def interaction_check(self, itx: Interaction) -> bool:
-        return await economy_check(itx, self.controlling_user.id)
+        """Shared interaction check common amongst most interactions."""
+        if self.controlling_user.id == itx.user.id:
+            return True
+        await itx.response.send_message(
+            "This menu is not for you",
+            ephemeral=True
+        )
+        return False
 
     async def on_error(
         self,

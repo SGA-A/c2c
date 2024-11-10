@@ -18,7 +18,6 @@ from .core.helpers import (
     BaseView,
     add_multiplier,
     declare_transaction,
-    economy_check,
     end_transaction,
     get_multi_of,
     membed,
@@ -29,7 +28,6 @@ from .core.helpers import (
 from .core.paginators import PaginationItem, RefreshPagination
 from .core.transformers import RawIntegerTransformer
 
-DOWN = True
 NO_FILTER = "0"
 YT_SHORT = "https://www.youtube.com/shorts/vTrH4paRl90"
 MIN_BET_KEYCARD = 500_000
@@ -283,7 +281,8 @@ class BalanceView(BaseView):
     async def interaction_check(self, itx: Interaction) -> bool:
         #! Check it is the author of the original interaction running this
 
-        value = await economy_check(itx, self.itx.user.id)
+        # Parent method already responds if False
+        value = await super().interaction_check(itx)
         if not value:
             return False
 

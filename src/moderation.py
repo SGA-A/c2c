@@ -1,4 +1,4 @@
-from re import compile
+from re import compile as _compile
 from typing import Generator, Optional
 
 import discord
@@ -10,7 +10,7 @@ from .core.errors import FailingConditionalError
 from .core.helpers import membed, send_prompt
 from .core.paginators import PaginationItem
 
-ROLE_INPUT_REGEX = compile(r"([+-])([^+-]+)")
+ROLE_INPUT_REGEX = _compile(r"([+-])([^+-]+)")
 UPLOAD_FILE_DESCRIPTION = "A file to upload alongside the thread."
 GUILD_INSTALL = app_commands.AppInstallationType(guild=True, user=False)
 GUILD_CONTEXT = app_commands.AppCommandContext(

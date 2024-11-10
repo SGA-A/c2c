@@ -1,6 +1,5 @@
 import contextlib
 import sqlite3
-from asyncio import TimeoutError
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -8,7 +7,7 @@ import discord
 from asqlite import Connection
 from discord import app_commands
 
-from ._types import BotExports, MaybeInteractionMessage
+from ._types import BotExports
 from .core.bot import Interaction
 from .core.errors import FailingConditionalError
 from .core.helpers import BaseView, send_prompt
@@ -260,58 +259,22 @@ async def get(itx: Interaction, name: TAG_DELIMITER) -> None:
         await conn.execute(UPDATE_QUERY, tag_row[0])
         await conn.commit()
 
+
 @tag_group.command(description="Create a new tag owned by you")
-@app_commands.describe(
-    name="The name of this tag.",
-    content="The tag content. Starts an interactive session if empty."
-)
+@app_commands.describe(name="The tag name.", content="The tag content.")
 async def create(
     itx: Interaction,
     name: TAG_DELIMITER,
     content: Optional[CONTENT_DELIMITER],
-) -> MaybeInteractionMessage:
-
+) -> None:
     if content:
         async with itx.client.pool.acquire() as conn:
             resp = await create_tag(itx, name, content, conn)
         return await itx.response.send_message(resp)
 
-    def check(msg: discord.Message) -> bool:
-        return (
-            msg.author.id == itx.user.id and
-            msg.channel.id == itx.channel.id
-        )
-
-    await itx.response.send_message(
-        f"You've named the tag {name!r}. What about its content? "
-        f"You can type `abort` to end the process."
-    )
-
-    try:
-        msg = await itx.client.wait_for("message", check=check, timeout=180.0)
-    except TimeoutError:
-        return await itx.edit_original_response(content="You took too long.")
-
-    if msg.content == "abort":
-        return await msg.reply("Aborted.")
-    elif msg.content:
-        cleaned = msg.clean_content
-    else:
-        # Fast path I guess?
-        cleaned = msg.content
-
-    if msg.attachments:
-        attachments = "\n".join(
-            attachment.url for attachment in msg.attachments
-        )
-        cleaned = f"{cleaned}\n{attachments}" if cleaned else attachments
-
-    if len(cleaned) > 2000:
-        return await msg.reply(MAX_CHARACTERS_REACHED)
-
-    async with itx.client.pool.acquire() as conn:
-        resp = await create_tag(itx, name, cleaned, conn)
-    await msg.reply(resp)
+    modal = TagMakeModal()
+    modal.name.default = name
+    await itx.response.send_modal(modal)
 
 
 @tag_group.command(description="Modifiy an existing tag that you own")

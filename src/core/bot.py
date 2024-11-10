@@ -1,6 +1,7 @@
 import json
 import logging
-import random
+from collections import Counter
+from random import choice
 from sqlite3 import IntegrityError
 from traceback import format_exception
 from typing import Self
@@ -88,7 +89,7 @@ async def add_exp_or_levelup(
     )
 
     rankup = membed(
-        f"{random.choice(LEVEL_UP_PROMPTS)}, {itx.user.name}!\n"
+        f"{choice(LEVEL_UP_PROMPTS)}, {itx.user.name}!\n"
         f"You've leveled up to level **{level}**"
     )
 
@@ -153,11 +154,11 @@ class BasicTree(app_commands.CommandTree["C2C"]):
                 "Seems like the bot has stumbled upon an unexpected error.\n"
                 "Not to worry. If the issue persists, please let us know."
             )
-        await meth(msg, view=self.client.contact_devs)
+        await meth(msg)
 
 
 class C2C(discord.Client):
-    owner_ids: set[int] = {992152414566232139, 546086191414509599}
+    owner_ids = {992152414566232139, 546086191414509599}
 
     def __init__(
         self,
@@ -170,8 +171,6 @@ class C2C(discord.Client):
         flags.joined = True
 
         intents = discord.Intents.none()
-        intents.message_content = True
-        intents.messages = True
         intents.guilds = True
         intents.members = True
 
@@ -195,19 +194,17 @@ class C2C(discord.Client):
         self.session = session
         self.initial_exts = initial_exts
         self.tree = BasicTree.from_c2c(self)
+        self.socket_stats: Counter[str] = Counter()
 
         # Misc
         self.process = Process()
-        self.time_launch = discord.utils.utcnow()
-        self.contact_devs = discord.ui.View(timeout=5.0).add_item(
-            discord.ui.Button(
-                label="Contact a developer",
-                url="https://www.discordapp.com/users/546086191414509599"
-            )
-        )
+        self.uptime = discord.utils.utcnow()
 
     def is_owner(self, user: discord.abc.User) -> bool:
         return user.id in self.owner_ids
+
+    async def on_socket_event_type(self, event_type: str) -> None:
+        self.socket_stats[event_type] += 1
 
     async def on_app_command_completion(
         self,
