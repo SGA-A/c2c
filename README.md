@@ -40,4 +40,4 @@ We are not responsible for any errors that may occur when running this bot on yo
 - [RDanny](https://github.com/Rapptz/RoboDanny)
 - [RMysty](https://github.com/EvieePy/RMysty)
 - [Salamander](https://github.com/mikeshardmind/salamander-reloaded/)
-- [discord.py](https://discord.gg/r3sSKJJ)
+- [discord.py](https://github.com/Rapptz/discord.py)
