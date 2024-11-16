@@ -1,4 +1,3 @@
-import json
 import logging
 from collections import Counter
 from random import choice
@@ -158,11 +157,12 @@ class BasicTree(app_commands.CommandTree["C2C"]):
 
 
 class C2C(discord.Client):
-    owner_ids = {992152414566232139, 546086191414509599}
+    owner_ids: set[int]
 
     def __init__(
         self,
         pool: Pool,
+        config: dict[str, str],
         session: ClientSession,
         initial_exts: list[HasExports]
     ) -> None:
@@ -184,10 +184,9 @@ class C2C(discord.Client):
             status=discord.Status.idle
         )
 
-        with open(".\\config.json", "r") as f:
-            config: dict[str, str] = json.load(f)
-            for k, v in config.items():
-                setattr(self, k, v)
+        self.jeyy_api_token = config["jeyy_api_token"]
+        self.ninja_api_token = config["ninja_api_token"]
+        self.github_api_token = config["github_api_token"]
 
         # Setup
         self.pool = pool
@@ -246,7 +245,7 @@ class C2C(discord.Client):
             except IntegrityError:
                 return
 
-            exp_gainable = command.extras.get("exp_gained")
+            exp_gainable = command.extras.get("exp_gained", 0)
             if not exp_gainable:
                 return
 
@@ -260,8 +259,7 @@ class C2C(discord.Client):
         logging.error(formatted_traceback)
 
     async def setup_hook(self) -> None:
-        # ! If in the future some modules don't have commands
-        # ! if mod.exports.commands followed by this branch
+        self.owner_ids = {mem.id for mem in self.application.team.members}
 
         for mod in self.initial_exts:
             for command_obj in mod.exports.commands:

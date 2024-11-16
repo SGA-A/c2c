@@ -217,7 +217,7 @@ class KonaPagination(Pagination):
 
 async def fetch_commits(itx: Interaction) -> str:
     gh_headers = {
-        "Authorization": f"token {itx.client.gh_token}",
+        "Authorization": f"token {itx.client.github_api_token}",
         "Accept": "application/vnd.github.v3+json"
     }
 
@@ -308,7 +308,7 @@ async def socketstats(itx: Interaction) -> None:
     )
 
     await itx.response.send_message(
-        f"## {total:,} events observed ({cpm:.2f}/minute)\n{data}"
+        f"## {total:,} events observed ({cpm:.2f}/min)\n{data}"
     )
 
 
@@ -561,7 +561,7 @@ async def clear(itx: Interaction) -> None:
 
 @app_commands.command(description="Queries a random fact")
 async def randomfact(itx: Interaction) -> None:
-    params = {"X-Api-Key": itx.client.ninja_api}
+    params = {"X-Api-Key": itx.client.ninja_api_token}
 
     async with itx.client.session.get(FACTS_ENDPOINT, params=params) as resp:
         if resp.status != 200:
@@ -584,7 +584,7 @@ async def image(
 
     user = user or itx.user
     params = {"image_url": user.display_avatar.url}
-    headers = {"Authorization": f"Bearer {itx.client.j_api}"}
+    headers = {"Authorization": f"Bearer {itx.client.jeyy_api_token}"}
     api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
     await format_gif_api_response(itx, api_url, params, headers)
@@ -604,7 +604,7 @@ async def image2(
 
     user = user or itx.user
     params = {"image_url": user.display_avatar.url}
-    headers = {"Authorization": f"Bearer {itx.client.j_api}"}
+    headers = {"Authorization": f"Bearer {itx.client.jeyy_api_token}"}
     api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
 
     await format_gif_api_response(itx, api_url, params, headers)
