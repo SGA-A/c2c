@@ -1,6 +1,5 @@
 import sqlite3
 from datetime import datetime, timezone
-from io import BytesIO
 from typing import Callable, Generator, Literal, Optional
 from unicodedata import name
 from xml.etree.ElementTree import Element, fromstring
@@ -22,19 +21,6 @@ COMMITS_ENDPOINT = "https://api.github.com/repos/SGA-A/c2c/commits"
 TEXT_RAN = 6231  # goodbye prefix commands
 ARROW = "<:Arrow:1263919893762543717>"
 API_EXCEPTION = "The API fucked up, try again later."
-API_ENDPOINTS = Literal[
-    "abstract", "balls", "billboard", "bonks",
-    "bubble", "canny", "clock", "cloth", "contour",
-    "cow", "cube", "dilate", "fall",
-    "fan", "flush", "gallery", "globe",
-    "half-invert", "hearts", "infinity",
-    "laundry", "lsd", "optics", "parapazzi"
-]
-MORE_API_ENDPOINTS = Literal[
-    "minecraft", "patpat", "plates", "pyramid",
-    "radiate", "rain", "ripped", "ripple",
-    "shred", "wiggle", "warp", "wave"
-]
 EMBED_TIMEZONES = {
     "Pacific": "US/Pacific",
     "Mountain": "US/Mountain",
@@ -277,23 +263,6 @@ async def kona(itx: Interaction, **params) -> int | list[Element]:
             return resp.status
 
         return parse_xml(mode, await resp.text())
-
-
-async def format_gif_api_response(
-    itx: Interaction,
-    url: str,
-    param: dict,
-    header: dict,
-    /
-) -> None:
-    async with itx.client.session.get(url, params=param, headers=header) as r:
-        if r.status != 200:
-            await itx.followup.send(API_EXCEPTION)
-            return
-        initial_bytes = await r.read()
-
-    buffer = BytesIO(initial_bytes)
-    await itx.followup.send(file=discord.File(buffer, "clip.gif"))
 
 
 @app_commands.command(description="See events I observed in Discord")
@@ -570,46 +539,6 @@ async def randomfact(itx: Interaction) -> None:
     await itx.response.send_message(text[0]["fact"])
 
 
-@app_commands.command(description="Manipulate a user's avatar")
-@app_commands.describe(
-    user="The user to apply the manipulation to. Defaults to you.",
-    endpoint="What kind of manipulation sorcery to use."
-)
-async def image(
-    itx: Interaction,
-    endpoint: API_ENDPOINTS,
-    user: Optional[discord.User]
-) -> None:
-    await itx.response.defer(thinking=True)
-
-    user = user or itx.user
-    params = {"image_url": user.display_avatar.url}
-    headers = {"Authorization": f"Bearer {itx.client.jeyy_api_token}"}
-    api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
-
-    await format_gif_api_response(itx, api_url, params, headers)
-
-
-@app_commands.command(description="Manipulate a user's avatar further")
-@app_commands.describe(
-    user="The user to apply the manipulation to. Defaults to you.",
-    endpoint="What kind of manipulation sorcery to use."
-)
-async def image2(
-    itx: Interaction,
-    endpoint: MORE_API_ENDPOINTS,
-    user: Optional[discord.User]
-) -> None:
-    await itx.response.defer(thinking=True)
-
-    user = user or itx.user
-    params = {"image_url": user.display_avatar.url}
-    headers = {"Authorization": f"Bearer {itx.client.jeyy_api_token}"}
-    api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
-
-    await format_gif_api_response(itx, api_url, params, headers)
-
-
 @app_commands.command(description="Show information about characters")
 @app_commands.describe(characters="Any written letters or symbols.")
 async def charinfo(
@@ -701,11 +630,8 @@ async def about(itx: Interaction) -> None:
 async def worldclock(itx: Interaction) -> None:
     await itx.response.defer(thinking=True)
 
-    clock = discord.Embed(
-        title="UTC",
-        colour=0x2AA198,
-        timestamp=discord.utils.utcnow()
-    )
+    clock = discord.Embed(title="UTC", colour=0x2AA198)
+    clock.timestamp = discord.utils.utcnow()
 
     for location, tz in EMBED_TIMEZONES.items():
         time_there = datetime.now(tz=pytz_timezone(tz))
@@ -750,7 +676,6 @@ exports = BotExports(
     [
         usage, calc, worldclock,
         ping, kona_group, randomfact,
-        image, image2, charinfo,
-        about, socketstats
+        charinfo, about, socketstats
     ]
 )
