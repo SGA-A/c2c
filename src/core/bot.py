@@ -184,7 +184,6 @@ class C2C(discord.Client):
             status=discord.Status.idle
         )
 
-        self.jeyy_api_token = config["jeyy_api_token"]
         self.ninja_api_token = config["ninja_api_token"]
         self.github_api_token = config["github_api_token"]
 
