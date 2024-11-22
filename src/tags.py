@@ -278,12 +278,11 @@ async def create(
 
 
 @tag_group.command(description="Modifiy an existing tag that you own")
-@app_commands.rename(new_content="content")
-@app_commands.describe(name="The tag to edit.")
+@app_commands.describe(name="The tag to edit.", content="The new tag content.")
 async def edit(
     itx: Interaction,
     name: TAG_DELIMITER,
-    new_content: Optional[CONTENT_DELIMITER]
+    content: Optional[CONTENT_DELIMITER]
 ) -> None:
 
     owned_unless_dev = not itx.client.is_owner(itx.user)
@@ -291,21 +290,21 @@ async def edit(
         itx, name, owned_unless_dev, "content"
     )
 
-    if new_content is None:
+    if content is None:
         modal = TagEditModal(title="Edit Tag")
         modal.content.default = tag_content
         await itx.response.send_modal(modal)
         await modal.wait()
 
         itx = modal.itx
-        new_content = modal.text
+        content = modal.text
 
     if owned_unless_dev:
         clause = "WHERE name = ? AND ownerID = ?"
-        args = (new_content, name, itx.user.id)
+        args = (content, name, itx.user.id)
     else:
         clause = "WHERE name = ?"
-        args = (new_content, name)
+        args = (content, name)
 
     query = f"UPDATE tags SET content = ? {clause} RETURNING rowid"
     async with itx.client.pool.acquire() as conn, conn.transaction():
@@ -319,8 +318,8 @@ async def edit(
     await itx.response.send_message(TAG_NOT_FOUND)
 
 
-@tag_group.command(description="Remove a tag that you own")
-@app_commands.describe(name="The tag to remove.")
+@tag_group.command(description="Delete a tag that you own")
+@app_commands.describe(name="The tag to delete.")
 async def remove(itx: Interaction, name: TAG_DELIMITER) -> None:
     ((name,), itx) = await transform(itx, name, owned_tags_only=True)
 
@@ -337,7 +336,7 @@ async def remove(itx: Interaction, name: TAG_DELIMITER) -> None:
     await itx.response.send_message(TAG_NOT_FOUND)
 
 
-@tag_group.command(description="Remove a tag that you own by its ID")
+@tag_group.command(description="Delete a tag that you own by its ID")
 @app_commands.describe(tag_id="The internal tag ID to delete.")
 @app_commands.rename(tag_id="id")
 async def remove_id(itx: Interaction, tag_id: int) -> None:
@@ -372,10 +371,7 @@ async def _send_tag_info(itx: Interaction, row: sqlite3.Row) -> None:
     # Unpacking the row
     embed.title, rowid, uses, owner_id, time_created = row
 
-    user = (
-        itx.client.get_user(owner_id)
-        or (await itx.client.fetch_user(owner_id))
-    )
+    user = await itx.client.get_or_fetch_user(owner_id)
     embed.timestamp = datetime.fromtimestamp(time_created, tz=timezone.utc)
     embed.set_author(name=user.name, icon_url=user.display_avatar.url)
     embed.add_field(name="Owner", value=f"<@{owner_id}>")
@@ -682,7 +678,7 @@ async def global_stats(itx: Interaction) -> None:
 
 async def member_stats(itx: Interaction, user: discord.abc.User) -> None:
     e = discord.Embed(colour=discord.Colour.blurple())
-    e.set_author(name=str(user), icon_url=user.display_avatar.url)
+    e.set_author(icon_url=user.display_avatar.url, name=str(user))
     e.set_footer(text="These stats are user-specific.")
 
     query = (
@@ -719,9 +715,9 @@ async def member_stats(itx: Interaction, user: discord.abc.User) -> None:
         count, owned_tags, owned_uses = await conn.fetchone(query, user.id)
         records = await conn.fetchall(second_query, user.id)
 
-    e.add_field(name="Owned Tags", value=owned_tags).add_field(
-        name="Owned Tag Uses", value=owned_uses
-    ).add_field(name="Tag Command Uses", value=f"{count:,}")
+    e.add_field(name="Owned Tags", value=owned_tags)
+    e.add_field(name="Owned Tag Uses", value=owned_uses)
+    e.add_field(name="Tag Command Uses", value=f"{count:,}")
 
     # fill with data to ensure that we have a minimum of 3
     if len(records) < 3:

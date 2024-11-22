@@ -283,10 +283,7 @@ async def socketstats(itx: Interaction) -> None:
 
 @app_commands.command(description="See your total command usage")
 @app_commands.describe(user="Whose command usage to display.")
-async def usage(
-    itx: Interaction,
-    user: Optional[discord.User]
-) -> None:
+async def usage(itx: Interaction, user: Optional[discord.User]) -> None:
     user = user or itx.user
 
     paginator = CommandUsage(itx, viewing=user)
@@ -528,7 +525,7 @@ async def clear(itx: Interaction) -> None:
     await itx.followup.send(resp)
 
 
-@app_commands.command(description="Queries a random fact")
+@app_commands.command(description="Send a random fact")
 async def randomfact(itx: Interaction) -> None:
     params = {"X-Api-Key": itx.client.ninja_api_token}
 

@@ -204,6 +204,10 @@ class C2C(discord.Client):
     async def on_socket_event_type(self, event_type: str) -> None:
         self.socket_stats[event_type] += 1
 
+    async def get_or_fetch_user(self, user_id: int) -> discord.User:
+        """Looks up a member in cache or fetches if not found."""
+        return self.get_user(user_id) or await self.fetch_user(user_id)
+
     async def on_app_command_completion(
         self,
         itx: Interaction,
