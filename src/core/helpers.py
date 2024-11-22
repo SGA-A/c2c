@@ -43,7 +43,6 @@ async def add_multiplier(
     multi_type: Literal["xp", "luck", "robux"],
     cause: str,
     description: str,
-    expiry: Optional[float] = None,
     on_conflict: str = "UPDATE SET amount = amount + $1, description = $4"
 ) -> None:
     """
@@ -81,7 +80,7 @@ async def add_multiplier(
     ### `on_conflict` set to "DO NOTHING"
     - Return `False` if the `on_conflict` clause was triggered.
     - Row insertion occurs otherwise, returning `True`.
-    - Useful for apply temporary multipliers.
+    - Useful to apply temporary multipliers.
 
     ### `on_conflict` set to "DO UPDATE" (default)
     - Always return `True` because in either case an operation took place.
@@ -90,10 +89,10 @@ async def add_multiplier(
 
     result = await conn.fetchone(
         f"""
-        INSERT INTO multipliers VALUES ($0, $1, $2, $3, $4, $5)
+        INSERT INTO multipliers VALUES ($0, $1, $2, $3, $4)
         ON CONFLICT(userID, cause) DO {on_conflict}
         RETURNING rowid
-        """, user_id, multi_amount, multi_type, cause, description, expiry
+        """, user_id, multi_amount, multi_type, cause, description
     )
     return result is not None
 
