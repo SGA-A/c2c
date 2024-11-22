@@ -1,7 +1,7 @@
-import asyncio
 import json
 import logging
 
+import winloop
 from aiohttp import ClientSession, DummyCookieJar
 from asqlite import create_pool
 from discord.utils import setup_logging
@@ -24,4 +24,4 @@ async def main():
                 await client.start(config["client_token"])
 
 
-asyncio.run(main())
+winloop.run(main())
