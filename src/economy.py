@@ -88,6 +88,11 @@ PRESTIGE_EMOTES = {
     10: "<:xrn:1263924236242780171>",
     11: "<:Xrne:1263924252470415476>"
 }
+RECURRING_MULTIPLIERS  = {
+    "weekly": 10_000_000,
+    "monthly": 100_000_000,
+    "yearly": 1_000_000_000
+}
 
 item_handlers = {}
 
@@ -2296,21 +2301,11 @@ async def payout_recurring_income(
     income_type: str,
     weeks_away: int
 ) -> None:
-    multiplier = {
-        "weekly": 10_000_000,
-        "monthly": 100_000_000,
-        "yearly": 1_000_000_000
-    }.get(income_type)
+    multiplier = RECURRING_MULTIPLIERS[income_type]
 
     # ! Do they have a cooldown?
+    query = "SELECT until FROM cooldowns WHERE userID = $0 AND cooldown = $1"
     async with itx.client.pool.acquire() as conn:
-        query = (
-            """
-            SELECT until
-            FROM cooldowns
-            WHERE userID = $0 AND cooldown = $1
-            """
-        )
         cd_timestamp = await conn.fetchone(query, itx.user.id, income_type)
 
     noun_period = income_type[:-2]
@@ -2321,33 +2316,25 @@ async def payout_recurring_income(
         if isinstance(user_cd, datetime):
             r = discord.utils.format_dt(user_cd, style="R")
             return await itx.response.send_message(
-                f"You already got your {income_type} robux "
-                f"this {noun_period}, try again {r}."
+                f"**{itx.user.name}**, your {income_type} robux "
+                f"was already redeemed this {noun_period}, try again {r}."
             )
 
     # ! Try updating the cooldown, giving robux
-    r = discord.utils.utcnow() + timedelta(weeks=weeks_away)
-    rformatted = discord.utils.format_dt(r, style="R")
 
-    async with itx.client.pool.acquire() as conn, conn.transaction() as tr:
-        try:
-            ret = await update_account(itx.user.id, multiplier, conn)
-            assert ret is not None
-        except AssertionError:
-            await tr.rollback()
+    async with itx.client.pool.acquire() as conn:
+        ret = await update_account(itx.user.id, multiplier, conn)
+        if ret is None:
             return await itx.response.send_message(INVOKER_NOT_REGISTERED)
 
+        r = discord.utils.utcnow() + timedelta(weeks=weeks_away)
         await update_cooldown(itx.user.id, income_type, r.timestamp(), conn)
+        await conn.commit()
 
-    link = "<https://www.youtube.com/watch?v=ue_X8DskUN4>"
-    msg = (
-        f"## [{itx.user.display_name}'s {income_type.title()} Robux]({link})\n"
-        f"You just got {CURRENCY} **{multiplier:,}** "
-        f"for checking in this {noun_period}.\n"
-        f"See you next {noun_period} ({rformatted})!"
+    await itx.response.send_message(
+        f"**{itx.user.name}**, you just got {CURRENCY} **{multiplier:,}** "
+        f"for checking in this {noun_period}. See you next {noun_period}!"
     )
-
-    await itx.response.send_message(msg)
 
 
 @app_commands.command(description="Get a weekly injection of robux")
