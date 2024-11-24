@@ -15,6 +15,7 @@ from .core.bot import Interaction
 from .core.constants import *
 from .core.errors import CustomTransformerError, FailingConditionalError
 from .core.helpers import (
+    LRU,
     BaseView,
     add_multiplier,
     declare_transaction,
@@ -2777,12 +2778,18 @@ async def owned_items_lookup(
     ]
 
 
+_cache: LRU[str, list[app_commands.Choice[str]]] = LRU(1024)
+
+
 @use.autocomplete("item")
 @item.autocomplete("item")
 async def item_lookup(
     itx: Interaction,
     current: str
 ) -> list[app_commands.Choice[str]]:
+    if (val:=_cache.get(current, None)) is not None:
+        return val
+
     query = (
         """
         SELECT itemName
@@ -2797,10 +2804,11 @@ async def item_lookup(
     async with itx.client.pool.acquire() as conn:
         options = await conn.fetchall(query, (current, current))
 
-    return [
+    _cache[current] = r = [
         app_commands.Choice(name=option, value=option)
         for (option,) in options
     ]
+    return r
 
 
 cmds = [

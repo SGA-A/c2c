@@ -12,7 +12,7 @@ from pytz import timezone as pytz_timezone
 
 from ._types import BotExports
 from .core.bot import Interaction
-from .core.helpers import BaseView, get_cmd_sum, membed, send_prompt, to_ord
+from .core.helpers import LRU, BaseView, count_cmd, membed, send_prompt, to_ord
 from .core.paginators import Pagination, RefreshPagination
 
 BASE = "http://www.fileformat.info/info/unicode/char/"
@@ -166,7 +166,7 @@ class CommandUsage(RefreshPagination):
                 self.total, self.total_pages = 0, 1
                 return
 
-            self.total = await get_cmd_sum(self.viewing.id, conn)
+            self.total = await count_cmd(self.viewing.id, conn)
         self.total_pages = self.compute_total_pages(
             len(self.data), self.length
         )
@@ -289,12 +289,18 @@ async def fetch_commits(itx: Interaction) -> str:
     return revision
 
 
+_cache: LRU[str, list[app_commands.Choice[str]]] = LRU(1024)
+
+
 async def tag_autocomplete(
     itx: Interaction,
     current: str
 ) -> list[app_commands.Choice[str]]:
 
     current = current.lower()
+    if (val:=_cache.get(current, None)) is not None:
+        return val
+
     tags_xml = await kona(
         itx,
         name=current,
@@ -306,12 +312,14 @@ async def tag_autocomplete(
 
     # http status code was returned (when != 200 OK)
     if isinstance(tags_xml, int):
-        return []
+        _cache[current] = r = []
+        return r
 
-    return [
+    _cache[current] = r = [
         app_commands.Choice(name=tag_name, value=tag_name)
         for tag_xml in tags_xml if (tag_name:= tag_xml.get("name"))
     ]
+    return r
 
 
 async def kona(itx: Interaction, **params) -> int | list[Element]:
