@@ -198,6 +198,19 @@ class C2C(discord.Client):
         self.process = Process()
         self.uptime = discord.utils.utcnow()
 
+    async def close(self) -> None:
+        query = (
+            """
+            INSERT INTO socketstats (event, count) VALUES (?, ?)
+            ON CONFLICT(event) DO UPDATE SET count = count + excluded.count
+            """
+        )
+
+        # Add all the socket stats since runtime onto the database
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.executemany(query, list(self.socket_stats.items()))
+        await super().close()
+
     def is_owner(self, user: discord.abc.User) -> bool:
         return user.id in self.owner_ids
 

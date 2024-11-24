@@ -1,4 +1,5 @@
 import sqlite3
+from collections import deque
 from datetime import datetime, timezone
 from typing import Callable, Generator, Literal, Optional
 from unicodedata import name
@@ -11,7 +12,7 @@ from pytz import timezone as pytz_timezone
 
 from ._types import BotExports
 from .core.bot import Interaction
-from .core.helpers import commands_used_by, membed, send_prompt, to_ord
+from .core.helpers import BaseView, get_cmd_sum, membed, send_prompt, to_ord
 from .core.paginators import Pagination, RefreshPagination
 
 BASE = "http://www.fileformat.info/info/unicode/char/"
@@ -68,6 +69,70 @@ def parse_xml(mode: Literal["post", "tag"], xml: str, /) -> list[Element]:
     return fromstring(xml).findall(f".//{mode}")
 
 
+class SocketStatsView(BaseView):
+    @staticmethod
+    def latest_socketstats(itx: Interaction) -> discord.Embed:
+        delta = discord.utils.utcnow() - itx.client.uptime
+        _sum = sum(itx.client.socket_stats.values())
+        total = len(itx.client.socket_stats)
+        cpm = total / (delta.total_seconds() / 60)
+
+        e, = getattr(itx.message, "embeds", None) or (discord.Embed(),)
+        e.set_author(name=f"{_sum:,} observed ({total:,} unique, {cpm:.2f}/m)")
+        e.set_footer(text="Includes runtime socketstats only.")
+
+        e.description = ", ".join(
+            f"**{name}** ({count:,})"
+            for (name, count) in itx.client.socket_stats.items()
+        )
+
+        return e
+
+    @staticmethod
+    async def all_socketstats(itx: Interaction) -> discord.Embed:
+        async with itx.client.pool.acquire() as conn:
+            socket_rows = await conn.fetchall("SELECT * FROM socketstats")
+            total, _sum = await conn.fetchone(
+                "SELECT COUNT(*), SUM(count) FROM socketstats"
+            )
+
+        e, = getattr(itx.message, "embeds", None) or (discord.Embed(),)
+        e.description = ", ".join(
+            f"**{name}** ({count:,})"
+            for (name, count) in socket_rows
+        )
+
+        e.set_author(name=f"{_sum:,} observed ({total:,} unique)")
+        e.set_footer(text="Excludes runtime socketstats.")
+
+        return e
+
+    socket_methods = (all_socketstats, latest_socketstats)
+
+    def __init__(self, itx: Interaction) -> None:
+        super().__init__(itx)
+        self._queue = deque(self.socket_methods, maxlen=2)
+        self.socket_method = self.next_method()
+
+    def next_method(self) -> Callable:
+        # This is why the queue has a maxlen of 3 not 2
+        # At this line, the queue briefly holds 3 elements
+        popped = self._queue.popleft()
+        self._queue.append(popped)
+        return popped
+
+    @discord.ui.button(label="Switch Scope")
+    async def scope(self, itx: Interaction, _: discord.ui.Button) -> None:
+        self.socket_method = self.next_method()
+        embed = await discord.utils.maybe_coroutine(self.socket_method, itx)
+        await itx.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(emoji="<:refreshPages:1263923160433168414>")
+    async def refresh(self, itx: Interaction, _: discord.ui.Button) -> None:
+        embed = await discord.utils.maybe_coroutine(self.socket_method, itx)
+        await itx.response.edit_message(embed=embed, view=self)
+
+
 class CommandUsage(RefreshPagination):
     length = 12
     def __init__(
@@ -101,7 +166,7 @@ class CommandUsage(RefreshPagination):
                 self.total, self.total_pages = 0, 1
                 return
 
-            self.total = await commands_used_by(self.viewing.id, conn)
+            self.total = await get_cmd_sum(self.viewing.id, conn)
         self.total_pages = self.compute_total_pages(
             len(self.data), self.length
         )
@@ -267,18 +332,9 @@ async def kona(itx: Interaction, **params) -> int | list[Element]:
 
 @app_commands.command(description="See events I observed in Discord")
 async def socketstats(itx: Interaction) -> None:
-    delta = discord.utils.utcnow() - itx.client.uptime
-    total = sum(itx.client.socket_stats.values())
-    cpm = total / (delta.total_seconds() / 60)
-
-    data = "\n".join(
-        f"- {event_type}: {event_count:,}"
-        for event_type, event_count in itx.client.socket_stats.items()
-    )
-
-    await itx.response.send_message(
-        f"## {total:,} events observed ({cpm:.2f}/min)\n{data}"
-    )
+    view = SocketStatsView(itx)
+    embed = await discord.utils.maybe_coroutine(view.socket_method, itx)
+    await itx.response.send_message(embed=embed, view=view)
 
 
 @app_commands.command(description="See your total command usage")

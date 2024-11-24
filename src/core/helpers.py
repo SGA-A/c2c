@@ -23,7 +23,7 @@ async def end_transaction(conn: Connection, user_id: int, /) -> bool:
     await conn.execute("DELETE FROM transactions WHERE userID = $0", user_id)
 
 
-async def commands_used_by(user_id: int, conn: Connection) -> int:
+async def get_cmd_sum(user_id: int, conn: Connection) -> int:
     total, = await conn.fetchone(
         """
         SELECT CAST(TOTAL(cmd_count) AS INTEGER)
