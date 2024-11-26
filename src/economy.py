@@ -2754,10 +2754,7 @@ async def bet(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
 
 @sell.autocomplete("item")
 @share_items.autocomplete("item")
-async def owned_items_lookup(
-    itx: Interaction,
-    current: str
-) -> list[Choice[str]]:
+async def owned_item_ac(itx: Interaction, current: str) -> list[Choice[str]]:
     query = (
         """
         SELECT itemName
@@ -2781,7 +2778,7 @@ _cache: LRU[str, list[Choice[str]]] = LRU(1024)
 
 @use.autocomplete("item")
 @item.autocomplete("item")
-async def item_lookup(itx: Interaction, current: str) -> list[Choice[str]]:
+async def item_ac(itx: Interaction, current: str) -> list[Choice[str]]:
     if (val:=_cache.get(current, None)) is not None:
         return val
 
