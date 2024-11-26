@@ -6,11 +6,12 @@ from typing import Optional
 import discord
 from asqlite import Connection
 from discord import app_commands
+from discord.app_commands import Choice
 
 from ._types import BotExports
 from .core.bot import Interaction
 from .core.errors import FailingConditionalError
-from .core.helpers import BaseView, send_prompt
+from .core.helpers import LRU, BaseView, send_prompt
 from .core.paginators import PaginationSimple
 
 UPDATE_QUERY = "UPDATE tags SET uses = uses + 1 WHERE name = ?"
@@ -739,31 +740,45 @@ async def stats(itx: Interaction, member: Optional[discord.User]) -> None:
     await global_stats(itx)
 
 
+# int = user id, str = user input
+# TODO: test if 512 is suitable cache size
+_owned_tag_cache: LRU[tuple[int, str], list[Choice[str]]] = LRU(512)
+_all_tag_cache: LRU[str, list[Choice[str]]] = LRU(512)
+
+
 @get.autocomplete("name")
 @info.autocomplete("name")
-async def all_tag_autocomplete(
-    itx: Interaction,
-    current: str
-) -> list[app_commands.Choice[str]]:
+async def all_tag_ac(itx: Interaction, current: str) -> list[Choice[str]]:
+
+    if (val:=_all_tag_cache.get(current, None)) is not None:
+        return val
 
     async with itx.client.pool.acquire() as conn:
         all_tags = await partial_match(itx, current, conn)
 
-    return [app_commands.Choice(name=tag, value=tag) for (tag,) in all_tags]
+    _all_tag_cache[current] = r = [
+        Choice(name=tag, value=tag)
+        for (tag,) in all_tags
+    ]
+    return r
 
 
 @edit.autocomplete("name")
 @remove.autocomplete("name")
 @transfer.autocomplete("tag")
-async def owned_tag_autocomplete(
-    itx: Interaction,
-    current: str
-) -> list[app_commands.Choice[str]]:
+async def owned_tag_ac(itx: Interaction, current: str) -> list[Choice[str]]:
+    key = (itx.user.id, current)
+    if (val:=_owned_tag_cache.get(key, None)) is not None:
+        return val
 
     async with itx.client.pool.acquire() as conn:
         owned_tags = await owned_partial_match(itx, current, conn)
 
-    return [app_commands.Choice(name=tag, value=tag) for (tag,) in owned_tags]
+    _owned_tag_cache[key] = r = [
+        Choice(name=tag, value=tag)
+        for (tag,) in owned_tags
+    ]
+    return r
 
 
 exports = BotExports([tag_group, tag_msg_menu])

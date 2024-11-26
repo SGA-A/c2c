@@ -7,6 +7,7 @@ from xml.etree.ElementTree import Element, fromstring
 
 import discord
 from discord import app_commands
+from discord.app_commands import Choice
 from psutil import cpu_count
 from pytz import timezone as pytz_timezone
 
@@ -289,13 +290,10 @@ async def fetch_commits(itx: Interaction) -> str:
     return revision
 
 
-_cache: LRU[str, list[app_commands.Choice[str]]] = LRU(1024)
+_cache: LRU[str, list[Choice[str]]] = LRU(1024)
 
 
-async def tag_autocomplete(
-    itx: Interaction,
-    current: str
-) -> list[app_commands.Choice[str]]:
+async def tag_lookup(itx: Interaction, current: str) -> list[Choice[str]]:
 
     current = current.lower()
     if (val:=_cache.get(current, None)) is not None:
@@ -316,7 +314,7 @@ async def tag_autocomplete(
         return r
 
     _cache[current] = r = [
-        app_commands.Choice(name=tag_name, value=tag_name)
+        Choice(name=tag_name, value=tag_name)
         for tag_xml in tags_xml if (tag_name:= tag_xml.get("name"))
     ]
     return r
@@ -439,9 +437,9 @@ kona_group.add_command(bookmark_group)
     page="The page number to look through."
 )
 @app_commands.autocomplete(
-    tag1=tag_autocomplete,
-    tag2=tag_autocomplete,
-    tag3=tag_autocomplete
+    tag1=tag_lookup,
+    tag2=tag_lookup,
+    tag3=tag_lookup
 )
 async def kona_search(
     itx: Interaction,

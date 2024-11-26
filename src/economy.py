@@ -9,6 +9,7 @@ from typing import Any, Literal, Optional
 import discord
 from asqlite import Connection
 from discord import ButtonStyle, app_commands
+from discord.app_commands import Choice
 
 from ._types import BotExports, MaybeWebhook, UserEntry
 from .core.bot import Interaction
@@ -2756,7 +2757,7 @@ async def bet(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
 async def owned_items_lookup(
     itx: Interaction,
     current: str
-) -> list[app_commands.Choice[str]]:
+) -> list[Choice[str]]:
     query = (
         """
         SELECT itemName
@@ -2772,21 +2773,15 @@ async def owned_items_lookup(
     async with itx.client.pool.acquire() as conn:
         options = await conn.fetchall(query, (current, itx.user.id, current))
 
-    return [
-        app_commands.Choice(name=option, value=option)
-        for (option,) in options
-    ]
+    return [Choice(name=option, value=option) for (option,) in options]
 
 
-_cache: LRU[str, list[app_commands.Choice[str]]] = LRU(1024)
+_cache: LRU[str, list[Choice[str]]] = LRU(1024)
 
 
 @use.autocomplete("item")
 @item.autocomplete("item")
-async def item_lookup(
-    itx: Interaction,
-    current: str
-) -> list[app_commands.Choice[str]]:
+async def item_lookup(itx: Interaction, current: str) -> list[Choice[str]]:
     if (val:=_cache.get(current, None)) is not None:
         return val
 
@@ -2805,7 +2800,7 @@ async def item_lookup(
         options = await conn.fetchall(query, (current, current))
 
     _cache[current] = r = [
-        app_commands.Choice(name=option, value=option)
+        Choice(name=option, value=option)
         for (option,) in options
     ]
     return r
