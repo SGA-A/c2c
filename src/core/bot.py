@@ -1,6 +1,6 @@
-import json
 import logging
-import random
+from collections import Counter
+from random import choice
 from sqlite3 import IntegrityError
 from traceback import format_exception
 from typing import Self
@@ -19,20 +19,21 @@ type Interaction = discord.Interaction[C2C]
 
 
 LEVEL_UP_PROMPTS = (
+    "Amazing",
+    "Awe inspiring stuff",
+    "Brilliant job",
+    "Fantastic work",
     "Great work",
     "Hard work paid off",
-    "Inspiring",
-    "Top notch",
-    "You're on fire",
-    "You're on a roll",
-    "Keep it up",
-    "Amazing",
     "I'm proud of you",
-    "Fantastic work",
-    "Superb effort",
-    "Brilliant job",
+    "Inspiring",
+    "Keep it up",
     "Outstanding",
-    "You're doing great"
+    "Superb effort",
+    "Top notch",
+    "You're doing great",
+    "You're on a roll",
+    "You're on fire"
 )
 
 
@@ -87,8 +88,8 @@ async def add_exp_or_levelup(
     )
 
     rankup = membed(
-        f"{random.choice(LEVEL_UP_PROMPTS)}, {itx.user.name}!\n"
-        f"You've leveled up from level **{level-1:,}** to **{level:,}**."
+        f"{choice(LEVEL_UP_PROMPTS)}, {itx.user.name}!\n"
+        f"You've leveled up to level **{level}**"
     )
 
     await itx.followup.send(embed=rankup)
@@ -152,15 +153,16 @@ class BasicTree(app_commands.CommandTree["C2C"]):
                 "Seems like the bot has stumbled upon an unexpected error.\n"
                 "Not to worry. If the issue persists, please let us know."
             )
-        await meth(msg, view=self.client.contact_devs)
+        await meth(msg)
 
 
 class C2C(discord.Client):
-    owner_ids: set[int] = {992152414566232139, 546086191414509599}
+    owner_ids: set[int]
 
     def __init__(
         self,
         pool: Pool,
+        config: dict[str, str],
         session: ClientSession,
         initial_exts: list[HasExports]
     ) -> None:
@@ -169,8 +171,6 @@ class C2C(discord.Client):
         flags.joined = True
 
         intents = discord.Intents.none()
-        intents.message_content = True
-        intents.messages = True
         intents.guilds = True
         intents.members = True
 
@@ -184,30 +184,42 @@ class C2C(discord.Client):
             status=discord.Status.idle
         )
 
-        with open(".\\config.json", "r") as f:
-            config: dict[str, str] = json.load(f)
-            for k, v in config.items():
-                setattr(self, k, v)
+        self.ninja_api_token = config["ninja_api_token"]
+        self.github_api_token = config["github_api_token"]
 
         # Setup
         self.pool = pool
         self.session = session
         self.initial_exts = initial_exts
         self.tree = BasicTree.from_c2c(self)
+        self.socket_stats: Counter[str] = Counter()
 
         # Misc
         self.process = Process()
-        self.time_launch = discord.utils.utcnow()
-        self.contact_devs = discord.ui.View(timeout=5.0).add_item(
-            discord.ui.Button(
-                label="Contact a developer",
-                url="https://www.discordapp.com/users/546086191414509599"
-            )
+        self.uptime = discord.utils.utcnow()
+
+    async def close(self) -> None:
+        query = (
+            """
+            INSERT INTO socketstats (event, count) VALUES (?, ?)
+            ON CONFLICT(event) DO UPDATE SET count = count + excluded.count
+            """
         )
 
-    @staticmethod
-    def is_owner(user: discord.abc.User) -> bool:
-        return user.id in C2C.owner_ids
+        # Add all the socket stats since runtime onto the database
+        async with self.pool.acquire() as conn, conn.transaction():
+            await conn.executemany(query, list(self.socket_stats.items()))
+        await super().close()
+
+    def is_owner(self, user: discord.abc.User) -> bool:
+        return user.id in self.owner_ids
+
+    async def on_socket_event_type(self, event_type: str) -> None:
+        self.socket_stats[event_type] += 1
+
+    async def get_or_fetch_user(self, user_id: int) -> discord.User:
+        """Looks up a member in cache or fetches if not found."""
+        return self.get_user(user_id) or await self.fetch_user(user_id)
 
     async def on_app_command_completion(
         self,
@@ -249,7 +261,7 @@ class C2C(discord.Client):
             except IntegrityError:
                 return
 
-            exp_gainable = command.extras.get("exp_gained")
+            exp_gainable = command.extras.get("exp_gained", 0)
             if not exp_gainable:
                 return
 
@@ -263,8 +275,7 @@ class C2C(discord.Client):
         logging.error(formatted_traceback)
 
     async def setup_hook(self) -> None:
-        # ! If in the future some modules don't have commands
-        # ! if mod.exports.commands followed by this branch
+        self.owner_ids = {mem.id for mem in self.application.team.members}
 
         for mod in self.initial_exts:
             for command_obj in mod.exports.commands:

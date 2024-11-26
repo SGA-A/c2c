@@ -9,16 +9,17 @@ from typing import Any, Literal, Optional
 import discord
 from asqlite import Connection
 from discord import ButtonStyle, app_commands
+from discord.app_commands import Choice
 
 from ._types import BotExports, MaybeWebhook, UserEntry
 from .core.bot import Interaction
 from .core.constants import *
 from .core.errors import CustomTransformerError, FailingConditionalError
 from .core.helpers import (
+    LRU,
     BaseView,
     add_multiplier,
     declare_transaction,
-    economy_check,
     end_transaction,
     get_multi_of,
     membed,
@@ -29,7 +30,6 @@ from .core.helpers import (
 from .core.paginators import PaginationItem, RefreshPagination
 from .core.transformers import RawIntegerTransformer
 
-DOWN = True
 NO_FILTER = "0"
 YT_SHORT = "https://www.youtube.com/shorts/vTrH4paRl90"
 MIN_BET_KEYCARD = 500_000
@@ -89,6 +89,11 @@ PRESTIGE_EMOTES = {
     9: "<:ixrn:1263922037018202112>",
     10: "<:xrn:1263924236242780171>",
     11: "<:Xrne:1263924252470415476>"
+}
+RECURRING_MULTIPLIERS  = {
+    "weekly": 10_000_000,
+    "monthly": 100_000_000,
+    "yearly": 1_000_000_000
 }
 
 item_handlers = {}
@@ -154,8 +159,18 @@ class ItemInputTransformer(app_commands.Transformer):
     containing the item ID, name, and emoji.
     """
 
-    ITEM_NOT_FOUND = "No items found with that name pattern."
+    ITEM_NOT_FOUND = "No items exist with that name pattern."
     TIMED_OUT = "Timed out waiting for a response."
+    QUERY = (
+        """
+        SELECT itemID, itemName, emoji
+        FROM shop
+        WHERE itemName LIKE '%' || ? || '%'
+        COLLATE NOCASE
+        ORDER BY INSTR(itemName, ?)
+        LIMIT 5
+        """
+    )
 
     async def transform(
         self,
@@ -163,64 +178,31 @@ class ItemInputTransformer(app_commands.Transformer):
         value: str
     ) -> tuple[int, str, str]:
         async with itx.client.pool.acquire() as conn:
-            res = await conn.fetchall(
-                """
-                SELECT itemID, itemName, emoji
-                FROM shop
-                WHERE LOWER(itemName) LIKE '%' || ? || '%'
-                LIMIT 5
-                """, (value.lower(),)
-            )
+            rows = await conn.fetchall(self.QUERY, (value, value))
 
-        if not res:
+        if not rows:
             raise CustomTransformerError(
                 value, self.type, self, self.ITEM_NOT_FOUND
             )
 
-        length = len(res)
+        length = len(rows)
         if length == 1:
-            return res[0]
+            return rows[0]
 
         content = f"{length} results for {value!r} found, select one below."
-        match_view = BaseView(itx, content)
-        match_view.chosen_item = None
+        view = BaseView(itx, content)
+        view.chosen_item = None
 
-        for (item_id, item_name, item_emoji) in res:
-            match_view.add_item(MatchItem(item_id, item_name, item_emoji))
+        for (item_id, item_name, item_emoji) in rows:
+            view.add_item(MatchItem(item_id, item_name, item_emoji))
 
-        await respond(itx, content, view=match_view)
+        await itx.response.send_message(content, view=view)
+        await view.wait()
 
-        await match_view.wait()
-        if match_view.chosen_item:
-            return match_view.chosen_item
+        if view.chosen_item:
+            return view.chosen_item
 
         raise CustomTransformerError(value, self.type, self, self.TIMED_OUT)
-
-
-class UserSettings(BaseView):
-    def __init__(
-        self,
-        itx: Interaction,
-        /,
-        data: list,
-        chosen_setting: str
-    ) -> None:
-        super().__init__(itx)
-
-        self.select = SettingsDropdown(
-            data=data,
-            default_setting=chosen_setting
-        )
-        self.disable_button = ToggleButton(
-            label="Disable",
-            style=ButtonStyle.danger,
-            row=1
-        )
-        self.enable_button = ToggleButton(
-            label="Enable",
-            style=ButtonStyle.success,
-            row=1
-        )
 
 
 class ConfirmResetData(BaseView):
@@ -306,7 +288,8 @@ class BalanceView(BaseView):
     async def interaction_check(self, itx: Interaction) -> bool:
         #! Check it is the author of the original interaction running this
 
-        value = await economy_check(itx, self.itx.user.id)
+        # Parent method already responds if False
+        value = await super().interaction_check(itx)
         if not value:
             return False
 
@@ -565,6 +548,7 @@ class HighLow(BaseView):
         loss_rate = (hl_loss / (hl_loss + hl_win)) * 100
 
         lose = itx.message.embeds[0]
+        lose.remove_footer()
         lose.colour = discord.Colour.brand_red()
         lose.description = (
             f"**You lost {CURRENCY} {self.their_bet:,}!**\n"
@@ -573,8 +557,6 @@ class HighLow(BaseView):
             f"Your new balance is {CURRENCY} **{new_amount:,}**.\n"
             f"-# {loss_rate:.1f}% of highlow games lost."
         )
-
-        lose.remove_footer()
 
         await itx.response.edit_message(embed=lose, view=self)
 
@@ -619,7 +601,7 @@ class MultiplierView(RefreshPagination):
         "Luck": (0x65D654, luck_emoji.url)
     }
 
-    multipliers = [
+    options = [
         discord.SelectOption(label="Robux", emoji=robux_emoji),
         discord.SelectOption(label="XP", emoji=xp_emoji),
         discord.SelectOption(label="Luck", emoji=luck_emoji)
@@ -684,7 +666,6 @@ class MultiplierView(RefreshPagination):
         return f"> {self.chosen_multiplier}: **{amount:.2f}{unit}**\n\n"
 
     async def format_pages(self) -> None:
-        lowered = self.chosen_multiplier.lower()
         async with self.itx.client.pool.acquire() as conn:
             self.total_multi, = await conn.fetchone(
                 """
@@ -692,8 +673,10 @@ class MultiplierView(RefreshPagination):
                 FROM multipliers
                 WHERE (userID IS NULL OR userID = $0)
                 AND multi_type = $1
-                """, self.viewing.id, lowered
+                COLLATE NOCASE
+                """, self.viewing.id, self.chosen_multiplier
             )
+
             self.multiplier_list = []
             if self.total_multi:
                 self.multiplier_list = await conn.fetchall(
@@ -702,8 +685,9 @@ class MultiplierView(RefreshPagination):
                     FROM multipliers
                     WHERE (userID IS NULL OR userID = $0)
                     AND multi_type = $1
+                    COLLATE NOCASE
                     ORDER BY amount DESC
-                    """, self.viewing.id, lowered
+                    """, self.viewing.id, self.chosen_multiplier
                 )
 
         self.total_pages = self.compute_total_pages(
@@ -711,11 +695,7 @@ class MultiplierView(RefreshPagination):
             self.length
         )
 
-    @discord.ui.select(
-        options=multipliers,
-        row=0,
-        placeholder="Select a multiplier"
-    )
+    @discord.ui.select(options=options, row=0, placeholder="Select multiplier")
     async def scall(self, itx: Interaction, select: discord.ui.Select) -> None:
         self.chosen_multiplier: str = select.values[0]
         self.index = 1
@@ -758,101 +738,6 @@ class MatchItem(discord.ui.Button):
             item.disabled = True
 
         await itx.response.edit_message(view=self.view)
-
-
-class SettingsDropdown(discord.ui.Select):
-
-    def __init__(self, data: tuple, default_setting: str) -> None:
-        options = [
-            discord.SelectOption(
-                label=" ".join(setting.split("_")).title(),
-                description=brief,
-                default=(setting == default_setting),
-                value=setting
-            )
-            for setting, brief in data
-        ]
-        super().__init__(options=options, placeholder="Select a setting")
-
-        self.current_setting = default_setting
-        self.current_setting_state = None
-
-    async def callback(self, itx: Interaction) -> None:
-        self.current_setting = self.values[0]
-
-        for option in self.options:
-            option.default = option.value == self.current_setting
-
-        async with itx.client.pool.acquire() as conn:
-            em = await get_setting_embed(self.view, conn)
-        await itx.response.edit_message(embed=em, view=self.view)
-
-
-class ToggleButton(discord.ui.Button):
-    QUERY = (
-        """
-        INSERT INTO settings (userID, setting, value)
-        VALUES ($0, $1, $2)
-        ON CONFLICT(userID, setting) DO UPDATE SET value = $2
-        """
-    )
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(**kwargs)
-
-    async def callback(self, itx: Interaction) -> None:
-        select = self.view.select
-
-        select.current_setting_state = int(not select.current_setting_state)
-
-        async with itx.client.pool.acquire() as conn:
-            tr = conn.transaction()
-            await tr.start()
-
-            try:
-                await conn.execute(
-                    self.QUERY,
-                    itx.user.id,
-                    select.current_setting,
-                    select.current_setting_state
-                )
-            except IntegrityError:
-                await tr.rollback()
-                return await itx.response.send_message(
-                    INVOKER_NOT_REGISTERED, ephemeral=True
-                )
-            else:
-                await tr.commit()
-
-        enabled = select.current_setting_state == 1
-        em = itx.message.embeds[0].set_field_at(
-            index=0,
-            name="Current",
-            value=(
-                "<:Enabled:1263921710990622802> Enabled"
-                if enabled
-                else "<:Disabled:1263921453229801544> Disabled"
-            )
-        )
-
-        self.view.disable_button.disabled = not enabled
-        self.view.enable_button.disabled = enabled
-
-        await itx.response.edit_message(embed=em, view=self.view)
-
-
-class ProfileCustomizeButton(discord.ui.Button):
-    def __init__(self, **kwargs) -> None:
-
-        super().__init__(
-            label="Edit Profile (in development)",
-            row=2,
-            disabled=True,
-            **kwargs
-        )
-
-    async def callback(self, _: Interaction) -> None:
-        pass
 
 
 class ItemQuantityModal(discord.ui.Modal):
@@ -1399,58 +1284,6 @@ async def update_games(
     )
 
 
-async def get_setting_embed(
-    view: UserSettings,
-    conn: Connection
-) -> discord.Embed:
-
-    data = await conn.fetchone(
-        """
-        SELECT
-            COALESCE(
-                (
-                    SELECT settings.value
-                    FROM settings
-                    WHERE settings.userID = $0 AND setting = $1
-                ), 0
-            ) AS userSetting,
-            settings_descriptions.description
-        FROM settings_descriptions
-        WHERE setting = $1
-        """, view.itx.user.id, view.select.current_setting
-    )
-
-    if data is None:
-        view.clear_items().stop()
-        return membed("This setting does not exist.")
-
-    value, description = data
-    view.select.current_setting_state = value
-
-    embed = membed(f"> {description}")
-
-    embed.title = " ".join(
-        view.select.current_setting.split("_")
-    ).title()
-
-    view.clear_items().add_item(view.select)
-
-    if embed.title == "Profile Customization":
-        view.add_item(ProfileCustomizeButton())
-    else:
-        enabled = value == 1
-        current_text = (
-            "<:Enabled:1263921710990622802> Enabled"
-            if enabled
-            else "<:Disabled:1263921453229801544> Disabled"
-        )
-        embed.add_field(name="Current", value=current_text)
-        view.disable_button.disabled = not enabled
-        view.enable_button.disabled = enabled
-        view.add_item(view.disable_button).add_item(view.enable_button)
-    return embed
-
-
 async def calc_inv_net(user: UserEntry, conn: Connection) -> int:
     """Calculate the net value of a user's inventory"""
 
@@ -1767,19 +1600,6 @@ async def update_cooldown(
     )
 
 # ----------- END OF ECONOMY FUNCS, HERE ON IS JUST COMMANDS --------------
-
-@app_commands.command(description="Adjust user-specific settings")
-@app_commands.describe(setting="The specific setting you want to adjust.")
-async def settings(itx: Interaction, setting: Optional[str]) -> None:
-
-    query = "SELECT setting, brief FROM settings_descriptions"
-    async with itx.client.pool.acquire() as conn:
-        settings = await conn.fetchall(query)
-        chosen_setting = setting or settings[0][0]
-
-        view = UserSettings(itx, data=settings, chosen_setting=chosen_setting)
-        em = await get_setting_embed(view, conn)
-    await itx.response.send_message(embed=em, view=view)
 
 
 @app_commands.command(description="View all multipliers within the bot")
@@ -2483,21 +2303,11 @@ async def payout_recurring_income(
     income_type: str,
     weeks_away: int
 ) -> None:
-    multiplier = {
-        "weekly": 10_000_000,
-        "monthly": 100_000_000,
-        "yearly": 1_000_000_000
-    }.get(income_type)
+    multiplier = RECURRING_MULTIPLIERS[income_type]
 
     # ! Do they have a cooldown?
+    query = "SELECT until FROM cooldowns WHERE userID = $0 AND cooldown = $1"
     async with itx.client.pool.acquire() as conn:
-        query = (
-            """
-            SELECT until
-            FROM cooldowns
-            WHERE userID = $0 AND cooldown = $1
-            """
-        )
         cd_timestamp = await conn.fetchone(query, itx.user.id, income_type)
 
     noun_period = income_type[:-2]
@@ -2508,33 +2318,25 @@ async def payout_recurring_income(
         if isinstance(user_cd, datetime):
             r = discord.utils.format_dt(user_cd, style="R")
             return await itx.response.send_message(
-                f"You already got your {income_type} robux "
-                f"this {noun_period}, try again {r}."
+                f"**{itx.user.name}**, your {income_type} robux "
+                f"was already redeemed this {noun_period}, try again {r}."
             )
 
     # ! Try updating the cooldown, giving robux
-    r = discord.utils.utcnow() + timedelta(weeks=weeks_away)
-    rformatted = discord.utils.format_dt(r, style="R")
 
-    async with itx.client.pool.acquire() as conn, conn.transaction() as tr:
-        try:
-            ret = await update_account(itx.user.id, multiplier, conn)
-            assert ret is not None
-        except AssertionError:
-            await tr.rollback()
+    async with itx.client.pool.acquire() as conn:
+        ret = await update_account(itx.user.id, multiplier, conn)
+        if ret is None:
             return await itx.response.send_message(INVOKER_NOT_REGISTERED)
 
+        r = discord.utils.utcnow() + timedelta(weeks=weeks_away)
         await update_cooldown(itx.user.id, income_type, r.timestamp(), conn)
+        await conn.commit()
 
-    link = "<https://www.youtube.com/watch?v=ue_X8DskUN4>"
-    msg = (
-        f"## [{itx.user.display_name}'s {income_type.title()} Robux]({link})\n"
-        f"You just got {CURRENCY} **{multiplier:,}** "
-        f"for checking in this {noun_period}.\n"
-        f"See you next {noun_period} ({rformatted})!"
+    await itx.response.send_message(
+        f"**{itx.user.name}**, you just got {CURRENCY} **{multiplier:,}** "
+        f"for checking in this {noun_period}. See you next {noun_period}!"
     )
-
-    await itx.response.send_message(msg)
 
 
 @app_commands.command(description="Get a weekly injection of robux")
@@ -2952,91 +2754,60 @@ async def bet(itx: Interaction, robux: ROBUX_CONVERTER) -> None:
 
 @sell.autocomplete("item")
 @share_items.autocomplete("item")
-async def owned_items_lookup(
-    itx: Interaction,
-    current: str
-) -> list[app_commands.Choice[str]]:
+async def owned_item_ac(itx: Interaction, current: str) -> list[Choice[str]]:
     query = (
         """
         SELECT itemName
         FROM shop
         INNER JOIN inventory ON shop.itemID = inventory.itemID
-        WHERE LOWER(itemName) LIKE '%' || ? || '%' AND userID = ?
+        WHERE itemName LIKE '%' || ? || '%' AND userID = ?
         COLLATE NOCASE
         ORDER BY INSTR(itemName, ?)
         LIMIT 25
         """
     )
 
-    current = current.lower()
     async with itx.client.pool.acquire() as conn:
         options = await conn.fetchall(query, (current, itx.user.id, current))
 
-    return [
-        app_commands.Choice(name=option, value=option)
-        for (option,) in options
-    ]
+    return [Choice(name=option, value=option) for (option,) in options]
+
+
+_cache: LRU[str, list[Choice[str]]] = LRU(1024)
 
 
 @use.autocomplete("item")
 @item.autocomplete("item")
-async def item_lookup(
-    itx: Interaction,
-    current: str
-) -> list[app_commands.Choice[str]]:
+async def item_ac(itx: Interaction, current: str) -> list[Choice[str]]:
+    if (val:=_cache.get(current, None)) is not None:
+        return val
+
     query = (
         """
         SELECT itemName
         FROM shop
-        WHERE LOWER(itemName) LIKE '%' || ? || '%'
+        WHERE itemName LIKE '%' || ? || '%'
         COLLATE NOCASE
         ORDER BY INSTR(itemName, ?)
         LIMIT 25
         """
     )
 
-    current = current.lower()
     async with itx.client.pool.acquire() as conn:
         options = await conn.fetchall(query, (current, current))
 
-    return [
-        app_commands.Choice(name=option, value=option)
+    _cache[current] = r = [
+        Choice(name=option, value=option)
         for (option,) in options
     ]
-
-
-@settings.autocomplete("setting")
-async def setting_lookup(
-    itx: Interaction,
-    current: str
-) -> list[app_commands.Choice[str]]:
-    query = (
-        """
-        SELECT
-            setting,
-            REPLACE(setting, '_', ' ') AS formatted_setting
-        FROM settings_descriptions
-        WHERE LOWER(setting) LIKE '%' || ? || '%'
-        COLLATE NOCASE
-        ORDER BY INSTR(formatted_setting, ?)
-        """
-    )
-
-    current = current.lower()
-    async with itx.client.pool.acquire() as conn:
-        results = await conn.fetchall(query, (current, current))
-
-    return [
-        app_commands.Choice(name=formatted_setting.title(), value=setting)
-        for (setting, formatted_setting) in results
-    ]
+    return r
 
 
 cmds = [
-    settings, multipliers, share, shop, item, use,
-    prestige, highlow, slots, inventory, balance,
-    weekly, monthly, yearly, resetmydata, withdraw,
-    deposit, rob, bet
+    multipliers, share, shop, item, use, prestige,
+    highlow, slots, inventory, balance, weekly,
+    monthly, yearly, resetmydata, withdraw, deposit,
+    rob, bet
 ]
 
 for app_cmd in cmds:

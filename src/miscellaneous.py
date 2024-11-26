@@ -1,18 +1,19 @@
 import sqlite3
+from collections import deque
 from datetime import datetime, timezone
-from io import BytesIO
 from typing import Callable, Generator, Literal, Optional
 from unicodedata import name
 from xml.etree.ElementTree import Element, fromstring
 
 import discord
 from discord import app_commands
+from discord.app_commands import Choice
 from psutil import cpu_count
 from pytz import timezone as pytz_timezone
 
 from ._types import BotExports
 from .core.bot import Interaction
-from .core.helpers import commands_used_by, membed, send_prompt, to_ord
+from .core.helpers import LRU, BaseView, count_cmd, membed, send_prompt, to_ord
 from .core.paginators import Pagination, RefreshPagination
 
 BASE = "http://www.fileformat.info/info/unicode/char/"
@@ -22,19 +23,6 @@ COMMITS_ENDPOINT = "https://api.github.com/repos/SGA-A/c2c/commits"
 TEXT_RAN = 6231  # goodbye prefix commands
 ARROW = "<:Arrow:1263919893762543717>"
 API_EXCEPTION = "The API fucked up, try again later."
-API_ENDPOINTS = Literal[
-    "abstract", "balls", "billboard", "bonks",
-    "bubble", "canny", "clock", "cloth", "contour",
-    "cow", "cube", "dilate", "fall",
-    "fan", "flush", "gallery", "globe",
-    "half-invert", "hearts", "infinity",
-    "laundry", "lsd", "optics", "parapazzi"
-]
-MORE_API_ENDPOINTS = Literal[
-    "minecraft", "patpat", "plates", "pyramid",
-    "radiate", "rain", "ripped", "ripple",
-    "shred", "wiggle", "warp", "wave"
-]
 EMBED_TIMEZONES = {
     "Pacific": "US/Pacific",
     "Mountain": "US/Mountain",
@@ -82,6 +70,70 @@ def parse_xml(mode: Literal["post", "tag"], xml: str, /) -> list[Element]:
     return fromstring(xml).findall(f".//{mode}")
 
 
+class SocketStatsView(BaseView):
+    @staticmethod
+    def latest_socketstats(itx: Interaction) -> discord.Embed:
+        delta = discord.utils.utcnow() - itx.client.uptime
+        _sum = sum(itx.client.socket_stats.values())
+        total = len(itx.client.socket_stats)
+        cpm = total / (delta.total_seconds() / 60)
+
+        e, = getattr(itx.message, "embeds", None) or (discord.Embed(),)
+        e.set_author(name=f"{_sum:,} observed ({total:,} unique, {cpm:.2f}/m)")
+        e.set_footer(text="Includes runtime socketstats only.")
+
+        e.description = ", ".join(
+            f"**{name}** ({count:,})"
+            for (name, count) in itx.client.socket_stats.items()
+        )
+
+        return e
+
+    @staticmethod
+    async def all_socketstats(itx: Interaction) -> discord.Embed:
+        async with itx.client.pool.acquire() as conn:
+            socket_rows = await conn.fetchall("SELECT * FROM socketstats")
+            total, _sum = await conn.fetchone(
+                "SELECT COUNT(*), SUM(count) FROM socketstats"
+            )
+
+        e, = getattr(itx.message, "embeds", None) or (discord.Embed(),)
+        e.description = ", ".join(
+            f"**{name}** ({count:,})"
+            for (name, count) in socket_rows
+        )
+
+        e.set_author(name=f"{_sum:,} observed ({total:,} unique)")
+        e.set_footer(text="Excludes runtime socketstats.")
+
+        return e
+
+    socket_methods = (all_socketstats, latest_socketstats)
+
+    def __init__(self, itx: Interaction) -> None:
+        super().__init__(itx)
+        self._queue = deque(self.socket_methods, maxlen=2)
+        self.socket_method = self.next_method()
+
+    def next_method(self) -> Callable:
+        # This is why the queue has a maxlen of 3 not 2
+        # At this line, the queue briefly holds 3 elements
+        popped = self._queue.popleft()
+        self._queue.append(popped)
+        return popped
+
+    @discord.ui.button(label="Switch Scope")
+    async def scope(self, itx: Interaction, _: discord.ui.Button) -> None:
+        self.socket_method = self.next_method()
+        embed = await discord.utils.maybe_coroutine(self.socket_method, itx)
+        await itx.response.edit_message(embed=embed, view=self)
+
+    @discord.ui.button(emoji="<:refreshPages:1263923160433168414>")
+    async def refresh(self, itx: Interaction, _: discord.ui.Button) -> None:
+        embed = await discord.utils.maybe_coroutine(self.socket_method, itx)
+        await itx.response.edit_message(embed=embed, view=self)
+
+
 class CommandUsage(RefreshPagination):
     length = 12
     def __init__(
@@ -115,7 +167,7 @@ class CommandUsage(RefreshPagination):
                 self.total, self.total_pages = 0, 1
                 return
 
-            self.total = await commands_used_by(self.viewing.id, conn)
+            self.total = await count_cmd(self.viewing.id, conn)
         self.total_pages = self.compute_total_pages(
             len(self.data), self.length
         )
@@ -217,7 +269,7 @@ class KonaPagination(Pagination):
 
 async def fetch_commits(itx: Interaction) -> str:
     gh_headers = {
-        "Authorization": f"token {itx.client.gh_token}",
+        "Authorization": f"token {itx.client.github_api_token}",
         "Accept": "application/vnd.github.v3+json"
     }
 
@@ -233,18 +285,23 @@ async def fetch_commits(itx: Interaction) -> str:
         f"{c['commit']['message'].splitlines()[0]} "
         f"({relative(datetime.fromisoformat(c['commit']['author']['date']))})"
         for c in commits
-    )
+    ) or ""
 
-    return (revision or "")
+    return revision
 
 
-async def tag_search_autocomplete(
-    itx: Interaction,
-    current: str
-) -> list[app_commands.Choice[str]]:
+_cache: LRU[str, list[Choice[str]]] = LRU(1024)
+
+
+async def tag_lookup(itx: Interaction, current: str) -> list[Choice[str]]:
+
+    current = current.lower()
+    if (val:=_cache.get(current, None)) is not None:
+        return val
+
     tags_xml = await kona(
         itx,
-        name=current.lower(),
+        name=current,
         mode="tag",
         page=1,
         order="count",
@@ -253,12 +310,14 @@ async def tag_search_autocomplete(
 
     # http status code was returned (when != 200 OK)
     if isinstance(tags_xml, int):
-        return []
+        _cache[current] = r = []
+        return r
 
-    return [
-        app_commands.Choice(name=tag_name, value=tag_name)
+    _cache[current] = r = [
+        Choice(name=tag_name, value=tag_name)
         for tag_xml in tags_xml if (tag_name:= tag_xml.get("name"))
     ]
+    return r
 
 
 async def kona(itx: Interaction, **params) -> int | list[Element]:
@@ -277,29 +336,16 @@ async def kona(itx: Interaction, **params) -> int | list[Element]:
         return parse_xml(mode, await resp.text())
 
 
-async def format_gif_api_response(
-    itx: Interaction,
-    url: str,
-    param: dict,
-    header: dict,
-    /
-) -> None:
-    async with itx.client.session.get(url, params=param, headers=header) as r:
-        if r.status != 200:
-            await itx.followup.send(API_EXCEPTION)
-            return
-        initial_bytes = await r.read()
-
-    buffer = BytesIO(initial_bytes)
-    await itx.followup.send(file=discord.File(buffer, "clip.gif"))
+@app_commands.command(description="See events I observed in Discord")
+async def socketstats(itx: Interaction) -> None:
+    view = SocketStatsView(itx)
+    embed = await discord.utils.maybe_coroutine(view.socket_method, itx)
+    await itx.response.send_message(embed=embed, view=view)
 
 
 @app_commands.command(description="See your total command usage")
 @app_commands.describe(user="Whose command usage to display.")
-async def usage(
-    itx: Interaction,
-    user: Optional[discord.User]
-) -> None:
+async def usage(itx: Interaction, user: Optional[discord.User]) -> None:
     user = user or itx.user
 
     paginator = CommandUsage(itx, viewing=user)
@@ -391,9 +437,9 @@ kona_group.add_command(bookmark_group)
     page="The page number to look through."
 )
 @app_commands.autocomplete(
-    tag1=tag_search_autocomplete,
-    tag2=tag_search_autocomplete,
-    tag3=tag_search_autocomplete
+    tag1=tag_lookup,
+    tag2=tag_lookup,
+    tag3=tag_lookup
 )
 async def kona_search(
     itx: Interaction,
@@ -541,55 +587,15 @@ async def clear(itx: Interaction) -> None:
     await itx.followup.send(resp)
 
 
-@app_commands.command(description="Queries a random fact")
+@app_commands.command(description="Send a random fact")
 async def randomfact(itx: Interaction) -> None:
-    params = {"X-Api-Key": itx.client.ninja_api}
+    params = {"X-Api-Key": itx.client.ninja_api_token}
 
     async with itx.client.session.get(FACTS_ENDPOINT, params=params) as resp:
         if resp.status != 200:
             return await itx.response.send_message(API_EXCEPTION)
         text = await resp.json()
     await itx.response.send_message(text[0]["fact"])
-
-
-@app_commands.command(description="Manipulate a user's avatar")
-@app_commands.describe(
-    user="The user to apply the manipulation to. Defaults to you.",
-    endpoint="What kind of manipulation sorcery to use."
-)
-async def image(
-    itx: Interaction,
-    endpoint: API_ENDPOINTS,
-    user: Optional[discord.User]
-) -> None:
-    await itx.response.defer(thinking=True)
-
-    user = user or itx.user
-    params = {"image_url": user.display_avatar.url}
-    headers = {"Authorization": f"Bearer {itx.client.j_api}"}
-    api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
-
-    await format_gif_api_response(itx, api_url, params, headers)
-
-
-@app_commands.command(description="Manipulate a user's avatar further")
-@app_commands.describe(
-    user="The user to apply the manipulation to. Defaults to you.",
-    endpoint="What kind of manipulation sorcery to use."
-)
-async def image2(
-    itx: Interaction,
-    endpoint: MORE_API_ENDPOINTS,
-    user: Optional[discord.User]
-) -> None:
-    await itx.response.defer(thinking=True)
-
-    user = user or itx.user
-    params = {"image_url": user.display_avatar.url}
-    headers = {"Authorization": f"Bearer {itx.client.j_api}"}
-    api_url = f"https://api.jeyy.xyz/v2/image/{endpoint}"
-
-    await format_gif_api_response(itx, api_url, params, headers)
 
 
 @app_commands.command(description="Show information about characters")
@@ -638,7 +644,7 @@ async def about(itx: Interaction) -> None:
     memory_usage = itx.client.process.memory_full_info().uss / 1024 ** 2
     cpu_usage = itx.client.process.cpu_percent() / cpu_count()
 
-    diff = embed.timestamp - itx.client.time_launch
+    diff = embed.timestamp - itx.client.uptime
     minutes, seconds = divmod(diff.total_seconds(), 60)
     hours, minutes = divmod(minutes, 60)
     days, hours = divmod(hours, 24)
@@ -683,11 +689,8 @@ async def about(itx: Interaction) -> None:
 async def worldclock(itx: Interaction) -> None:
     await itx.response.defer(thinking=True)
 
-    clock = discord.Embed(
-        title="UTC",
-        colour=0x2AA198,
-        timestamp=discord.utils.utcnow()
-    )
+    clock = discord.Embed(title="UTC", colour=0x2AA198)
+    clock.timestamp = discord.utils.utcnow()
 
     for location, tz in EMBED_TIMEZONES.items():
         time_there = datetime.now(tz=pytz_timezone(tz))
@@ -732,7 +735,6 @@ exports = BotExports(
     [
         usage, calc, worldclock,
         ping, kona_group, randomfact,
-        image, image2, charinfo,
-        about
+        charinfo, about, socketstats
     ]
 )

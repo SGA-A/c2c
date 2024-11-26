@@ -3,3 +3,4 @@ asqlite==2.0.0
 discord.py[speed] @ git+https://github.com/Rapptz/discord.py@99a7093c340d2b768d8c7c8e216e13988ba64ec0
 psutil==6.0.0
 pytz==2024.1
+uvloop==0.21.0

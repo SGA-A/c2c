@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import contextlib
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import discord
@@ -8,6 +8,64 @@ from asqlite import Connection
 
 if TYPE_CHECKING:
     from .bot import Interaction
+
+
+class LRU[K, V]:
+    """
+    An LRU implementation.
+
+    Parameters
+    ----------
+    maxsize: int
+        The maximum number of items to retain
+    """
+
+    def __init__(self, maxsize: int, /) -> None:
+        self._cache: dict[K, V] = {}
+        self._maxsize = maxsize
+
+    def get[T](self, key: K, default: T, /) -> V | T:
+        """
+        Get a value by key or default value.
+
+        You should only use this when you have a default.
+        Otherwise, use index into the LRU by key.
+
+        Args:
+            key: The key to lookup a value for
+            default: A default value
+
+        Returns
+        -------
+            Either the value associated to a key-value pair in the LRU
+            or the specified default
+        """
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __getitem__(self, key: K, /) -> V:
+        val = self._cache[key] = self._cache.pop(key)
+        return val
+
+    def __setitem__(self, key: K, value: V, /) -> None:
+        self._cache[key] = value
+        if len(self._cache) > self._maxsize:
+            self._cache.pop(next(iter(self._cache)))
+
+    def remove(self, key: K, /) -> None:
+        """
+        Remove a key-value pair by key.
+
+        It is not an error to attempt to remove a key which may not exist.
+
+        Parameters
+        ----------
+        key:
+            The key to remove.
+        """
+        self._cache.pop(key, None)
 
 
 async def declare_transaction(conn: Connection, user_id: int, /) -> bool:
@@ -23,7 +81,7 @@ async def end_transaction(conn: Connection, user_id: int, /) -> bool:
     await conn.execute("DELETE FROM transactions WHERE userID = $0", user_id)
 
 
-async def commands_used_by(user_id: int, conn: Connection) -> int:
+async def count_cmd(user_id: int, conn: Connection) -> int:
     total, = await conn.fetchone(
         """
         SELECT CAST(TOTAL(cmd_count) AS INTEGER)
@@ -43,7 +101,6 @@ async def add_multiplier(
     multi_type: Literal["xp", "luck", "robux"],
     cause: str,
     description: str,
-    expiry: Optional[float] = None,
     on_conflict: str = "UPDATE SET amount = amount + $1, description = $4"
 ) -> None:
     """
@@ -81,7 +138,7 @@ async def add_multiplier(
     ### `on_conflict` set to "DO NOTHING"
     - Return `False` if the `on_conflict` clause was triggered.
     - Row insertion occurs otherwise, returning `True`.
-    - Useful for apply temporary multipliers.
+    - Useful to apply temporary multipliers.
 
     ### `on_conflict` set to "DO UPDATE" (default)
     - Always return `True` because in either case an operation took place.
@@ -90,10 +147,10 @@ async def add_multiplier(
 
     result = await conn.fetchone(
         f"""
-        INSERT INTO multipliers VALUES ($0, $1, $2, $3, $4, $5)
+        INSERT INTO multipliers VALUES ($0, $1, $2, $3, $4)
         ON CONFLICT(userID, cause) DO {on_conflict}
         RETURNING rowid
-        """, user_id, multi_amount, multi_type, cause, description, expiry
+        """, user_id, multi_amount, multi_type, cause, description
     )
     return result is not None
 
@@ -133,21 +190,6 @@ def membed(description: Optional[str] = None) -> discord.Embed:
     return discord.Embed(colour=0x2B2D31, description=description)
 
 
-async def economy_check(
-    itx: Interaction,
-    original_id: int,
-    /
-) -> bool:
-    """Shared interaction check common amongst most interactions."""
-    if original_id == itx.user.id:
-        return True
-    await itx.response.send_message(
-        "This menu is not for you",
-        ephemeral=True
-    )
-    return False
-
-
 class BaseView(discord.ui.View):
     """
     An itemless base view that most views must inherit from.
@@ -180,7 +222,7 @@ class BaseView(discord.ui.View):
         if self.content:
             self.content = f"~~{self.content}~~"
 
-        with contextlib.suppress(discord.NotFound):
+        with suppress(discord.NotFound):
             await self.itx.edit_original_response(
                 content=self.content, view=self
             )
@@ -189,7 +231,14 @@ class BaseView(discord.ui.View):
             await self.end_transactions(self.itx)
 
     async def interaction_check(self, itx: Interaction) -> bool:
-        return await economy_check(itx, self.controlling_user.id)
+        """Shared interaction check common amongst most interactions."""
+        if self.controlling_user.id == itx.user.id:
+            return True
+        await itx.response.send_message(
+            "This menu is not for you",
+            ephemeral=True
+        )
+        return False
 
     async def on_error(
         self,
@@ -310,8 +359,8 @@ async def send_prompt(
     view.value = None
 
     await respond(itx, prompt, view=view, **kwargs)
-
     await view.wait()
+
     return view.value
 
 
