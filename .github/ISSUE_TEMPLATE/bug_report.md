@@ -1,26 +1,26 @@
 ---
 name: Bug report
-about: Create a report about a bug in the bot
+about: Report a bug in the code logic or syntax
 title: ''
 labels: bug
-assignees: SGA-A
+assignees: geoversed
 
 ---
 
 **Describe the bug**
-A clear and concise description of what the bug is.
+Clearly describe what the bug is.
 
 **To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Scroll down to '....'
-3. See error
+State it's origins here.
+1. Go to: 
+2. Scroll down to:
+3. Full error displayed:
 
 **Expected behavior**
-A clear and concise description of what you expected to happen.
+Describe what you expected to happen.
 
 **Screenshots**
-If applicable, add screenshots to help explain your problem.
+Optionally, add screenshots to help showcase your problem.
 
 **Additional context**
-Add any other context about the problem here.
+Optionally, add any other context about the problem here.

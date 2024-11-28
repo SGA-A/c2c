@@ -1,20 +1,20 @@
 ---
 name: Feature request
-about: Suggest an idea for this project
+about: Suggest new functionality or commands
 title: ''
-labels: feature request
-assignees: SGA-A
+labels: feature
+assignees: geoversed
 
 ---
 
 ### Is your feature request related to a problem?
-A clear and concise description of what the problem is.
+Why you decided to make this feature request.
 
 ### Describe the solution you'd like
-A clear and concise description of what you want to happen.
+Describe what you want to happen.
 
 ### Describe alternatives you've considered
-A clear and concise description of any alternative solutions or features you've considered.
+Optionally, describe alternative solutions you've considered.
 
 ### Additional context
-Add any other context or screenshots about the feature request here.
+Optionally, add other context or screenshots about the feature.
