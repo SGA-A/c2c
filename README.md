@@ -1,19 +1,20 @@
-<h2 align="center">
+<h1 align="center">
   <div align="center">
     <img src=".github/avatar.png" alt="c2c Logo" style="width:150px; height:auto;">
   </div>
   c2c
-</h2>
-<p align="center">
-  WIP multi-purpose discord bot written using discord.py.
-</p>
+</h1>
+<p align="center">WIP multi-purpose discord bot written using discord.py.</p>
 <p align="center">
   <a href="https://github.com/astral-sh/ruff">
-    <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff" style="max-width:100%;"></a>
-  <a href="https://img.shields.io/badge/os-linux-yellow">
-    <img alt="Linux" src="https://img.shields.io/badge/os-linux-yellow"></a>
+    <img src="https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json" alt="Ruff" style="max-width:100%;">
+  </a>
+  <a href="https://www.linux.org/pages/download/">
+    <img alt="Linux" src="https://img.shields.io/badge/os-linux-yellow">
+  </a>
   <a href="https://www.python.org/downloads/release">
-    <img alt="Python Compatible Versions" src="https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue"></a>
+    <img alt="Python Compatible Versions" src="https://img.shields.io/badge/Python-3.12%20%7C%203.13-blue">
+  </a>
 </p>
 
 > [!NOTE]
@@ -34,8 +35,6 @@ We are not responsible for any errors that may occur when running this bot on yo
 
 ## Credits
 - [Jake Lee](https://blog.jakelee.co.uk/converting-levels-into-xp-vice-versa)
-- [DrenJaha](https://github.com/DrenJaha/discord-blackjack-bot)
-- [Skrphenix](https://github.com/Modern-Realm/economy-bot-discord.py)
 - [RDanny](https://github.com/Rapptz/RoboDanny)
 - [RMysty](https://github.com/EvieePy/RMysty)
 - [Salamander](https://github.com/mikeshardmind/salamander-reloaded/)
