@@ -108,7 +108,7 @@ class SocketStatsView(BaseView):
 
         return e
 
-    socket_methods = (all_socketstats, latest_socketstats)
+    socket_methods = (latest_socketstats, all_socketstats)
 
     def __init__(self, itx: Interaction) -> None:
         super().__init__(itx)
@@ -116,11 +116,8 @@ class SocketStatsView(BaseView):
         self.socket_method = self.next_method()
 
     def next_method(self) -> Callable:
-        # This is why the queue has a maxlen of 3 not 2
-        # At this line, the queue briefly holds 3 elements
-        popped = self._queue.popleft()
-        self._queue.append(popped)
-        return popped
+        self._queue.append(self._queue.popleft())
+        return self._queue[-1]
 
     @discord.ui.button(label="Switch Scope")
     async def scope(self, itx: Interaction, _: discord.ui.Button) -> None:
