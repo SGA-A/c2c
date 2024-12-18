@@ -11,7 +11,8 @@ async def main():
     with open("config.json", "r") as f:
         config: dict[str, str] = json.load(f)
 
-    setup_logging(handler=logging.FileHandler("discord.log", "w"))
+    handler = logging.FileHandler("discord.log", "w")
+    setup_logging(level=logging.WARNING, handler=handler)
 
     from src import admin, economy, miscellaneous, moderation, tags
     initial_exts = [admin, economy, miscellaneous, moderation, tags]
