@@ -481,7 +481,7 @@ async def post(
         applied_tags=applicable_tags
     )
 
-    await itx.followup.send(thread.jump_url, ephemeral=True)
+    await itx.followup.send(thread.jump_url)
 
 
 @app_commands.context_menu(name="Purge Up To Here")

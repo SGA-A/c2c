@@ -204,16 +204,16 @@ class KonaPagination(Pagination):
         self.url_dict: dict[str, str] = {}
         self.dropdown: discord.ui.Select = self.children[-1]
 
-    async def navigate(self, **kwargs) -> None:
+    async def navigate(self) -> None:
         embeds = await self.get_page()
         self.dropdown.max_values = len(embeds)
         self.refresh_options(embeds)
 
         if self.total_pages == 1:
-            await self.itx.followup.send(embeds=embeds, **kwargs)
+            await self.itx.followup.send(embeds=embeds)
 
         self.update_buttons(self)
-        await self.itx.followup.send(embeds=embeds, view=self, **kwargs)
+        await self.itx.followup.send(embeds=embeds, view=self)
 
     async def edit_page(self, itx: Interaction) -> None:
         embeds = await self.get_page()
@@ -427,7 +427,7 @@ kona_group.add_command(bookmark_group)
 @app_commands.describe(
     tag1="A tag to base your search on.",
     tag2="A tag to base your search on.",
-    tag3="A tag to base your search on." ,
+    tag3="A tag to base your search on.",
     private="Hide the results from others. Defaults to True.",
     per_page="The maximum number of images to display at once. Defaults to 3.",
     maximum="The maximum number of images to retrieve. Defaults to 30.",
@@ -441,8 +441,8 @@ kona_group.add_command(bookmark_group)
 async def kona_search(
     itx: Interaction,
     tag1: str,
-    tag2: Optional[str],
-    tag3: Optional[str],
+    tag2: Optional[str] = "",
+    tag3: Optional[str] = "",
     private: bool = True,
     per_page: app_commands.Range[int, 1, 10] = 3,
     maximum: app_commands.Range[int, 1, 1000] = 30,
@@ -450,16 +450,8 @@ async def kona_search(
 ) -> Optional[discord.WebhookMessage]:
     await itx.response.defer(thinking=True, ephemeral=private)
 
-    tag_args = (arg for _, arg in itx.namespace if isinstance(arg, str))
-    tagviewing = " ".join(tag_args)
-
-    xml: list[Element] = await kona(
-        itx,
-        tags=tagviewing,
-        limit=maximum,
-        page=page,
-        mode="post"
-    )
+    tags = " ".join((tag1, tag2, tag3))
+    xml = await kona(itx, tags=tags, limit=maximum, page=page, mode="post")
 
     if isinstance(xml, int):
         return await itx.followup.send(API_EXCEPTION)
@@ -467,14 +459,10 @@ async def kona_search(
     # If the list of raw XML is empty
     if not xml:
         resp = (
-            "## No posts found\n"
-            "There are a few known causes:\n"
-            "- Entering an invalid tag name\n"
-            "- Posts aren't available under this tag\n"
-            "- Page number exceeds maximum available under this tag\n"
-            "-# Find a tag by using the [website.](<https://konachan.net/tag>)"
+            "No posts were found, often due to entering an invalid "
+            "tag or sequences of tags, or exceeding the maximum pages."
         )
-        return await itx.followup.send(resp, ephemeral=True)
+        return await itx.followup.send(resp)
 
     total_pages = Pagination.compute_total_pages(len(xml), per_page)
     paginator = KonaPagination(itx, total_pages)
@@ -497,7 +485,7 @@ async def kona_search(
         ]
 
     paginator.get_page = get_page
-    await paginator.navigate(ephemeral=private)
+    await paginator.navigate()
 
 
 @bookmark_group.command(name="remove", description="Remove a kona bookmark")
